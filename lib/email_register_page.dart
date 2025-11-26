@@ -106,7 +106,7 @@ class _EmailRegisterPageState extends State<EmailRegisterPage> {
 
     try {
       print('🔍 开始注册用户: ${_emailController.text.trim()}');
-      
+
       // 使用 Supabase 注册，禁用邮箱确认
       final response = await _supabase.auth.signUp(
         email: _emailController.text.trim(),
@@ -150,10 +150,10 @@ class _EmailRegisterPageState extends State<EmailRegisterPage> {
     } on AuthException catch (e) {
       print('❌ 注册失败: ${e.message}');
       print('Status Code: ${e.statusCode}');
-      
+
       String errorMessage = '注册失败';
-      
-      if (e.message.contains('already registered') || 
+
+      if (e.message.contains('already registered') ||
           e.message.contains('already exists')) {
         errorMessage = '该邮箱已被注册，请直接登录';
       } else if (e.message.contains('Invalid email')) {
@@ -165,7 +165,7 @@ class _EmailRegisterPageState extends State<EmailRegisterPage> {
       } else {
         errorMessage = '${e.message} (状态码: ${e.statusCode})';
       }
-      
+
       setState(() {
         _errorMessage = errorMessage;
         _successMessage = null;

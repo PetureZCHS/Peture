@@ -37,7 +37,7 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
 
     try {
       print('🔍 尝试密码登录: ${_emailController.text.trim()}');
-      
+
       final response = await _supabase.auth.signInWithPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text,
@@ -49,18 +49,17 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
       if (response.user != null) {
         // 隐藏键盘
         FocusScope.of(context).unfocus();
-        
+
         // 直接跳转，不显示提示消息
         if (mounted) {
           Navigator.of(context).pushReplacement(
             PageRouteBuilder(
-              pageBuilder: (context, animation, secondaryAnimation) => const MyApp(),
-              transitionsBuilder: (context, animation, secondaryAnimation, child) {
-                return FadeTransition(
-                  opacity: animation,
-                  child: child,
-                );
-              },
+              pageBuilder: (context, animation, secondaryAnimation) =>
+                  const MyApp(),
+              transitionsBuilder:
+                  (context, animation, secondaryAnimation, child) {
+                    return FadeTransition(opacity: animation, child: child);
+                  },
               transitionDuration: const Duration(milliseconds: 400),
             ),
           );
@@ -69,7 +68,7 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
     } on AuthException catch (e) {
       print('❌ 密码登录失败: ${e.message}');
       print('Status Code: ${e.statusCode}');
-      
+
       String errorMsg = '登录失败';
       if (e.message.contains('Invalid login credentials')) {
         errorMsg = '邮箱或密码错误';
@@ -187,46 +186,46 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
 
                 // 密码输入框
                 TextFormField(
-                    controller: _passwordController,
-                    obscureText: _obscurePassword,
-                    decoration: InputDecoration(
-                      labelText: '密码',
-                      hintText: '请输入您的密码',
-                      prefixIcon: const Icon(Icons.lock_outline),
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          _obscurePassword
-                              ? Icons.visibility_outlined
-                              : Icons.visibility_off_outlined,
-                        ),
-                        onPressed: () {
-                          setState(() {
-                            _obscurePassword = !_obscurePassword;
-                          });
-                        },
+                  controller: _passwordController,
+                  obscureText: _obscurePassword,
+                  decoration: InputDecoration(
+                    labelText: '密码',
+                    hintText: '请输入您的密码',
+                    prefixIcon: const Icon(Icons.lock_outline),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _obscurePassword
+                            ? Icons.visibility_outlined
+                            : Icons.visibility_off_outlined,
                       ),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16.0),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16.0),
-                        borderSide: const BorderSide(
-                          color: Color(0xFF5D5FEF),
-                          width: 2,
-                        ),
+                      onPressed: () {
+                        setState(() {
+                          _obscurePassword = !_obscurePassword;
+                        });
+                      },
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16.0),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16.0),
+                      borderSide: const BorderSide(
+                        color: Color(0xFF5D5FEF),
+                        width: 2,
                       ),
                     ),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return '请输入密码';
-                      }
-                      if (value.length < 6) {
-                        return '密码至少6位';
-                      }
-                      return null;
-                    },
                   ),
-                
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return '请输入密码';
+                    }
+                    if (value.length < 6) {
+                      return '密码至少6位';
+                    }
+                    return null;
+                  },
+                ),
+
                 const SizedBox(height: 32),
 
                 // 登录按钮
