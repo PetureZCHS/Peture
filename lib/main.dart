@@ -6,10 +6,8 @@ import 'package:supabase_flutter/supabase_flutter.dart'; // ✅ 添加 Supabase
 import 'login_page.dart'; // <-- 这是新添加的导入
 
 import 'home_screen.dart';
-import 'profile_screen.dart';
 import 'settings/theme_constants.dart';
-import 'medical_record_screen.dart'; // 新增导入
-import 'community_screen.dart'; // 社区页面导入
+
 
 void main() async {
   // 确保 Flutter 框架初始化
@@ -22,13 +20,15 @@ void main() async {
   print('🔧 开始初始化 Supabase...');
   await Supabase.initialize(
     url: 'https://tcftpcvcldfudzxgemdh.supabase.co',
-    anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRjZnRwY3ZjbGRmdWR6eGdlbWRoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA2NjMzMTQsImV4cCI6MjA3NjIzOTMxNH0.uiusEWfuAw37fL6neZfK3q9NV4HZF7k-kX6hFIJQ83s',
+    anonKey:
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRjZnRwY3ZjbGRmdWR6eGdlbWRoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA2NjMzMTQsImV4cCI6MjA3NjIzOTMxNH0.uiusEWfuAw37fL6neZfK3q9NV4HZF7k-kX6hFIJQ83s',
   );
   print('✅ Supabase 初始化成功');
 
   // 将您的登录页面包裹在一个 MaterialApp 中
   runApp(
     MaterialApp(
+      debugShowCheckedModeBanner: false,
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
@@ -112,79 +112,7 @@ class MyApp extends StatelessWidget {
           Locale('en', 'US'), // 英文
         ],
         locale: const Locale('zh', 'CN'), // 默认使用中文
-        home: const MyHomePage(title: '智宠合生'),
-      ),
-    );
-  }
-}
-
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  final String title;
-
-  @override
-  State<MyHomePage> createState() => _MyHomePageState();
-}
-
-class _MyHomePageState extends State<MyHomePage>
-    with SingleTickerProviderStateMixin {
-  int _selectedIndex = 0;
-  final PageController _pageController = PageController();
-
-  final List<Widget> _pages = [
-    const HomeScreen(),
-    const CommunityScreen(), // 社区页面
-    const MedicalRecordScreen(), // 病历页面
-    const ProfileScreen(),
-  ];
-
-  @override
-  void dispose() {
-    _pageController.dispose();
-    super.dispose();
-  }
-
-  void _onPageChanged(int index) {
-    setState(() {
-      _selectedIndex = index;
-    });
-  }
-
-  void _onNavTapped(int index) {
-    setState(() {
-      _selectedIndex = index;
-    });
-    _pageController.animateToPage(
-      index,
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeInOut,
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: PageView(
-        controller: _pageController,
-        onPageChanged: _onPageChanged,
-        children: _pages,
-      ),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _selectedIndex,
-        onTap: _onNavTapped,
-        type: BottomNavigationBarType.fixed,
-        selectedItemColor: const Color(0xFF007AFF),
-        unselectedItemColor: Colors.grey,
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: '首页'),
-          BottomNavigationBarItem(icon: Icon(Icons.explore), label: '社区'),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.medical_services),
-            label: '病历',
-          ),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: '我的'),
-        ],
+        home: const HomeScreen(),
       ),
     );
   }
