@@ -252,9 +252,9 @@ class _CommunityScreenState extends State<CommunityScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: const Color(0xFFF0F4F8), // 修改背景色
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: const Color(0xFFF0F4F8), // 修改AppBar背景色
         elevation: 0,
         // 小红书风格的顶部导航栏
         centerTitle: true,
@@ -312,152 +312,10 @@ class _CommunityScreenState extends State<CommunityScreen>
         controller: _tabController,
         children: [_buildFollowTab(), _buildRecommendTab(), _buildTopicTab()],
       ),
-      // 添加小红书风格的发布按钮
-      floatingActionButton: FloatingActionButton(
-        onPressed: _showPublishDialog,
-        backgroundColor: const Color(0xFFFF2442),
-        elevation: 4,
-        child: const Icon(Icons.add, color: Colors.white, size: 28),
-      ),
     );
   }
 
-  // 显示发布选项对话框
-  void _showPublishDialog() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (BuildContext context) {
-        return Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          child: SafeArea(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const SizedBox(height: 12),
-                Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[300],
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 20),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      '发布内容',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
-                        color: Color(0xFF1E1E1E),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                _buildPublishOption(
-                  icon: Icons.image_outlined,
-                  iconColor: const Color(0xFFFF2442),
-                  title: '发帖子',
-                  subtitle: '分享图文、视频等精彩内容',
-                  onTap: () {
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('发布功能开发中...'),
-                        duration: Duration(seconds: 1),
-                      ),
-                    );
-                  },
-                ),
-                const Divider(height: 1, indent: 70, endIndent: 20),
-                _buildPublishOption(
-                  icon: Icons.help_outline,
-                  iconColor: const Color(0xFF8B77FF),
-                  title: '提问题',
-                  subtitle: '向社区求助，获取专业解答',
-                  onTap: () {
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('提问功能开发中...'),
-                        duration: Duration(seconds: 1),
-                      ),
-                    );
-                  },
-                ),
-                const SizedBox(height: 20),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
 
-  Widget _buildPublishOption({
-    required IconData icon,
-    required Color iconColor,
-    required String title,
-    required String subtitle,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-        child: Row(
-          children: [
-            Container(
-              width: 50,
-              height: 50,
-              decoration: BoxDecoration(
-                color: iconColor.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(icon, color: iconColor, size: 26),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF1E1E1E),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    subtitle,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      color: Color(0xFF999999),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const Icon(
-              Icons.arrow_forward_ios,
-              size: 16,
-              color: Color(0xFFCCCCCC),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
   // 推荐标签页 - 小红书风格双栏瀑布流
   Widget _buildRecommendTab() {
@@ -467,7 +325,7 @@ class _CommunityScreenState extends State<CommunityScreen>
         crossAxisCount: 2, // 双栏布局
         mainAxisSpacing: 8, // 垂直间距
         crossAxisSpacing: 8, // 水平间距
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+        padding: const EdgeInsets.fromLTRB(8, 12, 8, 100),
         itemCount: mockPosts.length,
         itemBuilder: (context, index) {
           final post = mockPosts[index];
@@ -623,6 +481,7 @@ class _CommunityScreenState extends State<CommunityScreen>
   // 关注标签页
   Widget _buildFollowTab() {
     return SingleChildScrollView(
+      padding: const EdgeInsets.only(bottom: 100),
       child: Column(
         children: [
           const SizedBox(height: 60),
@@ -826,7 +685,7 @@ class _CommunityScreenState extends State<CommunityScreen>
   // 附近标签页 - 基于地理位置的本地发现页
   Widget _buildTopicTab() {
     return ListView(
-      padding: const EdgeInsets.all(0),
+      padding: const EdgeInsets.only(bottom: 100),
       children: [
         // 地图模块
         _buildMapModule(),
