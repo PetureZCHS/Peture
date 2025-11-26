@@ -19,7 +19,7 @@ class PetPassportPage extends StatefulWidget {
 class _PetPassportPageState extends State<PetPassportPage>
     with SingleTickerProviderStateMixin {
   List<Pet> _pets = [];
-  final Map<int, PetPassport?> _passports = {};
+  final Map<String, PetPassport?> _passports = {};
   bool _isLoading = true;
   int _selectedPetIndex = 0;
   late AnimationController _flipController;
@@ -151,6 +151,8 @@ class _PetPassportPageState extends State<PetPassportPage>
           : _pets.isEmpty
           ? _buildEmptyState()
           : _buildPassportView(),
+      // 添加底部安全区域，避免内容被液态导航栏遮挡
+      bottomNavigationBar: const SizedBox(height: 20),
     );
   }
 

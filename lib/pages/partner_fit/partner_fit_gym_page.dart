@@ -115,6 +115,8 @@ class _PartnerFitGymPageState extends State<PartnerFitGymPage> {
           ),
         ],
       ),
+      // 添加底部安全区域，避免内容被液态导航栏遮挡
+      bottomNavigationBar: const SizedBox(height: 20),
     );
   }
 
