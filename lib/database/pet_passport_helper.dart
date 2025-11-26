@@ -27,7 +27,7 @@ class PetPassportHelper {
     await db.execute('''
       CREATE TABLE pet_passports (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        pet_id INTEGER NOT NULL UNIQUE,
+        pet_id TEXT NOT NULL UNIQUE,
         photo_path TEXT,
         owner_name TEXT,
         adoption_date TEXT,
@@ -143,7 +143,7 @@ class PetPassportHelper {
   }
 
   /// 根据宠物ID获取身份证
-  Future<PetPassport?> getPassportByPetId(int petId) async {
+  Future<PetPassport?> getPassportByPetId(String petId) async {
     final db = await database;
 
     final results = await db.query(
@@ -177,7 +177,7 @@ class PetPassportHelper {
 
     return PetPassport(
       id: passportId,
-      petId: passportData['pet_id'] as int,
+      petId: passportData['pet_id'] as String,
       photoPath: passportData['photo_path'] as String?,
       ownerName: passportData['owner_name'] as String?,
       adoptionDate: passportData['adoption_date'] != null
@@ -229,7 +229,7 @@ class PetPassportHelper {
       passports.add(
         PetPassport(
           id: passportId,
-          petId: passportData['pet_id'] as int,
+          petId: passportData['pet_id'] as String,
           photoPath: passportData['photo_path'] as String?,
           ownerName: passportData['owner_name'] as String?,
           adoptionDate: passportData['adoption_date'] != null
@@ -255,7 +255,7 @@ class PetPassportHelper {
   }
 
   /// 删除宠物身份证
-  Future<int> deletePassport(int petId) async {
+  Future<int> deletePassport(String petId) async {
     final db = await database;
 
     return await db.delete(
@@ -266,7 +266,7 @@ class PetPassportHelper {
   }
 
   /// 解锁成就
-  Future<void> unlockAchievement(int petId, Achievement achievement) async {
+  Future<void> unlockAchievement(String petId, Achievement achievement) async {
     final passport = await getPassportByPetId(petId);
     if (passport == null) return;
 

@@ -14,7 +14,9 @@ class MedicalRecordHelper {
   // 获取数据库实例
   Future<Database> get database async {
     if (kIsWeb) {
-      throw UnsupportedError('SQLite is not supported on Web. Use getAllPets() instead.');
+      throw UnsupportedError(
+        'SQLite is not supported on Web. Use getAllPets() instead.',
+      );
     }
     if (_database != null) return _database!;
     _database = await _initDB('medical_records.db');
@@ -220,15 +222,15 @@ class MedicalRecordHelper {
         final prefs = await SharedPreferences.getInstance();
         final petsJson = prefs.getString('pets') ?? '[]';
         final List<dynamic> pets = jsonDecode(petsJson);
-        
+
         int newId = 1;
         if (pets.isNotEmpty) {
           newId = (pets.last['id'] as int) + 1;
         }
-        
+
         pet['id'] = newId;
         pets.add(pet);
-        
+
         await prefs.setString('pets', jsonEncode(pets));
         return newId;
       } catch (e) {
@@ -267,10 +269,10 @@ class MedicalRecordHelper {
         final prefs = await SharedPreferences.getInstance();
         final petsJson = prefs.getString('pets') ?? '[]';
         final List<dynamic> pets = jsonDecode(petsJson);
-        
+
         final initialLength = pets.length;
         pets.removeWhere((pet) => pet['id'] == id);
-        
+
         await prefs.setString('pets', jsonEncode(pets));
         return initialLength - pets.length;
       } catch (e) {
@@ -290,7 +292,7 @@ class MedicalRecordHelper {
         final prefs = await SharedPreferences.getInstance();
         final petsJson = prefs.getString('pets') ?? '[]';
         final List<dynamic> pets = jsonDecode(petsJson);
-        
+
         final index = pets.indexWhere((p) => p['id'] == pet['id']);
         if (index >= 0) {
           pets[index] = pet;
@@ -313,7 +315,12 @@ class MedicalRecordHelper {
       final updateMap = Map<String, dynamic>.from(pet);
       updateMap.remove('id');
 
-      return await db.update('pets', updateMap, where: 'id = ?', whereArgs: [id]);
+      return await db.update(
+        'pets',
+        updateMap,
+        where: 'id = ?',
+        whereArgs: [id],
+      );
     }
   }
 

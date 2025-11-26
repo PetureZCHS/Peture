@@ -125,7 +125,7 @@ class DatabaseHelper {
       'conversations',
       conversation.toMap(),
       where: 'id = ?',
-      whereArgs: [conversation.id],
+      whereArgs: [int.parse(conversation.id!)],
     );
   }
 
