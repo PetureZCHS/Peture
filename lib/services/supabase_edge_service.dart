@@ -242,8 +242,9 @@ class SupabaseEdgeFunctionService {
         print('✅ 响应成功');
         final answer = data['answer']?.toString() ?? '';
         if (answer.isNotEmpty) {
-          final preview =
-              answer.length > 50 ? '${answer.substring(0, 50)}...' : answer;
+          final preview = answer.length > 50
+              ? '${answer.substring(0, 50)}...'
+              : answer;
           print('   answer: $preview');
         }
         print('   conversation_id: ${data['conversation_id']}');
@@ -312,17 +313,16 @@ class PetDiaryEdgeService {
       // ✅ 根据 Dify Workflow API 文档构建请求体
       // inputs 对象包含 query 和 style
       final body = {
-        'inputs': {
-          'query': query,
-          'style': style,
-        },
+        'inputs': {'query': query, 'style': style},
         'response_mode': 'streaming',
-        'user': userId,  // ⚠️ 注意:Edge Function 使用 user 参数
+        'user': userId, // ⚠️ 注意:Edge Function 使用 user 参数
       };
 
       print('📝 调用 Diary Edge Function');
       print('📦 参数:');
-      print('   - inputs.query: ${query.substring(0, 30.clamp(0, query.length))}...');
+      print(
+        '   - inputs.query: ${query.substring(0, 30.clamp(0, query.length))}...',
+      );
       print('   - inputs.style: $style');
       print('   - response_mode: streaming');
       print('   - user: $userId');
@@ -458,7 +458,9 @@ class PetDiaryEdgeService {
               }
             } catch (e) {
               print('⚠️ 解析 Diary JSON 失败: $e');
-              print('   原始内容: ${dataString.substring(0, 100.clamp(0, dataString.length))}...');
+              print(
+                '   原始内容: ${dataString.substring(0, 100.clamp(0, dataString.length))}...',
+              );
             }
           }
         }
@@ -489,12 +491,9 @@ class PetDiaryEdgeService {
       // ✅ 根据 Dify Workflow API 文档构建请求体
       // inputs 对象包含 query 和 style
       final body = {
-        'inputs': {
-          'query': query,
-          'style': style,
-        },
+        'inputs': {'query': query, 'style': style},
         'response_mode': 'blocking',
-        'user': userId,  // ⚠️ 注意:Edge Function 使用 user 参数
+        'user': userId, // ⚠️ 注意:Edge Function 使用 user 参数
       };
 
       print('📝 阻塞模式调用 Diary Edge Function');
@@ -518,14 +517,16 @@ class PetDiaryEdgeService {
         print('✅ Diary 响应成功');
 
         // 尝试从不同的可能字段中获取文本
-        final text = data['text'] as String? ??
+        final text =
+            data['text'] as String? ??
             data['result'] as String? ??
             data['output'] as String? ??
             '';
 
         if (text.isNotEmpty) {
-          final preview =
-              text.length > 50 ? '${text.substring(0, 50)}...' : text;
+          final preview = text.length > 50
+              ? '${text.substring(0, 50)}...'
+              : text;
           print('   生成文本: $preview');
         }
 
