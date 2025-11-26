@@ -6,7 +6,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 
 /// 简单的测试页面
-/// 
+///
 /// 使用方法：
 /// 1. 替换下面的 YOUR_ANON_KEY
 /// 2. 运行这个页面
@@ -50,7 +50,8 @@ class _EdgeFunctionTestPageState extends State<EdgeFunctionTestPage> {
       );
 
       setState(() {
-        _result = '阻塞模式测试结果:\n\n'
+        _result =
+            '阻塞模式测试结果:\n\n'
             '状态码: ${response.statusCode}\n'
             '响应头: ${response.headers}\n\n'
             '响应体:\n${response.body}\n\n';
@@ -110,9 +111,10 @@ class _EdgeFunctionTestPageState extends State<EdgeFunctionTestPage> {
         int chunkCount = 0;
         String fullAnswer = '';
 
-        await for (final chunk in streamedResponse.stream
-            .transform(utf8.decoder)
-            .transform(const LineSplitter())) {
+        await for (final chunk
+            in streamedResponse.stream
+                .transform(utf8.decoder)
+                .transform(const LineSplitter())) {
           if (chunk.startsWith('data: ')) {
             final data = chunk.substring(6).trim();
             if (data.isNotEmpty && data != '[DONE]') {
@@ -227,10 +229,7 @@ class _EdgeFunctionTestPageState extends State<EdgeFunctionTestPage> {
             const SizedBox(height: 20),
 
             // 加载指示器
-            if (_isLoading)
-              const Center(
-                child: CircularProgressIndicator(),
-              ),
+            if (_isLoading) const Center(child: CircularProgressIndicator()),
 
             // 结果显示
             Expanded(
