@@ -1,7 +1,7 @@
 /// 宠物身份证模型
 class PetPassport {
   final int? id;
-  final int petId; // 关联的宠物ID
+  final String petId; // 关联的宠物ID
 
   // 基础信息
   final String? photoPath; // 宠物照片
@@ -90,7 +90,7 @@ class PetPassport {
 
   PetPassport copyWith({
     int? id,
-    int? petId,
+    String? petId,
     String? photoPath,
     String? ownerName,
     DateTime? adoptionDate,

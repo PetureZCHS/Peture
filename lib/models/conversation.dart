@@ -6,7 +6,7 @@
 // 我们保留它不动，以确保你的历史记录等功能不受影响。
 // -----------------------------------------------------------------------------
 class Conversation {
-  final int? id; // 数据库自动生成的ID
+  final String? id; // 从 int? 改为 String? 以支持 UUID
   final String question; // 用户提问
   final String answer; // AI回答
   final DateTime timestamp; // 时间戳
@@ -35,7 +35,7 @@ class Conversation {
   // 从Map创建对象（从数据库读取）
   factory Conversation.fromMap(Map<String, dynamic> map) {
     return Conversation(
-      id: map['id'],
+      id: map['id']?.toString(), // 确保转换为 String
       question: map['question'],
       answer: map['answer'],
       timestamp: DateTime.parse(map['timestamp']),
@@ -45,7 +45,7 @@ class Conversation {
 
   // copyWith 方法
   Conversation copyWith({
-    int? id,
+    String? id, // 从 int? 改为 String?
     String? question,
     String? answer,
     DateTime? timestamp,

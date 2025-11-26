@@ -5,7 +5,7 @@ class DailyCostItem {
   final double totalPrice; // 总价格
   final String purchaseDate; // 购买日期（格式：yyyy-MM-dd）
   final String? finishDate; // 用完日期（可选，格式：yyyy-MM-dd）
-  final int? petId; // 关联的宠物ID
+  final String? petId; // 关联的宠物ID
   final String? petName; // 宠物名称（用于显示）
   final String? imagePath; // 物品图片路径（可选）
   final String? note; // 备注（可选）
@@ -67,7 +67,7 @@ class DailyCostItem {
       totalPrice: (map['totalPrice'] as num).toDouble(),
       purchaseDate: map['purchaseDate'] as String,
       finishDate: map['finishDate'] as String?,
-      petId: map['petId'] as int?,
+      petId: map['petId']?.toString(),
       petName: map['petName'] as String?,
       imagePath: map['imagePath'] as String?,
       note: map['note'] as String?,
@@ -82,7 +82,7 @@ class DailyCostItem {
     double? totalPrice,
     String? purchaseDate,
     String? finishDate,
-    int? petId,
+    String? petId,
     String? petName,
     String? imagePath,
     String? note,

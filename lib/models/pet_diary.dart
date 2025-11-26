@@ -1,5 +1,5 @@
 class PetDiary {
-  final int? id;
+  final String? id; // 从 int? 改为 String? 以支持 UUID
   final String originalText; // 用户输入的原始文本
   final String content; // AI生成的日记内容
   final String style; // 日记风格
@@ -22,7 +22,7 @@ class PetDiary {
   };
 
   factory PetDiary.fromMap(Map<String, dynamic> map) => PetDiary(
-    id: map['id'] as int?,
+    id: map['id']?.toString(), // 确保转换为 String
     originalText: map['original_text'] as String? ?? '',
     content: map['content'] as String,
     style: map['style'] as String? ?? '小红书',
