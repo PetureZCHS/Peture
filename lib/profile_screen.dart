@@ -2,55 +2,12 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import 'database/medical_record_helper.dart';
+import 'services/supabase_service.dart';
+import 'models/pet.dart';
 import 'settings_page.dart';
 import 'pages/unified_expense/unified_expense_home_page.dart';
 import 'pages/reminder/intelligent_reminder_page.dart';
-import 'account_settings_page.dart';
-
-// =========================================================
-// 宠物数据模型
-// =========================================================
-class Pet {
-  final int? id;
-  final String type;
-  final String name;
-  final String age;
-  final String gender;
-  final String breed;
-
-  Pet({
-    this.id,
-    required this.type,
-    required this.name,
-    required this.age,
-    required this.gender,
-    required this.breed,
-  });
-
-  Map<String, dynamic> toMap() {
-    return {
-      'id': id,
-      'type': type,
-      'name': name,
-      'age': age,
-      'gender': gender,
-      'breed': breed,
-    };
-  }
-
-  factory Pet.fromMap(Map<String, dynamic> map) {
-    return Pet(
-      id: map['id'],
-      type: map['type'],
-      name: map['name'],
-      age: map['age'],
-      gender: map['gender'],
-      breed: map['breed'],
-    );
-  }
-}
+import 'pages/pet_profile_form_page.dart';
 
 // =========================================================
 // 全局设计系统 - 美学升级版
@@ -149,27 +106,20 @@ class ProfileScreen extends StatelessWidget {
   }
 
   Widget _buildHeader(BuildContext context) {
-    // 从 Supabase 获取用户信息
-    final user = Supabase.instance.client.auth.currentUser;
-    final String userNickname = user?.userMetadata?['name'] ?? '';
-    final String userEmail = user?.email ?? '';
-    final String displayName = userNickname.isEmpty 
-        ? (userEmail.isEmpty ? '点击登录' : userEmail.split('@')[0]) 
-        : userNickname;
-    final String avatarText = userNickname.isEmpty 
-        ? (userEmail.isEmpty ? '?' : userEmail[0].toUpperCase())
-        : userNickname[0];
+    // TODO: 从用户数据库或SharedPreferences中获取用户昵称
+    final String userNickname = ''; // 暂时为空，需要接入数据库
+    final String displayName = userNickname.isEmpty ? '点击设置昵称' : userNickname;
+    final String avatarText = userNickname.isEmpty ? '?' : userNickname[0];
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         GestureDetector(
           onTap: () {
-            // 跳转到账户设置页面
-            Navigator.push(
+            // TODO: 跳转到设置昵称页面
+            ScaffoldMessenger.of(
               context,
-              MaterialPageRoute(builder: (context) => const AccountSettingsPage()),
-            );
+            ).showSnackBar(const SnackBar(content: Text('昵称设置功能开发中...')));
           },
           child: Row(
             children: [
@@ -199,30 +149,14 @@ class ProfileScreen extends StatelessWidget {
                     style: AppStyles.ownerId.copyWith(
                       fontSize: 15,
                       fontWeight: FontWeight.w500,
-                      color: AppColors.primaryText,
+                      color: userNickname.isEmpty
+                          ? AppColors.secondaryText.withOpacity(0.6)
+                          : AppColors.primaryText,
                     ),
                   ),
-                  if (userEmail.isNotEmpty)
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.verified_user,
-                          size: 12,
-                          color: Colors.green.withOpacity(0.8),
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          '已登录',
-                          style: AppStyles.ownerId.copyWith(
-                            fontSize: 11,
-                            color: Colors.green.withOpacity(0.8),
-                          ),
-                        ),
-                      ],
-                    )
-                  else
+                  if (userNickname.isEmpty)
                     Text(
-                      '轻触登录',
+                      '轻触设置',
                       style: AppStyles.ownerId.copyWith(
                         fontSize: 11,
                         color: AppColors.secondaryText.withOpacity(0.5),
@@ -277,8 +211,6 @@ class ProfileScreen extends StatelessWidget {
       ],
     );
   }
-
-
 
   Widget _buildActionItem({
     required IconData icon,
@@ -435,6 +367,7 @@ class PetProfileSection extends StatefulWidget {
 
 class _PetProfileSectionState extends State<PetProfileSection> {
   final List<Pet> pets = [];
+  final _supabaseService = SupabaseService();
 
   @override
   void initState() {
@@ -443,8 +376,7 @@ class _PetProfileSectionState extends State<PetProfileSection> {
   }
 
   Future<void> _loadPets() async {
-    final List<Map<String, dynamic>> petsData = await MedicalRecordHelper
-        .instance
+    final List<Map<String, dynamic>> petsData = await _supabaseService
         .getAllPets();
     if (mounted) {
       setState(() {
@@ -455,40 +387,64 @@ class _PetProfileSectionState extends State<PetProfileSection> {
   }
 
   void _addPet(Pet newPet) {
-    MedicalRecordHelper.instance
+    _supabaseService
         .insertPet(newPet.toMap())
         .then((generatedId) {
-          final petWithId = Pet(
-            id: generatedId,
-            type: newPet.type,
-            name: newPet.name,
-            age: newPet.age,
-            gender: newPet.gender,
-            breed: newPet.breed,
-          );
+          if (generatedId != null) {
+            final petWithId = Pet(
+              id: generatedId, // generatedId 已经是 String 类型
+              type: newPet.type,
+              name: newPet.name,
+              age: newPet.age,
+              gender: newPet.gender,
+              breed: newPet.breed,
+            );
 
-          if (mounted) {
-            setState(() {
-              pets.add(petWithId);
-            });
-          }
+            if (mounted) {
+              setState(() {
+                pets.add(petWithId);
+              });
+            }
 
-          if (mounted) {
-            ScaffoldMessenger.of(
-              context,
-            ).showSnackBar(const SnackBar(content: Text('宠物档案添加成功')));
+            if (mounted) {
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(const SnackBar(content: Text('宠物档案添加成功')));
+            }
+          } else {
+            if (mounted) {
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(const SnackBar(content: Text('宠物档案添加失败，请检查网络连接')));
+            }
           }
         })
         .catchError((error, stackTrace) {
           // 使用 debugPrint 替代 print
           debugPrint('--- 宠物档案添加失败 ---');
           debugPrint('错误详情 (Error): $error');
+          debugPrint('错误类型: ${error.runtimeType}');
           debugPrint('堆栈跟踪 (Stack Trace): $stackTrace');
+
+          // 检查是否是数据库约束错误（可能是 user_id 类型不匹配）
+          final errorStr = error.toString().toLowerCase();
+          String errorMessage = '添加失败，请检查终端日志';
+
+          if (errorStr.contains('foreign key') ||
+              errorStr.contains('user_id')) {
+            errorMessage = '添加失败：用户ID格式错误，请重新登录';
+          } else if (errorStr.contains('null') ||
+              errorStr.contains('not null')) {
+            errorMessage = '添加失败：缺少必要字段';
+          } else if (errorStr.contains('network') ||
+              errorStr.contains('connection')) {
+            errorMessage = '添加失败，请检查网络连接';
+          }
 
           if (mounted) {
             ScaffoldMessenger.of(
               context,
-            ).showSnackBar(const SnackBar(content: Text('添加失败，请检查终端日志')));
+            ).showSnackBar(SnackBar(content: Text(errorMessage)));
           }
         });
   }
@@ -515,9 +471,17 @@ class _PetProfileSectionState extends State<PetProfileSection> {
                 Navigator.of(context).pop();
                 try {
                   if (petToDelete.id != null) {
-                    await MedicalRecordHelper.instance.deletePet(
-                      petToDelete.id!,
+                    final success = await _supabaseService.deletePet(
+                      petToDelete.id.toString(),
                     );
+                    if (!success) {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('删除失败，请检查网络连接')),
+                        );
+                      }
+                      return;
+                    }
                     if (mounted) {
                       setState(() {
                         pets.removeWhere((pet) => pet.id == petToDelete.id);
@@ -553,7 +517,34 @@ class _PetProfileSectionState extends State<PetProfileSection> {
           children: [
             const Text('宠物档案', style: AppStyles.sectionTitle),
             ElevatedButton.icon(
-              onPressed: () => _showAddPetDialog(context),
+              onPressed: () async {
+                final result = await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const PetProfileFormPage(),
+                  ),
+                );
+                
+                if (result != null && mounted) {
+                  // 从表单页面返回的数据
+                  final petData = result as Map<String, dynamic>;
+                  
+                  // 创建Pet对象，包含所有表单字段
+                  final newPet = Pet(
+                    type: petData['species']?.split('').first ?? '狗', // 从品种推断类型
+                    name: petData['name'] ?? '',
+                    age: '1岁0个月', // 默认年龄，可以后续修改
+                    gender: petData['gender'] ?? '哥哥',
+                    breed: petData['species'] ?? '',
+                    avatar: petData['avatar'], // 头像路径
+                    birthDate: petData['birthDate'], // 出生日期
+                    neuterStatus: petData['neuterStatus'], // 绝育状态
+                    weight: petData['weight'] != null ? (petData['weight'] as num).toDouble() : null, // 体重
+                  );
+                  
+                  _addPet(newPet);
+                }
+              },
               icon: const Icon(Icons.add, size: 18),
               label: const Text('添加宠物'),
               style: ElevatedButton.styleFrom(
@@ -635,187 +626,6 @@ class _PetProfileSectionState extends State<PetProfileSection> {
                 ),
               ),
       ],
-    );
-  }
-
-  void _showAddPetDialog(BuildContext context) {
-    String? selectedPetType;
-    String? selectedBreed;
-    String? selectedGender;
-    int? selectedYears;
-    int? selectedMonths;
-    final TextEditingController nameController = TextEditingController();
-
-    final Map<String, List<String>> petBreeds = {
-      '狗': ['拉布拉多', '金毛寻回犬', '法国斗牛犬', '贵宾犬', '比熊', '柯基', '柴犬', '哈士奇'],
-      '猫': ['英国短毛猫', '美国短毛猫', '布偶猫', '暹罗猫', '波斯猫', '缅因猫', '苏格兰折耳猫'],
-      '兔': ['垂耳兔', '荷兰兔', '安哥拉兔', '侏儒兔', '新西兰兔'],
-      '仓鼠': ['金丝熊', '三线仓鼠', '银狐', '布丁', '奶茶'],
-      '其他': ['未知品种'],
-    };
-
-    showDialog(
-      context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setState) {
-            return AlertDialog(
-              title: const Text('新增宠物档案'),
-              backgroundColor: AppColors.cardBackground,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextField(
-                      controller: nameController,
-                      decoration: const InputDecoration(labelText: '昵称'),
-                    ),
-                    const SizedBox(height: 16),
-                    DropdownButtonFormField<String>(
-                      decoration: const InputDecoration(labelText: '性别'),
-                      value: selectedGender,
-                      items: const ['哥哥', '妹妹'].map((String value) {
-                        return DropdownMenuItem<String>(
-                          value: value,
-                          child: Text(value),
-                        );
-                      }).toList(),
-                      onChanged: (String? newValue) {
-                        setState(() {
-                          selectedGender = newValue;
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: DropdownButtonFormField<int>(
-                            decoration: const InputDecoration(
-                              labelText: '年龄(岁)',
-                            ),
-                            value: selectedYears,
-                            items: List.generate(20, (index) => index).map((
-                              int value,
-                            ) {
-                              return DropdownMenuItem<int>(
-                                value: value,
-                                child: Text('$value'),
-                              );
-                            }).toList(),
-                            onChanged: (int? newValue) {
-                              setState(() {
-                                selectedYears = newValue;
-                              });
-                            },
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: DropdownButtonFormField<int>(
-                            decoration: const InputDecoration(
-                              labelText: '年龄(月)',
-                            ),
-                            value: selectedMonths,
-                            items: List.generate(12, (index) => index).map((
-                              int value,
-                            ) {
-                              return DropdownMenuItem<int>(
-                                value: value,
-                                child: Text('$value'),
-                              );
-                            }).toList(),
-                            onChanged: (int? newValue) {
-                              setState(() {
-                                selectedMonths = newValue;
-                              });
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    DropdownButtonFormField<String>(
-                      decoration: const InputDecoration(labelText: '宠物类型'),
-                      value: selectedPetType,
-                      items: petBreeds.keys.map((String value) {
-                        return DropdownMenuItem<String>(
-                          value: value,
-                          child: Text(value),
-                        );
-                      }).toList(),
-                      onChanged: (String? newValue) {
-                        setState(() {
-                          selectedPetType = newValue;
-                          selectedBreed = null;
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    if (selectedPetType != null)
-                      DropdownButtonFormField<String>(
-                        decoration: const InputDecoration(labelText: '品种'),
-                        value: selectedBreed,
-                        items: petBreeds[selectedPetType]!.map((String value) {
-                          return DropdownMenuItem<String>(
-                            value: value,
-                            child: Text(value),
-                          );
-                        }).toList(),
-                        onChanged: (String? newValue) {
-                          setState(() {
-                            selectedBreed = newValue;
-                          });
-                        },
-                      ),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('取消'),
-                ),
-                ElevatedButton(
-                  onPressed: () {
-                    if (nameController.text.isEmpty ||
-                        selectedGender == null ||
-                        selectedPetType == null ||
-                        selectedBreed == null ||
-                        (selectedYears == null && selectedMonths == null)) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('请填写所有必填项'),
-                          backgroundColor: Colors.red,
-                        ),
-                      );
-                      return;
-                    }
-
-                    final String ageString =
-                        '${selectedYears ?? 0}岁${selectedMonths ?? 0}个月';
-
-                    final newPet = Pet(
-                      type: selectedPetType!,
-                      name: nameController.text,
-                      age: ageString,
-                      gender: selectedGender!,
-                      breed: selectedBreed!,
-                    );
-
-                    _addPet(newPet);
-                    Navigator.of(context).pop();
-                  },
-                  child: const Text('添加'),
-                ),
-              ],
-            );
-          },
-        );
-      },
     );
   }
 }
@@ -1020,6 +830,7 @@ class PetProfileDetailsPage extends StatefulWidget {
 
 class _PetProfileDetailsPageState extends State<PetProfileDetailsPage> {
   late Pet _currentPet;
+  final _supabaseService = SupabaseService();
 
   @override
   void initState() {
@@ -1113,9 +924,17 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage> {
 
                 if (updatedPet != null && mounted) {
                   try {
-                    await MedicalRecordHelper.instance.updatePet(
+                    final success = await _supabaseService.updatePet(
                       updatedPet.toMap(),
                     );
+                    if (!success) {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('更新失败，请检查网络连接')),
+                        );
+                      }
+                      return;
+                    }
                     setState(() {
                       _currentPet = updatedPet;
                     });
@@ -1180,6 +999,15 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage> {
                 _buildInfoCard('性别', _currentPet.gender),
                 const SizedBox(height: 12),
                 _buildInfoCard('年龄', _currentPet.age),
+                const SizedBox(height: 12),
+                if (_currentPet.birthDate != null)
+                  _buildInfoCard('出生日期', _currentPet.birthDate!),
+                if (_currentPet.birthDate != null) const SizedBox(height: 12),
+                if (_currentPet.neuterStatus != null)
+                  _buildInfoCard('绝育状态', _currentPet.neuterStatus!),
+                if (_currentPet.neuterStatus != null) const SizedBox(height: 12),
+                if (_currentPet.weight != null)
+                  _buildInfoCard('体重', '${_currentPet.weight!.toStringAsFixed(1)} kg'),
                 const SizedBox(height: 50),
               ],
             ),

@@ -1,6 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import '../../database/database_helper.dart';
+import '../../services/supabase_service.dart';
 import '../../models/pet_diary.dart';
 import 'pet_diary_result_page.dart';
 import 'package:intl/intl.dart';
@@ -16,6 +16,7 @@ class PetDiaryListPage extends StatefulWidget {
 class _PetDiaryListPageState extends State<PetDiaryListPage> {
   List<PetDiary> _diaries = [];
   bool _isLoading = true;
+  final _supabaseService = SupabaseService();
 
   @override
   void initState() {
@@ -29,7 +30,7 @@ class _PetDiaryListPageState extends State<PetDiaryListPage> {
     });
 
     try {
-      final diaries = await DatabaseHelper.instance.getAllDiaries();
+      final diaries = await _supabaseService.getAllDiaries();
       if (mounted) {
         setState(() {
           _diaries = diaries;
@@ -48,18 +49,29 @@ class _PetDiaryListPageState extends State<PetDiaryListPage> {
     }
   }
 
-  Future<void> _deleteDiary(int id) async {
+  Future<void> _deleteDiary(String id) async {
     try {
-      await DatabaseHelper.instance.deleteDiary(id);
-      _loadDiaries();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('日记已删除'),
-            backgroundColor: Color(0xFF4CAF50),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+      final success = await _supabaseService.deleteDiary(id);
+      if (success) {
+        _loadDiaries();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('日记已删除'),
+              backgroundColor: Color(0xFF4CAF50),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('删除失败，请检查网络连接'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -280,7 +292,9 @@ class _PetDiaryListPageState extends State<PetDiaryListPage> {
           TextButton(
             onPressed: () {
               Navigator.pop(context);
-              _deleteDiary(diary.id!);
+              if (diary.id != null) {
+                _deleteDiary(diary.id!);
+              }
             },
             child: const Text('删除', style: TextStyle(color: Colors.red)),
           ),

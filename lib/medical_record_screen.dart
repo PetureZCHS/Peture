@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 // 添加数据库助手导入
-import 'database/medical_record_helper.dart';
+import 'services/supabase_service.dart';
 import 'models/pet.dart';
 
 // =========================================================
@@ -350,10 +350,12 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> {
     _loadAllData();
   }
 
-  // --- Data Management (修改为使用数据库) ---
+  // --- Data Management (修改为使用 Supabase) ---
+  final _supabaseService = SupabaseService();
+
   Future<void> _loadAllData() async {
     // 加载所有宠物
-    final pets = await MedicalRecordHelper.instance.getAllPets();
+    final pets = await _supabaseService.getAllPets();
     _allPets = pets.map((p) => Pet.fromMap(p)).toList();
 
     // 设置默认选中的宠物
@@ -370,29 +372,26 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> {
   }
 
   Future<void> _loadDataForSelectedPet() async {
-    if (_selectedPet == null) return;
+    if (_selectedPet == null || _selectedPet!.id == null) return;
 
     final petId = _selectedPet!.id!;
 
     // 加载病历记录
-    final records = await MedicalRecordHelper.instance.getMedicalRecordsForPet(
-      petId,
-    );
+    final records = await _supabaseService.getMedicalRecordsForPet(petId.toString());
     _records = records.map((r) => MedicalRecord.fromMap(r)).toList();
 
     // 加载提醒事项
-    final reminders = await MedicalRecordHelper.instance
-        .getDailyRemindersForPet(petId);
+    final reminders = await _supabaseService.getDailyRemindersForPet(petId.toString());
     _reminders = reminders.map((r) => DailyReminder.fromMap(r)).toList();
 
     // 加载体重记录
-    final weightRecords = await MedicalRecordHelper.instance
-        .getWeightRecordsForPet(petId);
+    final weightRecords = await _supabaseService.getWeightRecordsForPet(petId.toString());
     _weightRecords = weightRecords.map((r) => WeightRecord.fromMap(r)).toList();
 
     // 加载疫苗记录
-    final vaccineRecords = await MedicalRecordHelper.instance
-        .getVaccineRecordsForPet(petId);
+    final vaccineRecords = await _supabaseService.getVaccineRecordsForPet(
+      petId.toString(),
+    );
     _vaccineRecords = vaccineRecords
         .map((r) => VaccineRecord.fromMap(r))
         .toList();
@@ -450,11 +449,16 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> {
     final recordMap = newRecord.toMap();
     recordMap['pet_id'] = _selectedPet?.id;
 
-    await MedicalRecordHelper.instance.insertMedicalRecord(recordMap);
-    final recordWithPetId = MedicalRecord.fromMap(recordMap);
-    _records.add(recordWithPetId);
-    _compileAndSortHealthLog();
-    if (mounted) _showSuccessSnackBar('病历添加成功!');
+    final newId = await _supabaseService.insertMedicalRecord(recordMap);
+    if (newId != null) {
+      recordMap['id'] = newId;
+      final recordWithPetId = MedicalRecord.fromMap(recordMap);
+      _records.add(recordWithPetId);
+      _compileAndSortHealthLog();
+      if (mounted) _showSuccessSnackBar('病历添加成功!');
+    } else {
+      if (mounted) _showSuccessSnackBar('病历添加失败，请检查网络连接');
+    }
   }
 
   Future<void> _addReminder(DailyReminder newReminder) async {
@@ -463,11 +467,16 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> {
     final reminderMap = newReminder.toMap();
     reminderMap['pet_id'] = _selectedPet?.id;
 
-    await MedicalRecordHelper.instance.insertDailyReminder(reminderMap);
-    final reminderWithPetId = DailyReminder.fromMap(reminderMap);
-    _reminders.add(reminderWithPetId);
-    setState(() {});
-    if (mounted) _showSuccessSnackBar('提醒事项添加成功!');
+    final newId = await _supabaseService.insertDailyReminder(reminderMap);
+    if (newId != null) {
+      reminderMap['id'] = newId;
+      final reminderWithPetId = DailyReminder.fromMap(reminderMap);
+      _reminders.add(reminderWithPetId);
+      setState(() {});
+      if (mounted) _showSuccessSnackBar('提醒事项添加成功!');
+    } else {
+      if (mounted) _showSuccessSnackBar('提醒事项添加失败，请检查网络连接');
+    }
   }
 
   Future<void> _addWeightRecord(WeightRecord newRecord) async {
@@ -476,11 +485,16 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> {
     final recordMap = newRecord.toMap();
     recordMap['pet_id'] = _selectedPet?.id;
 
-    await MedicalRecordHelper.instance.insertWeightRecord(recordMap);
-    final recordWithPetId = WeightRecord.fromMap(recordMap);
-    _weightRecords.add(recordWithPetId);
-    _compileAndSortHealthLog();
-    if (mounted) _showSuccessSnackBar('体重记录成功!');
+    final newId = await _supabaseService.insertWeightRecord(recordMap);
+    if (newId != null) {
+      recordMap['id'] = newId;
+      final recordWithPetId = WeightRecord.fromMap(recordMap);
+      _weightRecords.add(recordWithPetId);
+      _compileAndSortHealthLog();
+      if (mounted) _showSuccessSnackBar('体重记录成功!');
+    } else {
+      if (mounted) _showSuccessSnackBar('体重记录失败，请检查网络连接');
+    }
   }
 
   Future<void> _addVaccineRecord(VaccineRecord newRecord) async {
@@ -489,53 +503,82 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> {
     final recordMap = newRecord.toMap();
     recordMap['pet_id'] = _selectedPet?.id;
 
-    await MedicalRecordHelper.instance.insertVaccineRecord(recordMap);
-    final recordWithPetId = VaccineRecord.fromMap(recordMap);
-    _vaccineRecords.add(recordWithPetId);
-    _compileAndSortHealthLog();
-    if (mounted) _showSuccessSnackBar('疫苗/驱虫记录成功!');
+    final newId = await _supabaseService.insertVaccineRecord(recordMap);
+    if (newId != null) {
+      recordMap['id'] = newId;
+      final recordWithPetId = VaccineRecord.fromMap(recordMap);
+      _vaccineRecords.add(recordWithPetId);
+      _compileAndSortHealthLog();
+      if (mounted) _showSuccessSnackBar('疫苗/驱虫记录成功!');
+    } else {
+      if (mounted) _showSuccessSnackBar('疫苗/驱虫记录失败，请检查网络连接');
+    }
   }
 
   Future<void> _deleteRecord(MedicalRecord record) async {
     HapticFeedback.heavyImpact();
     // 注意：这里需要根据ID删除数据库中的记录
     if (record.id != null) {
-      await MedicalRecordHelper.instance.deleteMedicalRecord(record.id!);
+      final success = await _supabaseService.deleteMedicalRecord(
+        record.id.toString(),
+      );
+      if (success) {
+        _records.remove(record);
+        _compileAndSortHealthLog();
+        if (mounted) _showSuccessSnackBar('病历删除成功!');
+      } else {
+        if (mounted) _showSuccessSnackBar('病历删除失败，请检查网络连接');
+      }
     }
-    _records.remove(record);
-    _compileAndSortHealthLog();
-    if (mounted) _showSuccessSnackBar('病历删除成功!');
   }
 
   Future<void> _deleteWeightRecord(WeightRecord record) async {
     HapticFeedback.heavyImpact();
     if (record.id != null) {
-      await MedicalRecordHelper.instance.deleteWeightRecord(record.id!);
+      final success = await _supabaseService.deleteWeightRecord(
+        record.id.toString(),
+      );
+      if (success) {
+        _weightRecords.remove(record);
+        _compileAndSortHealthLog();
+        if (mounted) _showSuccessSnackBar('体重记录已删除!');
+      } else {
+        if (mounted) _showSuccessSnackBar('体重记录删除失败，请检查网络连接');
+      }
     }
-    _weightRecords.remove(record);
-    _compileAndSortHealthLog();
-    if (mounted) _showSuccessSnackBar('体重记录已删除!');
   }
 
   Future<void> _deleteVaccineRecord(VaccineRecord record) async {
     HapticFeedback.heavyImpact();
     if (record.id != null) {
-      await MedicalRecordHelper.instance.deleteVaccineRecord(record.id!);
+      final success = await _supabaseService.deleteVaccineRecord(
+        record.id.toString(),
+      );
+      if (success) {
+        _vaccineRecords.remove(record);
+        _compileAndSortHealthLog();
+        if (mounted) _showSuccessSnackBar('疫苗/驱虫记录已删除!');
+      } else {
+        if (mounted) _showSuccessSnackBar('疫苗/驱虫记录删除失败，请检查网络连接');
+      }
     }
-    _vaccineRecords.remove(record);
-    _compileAndSortHealthLog();
-    if (mounted) _showSuccessSnackBar('疫苗/驱虫记录已删除!');
   }
 
   Future<void> _deleteReminder(int index) async {
     HapticFeedback.heavyImpact();
     final reminder = _reminders[index];
     if (reminder.id != null) {
-      await MedicalRecordHelper.instance.deleteDailyReminder(reminder.id!);
+      final success = await _supabaseService.deleteDailyReminder(
+        reminder.id.toString(),
+      );
+      if (success) {
+        _reminders.removeAt(index);
+        setState(() {});
+        if (mounted) _showSuccessSnackBar('提醒事项删除成功!');
+      } else {
+        if (mounted) _showSuccessSnackBar('提醒事项删除失败，请检查网络连接');
+      }
     }
-    _reminders.removeAt(index);
-    setState(() {});
-    if (mounted) _showSuccessSnackBar('提醒事项删除成功!');
   }
 
   // --- 新的宠物选择器方法 ---
@@ -1538,9 +1581,15 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> {
 
                     // 更新数据库
                     if (reminder.id != null) {
-                      await MedicalRecordHelper.instance.updateDailyReminder(
-                        updatedReminder.toMap(),
-                      );
+                      final success = await _supabaseService
+                          .updateDailyReminder(updatedReminder.toMap());
+                      if (!success) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('更新失败，请检查网络连接')),
+                          );
+                        }
+                      }
                     }
 
                     // 更新本地列表
@@ -1749,9 +1798,15 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> {
 
                     // 更新数据库
                     if (record.id != null) {
-                      await MedicalRecordHelper.instance.updateMedicalRecord(
-                        updatedRecord.toMap(),
-                      );
+                      final success = await _supabaseService
+                          .updateMedicalRecord(updatedRecord.toMap());
+                      if (!success) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('更新失败，请检查网络连接')),
+                          );
+                        }
+                      }
                     }
 
                     // 更新本地列表
@@ -1885,9 +1940,16 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> {
 
                     // 更新数据库
                     if (record.id != null) {
-                      await MedicalRecordHelper.instance.updateWeightRecord(
+                      final success = await _supabaseService.updateWeightRecord(
                         updatedRecord.toMap(),
                       );
+                      if (!success) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('更新失败，请检查网络连接')),
+                          );
+                        }
+                      }
                     }
 
                     // 更新本地列表
@@ -2026,9 +2088,15 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> {
 
                     // 更新数据库
                     if (record.id != null) {
-                      await MedicalRecordHelper.instance.updateVaccineRecord(
-                        updatedRecord.toMap(),
-                      );
+                      final success = await _supabaseService
+                          .updateVaccineRecord(updatedRecord.toMap());
+                      if (!success) {
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('更新失败，请检查网络连接')),
+                          );
+                        }
+                      }
                     }
 
                     // 更新本地列表

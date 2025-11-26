@@ -2,9 +2,9 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import '../../database/database_helper.dart';
-import '../../models/pet_diary.dart';
 import '../../services/supabase_edge_service.dart';
+import '../../models/pet_diary.dart';
+import '../../services/supabase_service.dart';
 
 /// 宠物日记结果展示页面
 class PetDiaryResultPage extends StatefulWidget {
@@ -317,7 +317,19 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
         timestamp: DateTime.now(),
       );
 
-      await DatabaseHelper.instance.insertDiary(diary);
+      final supabaseService = SupabaseService();
+      final diaryId = await supabaseService.insertDiary(diary);
+      if (diaryId == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('保存失败，请检查网络连接'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
 
       if (mounted) {
         setState(() {

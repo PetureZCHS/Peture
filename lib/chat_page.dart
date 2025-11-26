@@ -6,8 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:share_plus/share_plus.dart';
-// ✅ 使用新的 Supabase Edge Function 服务
-import 'services/supabase_edge_service.dart';
+// ✅ 使用新的 Supabase Dify 服务
+import 'services/supabase_dify_service.dart';
 // ================== 所有必需的导入 ==================
 import 'models/conversation.dart';
 import 'database/database_helper.dart';
@@ -74,9 +74,14 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
   bool _shouldAutoScroll = true;
   bool _isStreamDone = false;
   bool _userScrolledUp = false;
+  
+  // 用于保存完整的对话内容
+  String? _pendingSaveQuestion;
+  String _fullResponseText = '';
 
   // ✅ 使用新的 Supabase Edge Function 服务
-  final SupabaseEdgeFunctionService _edgeService = SupabaseEdgeFunctionService();
+  final SupabaseDifyService _difyService =
+      SupabaseDifyService();
 
   final List<String> _allSuggestions = [
     "猫咪呼吸似乎有点困难，嘴巴张开呼吸，像小狗一样喘气",
@@ -139,7 +144,9 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
       timestamp: DateTime.now(),
     );
     await DatabaseHelper.instance.insertConversation(conversation);
-    debugPrint("对话已保存: Q: $question");
+    debugPrint("✅ 对话已保存: Q: $question");
+    debugPrint("✅ 答案长度: ${answer.length} 字符");
+    debugPrint("✅ 答案前100字: ${answer.substring(0, answer.length > 100 ? 100 : answer.length)}");
   }
 
   void _startNewChat() {
@@ -153,6 +160,8 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
       _pendingChunks.clear();
       _isTyping = false;
       _currentTypingText = '';
+      _fullResponseText = '';
+      _pendingSaveQuestion = null;
       _updateSuggestions();
     });
     debugPrint("新对话已开始, conversationId 已清空。");
@@ -160,6 +169,10 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
 
   // 添加这个新方法来加载历史对话
   void _loadConversation(Conversation conversation) {
+    debugPrint("📖 开始加载历史对话...");
+    debugPrint("📖 问题: ${conversation.question}");
+    debugPrint("📖 答案长度: ${conversation.answer.length} 字符");
+    
     setState(() {
       _messages.clear();
       _textController.clear();
@@ -170,12 +183,25 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
       _pendingChunks.clear();
       _isTyping = false;
       _currentTypingText = '';
+      _fullResponseText = '';
+      _pendingSaveQuestion = null;
+      
       // 添加用户问题
       _messages.add(ChatMessage(text: conversation.question, isUser: true));
-      // 添加AI回答
+      // 添加AI回答（确保使用完整的answer内容）
       _messages.add(ChatMessage(text: conversation.answer, isUser: false));
+      
+      debugPrint("📖 消息列表已更新，共 ${_messages.length} 条消息");
+      debugPrint("📖 AI消息内容长度: ${_messages.last.text.length} 字符");
     });
-    debugPrint("已加载历史对话: ${conversation.question}");
+    
+    // 加载完成后滚动到底部
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scrollToBottom();
+      debugPrint("📖 已滚动到底部");
+    });
+    
+    debugPrint("✅ 历史对话加载完成");
   }
 
   // --- 数据库操作方法 ---
@@ -216,6 +242,12 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
         setState(() {
           _isLoading = false;
         });
+        // ✅ 所有内容都显示完成后，保存对话
+        if (_pendingSaveQuestion != null && _fullResponseText.isNotEmpty) {
+          _saveConversation(_pendingSaveQuestion!, _fullResponseText);
+          _pendingSaveQuestion = null;
+          _fullResponseText = '';
+        }
       }
       return;
     }
@@ -291,35 +323,48 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
     _saveMessageToDatabase(messageText, true);
     _scrollToBottom();
 
-    // ✅ 使用 Supabase Edge Function 服务
-    final stream = _edgeService.callDifyChat(
+    // ✅ 使用 Supabase Dify 服务
+    final stream = _difyService.callDifyChat(
       query: messageText,
       user: _userId,
       conversationId: _conversationId,
     );
+
+    // 重置完整响应文本和待保存的问题
+    _fullResponseText = '';
+    _pendingSaveQuestion = messageText;
     
     stream.listen((event) {
       if (!mounted) return;
       switch (event) {
         case ContentEvent():
+          // ✅ 累积完整的响应文本
+          _fullResponseText += event.content;
           _startTypewriterEffect(event.content);
           break;
-          
+
         case DoneEvent():
           _isStreamDone = true;
           // ✅ 从 DoneEvent 获取 conversation_id
-          if (event.conversationId != null && event.conversationId != _conversationId) {
+          if (event.conversationId != null &&
+              event.conversationId != _conversationId) {
             setState(() {
               _conversationId = event.conversationId;
             });
             debugPrint("✅ Conversation ID 已更新: $_conversationId");
           }
-          _saveConversation(messageText, _currentTypingText);
+          // ✅ 不在这里保存，而是在打字机效果完成后保存
+          // 如果没有打字机效果（_pendingChunks为空且不在打字中），立即保存
           if (_pendingChunks.isEmpty && !_isTyping) {
             setState(() => _isLoading = false);
+            if (_pendingSaveQuestion != null && _fullResponseText.isNotEmpty) {
+              _saveConversation(_pendingSaveQuestion!, _fullResponseText);
+              _pendingSaveQuestion = null;
+              _fullResponseText = '';
+            }
           }
           break;
-          
+
         case ErrorEvent():
           _typingTimer?.cancel();
           setState(() {
@@ -371,28 +416,39 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
       return;
     }
 
-    // ✅ 使用 Supabase Edge Function 服务
-    final stream = _edgeService.callDifyChat(
+    // ✅ 使用 Supabase Dify 服务
+    // 重置完整响应文本和待保存的问题
+    _fullResponseText = '';
+    _pendingSaveQuestion = lastUserMessage.text;
+    
+    final stream = _difyService.callDifyChat(
       query: lastUserMessage.text,
       user: _userId,
       conversationId: _conversationId,
     );
-    
+
     stream.listen((event) {
       if (!mounted) return;
       switch (event) {
         case ContentEvent():
+          // ✅ 累积完整的响应文本
+          _fullResponseText += event.content;
           _startTypewriterEffect(event.content);
           break;
-          
+
         case DoneEvent():
           _isStreamDone = true;
-          _saveConversation(lastUserMessage.text, _currentTypingText);
+          // ✅ 不在这里保存，而是在打字机效果完成后保存
           if (_pendingChunks.isEmpty && !_isTyping) {
             setState(() => _isLoading = false);
+            if (_pendingSaveQuestion != null && _fullResponseText.isNotEmpty) {
+              _saveConversation(_pendingSaveQuestion!, _fullResponseText);
+              _pendingSaveQuestion = null;
+              _fullResponseText = '';
+            }
           }
           break;
-          
+
         case ErrorEvent():
           _typingTimer?.cancel();
           setState(() {
@@ -1081,7 +1137,7 @@ class _AppDrawerState extends State<AppDrawer> {
               onPressed: () async {
                 if (conversation.id != null) {
                   await DatabaseHelper.instance.deleteConversation(
-                    conversation.id!,
+                    int.parse(conversation.id!),
                   );
                   _loadConversations();
                 }
@@ -1186,6 +1242,8 @@ class _AppDrawerState extends State<AppDrawer> {
                               _showConversationOptions(context, conversation),
                         ),
                         onTap: () {
+                          debugPrint("🔘 点击历史对话: ${conversation.question}");
+                          debugPrint("🔘 答案长度: ${conversation.answer.length} 字符");
                           Navigator.pop(context);
                           if (widget.onConversationSelected != null) {
                             widget.onConversationSelected!(conversation);
