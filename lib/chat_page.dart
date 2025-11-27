@@ -7,7 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:share_plus/share_plus.dart';
 // ✅ 使用新的 Supabase Dify 服务
-import 'services/supabase_dify_service.dart';
+import 'services/supabase_edge_service.dart';
 // ================== 所有必需的导入 ==================
 import 'models/conversation.dart';
 import 'database/database_helper.dart';
@@ -74,14 +74,14 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
   bool _shouldAutoScroll = true;
   bool _isStreamDone = false;
   bool _userScrolledUp = false;
-  
+
   // 用于保存完整的对话内容
   String? _pendingSaveQuestion;
   String _fullResponseText = '';
 
   // ✅ 使用新的 Supabase Edge Function 服务
-  final SupabaseDifyService _difyService =
-      SupabaseDifyService();
+  final SupabaseEdgeFunctionService _difyService =
+      SupabaseEdgeFunctionService();
 
   final List<String> _allSuggestions = [
     "猫咪呼吸似乎有点困难，嘴巴张开呼吸，像小狗一样喘气",
@@ -146,7 +146,8 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
     await DatabaseHelper.instance.insertConversation(conversation);
     debugPrint("✅ 对话已保存: Q: $question");
     debugPrint("✅ 答案长度: ${answer.length} 字符");
-    debugPrint("✅ 答案前100字: ${answer.substring(0, answer.length > 100 ? 100 : answer.length)}");
+    debugPrint(
+        "✅ 答案前100字: ${answer.substring(0, answer.length > 100 ? 100 : answer.length)}");
   }
 
   void _startNewChat() {
@@ -172,7 +173,7 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
     debugPrint("📖 开始加载历史对话...");
     debugPrint("📖 问题: ${conversation.question}");
     debugPrint("📖 答案长度: ${conversation.answer.length} 字符");
-    
+
     setState(() {
       _messages.clear();
       _textController.clear();
@@ -185,22 +186,22 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
       _currentTypingText = '';
       _fullResponseText = '';
       _pendingSaveQuestion = null;
-      
+
       // 添加用户问题
       _messages.add(ChatMessage(text: conversation.question, isUser: true));
       // 添加AI回答（确保使用完整的answer内容）
       _messages.add(ChatMessage(text: conversation.answer, isUser: false));
-      
+
       debugPrint("📖 消息列表已更新，共 ${_messages.length} 条消息");
       debugPrint("📖 AI消息内容长度: ${_messages.last.text.length} 字符");
     });
-    
+
     // 加载完成后滚动到底部
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _scrollToBottom();
       debugPrint("📖 已滚动到底部");
     });
-    
+
     debugPrint("✅ 历史对话加载完成");
   }
 
@@ -333,7 +334,7 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
     // 重置完整响应文本和待保存的问题
     _fullResponseText = '';
     _pendingSaveQuestion = messageText;
-    
+
     stream.listen((event) {
       if (!mounted) return;
       switch (event) {
@@ -420,7 +421,7 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
     // 重置完整响应文本和待保存的问题
     _fullResponseText = '';
     _pendingSaveQuestion = lastUserMessage.text;
-    
+
     final stream = _difyService.callDifyChat(
       query: lastUserMessage.text,
       user: _userId,
@@ -618,16 +619,15 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
               child: AnimatedSwitcher(
                 duration: const Duration(milliseconds: 500),
                 transitionBuilder: (Widget child, Animation<double> animation) {
-                  final offsetAnimation =
-                      Tween<Offset>(
-                        begin: const Offset(0.0, 1.0),
-                        end: Offset.zero,
-                      ).animate(
-                        CurvedAnimation(
-                          parent: animation,
-                          curve: Curves.easeInOutCubic,
-                        ),
-                      );
+                  final offsetAnimation = Tween<Offset>(
+                    begin: const Offset(0.0, 1.0),
+                    end: Offset.zero,
+                  ).animate(
+                    CurvedAnimation(
+                      parent: animation,
+                      curve: Curves.easeInOutCubic,
+                    ),
+                  );
                   return SlideTransition(
                     position: offsetAnimation,
                     child: child,
@@ -676,9 +676,9 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
                 child: Text(
                   "智能问诊",
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 18,
-                  ),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                      ),
                 ),
               ),
             ),
@@ -728,13 +728,11 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
   }
 
   Widget _buildStep(String title, IconData icon, {bool isActive = false}) {
-    final color = isActive
-        ? Theme.of(context).primaryColor
-        : Colors.grey.shade300;
+    final color =
+        isActive ? Theme.of(context).primaryColor : Colors.grey.shade300;
     final iconColor = isActive ? Colors.white : Colors.grey.shade600;
-    final textColor = isActive
-        ? Theme.of(context).primaryColor
-        : Colors.grey.shade500;
+    final textColor =
+        isActive ? Theme.of(context).primaryColor : Colors.grey.shade500;
     return Column(
       children: [
         Container(
@@ -940,8 +938,7 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
             itemCount: _messages.length,
             itemBuilder: (context, index) {
               final message = _messages[index];
-              final isLastMessageLoading =
-                  _isLoading &&
+              final isLastMessageLoading = _isLoading &&
                   index == _messages.length - 1 &&
                   message.text.isEmpty;
               final isLastMessage = index == _messages.length - 1;
@@ -1243,7 +1240,8 @@ class _AppDrawerState extends State<AppDrawer> {
                         ),
                         onTap: () {
                           debugPrint("🔘 点击历史对话: ${conversation.question}");
-                          debugPrint("🔘 答案长度: ${conversation.answer.length} 字符");
+                          debugPrint(
+                              "🔘 答案长度: ${conversation.answer.length} 字符");
                           Navigator.pop(context);
                           if (widget.onConversationSelected != null) {
                             widget.onConversationSelected!(conversation);
@@ -1383,9 +1381,8 @@ class _MessageBubble extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 8.0),
       child: Row(
-        mainAxisAlignment: isUser
-            ? MainAxisAlignment.end
-            : MainAxisAlignment.start,
+        mainAxisAlignment:
+            isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (!isUser)
@@ -1409,9 +1406,8 @@ class _MessageBubble extends StatelessWidget {
           if (!isUser) const SizedBox(width: 10),
           Flexible(
             child: Column(
-              crossAxisAlignment: isUser
-                  ? CrossAxisAlignment.end
-                  : CrossAxisAlignment.start,
+              crossAxisAlignment:
+                  isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
               children: [
                 Container(
                   padding: const EdgeInsets.symmetric(
