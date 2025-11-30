@@ -18,6 +18,7 @@ class PetProfileFormPage extends StatefulWidget {
 class _PetProfileFormPageState extends State<PetProfileFormPage> {
   File? _avatarFile;
   String? _petName;
+  String? _petType; // 宠物类型：狗狗/猫咪
   String? _petSpecies; // 品种
   DateTime? _birthDate;
   String? _gender; // 弟弟/妹妹/未知
@@ -497,20 +498,21 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
                                         const NeverScrollableScrollPhysics(),
                                     gridDelegate:
                                         const SliverGridDelegateWithFixedCrossAxisCount(
-                                          crossAxisCount: 4,
-                                          mainAxisSpacing: 16,
-                                          crossAxisSpacing: 16,
-                                          childAspectRatio: 0.85,
-                                        ),
+                                      crossAxisCount: 4,
+                                      mainAxisSpacing: 16,
+                                      crossAxisSpacing: 16,
+                                      childAspectRatio: 0.85,
+                                    ),
                                     itemCount: popularBreeds[category]!.length,
                                     itemBuilder: (context, index) {
                                       final breed =
                                           popularBreeds[category]![index];
                                       return GestureDetector(
                                         onTap: () {
-                                          setState(
-                                            () => _petSpecies = breed['name'],
-                                          );
+                                          setState(() {
+                                            _petType = currentCategory;
+                                            _petSpecies = breed['name'];
+                                          });
                                           Navigator.pop(ctx);
                                         },
                                         child: Column(
@@ -538,45 +540,44 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
                                                 child: Image.network(
                                                   breed['image']!,
                                                   fit: BoxFit.cover,
-                                                  loadingBuilder: (context, child, loadingProgress) {
+                                                  loadingBuilder: (context,
+                                                      child, loadingProgress) {
                                                     if (loadingProgress == null)
                                                       return child;
                                                     return Center(
                                                       child: SizedBox(
                                                         width: 16,
                                                         height: 16,
-                                                        child: CircularProgressIndicator(
+                                                        child:
+                                                            CircularProgressIndicator(
                                                           strokeWidth: 2,
-                                                          value:
-                                                              loadingProgress
+                                                          value: loadingProgress
                                                                       .expectedTotalBytes !=
                                                                   null
                                                               ? loadingProgress
-                                                                        .cumulativeBytesLoaded /
-                                                                    loadingProgress
-                                                                        .expectedTotalBytes!
+                                                                      .cumulativeBytesLoaded /
+                                                                  loadingProgress
+                                                                      .expectedTotalBytes!
                                                               : null,
                                                         ),
                                                       ),
                                                     );
                                                   },
-                                                  errorBuilder:
-                                                      (
-                                                        context,
-                                                        error,
-                                                        stackTrace,
-                                                      ) {
-                                                        return Container(
-                                                          color: Colors
-                                                              .grey
-                                                              .shade200,
-                                                          child: const Icon(
-                                                            Icons.pets,
-                                                            size: 24,
-                                                            color: Colors.grey,
-                                                          ),
-                                                        );
-                                                      },
+                                                  errorBuilder: (
+                                                    context,
+                                                    error,
+                                                    stackTrace,
+                                                  ) {
+                                                    return Container(
+                                                      color:
+                                                          Colors.grey.shade200,
+                                                      child: const Icon(
+                                                        Icons.pets,
+                                                        size: 24,
+                                                        color: Colors.grey,
+                                                      ),
+                                                    );
+                                                  },
                                                 ),
                                               ),
                                             ),
@@ -636,17 +637,18 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
                                           color: Colors.transparent,
                                           child: InkWell(
                                             onTap: () {
-                                              setState(
-                                                () => _petSpecies = breed,
-                                              );
+                                              setState(() {
+                                                _petType = currentCategory;
+                                                _petSpecies = breed;
+                                              });
                                               Navigator.pop(ctx);
                                             },
                                             child: Container(
                                               padding:
                                                   const EdgeInsets.symmetric(
-                                                    horizontal: 20,
-                                                    vertical: 16,
-                                                  ),
+                                                horizontal: 20,
+                                                vertical: 16,
+                                              ),
                                               decoration: BoxDecoration(
                                                 border: Border(
                                                   bottom: BorderSide(
@@ -1053,9 +1055,8 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
                         onPressed: () {
                           final now = DateTime.now();
                           // 最终确认：如果选择的日期在未来，使用今天的日期
-                          final finalDate = tempDate.isAfter(now)
-                              ? now
-                              : tempDate;
+                          final finalDate =
+                              tempDate.isAfter(now) ? now : tempDate;
                           setState(() => _birthDate = finalDate);
                           Navigator.pop(ctx);
                         },
@@ -1094,8 +1095,8 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
             // 找到初始选中项的索引
             final initialIndex =
                 tempGender != null && genderOptions.contains(tempGender)
-                ? genderOptions.indexOf(tempGender!)
-                : 0;
+                    ? genderOptions.indexOf(tempGender!)
+                    : 0;
 
             return SafeArea(
               child: Column(
@@ -1208,8 +1209,8 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
             // 找到初始选中项的索引
             final initialIndex =
                 tempStatus != null && neuterOptions.contains(tempStatus)
-                ? neuterOptions.indexOf(tempStatus!)
-                : 0;
+                    ? neuterOptions.indexOf(tempStatus!)
+                    : 0;
 
             return SafeArea(
               child: Column(
@@ -1510,120 +1511,119 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
       barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
       barrierColor: Colors.black54,
       transitionDuration: const Duration(milliseconds: 300),
-      pageBuilder:
-          (
-            BuildContext buildContext,
-            Animation animation,
-            Animation secondaryAnimation,
-          ) {
-            return Center(
-              child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 30),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Material(
-                  color: Colors.transparent,
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
+      pageBuilder: (
+        BuildContext buildContext,
+        Animation animation,
+        Animation secondaryAnimation,
+      ) {
+        return Center(
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 30),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text(
-                              '设置宠物昵称',
-                              style: TextStyle(
-                                fontSize: 17,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.close, size: 22),
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(),
-                              onPressed: () => Navigator.pop(buildContext),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 20),
-                        TextField(
-                          controller: controller,
-                          autofocus: false,
-                          decoration: InputDecoration(
-                            hintText: '请输入宠物昵称',
-                            hintStyle: TextStyle(color: Colors.grey.shade400),
-                            filled: true,
-                            fillColor: const Color(0xFFF7F8FA),
-                            border: OutlineInputBorder(
-                              borderSide: BorderSide.none,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 14,
-                            ),
+                        const Text(
+                          '设置宠物昵称',
+                          style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
-                        const SizedBox(height: 24),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: TextButton(
-                                style: TextButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 14,
-                                  ),
-                                  backgroundColor: const Color(0xFFF5F5F5),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                ),
-                                onPressed: () => Navigator.pop(buildContext),
-                                child: Text(
-                                  '取消',
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    color: Colors.grey.shade700,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: ElevatedButton(
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF5A8EFA),
-                                  foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 14,
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  elevation: 0,
-                                ),
-                                onPressed: () {
-                                  setState(() => _petName = controller.text);
-                                  Navigator.pop(buildContext);
-                                },
-                                child: const Text(
-                                  '确认',
-                                  style: TextStyle(fontSize: 16),
-                                ),
-                              ),
-                            ),
-                          ],
+                        IconButton(
+                          icon: const Icon(Icons.close, size: 22),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          onPressed: () => Navigator.pop(buildContext),
                         ),
                       ],
                     ),
-                  ),
+                    const SizedBox(height: 20),
+                    TextField(
+                      controller: controller,
+                      autofocus: false,
+                      decoration: InputDecoration(
+                        hintText: '请输入宠物昵称',
+                        hintStyle: TextStyle(color: Colors.grey.shade400),
+                        filled: true,
+                        fillColor: const Color(0xFFF7F8FA),
+                        border: OutlineInputBorder(
+                          borderSide: BorderSide.none,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 14,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextButton(
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 14,
+                              ),
+                              backgroundColor: const Color(0xFFF5F5F5),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            onPressed: () => Navigator.pop(buildContext),
+                            child: Text(
+                              '取消',
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: Colors.grey.shade700,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF5A8EFA),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 14,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              elevation: 0,
+                            ),
+                            onPressed: () {
+                              setState(() => _petName = controller.text);
+                              Navigator.pop(buildContext);
+                            },
+                            child: const Text(
+                              '确认',
+                              style: TextStyle(fontSize: 16),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
-            );
-          },
+            ),
+          ),
+        );
+      },
       transitionBuilder: (context, animation, secondaryAnimation, child) {
         return ScaleTransition(
           scale: CurvedAnimation(parent: animation, curve: Curves.easeOutBack),
@@ -1706,14 +1706,37 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
       return;
     }
 
-    // TODO: 保存逻辑，返回数据给上一页
+    // 保存逻辑，返回数据给上一页
+    // 根据品种自动推断宠物类型（如果用户没有明确选择）
+    String? petType = _petType;
+    if (petType == null && _petSpecies != null) {
+      // 尝试从品种推断类型
+      for (final entry in _speciesOptions.entries) {
+        if (entry.value.contains(_petSpecies)) {
+          petType = entry.key;
+          break;
+        }
+      }
+    }
+
+    // 转换类型名称：狗狗 -> 狗，猫咪 -> 猫
+    String? typeForDb;
+    if (petType == '狗狗') {
+      typeForDb = '狗';
+    } else if (petType == '猫咪') {
+      typeForDb = '猫';
+    } else {
+      typeForDb = petType;
+    }
+
     final result = {
       'avatar': _avatarFile?.path,
       'name': _petName,
-      'species': _petSpecies,
-      'birthDate': _birthDate?.toIso8601String(),
+      'type': typeForDb, // 宠物类型：狗、猫
+      'breed': _petSpecies, // 品种：边牧犬、布偶猫
+      'birth_date': _birthDate?.toIso8601String(),
       'gender': _gender,
-      'neuterStatus': _neuterStatus,
+      'neuter_status': _neuterStatus,
       'weight': _weight,
     };
 

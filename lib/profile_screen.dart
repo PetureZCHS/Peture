@@ -376,8 +376,8 @@ class _PetProfileSectionState extends State<PetProfileSection> {
   }
 
   Future<void> _loadPets() async {
-    final List<Map<String, dynamic>> petsData = await _supabaseService
-        .getAllPets();
+    final List<Map<String, dynamic>> petsData =
+        await _supabaseService.getAllPets();
     if (mounted) {
       setState(() {
         pets.clear();
@@ -387,66 +387,61 @@ class _PetProfileSectionState extends State<PetProfileSection> {
   }
 
   void _addPet(Pet newPet) {
-    _supabaseService
-        .insertPet(newPet.toMap())
-        .then((generatedId) {
-          if (generatedId != null) {
-            final petWithId = Pet(
-              id: generatedId, // generatedId 已经是 String 类型
-              type: newPet.type,
-              name: newPet.name,
-              age: newPet.age,
-              gender: newPet.gender,
-              breed: newPet.breed,
-            );
+    _supabaseService.insertPet(newPet.toMap()).then((generatedId) {
+      if (generatedId != null) {
+        final petWithId = Pet(
+          id: generatedId, // generatedId 已经是 String 类型
+          type: newPet.type,
+          name: newPet.name,
+          age: newPet.age,
+          gender: newPet.gender,
+          breed: newPet.breed,
+        );
 
-            if (mounted) {
-              setState(() {
-                pets.add(petWithId);
-              });
-            }
+        if (mounted) {
+          setState(() {
+            pets.add(petWithId);
+          });
+        }
 
-            if (mounted) {
-              ScaffoldMessenger.of(
-                context,
-              ).showSnackBar(const SnackBar(content: Text('宠物档案添加成功')));
-            }
-          } else {
-            if (mounted) {
-              ScaffoldMessenger.of(
-                context,
-              ).showSnackBar(const SnackBar(content: Text('宠物档案添加失败，请检查网络连接')));
-            }
-          }
-        })
-        .catchError((error, stackTrace) {
-          // 使用 debugPrint 替代 print
-          debugPrint('--- 宠物档案添加失败 ---');
-          debugPrint('错误详情 (Error): $error');
-          debugPrint('错误类型: ${error.runtimeType}');
-          debugPrint('堆栈跟踪 (Stack Trace): $stackTrace');
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('宠物档案添加成功')));
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('宠物档案添加失败，请检查网络连接')));
+        }
+      }
+    }).catchError((error, stackTrace) {
+      // 使用 debugPrint 替代 print
+      debugPrint('--- 宠物档案添加失败 ---');
+      debugPrint('错误详情 (Error): $error');
+      debugPrint('错误类型: ${error.runtimeType}');
+      debugPrint('堆栈跟踪 (Stack Trace): $stackTrace');
 
-          // 检查是否是数据库约束错误（可能是 user_id 类型不匹配）
-          final errorStr = error.toString().toLowerCase();
-          String errorMessage = '添加失败，请检查终端日志';
+      // 检查是否是数据库约束错误（可能是 user_id 类型不匹配）
+      final errorStr = error.toString().toLowerCase();
+      String errorMessage = '添加失败，请检查终端日志';
 
-          if (errorStr.contains('foreign key') ||
-              errorStr.contains('user_id')) {
-            errorMessage = '添加失败：用户ID格式错误，请重新登录';
-          } else if (errorStr.contains('null') ||
-              errorStr.contains('not null')) {
-            errorMessage = '添加失败：缺少必要字段';
-          } else if (errorStr.contains('network') ||
-              errorStr.contains('connection')) {
-            errorMessage = '添加失败，请检查网络连接';
-          }
+      if (errorStr.contains('foreign key') || errorStr.contains('user_id')) {
+        errorMessage = '添加失败：用户ID格式错误，请重新登录';
+      } else if (errorStr.contains('null') || errorStr.contains('not null')) {
+        errorMessage = '添加失败：缺少必要字段';
+      } else if (errorStr.contains('network') ||
+          errorStr.contains('connection')) {
+        errorMessage = '添加失败，请检查网络连接';
+      }
 
-          if (mounted) {
-            ScaffoldMessenger.of(
-              context,
-            ).showSnackBar(SnackBar(content: Text(errorMessage)));
-          }
-        });
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(errorMessage)));
+      }
+    });
   }
 
   void _deletePet(Pet petToDelete) {
@@ -524,24 +519,42 @@ class _PetProfileSectionState extends State<PetProfileSection> {
                     builder: (context) => const PetProfileFormPage(),
                   ),
                 );
-                
+
                 if (result != null && mounted) {
                   // 从表单页面返回的数据
                   final petData = result as Map<String, dynamic>;
-                  
+
+                  // 计算年龄（根据出生日期）
+                  String age = '1岁0个月';
+                  if (petData['birth_date'] != null) {
+                    final birthDate = DateTime.tryParse(petData['birth_date']);
+                    if (birthDate != null) {
+                      final now = DateTime.now();
+                      int years = now.year - birthDate.year;
+                      int months = now.month - birthDate.month;
+                      if (months < 0) {
+                        years--;
+                        months += 12;
+                      }
+                      age = '${years}岁${months}个月';
+                    }
+                  }
+
                   // 创建Pet对象，包含所有表单字段
                   final newPet = Pet(
-                    type: petData['species']?.split('').first ?? '狗', // 从品种推断类型
+                    type: petData['type'] ?? '狗', // 宠物类型
                     name: petData['name'] ?? '',
-                    age: '1岁0个月', // 默认年龄，可以后续修改
+                    age: age, // 根据出生日期计算
                     gender: petData['gender'] ?? '哥哥',
-                    breed: petData['species'] ?? '',
+                    breed: petData['breed'] ?? '', // 品种
                     avatar: petData['avatar'], // 头像路径
-                    birthDate: petData['birthDate'], // 出生日期
-                    neuterStatus: petData['neuterStatus'], // 绝育状态
-                    weight: petData['weight'] != null ? (petData['weight'] as num).toDouble() : null, // 体重
+                    birthDate: petData['birth_date'], // 出生日期
+                    neuterStatus: petData['neuter_status'], // 绝育状态
+                    weight: petData['weight'] != null
+                        ? (petData['weight'] as num).toDouble()
+                        : null, // 体重
                   );
-                  
+
                   _addPet(newPet);
                 }
               },
@@ -656,13 +669,12 @@ class _PetProfileCardState extends State<PetProfileCard>
       duration: const Duration(milliseconds: 100),
       vsync: this,
     );
-    _scaleAnimation =
-        Tween<double>(
-          begin: 1.0,
-          end: 0.98, // 轻微缩小2%
-        ).animate(
-          CurvedAnimation(parent: _scaleController, curve: Curves.easeInOut),
-        );
+    _scaleAnimation = Tween<double>(
+      begin: 1.0,
+      end: 0.98, // 轻微缩小2%
+    ).animate(
+      CurvedAnimation(parent: _scaleController, curve: Curves.easeInOut),
+    );
   }
 
   @override
@@ -737,8 +749,7 @@ class _PetProfileCardState extends State<PetProfileCard>
                         width: 60,
                         height: 60,
                         decoration: BoxDecoration(
-                          color:
-                              AppColors.petTypeColors[widget.pet.type] ??
+                          color: AppColors.petTypeColors[widget.pet.type] ??
                               AppColors.petTypeColors['其他'],
                           borderRadius: BorderRadius.circular(12),
                         ),
@@ -761,10 +772,8 @@ class _PetProfileCardState extends State<PetProfileCard>
                                 width: 60,
                                 height: 60,
                                 decoration: BoxDecoration(
-                                  color:
-                                      AppColors.petTypeColors[widget
-                                          .pet
-                                          .type] ??
+                                  color: AppColors
+                                          .petTypeColors[widget.pet.type] ??
                                       AppColors.petTypeColors['其他'],
                                   borderRadius: BorderRadius.circular(12),
                                 ),
@@ -1005,9 +1014,11 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage> {
                 if (_currentPet.birthDate != null) const SizedBox(height: 12),
                 if (_currentPet.neuterStatus != null)
                   _buildInfoCard('绝育状态', _currentPet.neuterStatus!),
-                if (_currentPet.neuterStatus != null) const SizedBox(height: 12),
+                if (_currentPet.neuterStatus != null)
+                  const SizedBox(height: 12),
                 if (_currentPet.weight != null)
-                  _buildInfoCard('体重', '${_currentPet.weight!.toStringAsFixed(1)} kg'),
+                  _buildInfoCard(
+                      '体重', '${_currentPet.weight!.toStringAsFixed(1)} kg'),
                 const SizedBox(height: 50),
               ],
             ),
