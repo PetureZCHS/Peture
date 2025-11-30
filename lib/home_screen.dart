@@ -3,9 +3,9 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
-import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
+// import 'package:liquid_glass_renderer/liquid_glass_renderer.dart'; 
 
-// --- 您的页面引用 ---
+// --- 您的页面引用 (保持不变) ---
 import 'chat_page.dart';
 import 'pages/pet_diary/pet_diary_compose_page.dart';
 import 'pages/pet_passport/pet_passport_page.dart';
@@ -17,42 +17,31 @@ import 'medical_record_screen.dart';
 import 'profile_screen.dart';
 
 // =========================================================
-// 1. 配色与样式 (增加了一些更高级的低饱和度颜色)
+// 1. 配色与样式
 // =========================================================
 
 class AppColors {
-  static const Color background = Color(0xFFF5F5F7); // iOS 风格浅灰底色
-  static const Color textDark = Color(0xFF1D1D1F); // 更接近黑色的深灰
-  static const Color textGrey = Color(0xFF86868B);
+  static const Color background = Color(0xFFF2F2F7); 
+  static const Color textDark = Color(0xFF1D1D1F); 
+  static const Color textGrey = Color(0xFF8E8E93); 
 
-  // 更加柔和高级的渐变
-  static const LinearGradient warmGradient = LinearGradient(
-    begin: Alignment.topLeft, end: Alignment.bottomRight,
-    colors: [Color(0xFFFF5E62), Color(0xFFFF9966)],
-  );
-  static const LinearGradient coolGradient = LinearGradient(
-    begin: Alignment.topLeft, end: Alignment.bottomRight,
-    colors: [Color(0xFF4FACFE), Color(0xFF00F2FE)],
-  );
-  static const LinearGradient natureGradient = LinearGradient(
-    begin: Alignment.topLeft, end: Alignment.bottomRight,
-    colors: [Color(0xFF43E97B), Color(0xFF38F9D7)],
-  );
-  static const LinearGradient magicGradient = LinearGradient(
-    begin: Alignment.topLeft, end: Alignment.bottomRight,
-    colors: [Color(0xFFA18CD1), Color(0xFFFBC2EB)],
-  );
-  static const LinearGradient oceanGradient = LinearGradient(
-    begin: Alignment.topLeft, end: Alignment.bottomRight,
-    colors: [Color(0xFF30CFD0), Color(0xFF330867)],
-  );
-  static const LinearGradient goldGradient = LinearGradient(
-    begin: Alignment.topLeft, end: Alignment.bottomRight,
-    colors: [Color(0xFFF6D365), Color(0xFFFDA085)],
-  );
-  
-  // 玻璃卡片背景色
-  static Color glassWhite = Colors.white.withOpacity(0.85);
+  static const Color orb1 = Color(0xFFC4E0E5);
+  static const Color orb2 = Color(0xFFE2D1F9);
+  static const Color orb3 = Color(0xFFFFDFC4);
+
+  static const LinearGradient navTab0 = LinearGradient(colors: [Color(0xFF2E3192), Color(0xFF1BFFFF)]);
+  static const LinearGradient navTab1 = LinearGradient(colors: [Color(0xFFFF512F), Color(0xFFDD2476)]);
+  static const LinearGradient navTab2 = LinearGradient(colors: [Color(0xFF00b09b), Color(0xFF96c93d)]);
+  static const LinearGradient navTab3 = LinearGradient(colors: [Color(0xFF667eea), Color(0xFF764ba2)]);
+
+  static const List<LinearGradient> navGradients = [navTab0, navTab1, navTab2, navTab3];
+
+  static const LinearGradient warmGradient = LinearGradient(colors: [Color(0xFFFF5E62), Color(0xFFFF9966)]);
+  static const LinearGradient coolGradient = LinearGradient(colors: [Color(0xFF4FACFE), Color(0xFF00F2FE)]);
+  static const LinearGradient natureGradient = LinearGradient(colors: [Color(0xFF43E97B), Color(0xFF38F9D7)]);
+  static const LinearGradient magicGradient = LinearGradient(colors: [Color(0xFFA18CD1), Color(0xFFFBC2EB)]);
+  static const LinearGradient oceanGradient = LinearGradient(colors: [Color(0xFF30CFD0), Color(0xFF330867)]);
+  static const LinearGradient goldGradient = LinearGradient(colors: [Color(0xFFF6D365), Color(0xFFFDA085)]);
 }
 
 // =========================================================
@@ -69,23 +58,29 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   int _currentIndex = 0;
   double _currentPosition = 0.0;
-  late AnimationController _bgBreathingController;
+  int _lastHapticIndex = 0;
 
-  // 默认 false (实用模式)，true 为星球模式
+  late AnimationController _orbController;
   bool _isUniverseMode = false;
 
   @override
   void initState() {
     super.initState();
-    _bgBreathingController = AnimationController(
+    
+    SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.dark,
+    ));
+
+    _orbController = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 15), // 呼吸更慢，更高级
+      duration: const Duration(seconds: 12), 
     )..repeat(reverse: true);
   }
 
   @override
   void dispose() {
-    _bgBreathingController.dispose();
+    _orbController.dispose();
     super.dispose();
   }
 
@@ -93,8 +88,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     setState(() {
       _currentIndex = index;
       _currentPosition = index.toDouble();
+      _lastHapticIndex = index;
     });
-    HapticFeedback.lightImpact();
+    HapticFeedback.mediumImpact();
   }
 
   void _toggleViewMode() {
@@ -106,9 +102,23 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    final Widget homePageContent = _isUniverseMode
-        ? _HomeUniverseContent(onToggleMode: _toggleViewMode)
-        : _HomeDashboardContent(onToggleMode: _toggleViewMode);
+    final Widget homePageContent = AnimatedSwitcher(
+      duration: const Duration(milliseconds: 500),
+      switchInCurve: Curves.easeOutQuart,
+      switchOutCurve: Curves.easeInQuart,
+      transitionBuilder: (Widget child, Animation<double> animation) {
+        return FadeTransition(
+          opacity: animation,
+          child: ScaleTransition(
+            scale: Tween<double>(begin: 0.95, end: 1.0).animate(animation),
+            child: child,
+          ),
+        );
+      },
+      child: _isUniverseMode
+          ? const _HomeUniverseContent(key: ValueKey('universe'))
+          : const _HomeDashboardContent(key: ValueKey('dashboard')),
+    );
 
     final List<Widget> pages = [
       homePageContent,
@@ -123,54 +133,99 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       backgroundColor: AppColors.background,
       body: Stack(
         children: [
-          // --- 背景层 (微弱的极光) ---
+          // 背景层
           Stack(
             children: [
-              Container(color: AppColors.background),
+              Container(color: AppColors.background), 
               AnimatedBuilder(
-                animation: _bgBreathingController,
+                animation: _orbController,
                 builder: (context, child) {
-                  double move = _bgBreathingController.value * 20;
-                  return Stack(
-                    children: [
-                      // 顶部柔光
-                      Positioned(
-                        top: -100 + move, right: -50,
-                        child: Container(
-                          width: 400, height: 400,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: const Color(0xFFFFE2D9).withOpacity(0.4), 
-                          ),
-                        ).blurred(sigmaX: 80, sigmaY: 80),
+                  return Positioned(
+                    top: -100 + (_orbController.value * 40),
+                    left: -50 + (_orbController.value * 20),
+                    child: Container(
+                      width: 500, height: 500,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: AppColors.orb1.withOpacity(0.5),
                       ),
-                      // 底部柔光
-                      Positioned(
-                        bottom: 100 - move, left: -50,
-                        child: Container(
-                          width: 300, height: 300,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: const Color(0xFFE0EAFF).withOpacity(0.4), 
-                          ),
-                        ).blurred(sigmaX: 80, sigmaY: 80),
+                    ).blurred(sigmaX: 90, sigmaY: 90),
+                  );
+                },
+              ),
+              AnimatedBuilder(
+                animation: _orbController,
+                builder: (context, child) {
+                  return Positioned(
+                    top: 300 + (math.sin(_orbController.value * math.pi) * 60),
+                    right: -100,
+                    child: Container(
+                      width: 350, height: 350,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: AppColors.orb3.withOpacity(0.4),
                       ),
-                    ],
+                    ).blurred(sigmaX: 80, sigmaY: 80),
+                  );
+                },
+              ),
+              AnimatedBuilder(
+                animation: _orbController,
+                builder: (context, child) {
+                  return Positioned(
+                    bottom: -150,
+                    left: -80 + (_orbController.value * 150),
+                    child: Container(
+                      width: 600, height: 400,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: AppColors.orb2.withOpacity(0.5),
+                      ),
+                    ).blurred(sigmaX: 100, sigmaY: 100),
                   );
                 },
               ),
             ],
           ),
 
-          // --- 内容层 ---
+          // 内容层
           IndexedStack(
             index: _currentIndex,
             children: pages,
           ),
 
-          // --- 底部导航 (悬浮玻璃) ---
+          // 右上角悬浮切换按钮
           Positioned(
-            left: 24, right: 24, bottom: 34, height: 80,
+            top: MediaQuery.of(context).padding.top + 10,
+            right: 20, 
+            child: GestureDetector(
+              onTap: _toggleViewMode,
+              child: ClipOval(
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                  child: Container(
+                    width: 42, height: 42,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.5),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white.withOpacity(0.8), width: 1),
+                    ),
+                    child: Icon(
+                      _isUniverseMode ? Icons.grid_view_rounded : Icons.hub_rounded, 
+                      color: AppColors.textDark, 
+                      size: 22 
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+          // 底部导航
+          Positioned(
+            left: 24, right: 24, 
+            bottom: 24, 
+            height: 68, 
             child: _buildFloatingGlassNavBar(),
           ),
         ],
@@ -178,87 +233,183 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
+  // =========================================================
+  // 底部导航栏
+  // =========================================================
+
   Widget _buildFloatingGlassNavBar() {
+    final double totalWidth = MediaQuery.of(context).size.width - 48;
+    final double itemWidth = totalWidth / 4;
+    const double indicatorWidth = 56.0; 
+    const double indicatorHeight = 40.0; 
+    const double navHeight = 68.0; 
+
+    final LinearGradient currentGradient = AppColors.navGradients[_currentIndex];
+
     return GestureDetector(
       onHorizontalDragUpdate: (details) {
         final double screenWidth = MediaQuery.of(context).size.width;
-        final double itemWidth = (screenWidth - 48) / 4;
+        final double dragItemWidth = (screenWidth - 48) / 4;
         setState(() {
-          _currentPosition += details.delta.dx / itemWidth;
+          _currentPosition += details.delta.dx / dragItemWidth;
           _currentPosition = _currentPosition.clamp(0.0, 3.0);
         });
+        int potentialIndex = _currentPosition.round();
+        if (potentialIndex != _lastHapticIndex) {
+          HapticFeedback.selectionClick(); 
+          _lastHapticIndex = potentialIndex;
+        }
       },
       onHorizontalDragEnd: (details) {
         int targetIndex = _currentPosition.round();
         setState(() {
           _currentIndex = targetIndex;
           _currentPosition = targetIndex.toDouble();
+          _lastHapticIndex = targetIndex;
         });
-        HapticFeedback.selectionClick();
+        HapticFeedback.lightImpact(); 
       },
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          // 纯净的磨砂玻璃背景
-          ClipRRect(
-            borderRadius: BorderRadius.circular(32),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-              child: Container(
-                width: MediaQuery.of(context).size.width - 48, 
-                height: 80,
-                color: Colors.white.withOpacity(0.65),
-              ),
+      child: Container(
+        height: navHeight,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(34), 
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1), 
+              blurRadius: 20,
+              offset: const Offset(0, 10),
+              spreadRadius: -4,
             ),
-          ),
-          
-          // 选中态指示器 (白色方块)
-          Positioned(
-            left: (_currentPosition * ((MediaQuery.of(context).size.width - 48) / 4)) + (((MediaQuery.of(context).size.width - 48) / 4) / 2) - (60.0 / 2),
-            child: Container(
-              width: 60.0, height: 48.0, 
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [
-                  BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))
-                ]
-              ),
+            BoxShadow(
+              color: currentGradient.colors.first.withOpacity(0.15),
+              blurRadius: 30,
+              offset: const Offset(0, 8),
+              spreadRadius: -8,
             ),
-          ),
-          
-          // 图标层
-          SizedBox(
-            width: MediaQuery.of(context).size.width - 48, height: 64,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(34),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25), 
+            child: Stack(
+              alignment: Alignment.centerLeft,
               children: [
-                _buildNavItem(0, Icons.home_rounded, '首页'),
-                _buildNavItem(1, Icons.explore_rounded, '社区'),
-                _buildNavItem(2, Icons.assignment_rounded, '病历'),
-                _buildNavItem(3, Icons.person_rounded, '我的'),
+                Container(
+                  width: totalWidth,
+                  height: navHeight,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(34),
+                    border: Border.all(
+                      color: Colors.white.withOpacity(0.5), 
+                      width: 1.0,
+                    ),
+                    gradient: RadialGradient(
+                      radius: 2.0, 
+                      center: Alignment.topCenter, 
+                      colors: [
+                        Colors.white.withOpacity(0.3), 
+                        Colors.white.withOpacity(0.6), 
+                        Colors.white.withOpacity(0.8), 
+                      ],
+                      stops: const [0.0, 0.7, 1.0],
+                    ),
+                  ),
+                ),
+                Positioned(
+                  top: 0, left: 20, right: 20, height: 1,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          Colors.white.withOpacity(0.0),
+                          Colors.white.withOpacity(0.9),
+                          Colors.white.withOpacity(0.0),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                AnimatedPositioned(
+                  duration: const Duration(milliseconds: 350),
+                  curve: Curves.easeOutBack,
+                  left: (_currentPosition * itemWidth) + (itemWidth / 2) - (indicatorWidth / 2),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 300),
+                    width: indicatorWidth,
+                    height: indicatorHeight,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(indicatorHeight / 2),
+                      gradient: currentGradient,
+                      boxShadow: [
+                        BoxShadow(
+                          color: currentGradient.colors.first.withOpacity(0.4),
+                          blurRadius: 12,
+                          spreadRadius: -2,
+                          offset: const Offset(0, 2),
+                        ),
+                        BoxShadow(
+                          color: Colors.white.withOpacity(0.3),
+                          blurRadius: 1,
+                          offset: const Offset(0, 1),
+                          spreadRadius: 0,
+                          blurStyle: BlurStyle.inner
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                SizedBox(
+                  width: totalWidth,
+                  height: navHeight,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      _buildNavItem(0, Icons.home_rounded, Icons.home_outlined),
+                      _buildNavItem(1, Icons.explore_rounded, Icons.explore_outlined),
+                      _buildNavItem(2, Icons.assignment_rounded, Icons.assignment_outlined),
+                      _buildNavItem(3, Icons.person_rounded, Icons.person_outline_rounded),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
-        ],
+        ),
       ),
     );
   }
 
-  Widget _buildNavItem(int index, IconData icon, String label) {
+  Widget _buildNavItem(int index, IconData selectedIcon, IconData unselectedIcon) {
     final double distance = (_currentPosition - index).abs();
     final double t = (1.0 - distance).clamp(0.0, 1.0);
+    double scale = 1.0 + (0.1 * t); 
+
+    Color iconColor;
+    if (t > 0.6) {
+      iconColor = Colors.white; 
+    } else {
+      iconColor = Color.lerp(AppColors.textGrey, AppColors.textDark, t)!;
+    }
+
     return GestureDetector(
       onTap: () => _onTabTapped(index),
       behavior: HitTestBehavior.translucent,
       child: SizedBox(
         width: (MediaQuery.of(context).size.width - 48) / 4,
-        height: 64,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, color: Color.lerp(AppColors.textGrey, AppColors.textDark, t), size: 24 + (4 * t)),
-          ],
+        height: 68, 
+        child: Transform.scale(
+          scale: scale,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                t > 0.6 ? selectedIcon : unselectedIcon,
+                color: iconColor,
+                size: 24, 
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -266,55 +417,35 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 }
 
 // =========================================================
-// 3. 模式 A: 实用仪表盘 (Bento Grid 现代风格)
+// 3. 模式 A: 实用仪表盘 (修复滚动 & 布局)
 // =========================================================
 
 class _HomeDashboardContent extends StatelessWidget {
-  final VoidCallback onToggleMode;
-
-  const _HomeDashboardContent({required this.onToggleMode});
+  const _HomeDashboardContent({super.key});
 
   @override
   Widget build(BuildContext context) {
     final double topPadding = MediaQuery.of(context).padding.top;
 
     return ListView(
-      padding: EdgeInsets.fromLTRB(20, topPadding + 10, 20, 130),
-      physics: const BouncingScrollPhysics(),
+      // [关键点1] 强制开启滚动物理效果，即使内容少也能滑动
+      physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+      
+      // [关键点2] 增加底部 Padding (130)，确保内容不被悬浮导航栏遮挡，且预留滑动空间
+      padding: EdgeInsets.fromLTRB(20, topPadding + 60, 20, 130),
       children: [
-        // 1. 顶部 Header (问候语 + 切换按钮)
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text("晚上好,", style: TextStyle(fontSize: 16, color: AppColors.textGrey)),
-                Text("糯米", style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: AppColors.textDark)),
-              ],
-            ),
-            _buildViewToggleButton(),
-          ],
-        ),
-
-        const SizedBox(height: 24),
-
-        // 2. AI 智能问诊 (Bento Hero Card) - 修复了高度 Overflow
+        // 1. AI 智能问诊 (修复版：文字完整显示)
         _buildHeroAiCard(context),
 
-        const SizedBox(height: 16),
+        const SizedBox(height: 16), 
 
-        // 3. 常用功能标题
-        // const Text("常用功能", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.textDark)),
-        // const SizedBox(height: 12),
-
-        // 4. 功能网格 (Bento Grid)
+        // 2. 功能网格
         LayoutBuilder(
           builder: (context, constraints) {
-            double width = (constraints.maxWidth - 16) / 2;
+            double width = (constraints.maxWidth - 12) / 2;
             return Wrap(
-              spacing: 16,
-              runSpacing: 16,
+              spacing: 12,
+              runSpacing: 12,
               children: [
                 _buildFeatureCard(width, '电子档案', 'Vaccine', Icons.badge_rounded, AppColors.coolGradient, const PetPassportPage()),
                 _buildFeatureCard(width, '成长日记', 'Diary', Icons.menu_book_rounded, AppColors.natureGradient, const PetDiaryComposePage()),
@@ -325,32 +456,25 @@ class _HomeDashboardContent extends StatelessWidget {
             );
           },
         ),
+
+        // 3. 底部占位演示 (表明可滑动)
+        const SizedBox(height: 30),
+        Center(
+          child: Text(
+            "更多功能敬请期待...",
+            style: TextStyle(
+              color: AppColors.textGrey.withOpacity(0.5),
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+        const SizedBox(height: 20), // 额外留白
       ],
     );
   }
 
-  // 顶部切换按钮 (磨砂质感)
-  Widget _buildViewToggleButton() {
-    return GestureDetector(
-      onTap: onToggleMode,
-      child: ClipOval(
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-          child: Container(
-            width: 48, height: 48,
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.5),
-              shape: BoxShape.circle,
-              border: Border.all(color: Colors.white.withOpacity(0.8), width: 1),
-            ),
-            child: const Icon(Icons.hub_rounded, color: AppColors.textDark, size: 24),
-          ),
-        ),
-      ),
-    );
-  }
-
-  // AI 核心大卡片 (修复高度问题，增加高级感)
+  // AI 大卡片 (修复布局)
   Widget _buildHeroAiCard(BuildContext context) {
     return GestureDetector(
       onTap: () {
@@ -358,95 +482,127 @@ class _HomeDashboardContent extends StatelessWidget {
         Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const ChatPageWithDatabase()));
       },
       child: Container(
-        height: 190, // 【关键修复】高度增加到 190，防止溢出
+        height: 176, // 高度给足
         width: double.infinity,
         decoration: BoxDecoration(
-          color: Colors.white, // 纯白底色
-          borderRadius: BorderRadius.circular(32), // 更大的圆角 (现代感)
+          borderRadius: BorderRadius.circular(28),
           boxShadow: [
             BoxShadow(color: AppColors.warmGradient.colors.first.withOpacity(0.12), blurRadius: 20, offset: const Offset(0, 10)),
-            BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 4, offset: const Offset(0, 2)),
           ],
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(32),
-          child: Stack(
-            children: [
-              // 背景装饰 (非常淡的渐变光)
-              Positioned(
-                right: -40, top: -40,
-                child: Container(
-                  width: 200, height: 200,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: RadialGradient(colors: [AppColors.warmGradient.colors.first.withOpacity(0.15), Colors.transparent]),
-                  ),
-                ),
-              ),
-              
-              Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        // 图标容器
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: AppColors.warmGradient.colors.first.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Row(
-                            children: [
-                              Icon(Icons.auto_awesome, size: 16, color: AppColors.warmGradient.colors.first),
-                              const SizedBox(width: 6),
-                              Text("AI VET", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppColors.warmGradient.colors.first)),
-                            ],
-                          ),
-                        ),
-                        const Icon(Icons.arrow_outward_rounded, color: AppColors.textGrey, size: 20),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    const Text("AI 智能问诊", style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: AppColors.textDark, letterSpacing: -0.5)),
-                    const SizedBox(height: 8),
-                    // 使用 Flexible 防止文字溢出
-                    const Flexible(
-                      child: Text(
-                        "24小时在线，快速分析宠物症状\n提供专业医疗建议。",
-                        style: TextStyle(fontSize: 15, color: AppColors.textGrey, height: 1.5),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
+          borderRadius: BorderRadius.circular(28),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+            child: Container(
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF5F0).withOpacity(0.6), 
+                borderRadius: BorderRadius.circular(28),
+                border: Border.all(color: Colors.white.withOpacity(0.6), width: 1),
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft, end: Alignment.bottomRight,
+                  colors: [
+                    Colors.white.withOpacity(0.7),
+                    Colors.white.withOpacity(0.3),
                   ],
                 ),
               ),
-
-              // 底部大按钮
-              Positioned(
-                right: 24, bottom: 24,
-                child: Container(
-                  width: 56, height: 56,
-                  decoration: BoxDecoration(
-                    gradient: AppColors.warmGradient,
-                    shape: BoxShape.circle,
-                    boxShadow: [BoxShadow(color: AppColors.warmGradient.colors.first.withOpacity(0.4), blurRadius: 12, offset: const Offset(0, 4))],
+              child: Stack(
+                children: [
+                  Positioned(
+                    right: -30, top: -30,
+                    child: Container(
+                      width: 140, height: 140,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.white.withOpacity(0.3),
+                      ),
+                    ).blurred(sigmaX: 30, sigmaY: 30),
                   ),
-                  child: const Icon(Icons.medical_services_rounded, color: Colors.white, size: 28),
-                ),
-              )
-            ],
+                  
+                  Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // 顶部 AI VET 标签
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: AppColors.warmGradient.colors.first.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: AppColors.warmGradient.colors.first.withOpacity(0.1)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.auto_awesome, size: 12, color: AppColors.warmGradient.colors.first),
+                              const SizedBox(width: 4),
+                              Text("AI VET", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.warmGradient.colors.first, letterSpacing: 0.5)),
+                            ],
+                          ),
+                        ),
+                        
+                        // 使用 SizedBox 代替 Spacer，防止文字被挤到最下面
+                        const SizedBox(height: 24), 
+                        
+                        // 大标题
+                        const Text("AI 智能问诊", 
+                          style: TextStyle(
+                            fontSize: 24, 
+                            fontWeight: FontWeight.w800, 
+                            color: AppColors.textDark, 
+                            letterSpacing: -0.8 
+                          )
+                        ),
+                        
+                        const SizedBox(height: 8),
+                        
+                        // 副标题
+                        Container(
+                          padding: const EdgeInsets.only(right: 60),
+                          child: const Text(
+                            "24小时在线，快速分析宠物症状\n提供专业医疗建议。",
+                            style: TextStyle(
+                              fontSize: 13, 
+                              color: Color(0xFF636366), 
+                              height: 1.5, 
+                              fontWeight: FontWeight.w400
+                            ), 
+                            maxLines: 2, 
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // 右下角悬浮按钮
+                  Positioned(
+                    right: 20, bottom: 20,
+                    child: Container(
+                      width: 48, height: 48,
+                      decoration: BoxDecoration(
+                        gradient: AppColors.warmGradient,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(color: AppColors.warmGradient.colors.first.withOpacity(0.4), blurRadius: 12, offset: const Offset(0, 6)),
+                          BoxShadow(color: Colors.white.withOpacity(0.5), blurRadius: 2, offset: const Offset(0, 2), spreadRadius: 0, blurStyle: BlurStyle.inner),
+                        ],
+                      ),
+                      child: const Icon(Icons.medical_services_rounded, color: Colors.white, size: 24),
+                    ),
+                  )
+                ],
+              ),
+            ),
           ),
         ),
       ),
     );
   }
 
-  // 功能小方块 (更方正，更现代)
+  // --- 小卡片 ---
   Widget _buildFeatureCard(double width, String title, String subtitle, IconData icon, LinearGradient gradient, Widget page) {
     return Builder(
       builder: (context) {
@@ -457,38 +613,76 @@ class _HomeDashboardContent extends StatelessWidget {
           },
           child: Container(
             width: width,
-            height: width * 0.75, // 使其略微扁平或方正
-            padding: const EdgeInsets.all(20),
+            height: width * 0.82,
             decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(28),
+              borderRadius: BorderRadius.circular(24),
               boxShadow: [
-                BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4)),
+                BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 15, offset: const Offset(0, 8)),
               ],
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                // 图标
-                Container(
-                  width: 40, height: 40,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(24),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+                child: Container(
+                  padding: const EdgeInsets.all(16), 
                   decoration: BoxDecoration(
-                    color: gradient.colors.first.withOpacity(0.1),
-                    shape: BoxShape.circle,
+                    color: Colors.white.withOpacity(0.65),
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: Colors.white.withOpacity(0.6), width: 1),
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft, end: Alignment.bottomRight,
+                      colors: [
+                        Colors.white.withOpacity(0.8),
+                        Colors.white.withOpacity(0.4),
+                      ],
+                    ),
                   ),
-                  child: Icon(icon, color: gradient.colors.first, size: 20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Container(
+                        width: 38, height: 38,
+                        decoration: BoxDecoration(
+                          color: gradient.colors.first.withOpacity(0.15),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(icon, color: gradient.colors.first, size: 20),
+                      ),
+                      Flexible(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(title, 
+                              style: const TextStyle(
+                                fontSize: 16, 
+                                fontWeight: FontWeight.w700, 
+                                color: AppColors.textDark,
+                                letterSpacing: -0.4 
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 3),
+                            Text(subtitle, 
+                              style: TextStyle(
+                                fontSize: 11, 
+                                color: AppColors.textGrey, 
+                                fontWeight: FontWeight.w500,
+                                letterSpacing: 0.3 
+                              ),
+                              maxLines: 1, 
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-                // 文字
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textDark)),
-                    const SizedBox(height: 2),
-                    Text(subtitle, style: TextStyle(fontSize: 12, color: AppColors.textGrey.withOpacity(0.8), fontWeight: FontWeight.w500)),
-                  ],
-                ),
-              ],
+              ),
             ),
           ),
         );
@@ -498,13 +692,11 @@ class _HomeDashboardContent extends StatelessWidget {
 }
 
 // =========================================================
-// 4. 模式 B: 沉浸式星球主页 (Universe Mode)
+// 4. 模式 B: 沉浸式星球主页
 // =========================================================
 
 class _HomeUniverseContent extends StatelessWidget {
-  final VoidCallback onToggleMode;
-
-  const _HomeUniverseContent({required this.onToggleMode});
+  const _HomeUniverseContent({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -520,7 +712,7 @@ class _HomeUniverseContent extends StatelessWidget {
         children: [
           Center(
             child: HolographicSphereMenu(
-              radius: screenWidth * 0.40,
+              radius: screenWidth * 0.38, 
               items: [
                 SphereItemData(title: 'AI 问诊', icon: Icons.medical_services_rounded, gradient: AppColors.warmGradient, page: const ChatPageWithDatabase()),
                 SphereItemData(title: '电子档案', icon: Icons.badge_rounded, gradient: AppColors.coolGradient, page: const PetPassportPage()),
@@ -534,24 +726,6 @@ class _HomeUniverseContent extends StatelessWidget {
               ],
             ),
           ),
-          
-          Positioned(
-            top: MediaQuery.of(context).padding.top + 10,
-            right: 24,
-            child: GestureDetector(
-              onTap: onToggleMode,
-              child: ClipOval(
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                  child: Container(
-                    width: 48, height: 48,
-                    color: Colors.white.withOpacity(0.4),
-                    child: const Icon(Icons.grid_view_rounded, color: AppColors.textDark, size: 24),
-                  ),
-                ),
-              ),
-            ),
-          ),
         ],
       ),
     );
@@ -559,7 +733,7 @@ class _HomeUniverseContent extends StatelessWidget {
 }
 
 // =========================================================
-// 5. 星球组件逻辑 (保持不变)
+// 5. 星球组件逻辑
 // =========================================================
 
 class HolographicSphereMenu extends StatefulWidget {
@@ -662,15 +836,14 @@ class _HolographicSphereMenuState extends State<HolographicSphereMenu> with Tick
             return Transform.scale(
               scale: breathScale,
               child: SizedBox(
-                width: widget.radius * 2.5,
-                height: widget.radius * 2.5,
+                width: widget.radius * 2.8,
+                height: widget.radius * 2.8,
                 child: Stack(
                   alignment: Alignment.center,
                   children: [
-                    // 1. 星核
                     Container(
-                      width: widget.radius * 1.2,
-                      height: widget.radius * 1.2,
+                      width: widget.radius * 1.0, 
+                      height: widget.radius * 1.0,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         gradient: RadialGradient(
@@ -682,9 +855,8 @@ class _HolographicSphereMenuState extends State<HolographicSphereMenu> with Tick
                           stops: const [0.0, 0.4, 1.0],
                         ),
                       ),
-                    ).blurred(sigmaX: 60, sigmaY: 60),
+                    ).blurred(sigmaX: 50, sigmaY: 50),
 
-                    // 2. 3D 节点
                     ..._build3DItems(),
                   ],
                 ),
@@ -701,7 +873,7 @@ class _HolographicSphereMenuState extends State<HolographicSphereMenu> with Tick
     final int count = widget.items.length;
     final double phi = math.pi * (3.0 - math.sqrt(5.0));
 
-    final double centerOffset = widget.radius * 1.25;
+    final double centerOffset = widget.radius * 1.4;
 
     for (int i = 0; i < count; i++) {
       final double y = 1 - (i / (count - 1)) * 2;
@@ -730,12 +902,11 @@ class _HolographicSphereMenuState extends State<HolographicSphereMenu> with Tick
 
     return projected.map((item) {
       final double zNorm = (item.z + 1) / 2;
-
-      final double scale = 0.3 + (0.9 * zNorm * zNorm);
+      final double scale = 0.4 + (0.6 * zNorm * zNorm); 
       final double opacity = 0.2 + (0.8 * zNorm);
       final bool isFront = item.z > 0.88;
 
-      const double iconSize = 74.0;
+      const double iconSize = 72.0; 
       const double halfIconSize = iconSize / 2;
 
       return Positioned(
@@ -760,21 +931,21 @@ class _HolographicSphereMenuState extends State<HolographicSphereMenu> with Tick
                       gradient: item.data.gradient,
                       boxShadow: [
                         if (isFront)
-                          BoxShadow(color: item.data.gradient.colors.first.withOpacity(0.6), blurRadius: 30, spreadRadius: 2),
-                        BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 10, offset: const Offset(0, 5)),
+                          BoxShadow(color: item.data.gradient.colors.first.withOpacity(0.5), blurRadius: 20, spreadRadius: 1),
+                        BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 8, offset: const Offset(0, 4)),
                       ],
                     ),
-                    child: Icon(item.data.icon, color: Colors.white, size: 32),
+                    child: Icon(item.data.icon, color: Colors.white, size: 30), 
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 6),
                   AnimatedOpacity(
                     duration: const Duration(milliseconds: 200),
                     opacity: isFront ? 1.0 : 0.0,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
                         color: Colors.white.withOpacity(0.8),
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(10),
                       ),
                       child: Text(
                         item.data.title,
@@ -792,7 +963,6 @@ class _HolographicSphereMenuState extends State<HolographicSphereMenu> with Tick
   }
 }
 
-// 辅助类
 class SphereItemData {
   final String title;
   final IconData icon;
