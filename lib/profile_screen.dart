@@ -537,7 +537,8 @@ class _PetProfileSectionState extends State<PetProfileSection> {
                       int years = now.year - birthDate.year;
                       int months = now.month - birthDate.month;
                       // Adjust for month and day
-                      if (months < 0 || (months == 0 && now.day < birthDate.day)) {
+                      if (months < 0 ||
+                          (months == 0 && now.day < birthDate.day)) {
                         years--;
                         months += 12;
                       }
@@ -556,7 +557,9 @@ class _PetProfileSectionState extends State<PetProfileSection> {
                     gender: petData['gender'] ?? '哥哥',
                     breed: petData['breed'] ?? '', // 品种
                     avatar: petData['avatar'], // 头像路径
-                    birthDate: petData['birth_date'], // 出生日期
+                    birthDate: petData['birth_date']
+                        ?.toString()
+                        .split('T')[0], // 出生日期（只保留年月日）
                     neuterStatus: petData['neuter_status'], // 绝育状态
                     weight: petData['weight'] != null
                         ? (petData['weight'] as num).toDouble()
@@ -1018,7 +1021,7 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage> {
                 _buildInfoCard('年龄', _currentPet.age),
                 const SizedBox(height: 12),
                 if (_currentPet.birthDate != null)
-                  _buildInfoCard('出生日期', _currentPet.birthDate!),
+                  _buildInfoCard('出生日期', _currentPet.birthDate!.split('T')[0]),
                 if (_currentPet.birthDate != null) const SizedBox(height: 12),
                 if (_currentPet.neuterStatus != null)
                   _buildInfoCard('绝育状态', _currentPet.neuterStatus!),

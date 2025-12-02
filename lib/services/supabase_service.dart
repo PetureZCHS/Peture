@@ -105,7 +105,14 @@ class SupabaseService {
       if (petData.containsKey('neuter_status')) {
         final neuterStatusStr = petData['neuter_status'];
         if (neuterStatusStr is String) {
-          petData['neuter_status'] = neuterStatusStr == '已绝育';
+          if (neuterStatusStr == '已绝育') {
+            petData['neuter_status'] = true;
+          } else if (neuterStatusStr == '未绝育') {
+            petData['neuter_status'] = false;
+          } else {
+            print('警告: 未知的 neuter_status 值: $neuterStatusStr');
+            petData['neuter_status'] = null;
+          }
         }
       }
 
@@ -200,7 +207,14 @@ class SupabaseService {
       if (updateData.containsKey('neuter_status')) {
         final neuterStatusStr = updateData['neuter_status'];
         if (neuterStatusStr is String) {
-          updateData['neuter_status'] = neuterStatusStr == '已绝育';
+          if (neuterStatusStr == '已绝育') {
+            updateData['neuter_status'] = true;
+          } else if (neuterStatusStr == '未绝育') {
+            updateData['neuter_status'] = false;
+          } else {
+            print('警告: 未知的 neuter_status 值: $neuterStatusStr');
+            updateData['neuter_status'] = null;
+          }
         }
       }
 

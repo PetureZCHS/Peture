@@ -1720,12 +1720,12 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
     }
 
     // 转换类型名称：狗狗 -> 狗，猫咪 -> 猫
-    String? typeForDb;
+    String typeForDb = '其他'; // 默认值
     if (petType == '狗狗') {
       typeForDb = '狗';
     } else if (petType == '猫咪') {
       typeForDb = '猫';
-    } else {
+    } else if (petType != null) {
       typeForDb = petType;
     }
 
