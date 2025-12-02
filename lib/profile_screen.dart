@@ -536,9 +536,13 @@ class _PetProfileSectionState extends State<PetProfileSection> {
                       final now = DateTime.now();
                       int years = now.year - birthDate.year;
                       int months = now.month - birthDate.month;
-                      if (months < 0) {
+                      // Adjust for month and day
+                      if (months < 0 || (months == 0 && now.day < birthDate.day)) {
                         years--;
                         months += 12;
+                      }
+                      if (now.day < birthDate.day && months > 0) {
+                        months--;
                       }
                       age = '${years}岁${months}个月';
                     }
