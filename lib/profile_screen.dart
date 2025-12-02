@@ -396,6 +396,10 @@ class _PetProfileSectionState extends State<PetProfileSection> {
           age: newPet.age,
           gender: newPet.gender,
           breed: newPet.breed,
+          avatar: newPet.avatar,
+          birthDate: newPet.birthDate,
+          neuterStatus: newPet.neuterStatus,
+          weight: newPet.weight,
         );
 
         if (mounted) {
