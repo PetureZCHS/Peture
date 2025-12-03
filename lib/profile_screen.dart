@@ -937,12 +937,58 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage> {
             IconButton(
               icon: const Icon(Icons.edit, color: AppColors.primary),
               onPressed: () async {
-                final updatedPet = await showDialog<Pet>(
-                  context: context,
-                  builder: (context) => EditPetDialog(pet: _currentPet),
+                final initialData = {
+                  'name': _currentPet.name,
+                  'species': _currentPet.breed,
+                  'birthDate': _currentPet.birthDate,
+                  'gender': _currentPet.gender,
+                  'neuterStatus': _currentPet.neuterStatus,
+                  'weight': _currentPet.weight,
+                  'avatar': _currentPet.avatar,
+                  'type': _currentPet.type,
+                };
+
+                final result = await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder:
+                        (context) =>
+                            PetProfileFormPage(initialData: initialData),
+                  ),
                 );
 
-                if (updatedPet != null && mounted) {
+                if (result != null && mounted) {
+                  // 计算年龄
+                  String age = _currentPet.age;
+                  if (result['birth_date'] != null) {
+                    try {
+                      final birthDate = DateTime.parse(result['birth_date']);
+                      final now = DateTime.now();
+                      int years = now.year - birthDate.year;
+                      int months = now.month - birthDate.month;
+                      if (months < 0) {
+                        years--;
+                        months += 12;
+                      }
+                      age = '${years}岁${months}个月';
+                    } catch (e) {
+                      debugPrint('Error calculating age: $e');
+                    }
+                  }
+
+                  final updatedPet = Pet(
+                    id: _currentPet.id,
+                    name: result['name'],
+                    type: result['type'],
+                    breed: result['breed'],
+                    birthDate: result['birth_date'],
+                    gender: result['gender'],
+                    neuterStatus: result['neuter_status'],
+                    weight: result['weight'],
+                    avatar: result['avatar'],
+                    age: age,
+                  );
+
                   try {
                     final success = await _supabaseService.updatePet(
                       updatedPet.toMap(),

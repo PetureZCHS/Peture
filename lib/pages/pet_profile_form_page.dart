@@ -181,6 +181,18 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
       _petName = data['name'] as String?;
       _petSpecies = data['species'] as String?;
       _gender = data['gender'] as String?;
+      
+      // 加载宠物类型
+      if (data['type'] != null) {
+        final type = data['type'] as String;
+        if (type == '狗') {
+          _petType = '狗狗';
+        } else if (type == '猫') {
+          _petType = '猫咪';
+        } else {
+          _petType = type;
+        }
+      }
 
       // 处理生日日期
       if (data['birthDate'] != null) {
@@ -835,23 +847,29 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
 
         return StatefulBuilder(
           builder: (context, setModalState) {
+            final now = DateTime.now();
+
             // 生成年份列表 (1990-当前年)
-            final currentYear = DateTime.now().year;
             final years = List.generate(
-              currentYear - 1990 + 1,
+              now.year - 1990 + 1,
               (i) => 1990 + i,
             );
 
-            // 月份列表 (1-12)
-            final months = List.generate(12, (i) => i + 1);
+            // 月份列表
+            int maxMonth = 12;
+            if (tempDate.year == now.year) {
+              maxMonth = now.month;
+            }
+            final months = List.generate(maxMonth, (i) => i + 1);
 
-            // 根据选中的年月计算天数
-            final daysInMonth = DateTime(
-              tempDate.year,
-              tempDate.month + 1,
-              0,
-            ).day;
-            final days = List.generate(daysInMonth, (i) => i + 1);
+            // 天数列表
+            int maxDay;
+            if (tempDate.year == now.year && tempDate.month == now.month) {
+              maxDay = now.day;
+            } else {
+              maxDay = DateTime(tempDate.year, tempDate.month + 1, 0).day;
+            }
+            final days = List.generate(maxDay, (i) => i + 1);
 
             return SafeArea(
               child: Column(
@@ -899,23 +917,30 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
                             onSelectedItemChanged: (index) {
                               setModalState(() {
                                 final newYear = years[index];
-                                final now = DateTime.now();
-                                var newDate = DateTime(
-                                  newYear,
-                                  tempDate.month,
-                                  tempDate.day,
-                                );
 
-                                // 检查是否超过当前日期
-                                if (newDate.isAfter(now)) {
-                                  newDate = DateTime(
-                                    now.year,
-                                    now.month,
-                                    now.day,
-                                  );
+                                // 如果选了当前年份，检查月份是否超过当前月份
+                                var newMonth = tempDate.month;
+                                if (newYear == now.year &&
+                                    newMonth > now.month) {
+                                  newMonth = now.month;
                                 }
 
-                                tempDate = newDate;
+                                // 检查日期是否超过该月最大天数或当前日期
+                                var newDay = tempDate.day;
+                                int maxDayInNewMonth;
+                                if (newYear == now.year &&
+                                    newMonth == now.month) {
+                                  maxDayInNewMonth = now.day;
+                                } else {
+                                  maxDayInNewMonth =
+                                      DateTime(newYear, newMonth + 1, 0).day;
+                                }
+
+                                if (newDay > maxDayInNewMonth) {
+                                  newDay = maxDayInNewMonth;
+                                }
+
+                                tempDate = DateTime(newYear, newMonth, newDay);
                               });
                             },
                             children: years
@@ -946,31 +971,25 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
                             onSelectedItemChanged: (index) {
                               setModalState(() {
                                 final newMonth = months[index];
-                                final now = DateTime.now();
-                                final newDaysInMonth = DateTime(
-                                  tempDate.year,
-                                  newMonth + 1,
-                                  0,
-                                ).day;
-                                final newDay = tempDate.day > newDaysInMonth
-                                    ? newDaysInMonth
-                                    : tempDate.day;
-                                var newDate = DateTime(
-                                  tempDate.year,
-                                  newMonth,
-                                  newDay,
-                                );
 
-                                // 检查是否超过当前日期
-                                if (newDate.isAfter(now)) {
-                                  newDate = DateTime(
-                                    now.year,
-                                    now.month,
-                                    now.day,
-                                  );
+                                // 检查日期是否超过该月最大天数或当前日期
+                                var newDay = tempDate.day;
+                                int maxDayInNewMonth;
+                                if (tempDate.year == now.year &&
+                                    newMonth == now.month) {
+                                  maxDayInNewMonth = now.day;
+                                } else {
+                                  maxDayInNewMonth =
+                                      DateTime(tempDate.year, newMonth + 1, 0)
+                                          .day;
                                 }
 
-                                tempDate = newDate;
+                                if (newDay > maxDayInNewMonth) {
+                                  newDay = maxDayInNewMonth;
+                                }
+
+                                tempDate =
+                                    DateTime(tempDate.year, newMonth, newDay);
                               });
                             },
                             children: months
@@ -1000,23 +1019,11 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
                             magnification: 1.15,
                             onSelectedItemChanged: (index) {
                               setModalState(() {
-                                final now = DateTime.now();
-                                var newDate = DateTime(
+                                tempDate = DateTime(
                                   tempDate.year,
                                   tempDate.month,
                                   days[index],
                                 );
-
-                                // 检查是否超过当前日期
-                                if (newDate.isAfter(now)) {
-                                  newDate = DateTime(
-                                    now.year,
-                                    now.month,
-                                    now.day,
-                                  );
-                                }
-
-                                tempDate = newDate;
                               });
                             },
                             children: days
@@ -1080,8 +1087,8 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
   }
 
   void _showGenderSelector() {
-    String? tempGender = _gender;
     final genderOptions = ['弟弟', '妹妹', '未知'];
+    String? tempGender = _gender ?? genderOptions[0];
 
     showModalBottomSheet(
       context: context,
@@ -1194,8 +1201,8 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
   }
 
   void _showNeuterSelector() {
-    String? tempStatus = _neuterStatus;
     final neuterOptions = ['已绝育', '未绝育'];
+    String? tempStatus = _neuterStatus ?? neuterOptions[0];
 
     showModalBottomSheet(
       context: context,
@@ -1362,29 +1369,9 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
                     const SizedBox(height: 20),
                     // 刻度尺
                     SizedBox(
-                      height: 100,
+                      height: 120, // 增加高度以容纳更美观的布局
                       child: Stack(
                         children: [
-                          // 中心指示线
-                          Positioned(
-                            left: MediaQuery.of(ctx).size.width / 2 - 1,
-                            top: 0,
-                            bottom: 0,
-                            child: Container(
-                              width: 2,
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF5A8EFA),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: const Color(
-                                      0xFF5A8EFA,
-                                    ).withOpacity(0.3),
-                                    blurRadius: 4,
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
                           // 刻度尺滚动区域
                           NotificationListener<ScrollNotification>(
                             onNotification: (notification) {
@@ -1394,8 +1381,8 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
                                 final itemWidth = 8.0; // 每 0.1kg 的宽度
                                 final index = (offset / itemWidth).round();
                                 final newWeight =
-                                    (index / 10.0) + 0.5; // 从 0.5kg 开始
-                                if (newWeight >= 0.5 &&
+                                    (index / 10.0) + 0.0; // 从 0kg 开始
+                                if (newWeight >= 0.0 &&
                                     newWeight <= 60.0 &&
                                     newWeight != tempWeight) {
                                   setModalState(() {
@@ -1410,21 +1397,21 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
                             child: ListView.builder(
                               controller: ScrollController(
                                 initialScrollOffset:
-                                    ((tempWeight - 0.5) * 10 * 8.0),
+                                    ((tempWeight - 0.0) * 10 * 8.0),
                               ),
                               scrollDirection: Axis.horizontal,
-                              itemCount: 600, // 0.5kg - 60kg
+                              itemCount: 601, // 0kg - 60kg
                               padding: EdgeInsets.symmetric(
                                 horizontal: MediaQuery.of(ctx).size.width / 2,
                               ),
                               itemBuilder: (context, index) {
-                                final value = (index / 10.0) + 0.5;
+                                final value = (index / 10.0) + 0.0;
                                 final isInteger = (index % 10) == 0;
+                                final isHalf = (index % 5) == 0 && !isInteger;
 
                                 return Container(
                                   width: 8, // 每 0.1kg 的间距
                                   alignment: Alignment.bottomCenter,
-                                  padding: const EdgeInsets.only(bottom: 10),
                                   child: Column(
                                     mainAxisAlignment: MainAxisAlignment.end,
                                     children: [
@@ -1432,28 +1419,31 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
                                       if (isInteger)
                                         Padding(
                                           padding: const EdgeInsets.only(
-                                            bottom: 4,
+                                            bottom: 12,
                                           ),
                                           child: Text(
                                             '${value.toInt()}',
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              color: Colors.grey.shade600,
+                                            style: const TextStyle(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w600,
+                                              color: Color(0xFF1A1A1A),
                                             ),
                                           ),
                                         )
                                       else
-                                        const SizedBox(height: 20),
+                                        const SizedBox(height: 28),
                                       // 刻度线
                                       Container(
-                                        width: 1.5,
+                                        width: isInteger ? 2 : 1.5,
                                         height: isInteger
                                             ? 40
-                                            : ((index % 5) == 0 ? 24 : 16),
+                                            : (isHalf ? 28 : 16),
                                         decoration: BoxDecoration(
                                           color: isInteger
-                                              ? const Color(0xFF5A8EFA)
-                                              : Colors.grey.shade400,
+                                              ? const Color(0xFF1A1A1A)
+                                              : (isHalf
+                                                  ? const Color(0xFF8E8E93)
+                                                  : const Color(0xFFD1D1D6)),
                                           borderRadius: BorderRadius.circular(
                                             2,
                                           ),
@@ -1463,6 +1453,70 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
                                   ),
                                 );
                               },
+                            ),
+                          ),
+                          // 左侧渐变遮罩
+                          Positioned(
+                            left: 0,
+                            top: 0,
+                            bottom: 0,
+                            width: 80,
+                            child: IgnorePointer(
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    begin: Alignment.centerLeft,
+                                    end: Alignment.centerRight,
+                                    colors: [
+                                      Colors.white,
+                                      Colors.white.withOpacity(0.0),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          // 右侧渐变遮罩
+                          Positioned(
+                            right: 0,
+                            top: 0,
+                            bottom: 0,
+                            width: 80,
+                            child: IgnorePointer(
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    begin: Alignment.centerRight,
+                                    end: Alignment.centerLeft,
+                                    colors: [
+                                      Colors.white,
+                                      Colors.white.withOpacity(0.0),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          // 中心指示线
+                          Positioned(
+                            left: MediaQuery.of(ctx).size.width / 2 - 1.5,
+                            top: 45, // 避开数字
+                            bottom: 0,
+                            child: Container(
+                              width: 3,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF5A8EFA),
+                                borderRadius: BorderRadius.circular(1.5),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(
+                                      0xFF5A8EFA,
+                                    ).withOpacity(0.3),
+                                    blurRadius: 4,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         ],
