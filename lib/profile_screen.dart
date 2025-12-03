@@ -951,9 +951,8 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage> {
                 final result = await Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder:
-                        (context) =>
-                            PetProfileFormPage(initialData: initialData),
+                    builder: (context) =>
+                        PetProfileFormPage(initialData: initialData),
                   ),
                 );
 
@@ -966,9 +965,14 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage> {
                       final now = DateTime.now();
                       int years = now.year - birthDate.year;
                       int months = now.month - birthDate.month;
-                      if (months < 0) {
+                      // Adjust for month and day
+                      if (months < 0 ||
+                          (months == 0 && now.day < birthDate.day)) {
                         years--;
                         months += 12;
+                      }
+                      if (now.day < birthDate.day && months > 0) {
+                        months--;
                       }
                       age = '${years}岁${months}个月';
                     } catch (e) {
