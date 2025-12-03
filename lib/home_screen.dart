@@ -3,7 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
-// import 'package:liquid_glass_renderer/liquid_glass_renderer.dart'; 
+// import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
 
 // --- 您的页面引用 (保持不变) ---
 import 'chat_page.dart';
@@ -17,32 +17,66 @@ import 'medical_record_screen.dart';
 import 'profile_screen.dart';
 import 'widgets/weight_trend_card.dart';
 
+/// 全局数据变更通知器，用于跨页面通知数据刷新需求
+class DataChangeNotifier {
+  static bool petDataChanged = false;
+
+  /// 标记宠物数据已变更，需要刷新
+  static void markPetDataChanged() {
+    petDataChanged = true;
+  }
+
+  /// 检查并重置标记
+  static bool checkAndReset() {
+    if (petDataChanged) {
+      petDataChanged = false;
+      return true;
+    }
+    return false;
+  }
+}
+
 // =========================================================
 // 1. 配色与样式
 // =========================================================
 
 class AppColors {
-  static const Color background = Color(0xFFF2F2F7); 
-  static const Color textDark = Color(0xFF1D1D1F); 
-  static const Color textGrey = Color(0xFF8E8E93); 
+  static const Color background = Color(0xFFF2F2F7);
+  static const Color textDark = Color(0xFF1D1D1F);
+  static const Color textGrey = Color(0xFF8E8E93);
 
   static const Color orb1 = Color(0xFFC4E0E5);
   static const Color orb2 = Color(0xFFE2D1F9);
   static const Color orb3 = Color(0xFFFFDFC4);
 
-  static const LinearGradient navTab0 = LinearGradient(colors: [Color(0xFF2E3192), Color(0xFF1BFFFF)]);
-  static const LinearGradient navTab1 = LinearGradient(colors: [Color(0xFFFF512F), Color(0xFFDD2476)]);
-  static const LinearGradient navTab2 = LinearGradient(colors: [Color(0xFF00b09b), Color(0xFF96c93d)]);
-  static const LinearGradient navTab3 = LinearGradient(colors: [Color(0xFF667eea), Color(0xFF764ba2)]);
+  static const LinearGradient navTab0 =
+      LinearGradient(colors: [Color(0xFF2E3192), Color(0xFF1BFFFF)]);
+  static const LinearGradient navTab1 =
+      LinearGradient(colors: [Color(0xFFFF512F), Color(0xFFDD2476)]);
+  static const LinearGradient navTab2 =
+      LinearGradient(colors: [Color(0xFF00b09b), Color(0xFF96c93d)]);
+  static const LinearGradient navTab3 =
+      LinearGradient(colors: [Color(0xFF667eea), Color(0xFF764ba2)]);
 
-  static const List<LinearGradient> navGradients = [navTab0, navTab1, navTab2, navTab3];
+  static const List<LinearGradient> navGradients = [
+    navTab0,
+    navTab1,
+    navTab2,
+    navTab3
+  ];
 
-  static const LinearGradient warmGradient = LinearGradient(colors: [Color(0xFFFF5E62), Color(0xFFFF9966)]);
-  static const LinearGradient coolGradient = LinearGradient(colors: [Color(0xFF4FACFE), Color(0xFF00F2FE)]);
-  static const LinearGradient natureGradient = LinearGradient(colors: [Color(0xFF43E97B), Color(0xFF38F9D7)]);
-  static const LinearGradient magicGradient = LinearGradient(colors: [Color(0xFFA18CD1), Color(0xFFFBC2EB)]);
-  static const LinearGradient oceanGradient = LinearGradient(colors: [Color(0xFF30CFD0), Color(0xFF330867)]);
-  static const LinearGradient goldGradient = LinearGradient(colors: [Color(0xFFF6D365), Color(0xFFFDA085)]);
+  static const LinearGradient warmGradient =
+      LinearGradient(colors: [Color(0xFFFF5E62), Color(0xFFFF9966)]);
+  static const LinearGradient coolGradient =
+      LinearGradient(colors: [Color(0xFF4FACFE), Color(0xFF00F2FE)]);
+  static const LinearGradient natureGradient =
+      LinearGradient(colors: [Color(0xFF43E97B), Color(0xFF38F9D7)]);
+  static const LinearGradient magicGradient =
+      LinearGradient(colors: [Color(0xFFA18CD1), Color(0xFFFBC2EB)]);
+  static const LinearGradient oceanGradient =
+      LinearGradient(colors: [Color(0xFF30CFD0), Color(0xFF330867)]);
+  static const LinearGradient goldGradient =
+      LinearGradient(colors: [Color(0xFFF6D365), Color(0xFFFDA085)]);
 }
 
 // =========================================================
@@ -64,10 +98,17 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   late AnimationController _orbController;
   bool _isUniverseMode = false;
 
+  /// 用于通知 MedicalRecordScreen 刷新数据的通知器
+  final ValueNotifier<int> _medicalScreenRefreshNotifier =
+      ValueNotifier<int>(0);
+
+  /// 标记是否需要刷新健康记录页面（首次进入或数据变更后需要刷新）
+  bool _needsMedicalScreenRefresh = true;
+
   @override
   void initState() {
     super.initState();
-    
+
     SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
       statusBarIconBrightness: Brightness.dark,
@@ -75,13 +116,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
     _orbController = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 12), 
+      duration: const Duration(seconds: 12),
     )..repeat(reverse: true);
   }
 
   @override
   void dispose() {
     _orbController.dispose();
+    _medicalScreenRefreshNotifier.dispose();
     super.dispose();
   }
 
@@ -92,6 +134,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       _lastHapticIndex = index;
     });
     HapticFeedback.mediumImpact();
+
+    // 当切换到 MedicalRecordScreen (index 2) 时，检查是否需要刷新
+    if (index == 2) {
+      // 检查全局数据变更标记或首次进入标记
+      if (_needsMedicalScreenRefresh || DataChangeNotifier.checkAndReset()) {
+        _medicalScreenRefreshNotifier.value++;
+        _needsMedicalScreenRefresh = false;
+      }
+    }
   }
 
   void _toggleViewMode() {
@@ -124,7 +175,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final List<Widget> pages = [
       homePageContent,
       const CommunityScreen(),
-      const MedicalRecordScreen(),
+      MedicalRecordScreen(refreshNotifier: _medicalScreenRefreshNotifier),
       const ProfileScreen(),
     ];
 
@@ -137,7 +188,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           // 背景层
           Stack(
             children: [
-              Container(color: AppColors.background), 
+              Container(color: AppColors.background),
               AnimatedBuilder(
                 animation: _orbController,
                 builder: (context, child) {
@@ -145,7 +196,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     top: -100 + (_orbController.value * 40),
                     left: -50 + (_orbController.value * 20),
                     child: Container(
-                      width: 500, height: 500,
+                      width: 500,
+                      height: 500,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         color: AppColors.orb1.withOpacity(0.5),
@@ -161,7 +213,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     top: 300 + (math.sin(_orbController.value * math.pi) * 60),
                     right: -100,
                     child: Container(
-                      width: 350, height: 350,
+                      width: 350,
+                      height: 350,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         color: AppColors.orb3.withOpacity(0.4),
@@ -177,7 +230,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     bottom: -150,
                     left: -80 + (_orbController.value * 150),
                     child: Container(
-                      width: 600, height: 400,
+                      width: 600,
+                      height: 400,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         color: AppColors.orb2.withOpacity(0.5),
@@ -199,24 +253,27 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           if (_currentIndex == 0)
             Positioned(
               top: MediaQuery.of(context).padding.top + 10,
-              right: 20, 
+              right: 20,
               child: GestureDetector(
                 onTap: _toggleViewMode,
                 child: ClipOval(
                   child: BackdropFilter(
                     filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                     child: Container(
-                      width: 42, height: 42,
+                      width: 42,
+                      height: 42,
                       decoration: BoxDecoration(
                         color: Colors.white.withOpacity(0.5),
                         shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white.withOpacity(0.8), width: 1),
+                        border: Border.all(
+                            color: Colors.white.withOpacity(0.8), width: 1),
                       ),
                       child: Icon(
-                        _isUniverseMode ? Icons.grid_view_rounded : Icons.hub_rounded, 
-                        color: AppColors.textDark, 
-                        size: 22 
-                      ),
+                          _isUniverseMode
+                              ? Icons.grid_view_rounded
+                              : Icons.hub_rounded,
+                          color: AppColors.textDark,
+                          size: 22),
                     ),
                   ),
                 ),
@@ -225,9 +282,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
           // 底部导航
           Positioned(
-            left: 24, right: 24, 
-            bottom: 24, 
-            height: 68, 
+            left: 24,
+            right: 24,
+            bottom: 24,
+            height: 68,
             child: _buildFloatingGlassNavBar(),
           ),
         ],
@@ -242,11 +300,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   Widget _buildFloatingGlassNavBar() {
     final double totalWidth = MediaQuery.of(context).size.width - 48;
     final double itemWidth = totalWidth / 4;
-    const double indicatorWidth = 56.0; 
-    const double indicatorHeight = 40.0; 
-    const double navHeight = 68.0; 
+    const double indicatorWidth = 56.0;
+    const double indicatorHeight = 40.0;
+    const double navHeight = 68.0;
 
-    final LinearGradient currentGradient = AppColors.navGradients[_currentIndex];
+    final LinearGradient currentGradient =
+        AppColors.navGradients[_currentIndex];
 
     return GestureDetector(
       onHorizontalDragUpdate: (details) {
@@ -258,7 +317,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         });
         int potentialIndex = _currentPosition.round();
         if (potentialIndex != _lastHapticIndex) {
-          HapticFeedback.selectionClick(); 
+          HapticFeedback.selectionClick();
           _lastHapticIndex = potentialIndex;
         }
       },
@@ -269,15 +328,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           _currentPosition = targetIndex.toDouble();
           _lastHapticIndex = targetIndex;
         });
-        HapticFeedback.lightImpact(); 
+        HapticFeedback.lightImpact();
       },
       child: Container(
         height: navHeight,
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(34), 
+          borderRadius: BorderRadius.circular(34),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.1), 
+              color: Colors.black.withOpacity(0.1),
               blurRadius: 20,
               offset: const Offset(0, 10),
               spreadRadius: -4,
@@ -293,7 +352,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         child: ClipRRect(
           borderRadius: BorderRadius.circular(34),
           child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25), 
+            filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
             child: Stack(
               alignment: Alignment.centerLeft,
               children: [
@@ -303,23 +362,26 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(34),
                     border: Border.all(
-                      color: Colors.white.withOpacity(0.5), 
+                      color: Colors.white.withOpacity(0.5),
                       width: 1.0,
                     ),
                     gradient: RadialGradient(
-                      radius: 2.0, 
-                      center: Alignment.topCenter, 
+                      radius: 2.0,
+                      center: Alignment.topCenter,
                       colors: [
-                        Colors.white.withOpacity(0.3), 
-                        Colors.white.withOpacity(0.6), 
-                        Colors.white.withOpacity(0.8), 
+                        Colors.white.withOpacity(0.3),
+                        Colors.white.withOpacity(0.6),
+                        Colors.white.withOpacity(0.8),
                       ],
                       stops: const [0.0, 0.7, 1.0],
                     ),
                   ),
                 ),
                 Positioned(
-                  top: 0, left: 20, right: 20, height: 1,
+                  top: 0,
+                  left: 20,
+                  right: 20,
+                  height: 1,
                   child: Container(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
@@ -335,7 +397,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 AnimatedPositioned(
                   duration: const Duration(milliseconds: 350),
                   curve: Curves.easeOutBack,
-                  left: (_currentPosition * itemWidth) + (itemWidth / 2) - (indicatorWidth / 2),
+                  left: (_currentPosition * itemWidth) +
+                      (itemWidth / 2) -
+                      (indicatorWidth / 2),
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 300),
                     width: indicatorWidth,
@@ -351,12 +415,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                           offset: const Offset(0, 2),
                         ),
                         BoxShadow(
-                          color: Colors.white.withOpacity(0.3),
-                          blurRadius: 1,
-                          offset: const Offset(0, 1),
-                          spreadRadius: 0,
-                          blurStyle: BlurStyle.inner
-                        ),
+                            color: Colors.white.withOpacity(0.3),
+                            blurRadius: 1,
+                            offset: const Offset(0, 1),
+                            spreadRadius: 0,
+                            blurStyle: BlurStyle.inner),
                       ],
                     ),
                   ),
@@ -368,9 +431,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
                       _buildNavItem(0, Icons.home_rounded, Icons.home_outlined),
-                      _buildNavItem(1, Icons.explore_rounded, Icons.explore_outlined),
-                      _buildNavItem(2, Icons.assignment_rounded, Icons.assignment_outlined),
-                      _buildNavItem(3, Icons.person_rounded, Icons.person_outline_rounded),
+                      _buildNavItem(
+                          1, Icons.explore_rounded, Icons.explore_outlined),
+                      _buildNavItem(2, Icons.assignment_rounded,
+                          Icons.assignment_outlined),
+                      _buildNavItem(3, Icons.person_rounded,
+                          Icons.person_outline_rounded),
                     ],
                   ),
                 ),
@@ -382,14 +448,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildNavItem(int index, IconData selectedIcon, IconData unselectedIcon) {
+  Widget _buildNavItem(
+      int index, IconData selectedIcon, IconData unselectedIcon) {
     final double distance = (_currentPosition - index).abs();
     final double t = (1.0 - distance).clamp(0.0, 1.0);
-    double scale = 1.0 + (0.1 * t); 
+    double scale = 1.0 + (0.1 * t);
 
     Color iconColor;
     if (t > 0.6) {
-      iconColor = Colors.white; 
+      iconColor = Colors.white;
     } else {
       iconColor = Color.lerp(AppColors.textGrey, AppColors.textDark, t)!;
     }
@@ -399,7 +466,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       behavior: HitTestBehavior.translucent,
       child: SizedBox(
         width: (MediaQuery.of(context).size.width - 48) / 4,
-        height: 68, 
+        height: 68,
         child: Transform.scale(
           scale: scale,
           child: Column(
@@ -408,7 +475,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               Icon(
                 t > 0.6 ? selectedIcon : unselectedIcon,
                 color: iconColor,
-                size: 24, 
+                size: 24,
               ),
             ],
           ),
@@ -431,8 +498,9 @@ class _HomeDashboardContent extends StatelessWidget {
 
     return ListView(
       // [关键点1] 强制开启滚动物理效果，即使内容少也能滑动
-      physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
-      
+      physics:
+          const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+
       // [关键点2] 增加底部 Padding (130)，确保内容不被悬浮导航栏遮挡，且预留滑动空间
       padding: EdgeInsets.fromLTRB(20, topPadding + 60, 20, 130),
       children: [
@@ -444,7 +512,7 @@ class _HomeDashboardContent extends StatelessWidget {
         // 1.5 体重趋势卡片
         const WeightTrendCard(),
 
-        const SizedBox(height: 16), 
+        const SizedBox(height: 16),
 
         // 2. 功能网格
         LayoutBuilder(
@@ -454,12 +522,43 @@ class _HomeDashboardContent extends StatelessWidget {
               spacing: 12,
               runSpacing: 12,
               children: [
-                _buildFeatureCard(width, '电子档案', 'Vaccine', Icons.badge_rounded, AppColors.coolGradient, const PetPassportPage()),
-                _buildFeatureCard(width, '成长日记', 'Diary', Icons.menu_book_rounded, AppColors.natureGradient, const PetDiaryComposePage()),
-                _buildFeatureCard(width, '活力健身', 'Fitness', Icons.directions_run_rounded, AppColors.oceanGradient, const PartnerFitGymPage()),
-                _buildFeatureCard(width, '营养食谱', 'Food', Icons.restaurant_menu_rounded, AppColors.goldGradient, const PetRecipeListPage()),
-                _buildFeatureCard(width, '训宠响片', 'Training', Icons.touch_app_rounded, AppColors.magicGradient, const DogClickerScreen()),
-                _buildFeatureCard(width, '寻宠互助', 'Emergency', Icons.campaign_rounded, AppColors.navTab1, const CommunityScreen()),
+                _buildFeatureCard(width, '电子档案', 'Vaccine', Icons.badge_rounded,
+                    AppColors.coolGradient, const PetPassportPage()),
+                _buildFeatureCard(
+                    width,
+                    '成长日记',
+                    'Diary',
+                    Icons.menu_book_rounded,
+                    AppColors.natureGradient,
+                    const PetDiaryComposePage()),
+                _buildFeatureCard(
+                    width,
+                    '活力健身',
+                    'Fitness',
+                    Icons.directions_run_rounded,
+                    AppColors.oceanGradient,
+                    const PartnerFitGymPage()),
+                _buildFeatureCard(
+                    width,
+                    '营养食谱',
+                    'Food',
+                    Icons.restaurant_menu_rounded,
+                    AppColors.goldGradient,
+                    const PetRecipeListPage()),
+                _buildFeatureCard(
+                    width,
+                    '训宠响片',
+                    'Training',
+                    Icons.touch_app_rounded,
+                    AppColors.magicGradient,
+                    const DogClickerScreen()),
+                _buildFeatureCard(
+                    width,
+                    '寻宠互助',
+                    'Emergency',
+                    Icons.campaign_rounded,
+                    AppColors.navTab1,
+                    const CommunityScreen()),
               ],
             );
           },
@@ -487,7 +586,8 @@ class _HomeDashboardContent extends StatelessWidget {
     return GestureDetector(
       onTap: () {
         HapticFeedback.mediumImpact();
-        Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const ChatPageWithDatabase()));
+        Navigator.of(context).push(
+            CupertinoPageRoute(builder: (_) => const ChatPageWithDatabase()));
       },
       child: Container(
         height: 176, // 高度给足
@@ -495,7 +595,10 @@ class _HomeDashboardContent extends StatelessWidget {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(28),
           boxShadow: [
-            BoxShadow(color: AppColors.warmGradient.colors.first.withOpacity(0.12), blurRadius: 20, offset: const Offset(0, 10)),
+            BoxShadow(
+                color: AppColors.warmGradient.colors.first.withOpacity(0.12),
+                blurRadius: 20,
+                offset: const Offset(0, 10)),
           ],
         ),
         child: ClipRRect(
@@ -504,11 +607,13 @@ class _HomeDashboardContent extends StatelessWidget {
             filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
             child: Container(
               decoration: BoxDecoration(
-                color: const Color(0xFFFFF5F0).withOpacity(0.6), 
+                color: const Color(0xFFFFF5F0).withOpacity(0.6),
                 borderRadius: BorderRadius.circular(28),
-                border: Border.all(color: Colors.white.withOpacity(0.6), width: 1),
+                border:
+                    Border.all(color: Colors.white.withOpacity(0.6), width: 1),
                 gradient: LinearGradient(
-                  begin: Alignment.topLeft, end: Alignment.bottomRight,
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
                   colors: [
                     Colors.white.withOpacity(0.7),
                     Colors.white.withOpacity(0.3),
@@ -518,16 +623,18 @@ class _HomeDashboardContent extends StatelessWidget {
               child: Stack(
                 children: [
                   Positioned(
-                    right: -30, top: -30,
+                    right: -30,
+                    top: -30,
                     child: Container(
-                      width: 140, height: 140,
+                      width: 140,
+                      height: 140,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         color: Colors.white.withOpacity(0.3),
                       ),
                     ).blurred(sigmaX: 30, sigmaY: 30),
                   ),
-                  
+
                   Padding(
                     padding: const EdgeInsets.all(20),
                     child: Column(
@@ -535,49 +642,58 @@ class _HomeDashboardContent extends StatelessWidget {
                       children: [
                         // 顶部 AI VET 标签
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 4),
                           decoration: BoxDecoration(
-                            color: AppColors.warmGradient.colors.first.withOpacity(0.1),
+                            color: AppColors.warmGradient.colors.first
+                                .withOpacity(0.1),
                             borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: AppColors.warmGradient.colors.first.withOpacity(0.1)),
+                            border: Border.all(
+                                color: AppColors.warmGradient.colors.first
+                                    .withOpacity(0.1)),
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(Icons.auto_awesome, size: 12, color: AppColors.warmGradient.colors.first),
+                              Icon(Icons.auto_awesome,
+                                  size: 12,
+                                  color: AppColors.warmGradient.colors.first),
                               const SizedBox(width: 4),
-                              Text("AI VET", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.warmGradient.colors.first, letterSpacing: 0.5)),
+                              Text("AI VET",
+                                  style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                      color:
+                                          AppColors.warmGradient.colors.first,
+                                      letterSpacing: 0.5)),
                             ],
                           ),
                         ),
-                        
+
                         // 使用 SizedBox 代替 Spacer，防止文字被挤到最下面
-                        const SizedBox(height: 24), 
-                        
+                        const SizedBox(height: 24),
+
                         // 大标题
-                        const Text("AI 智能问诊", 
-                          style: TextStyle(
-                            fontSize: 24, 
-                            fontWeight: FontWeight.w800, 
-                            color: AppColors.textDark, 
-                            letterSpacing: -0.8 
-                          )
-                        ),
-                        
+                        const Text("AI 智能问诊",
+                            style: TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.textDark,
+                                letterSpacing: -0.8)),
+
                         const SizedBox(height: 8),
-                        
+
                         // 副标题
                         Container(
                           padding: const EdgeInsets.only(right: 60),
                           child: const Text(
                             "24小时在线，快速分析宠物症状\n提供专业医疗建议。",
                             style: TextStyle(
-                              fontSize: 13, 
-                              color: Color(0xFF636366), 
-                              height: 1.5, 
-                              fontWeight: FontWeight.w400
-                            ), 
-                            maxLines: 2, 
+                                fontSize: 13,
+                                color: Color(0xFF636366),
+                                height: 1.5,
+                                fontWeight: FontWeight.w400),
+                            maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
@@ -587,18 +703,30 @@ class _HomeDashboardContent extends StatelessWidget {
 
                   // 右下角悬浮按钮
                   Positioned(
-                    right: 20, bottom: 20,
+                    right: 20,
+                    bottom: 20,
                     child: Container(
-                      width: 48, height: 48,
+                      width: 48,
+                      height: 48,
                       decoration: BoxDecoration(
                         gradient: AppColors.warmGradient,
                         shape: BoxShape.circle,
                         boxShadow: [
-                          BoxShadow(color: AppColors.warmGradient.colors.first.withOpacity(0.4), blurRadius: 12, offset: const Offset(0, 6)),
-                          BoxShadow(color: Colors.white.withOpacity(0.5), blurRadius: 2, offset: const Offset(0, 2), spreadRadius: 0, blurStyle: BlurStyle.inner),
+                          BoxShadow(
+                              color: AppColors.warmGradient.colors.first
+                                  .withOpacity(0.4),
+                              blurRadius: 12,
+                              offset: const Offset(0, 6)),
+                          BoxShadow(
+                              color: Colors.white.withOpacity(0.5),
+                              blurRadius: 2,
+                              offset: const Offset(0, 2),
+                              spreadRadius: 0,
+                              blurStyle: BlurStyle.inner),
                         ],
                       ),
-                      child: const Icon(Icons.medical_services_rounded, color: Colors.white, size: 24),
+                      child: const Icon(Icons.medical_services_rounded,
+                          color: Colors.white, size: 24),
                     ),
                   )
                 ],
@@ -611,91 +739,96 @@ class _HomeDashboardContent extends StatelessWidget {
   }
 
   // --- 小卡片 ---
-  Widget _buildFeatureCard(double width, String title, String subtitle, IconData icon, LinearGradient gradient, Widget page) {
-    return Builder(
-      builder: (context) {
-        return GestureDetector(
-          onTap: () {
-            HapticFeedback.lightImpact();
-            Navigator.of(context).push(CupertinoPageRoute(builder: (_) => page));
-          },
-          child: Container(
-            width: width,
-            height: width * 0.82,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(24),
-              boxShadow: [
-                BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 15, offset: const Offset(0, 8)),
-              ],
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(24),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-                child: Container(
-                  padding: const EdgeInsets.all(16), 
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.65),
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(color: Colors.white.withOpacity(0.6), width: 1),
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft, end: Alignment.bottomRight,
-                      colors: [
-                        Colors.white.withOpacity(0.8),
-                        Colors.white.withOpacity(0.4),
-                      ],
-                    ),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Container(
-                        width: 38, height: 38,
-                        decoration: BoxDecoration(
-                          color: gradient.colors.first.withOpacity(0.15),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(icon, color: gradient.colors.first, size: 20),
-                      ),
-                      Flexible(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(title, 
-                              style: const TextStyle(
-                                fontSize: 16, 
-                                fontWeight: FontWeight.w700, 
-                                color: AppColors.textDark,
-                                letterSpacing: -0.4 
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 3),
-                            Text(subtitle, 
-                              style: TextStyle(
-                                fontSize: 11, 
-                                color: AppColors.textGrey, 
-                                fontWeight: FontWeight.w500,
-                                letterSpacing: 0.3 
-                              ),
-                              maxLines: 1, 
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
-                        ),
-                      ),
+  Widget _buildFeatureCard(double width, String title, String subtitle,
+      IconData icon, LinearGradient gradient, Widget page) {
+    return Builder(builder: (context) {
+      return GestureDetector(
+        onTap: () {
+          HapticFeedback.lightImpact();
+          Navigator.of(context).push(CupertinoPageRoute(builder: (_) => page));
+        },
+        child: Container(
+          width: width,
+          height: width * 0.82,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 15,
+                  offset: const Offset(0, 8)),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(24),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.65),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(
+                      color: Colors.white.withOpacity(0.6), width: 1),
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Colors.white.withOpacity(0.8),
+                      Colors.white.withOpacity(0.4),
                     ],
                   ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        color: gradient.colors.first.withOpacity(0.15),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(icon, color: gradient.colors.first, size: 20),
+                    ),
+                    Flexible(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            title,
+                            style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.textDark,
+                                letterSpacing: -0.4),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            subtitle,
+                            style: TextStyle(
+                                fontSize: 11,
+                                color: AppColors.textGrey,
+                                fontWeight: FontWeight.w500,
+                                letterSpacing: 0.3),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
           ),
-        );
-      }
-    );
+        ),
+      );
+    });
   }
 }
 
@@ -720,17 +853,54 @@ class _HomeUniverseContent extends StatelessWidget {
         children: [
           Center(
             child: HolographicSphereMenu(
-              radius: screenWidth * 0.38, 
+              radius: screenWidth * 0.38,
               items: [
-                SphereItemData(title: 'AI 问诊', icon: Icons.medical_services_rounded, gradient: AppColors.warmGradient, page: const ChatPageWithDatabase()),
-                SphereItemData(title: '电子档案', icon: Icons.badge_rounded, gradient: AppColors.coolGradient, page: const PetPassportPage()),
-                SphereItemData(title: '成长日记', icon: Icons.menu_book_rounded, gradient: AppColors.natureGradient, page: const PetDiaryComposePage()),
-                SphereItemData(title: '活力健身', icon: Icons.directions_run_rounded, gradient: AppColors.oceanGradient, page: const PartnerFitGymPage()),
-                SphereItemData(title: '营养食谱', icon: Icons.restaurant_menu_rounded, gradient: AppColors.goldGradient, page: const PetRecipeListPage()),
-                SphereItemData(title: '训宠响片', icon: Icons.touch_app_rounded, gradient: AppColors.magicGradient, page: const DogClickerScreen()),
-                SphereItemData(title: '社区话题', icon: Icons.explore_rounded, gradient: AppColors.warmGradient, page: const CommunityScreen()),
-                SphereItemData(title: '商城', icon: Icons.shopping_bag_rounded, gradient: AppColors.coolGradient, page: const ProfileScreen()),
-                SphereItemData(title: '设置', icon: Icons.settings_rounded, gradient: const LinearGradient(colors: [Color(0xFF606c88), Color(0xFF3f4c6b)]), page: const ProfileScreen()),
+                SphereItemData(
+                    title: 'AI 问诊',
+                    icon: Icons.medical_services_rounded,
+                    gradient: AppColors.warmGradient,
+                    page: const ChatPageWithDatabase()),
+                SphereItemData(
+                    title: '电子档案',
+                    icon: Icons.badge_rounded,
+                    gradient: AppColors.coolGradient,
+                    page: const PetPassportPage()),
+                SphereItemData(
+                    title: '成长日记',
+                    icon: Icons.menu_book_rounded,
+                    gradient: AppColors.natureGradient,
+                    page: const PetDiaryComposePage()),
+                SphereItemData(
+                    title: '活力健身',
+                    icon: Icons.directions_run_rounded,
+                    gradient: AppColors.oceanGradient,
+                    page: const PartnerFitGymPage()),
+                SphereItemData(
+                    title: '营养食谱',
+                    icon: Icons.restaurant_menu_rounded,
+                    gradient: AppColors.goldGradient,
+                    page: const PetRecipeListPage()),
+                SphereItemData(
+                    title: '训宠响片',
+                    icon: Icons.touch_app_rounded,
+                    gradient: AppColors.magicGradient,
+                    page: const DogClickerScreen()),
+                SphereItemData(
+                    title: '社区话题',
+                    icon: Icons.explore_rounded,
+                    gradient: AppColors.warmGradient,
+                    page: const CommunityScreen()),
+                SphereItemData(
+                    title: '商城',
+                    icon: Icons.shopping_bag_rounded,
+                    gradient: AppColors.coolGradient,
+                    page: const ProfileScreen()),
+                SphereItemData(
+                    title: '设置',
+                    icon: Icons.settings_rounded,
+                    gradient: const LinearGradient(
+                        colors: [Color(0xFF606c88), Color(0xFF3f4c6b)]),
+                    page: const ProfileScreen()),
               ],
             ),
           ),
@@ -758,7 +928,8 @@ class HolographicSphereMenu extends StatefulWidget {
   State<HolographicSphereMenu> createState() => _HolographicSphereMenuState();
 }
 
-class _HolographicSphereMenuState extends State<HolographicSphereMenu> with TickerProviderStateMixin {
+class _HolographicSphereMenuState extends State<HolographicSphereMenu>
+    with TickerProviderStateMixin {
   double _angleX = 0.0;
   double _angleY = 0.0;
 
@@ -799,7 +970,7 @@ class _HolographicSphereMenuState extends State<HolographicSphereMenu> with Tick
       _angleX += _velocityY;
 
       if (_velocityX.abs() < 0.0001 && _velocityY.abs() < 0.0001) {
-         _angleY -= _autoRotateSpeed;
+        _angleY -= _autoRotateSpeed;
       }
     });
   }
@@ -850,7 +1021,7 @@ class _HolographicSphereMenuState extends State<HolographicSphereMenu> with Tick
                   alignment: Alignment.center,
                   children: [
                     Container(
-                      width: widget.radius * 1.0, 
+                      width: widget.radius * 1.0,
                       height: widget.radius * 1.0,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
@@ -864,7 +1035,6 @@ class _HolographicSphereMenuState extends State<HolographicSphereMenu> with Tick
                         ),
                       ),
                     ).blurred(sigmaX: 50, sigmaY: 50),
-
                     ..._build3DItems(),
                   ],
                 ),
@@ -910,11 +1080,11 @@ class _HolographicSphereMenuState extends State<HolographicSphereMenu> with Tick
 
     return projected.map((item) {
       final double zNorm = (item.z + 1) / 2;
-      final double scale = 0.4 + (0.6 * zNorm * zNorm); 
+      final double scale = 0.4 + (0.6 * zNorm * zNorm);
       final double opacity = 0.2 + (0.8 * zNorm);
       final bool isFront = item.z > 0.88;
 
-      const double iconSize = 72.0; 
+      const double iconSize = 72.0;
       const double halfIconSize = iconSize / 2;
 
       return Positioned(
@@ -927,37 +1097,50 @@ class _HolographicSphereMenuState extends State<HolographicSphereMenu> with Tick
             child: GestureDetector(
               onTap: () {
                 HapticFeedback.mediumImpact();
-                Navigator.of(context).push(CupertinoPageRoute(builder: (_) => item.data.page));
+                Navigator.of(context)
+                    .push(CupertinoPageRoute(builder: (_) => item.data.page));
               },
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Container(
-                    width: iconSize, height: iconSize,
+                    width: iconSize,
+                    height: iconSize,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       gradient: item.data.gradient,
                       boxShadow: [
                         if (isFront)
-                          BoxShadow(color: item.data.gradient.colors.first.withOpacity(0.5), blurRadius: 20, spreadRadius: 1),
-                        BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 8, offset: const Offset(0, 4)),
+                          BoxShadow(
+                              color: item.data.gradient.colors.first
+                                  .withOpacity(0.5),
+                              blurRadius: 20,
+                              spreadRadius: 1),
+                        BoxShadow(
+                            color: Colors.black.withOpacity(0.15),
+                            blurRadius: 8,
+                            offset: const Offset(0, 4)),
                       ],
                     ),
-                    child: Icon(item.data.icon, color: Colors.white, size: 30), 
+                    child: Icon(item.data.icon, color: Colors.white, size: 30),
                   ),
                   const SizedBox(height: 6),
                   AnimatedOpacity(
                     duration: const Duration(milliseconds: 200),
                     opacity: isFront ? 1.0 : 0.0,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
                         color: Colors.white.withOpacity(0.8),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Text(
                         item.data.title,
-                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.textDark),
+                        style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textDark),
                       ),
                     ),
                   ),
@@ -977,7 +1160,11 @@ class SphereItemData {
   final LinearGradient gradient;
   final Widget page;
 
-  SphereItemData({required this.title, required this.icon, required this.gradient, required this.page});
+  SphereItemData(
+      {required this.title,
+      required this.icon,
+      required this.gradient,
+      required this.page});
 }
 
 class _ProjectedItem {
@@ -985,7 +1172,8 @@ class _ProjectedItem {
   final double y;
   final double z;
   final SphereItemData data;
-  _ProjectedItem({required this.x, required this.y, required this.z, required this.data});
+  _ProjectedItem(
+      {required this.x, required this.y, required this.z, required this.data});
 }
 
 extension WidgetBlur on Widget {

@@ -139,12 +139,12 @@ class PetProfile {
   }
 
   Map<String, dynamic> toJson() => {
-    'name': name,
-    'age': age,
-    'breed': breed,
-    'weight': weight,
-    'status': status,
-  };
+        'name': name,
+        'age': age,
+        'breed': breed,
+        'weight': weight,
+        'status': status,
+      };
   factory PetProfile.fromJson(Map<String, dynamic> json) {
     return PetProfile(
       name: json['name'] as String,
@@ -160,7 +160,7 @@ class MedicalRecord extends HealthEvent {
   final int? id;
   final String description;
   MedicalRecord({this.id, required String date, required this.description})
-    : super(date);
+      : super(date);
 
   Map<String, dynamic> toMap() {
     return {'id': id, 'date': date, 'description': description};
@@ -229,10 +229,10 @@ class WeightRecord extends HealthEvent {
   }
 
   Map<String, dynamic> toJson() => {
-    'date': date,
-    'weight': weight,
-    'notes': notes,
-  };
+        'date': date,
+        'weight': weight,
+        'notes': notes,
+      };
   factory WeightRecord.fromJson(Map<String, dynamic> json) {
     return WeightRecord(
       date: json['date'],
@@ -276,11 +276,11 @@ class VaccineRecord extends HealthEvent {
   }
 
   Map<String, dynamic> toJson() => {
-    'date': date,
-    'type': type,
-    'name': name,
-    'nextDueDate': nextDueDate,
-  };
+        'date': date,
+        'type': type,
+        'name': name,
+        'nextDueDate': nextDueDate,
+      };
   factory VaccineRecord.fromJson(Map<String, dynamic> json) {
     return VaccineRecord(
       date: json['date'],
@@ -326,8 +326,13 @@ class MyApp extends StatelessWidget {
 // =========================================================
 // 4. 主屏幕
 // =========================================================
+
 class MedicalRecordScreen extends StatefulWidget {
-  const MedicalRecordScreen({super.key});
+  /// 刷新通知器，当值改变时触发数据刷新
+  final ValueNotifier<int>? refreshNotifier;
+
+  const MedicalRecordScreen({super.key, this.refreshNotifier});
+
   @override
   State<MedicalRecordScreen> createState() => _MedicalRecordScreenState();
 }
@@ -348,6 +353,21 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> {
   void initState() {
     super.initState();
     _loadAllData();
+    // 监听刷新通知
+    widget.refreshNotifier?.addListener(_onRefreshRequested);
+  }
+
+  @override
+  void dispose() {
+    widget.refreshNotifier?.removeListener(_onRefreshRequested);
+    super.dispose();
+  }
+
+  /// 当收到刷新通知时调用
+  void _onRefreshRequested() {
+    if (mounted) {
+      _loadAllData();
+    }
   }
 
   // --- Data Management (修改为使用 Supabase) ---
@@ -356,6 +376,8 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> {
   Future<void> _loadAllData() async {
     // 加载所有宠物
     final pets = await _supabaseService.getAllPets();
+    if (!mounted) return; // 异步操作后检查是否仍然挂载
+
     _allPets = pets.map((p) => Pet.fromMap(p)).toList();
 
     // 设置默认选中的宠物
@@ -377,24 +399,26 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> {
     final petId = _selectedPet!.id!;
 
     // 加载病历记录
-    final records = await _supabaseService.getMedicalRecordsForPet(petId.toString());
+    final records =
+        await _supabaseService.getMedicalRecordsForPet(petId.toString());
     _records = records.map((r) => MedicalRecord.fromMap(r)).toList();
 
     // 加载提醒事项
-    final reminders = await _supabaseService.getDailyRemindersForPet(petId.toString());
+    final reminders =
+        await _supabaseService.getDailyRemindersForPet(petId.toString());
     _reminders = reminders.map((r) => DailyReminder.fromMap(r)).toList();
 
     // 加载体重记录
-    final weightRecords = await _supabaseService.getWeightRecordsForPet(petId.toString());
+    final weightRecords =
+        await _supabaseService.getWeightRecordsForPet(petId.toString());
     _weightRecords = weightRecords.map((r) => WeightRecord.fromMap(r)).toList();
 
     // 加载疫苗记录
     final vaccineRecords = await _supabaseService.getVaccineRecordsForPet(
       petId.toString(),
     );
-    _vaccineRecords = vaccineRecords
-        .map((r) => VaccineRecord.fromMap(r))
-        .toList();
+    _vaccineRecords =
+        vaccineRecords.map((r) => VaccineRecord.fromMap(r)).toList();
 
     _compileAndSortHealthLog();
   }
@@ -600,9 +624,8 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> {
 
   Widget _buildExpandedPetSelector() {
     // 过滤出除当前选中宠物外的其他宠物
-    final availablePets = _allPets
-        .where((pet) => pet.id != _selectedPet?.id)
-        .toList();
+    final availablePets =
+        _allPets.where((pet) => pet.id != _selectedPet?.id).toList();
 
     if (availablePets.isEmpty) {
       return const SizedBox.shrink();
@@ -622,9 +645,8 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> {
         ],
       ),
       child: Column(
-        children: availablePets
-            .map((pet) => _buildPetSelectorItem(pet))
-            .toList(),
+        children:
+            availablePets.map((pet) => _buildPetSelectorItem(pet)).toList(),
       ),
     );
   }
@@ -2048,8 +2070,7 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> {
                     onTap: () async {
                       final picked = await showDatePicker(
                         context: context,
-                        initialDate:
-                            DateTime.tryParse(record.nextDueDate) ??
+                        initialDate: DateTime.tryParse(record.nextDueDate) ??
                             DateTime.now().add(const Duration(days: 90)),
                         firstDate: DateTime.now(),
                         lastDate: DateTime(2030),
