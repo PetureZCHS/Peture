@@ -17,6 +17,25 @@ import 'medical_record_screen.dart';
 import 'profile_screen.dart';
 import 'widgets/weight_trend_card.dart';
 
+/// 全局数据变更通知器，用于跨页面通知数据刷新需求
+class DataChangeNotifier {
+  static bool petDataChanged = false;
+
+  /// 标记宠物数据已变更，需要刷新
+  static void markPetDataChanged() {
+    petDataChanged = true;
+  }
+
+  /// 检查并重置标记
+  static bool checkAndReset() {
+    if (petDataChanged) {
+      petDataChanged = false;
+      return true;
+    }
+    return false;
+  }
+}
+
 // =========================================================
 // 1. 配色与样式
 // =========================================================
@@ -83,6 +102,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   final ValueNotifier<int> _medicalScreenRefreshNotifier =
       ValueNotifier<int>(0);
 
+  /// 标记是否需要刷新健康记录页面（首次进入或数据变更后需要刷新）
+  bool _needsMedicalScreenRefresh = true;
+
   @override
   void initState() {
     super.initState();
@@ -113,9 +135,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     });
     HapticFeedback.mediumImpact();
 
-    // 当切换到 MedicalRecordScreen (index 2) 时，通知刷新数据
+    // 当切换到 MedicalRecordScreen (index 2) 时，检查是否需要刷新
     if (index == 2) {
-      _medicalScreenRefreshNotifier.value++;
+      // 检查全局数据变更标记或首次进入标记
+      if (_needsMedicalScreenRefresh || DataChangeNotifier.checkAndReset()) {
+        _medicalScreenRefreshNotifier.value++;
+        _needsMedicalScreenRefresh = false;
+      }
     }
   }
 

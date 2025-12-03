@@ -365,7 +365,9 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> {
 
   /// 当收到刷新通知时调用
   void _onRefreshRequested() {
-    _loadAllData();
+    if (mounted) {
+      _loadAllData();
+    }
   }
 
   // --- Data Management (修改为使用 Supabase) ---
@@ -374,6 +376,8 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> {
   Future<void> _loadAllData() async {
     // 加载所有宠物
     final pets = await _supabaseService.getAllPets();
+    if (!mounted) return; // 异步操作后检查是否仍然挂载
+
     _allPets = pets.map((p) => Pet.fromMap(p)).toList();
 
     // 设置默认选中的宠物

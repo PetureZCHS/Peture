@@ -8,6 +8,7 @@ import 'settings_page.dart';
 import 'pages/unified_expense/unified_expense_home_page.dart';
 import 'pages/reminder/intelligent_reminder_page.dart';
 import 'pages/pet_profile_form_page.dart';
+import 'home_screen.dart' show DataChangeNotifier;
 
 // =========================================================
 // 全局设计系统 - 美学升级版
@@ -406,6 +407,8 @@ class _PetProfileSectionState extends State<PetProfileSection> {
           setState(() {
             pets.add(petWithId);
           });
+          // 标记数据已变更，切换到健康记录页时需要刷新
+          DataChangeNotifier.markPetDataChanged();
         }
 
         if (mounted) {
@@ -485,6 +488,8 @@ class _PetProfileSectionState extends State<PetProfileSection> {
                       setState(() {
                         pets.removeWhere((pet) => pet.id == petToDelete.id);
                       });
+                      // 标记数据已变更
+                      DataChangeNotifier.markPetDataChanged();
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(content: Text('${petToDelete.name} 的档案已删除')),
                       );
@@ -1008,6 +1013,8 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage> {
                     setState(() {
                       _currentPet = updatedPet;
                     });
+                    // 标记数据已变更
+                    DataChangeNotifier.markPetDataChanged();
                     if (mounted) {
                       ScaffoldMessenger.of(
                         context,
