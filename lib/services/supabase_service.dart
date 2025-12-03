@@ -101,11 +101,32 @@ class SupabaseService {
       petData.remove('id'); // 移除 id，让数据库使用默认值生成 UUID
       petData['user_id'] = userId;
 
-      final response = await _client
-          .from('pets')
-          .insert(petData)
-          .select()
-          .single();
+      // 处理 neuter_status：将字符串转换为布尔值
+      if (petData.containsKey('neuter_status')) {
+        final neuterStatusStr = petData['neuter_status'];
+        if (neuterStatusStr is String) {
+          if (neuterStatusStr == '已绝育') {
+            petData['neuter_status'] = true;
+          } else if (neuterStatusStr == '未绝育') {
+            petData['neuter_status'] = false;
+          } else {
+            print('警告: 未知的 neuter_status 值: $neuterStatusStr');
+            petData['neuter_status'] = null;
+          }
+        }
+      }
+
+      // 处理 birth_date：确保格式正确（只保留日期部分）
+      if (petData.containsKey('birth_date') && petData['birth_date'] != null) {
+        final birthDate = petData['birth_date'].toString();
+        // 如果包含时间部分，只保留日期
+        if (birthDate.contains('T')) {
+          petData['birth_date'] = birthDate.split('T')[0];
+        }
+      }
+
+      final response =
+          await _client.from('pets').insert(petData).select().single();
       return response['id'] as String?;
     } catch (e) {
       print('插入宠物失败: $e');
@@ -154,7 +175,16 @@ class SupabaseService {
           .eq('user_id', userId)
           .order('created_at', ascending: false);
 
-      return List<Map<String, dynamic>>.from(response);
+      // 转换字段类型以匹配应用层
+      return List<Map<String, dynamic>>.from(response).map((pet) {
+        final mapped = Map<String, dynamic>.from(pet);
+        // neuter_status: 布尔值 -> 字符串
+        if (mapped.containsKey('neuter_status')) {
+          mapped['neuter_status'] =
+              mapped['neuter_status'] == true ? '已绝育' : '未绝育';
+        }
+        return mapped;
+      }).toList();
     } catch (e) {
       print('获取宠物列表失败: $e');
       return [];
@@ -172,6 +202,30 @@ class SupabaseService {
       updateData.remove('id');
       updateData.remove('user_id'); // 不允许更新user_id
       updateData['updated_at'] = DateTime.now().toIso8601String();
+
+      // 处理 neuter_status：将字符串转换为布尔值
+      if (updateData.containsKey('neuter_status')) {
+        final neuterStatusStr = updateData['neuter_status'];
+        if (neuterStatusStr is String) {
+          if (neuterStatusStr == '已绝育') {
+            updateData['neuter_status'] = true;
+          } else if (neuterStatusStr == '未绝育') {
+            updateData['neuter_status'] = false;
+          } else {
+            print('警告: 未知的 neuter_status 值: $neuterStatusStr');
+            updateData['neuter_status'] = null;
+          }
+        }
+      }
+
+      // 处理 birth_date：确保格式正确（只保留日期部分）
+      if (updateData.containsKey('birth_date') &&
+          updateData['birth_date'] != null) {
+        final birthDate = updateData['birth_date'].toString();
+        if (birthDate.contains('T')) {
+          updateData['birth_date'] = birthDate.split('T')[0];
+        }
+      }
 
       await _client
           .from('pets')
@@ -594,10 +648,8 @@ class SupabaseService {
     if (userId == null) return [];
 
     try {
-      final response = await _client
-          .from('daily_reminders')
-          .select()
-          .eq('user_id', userId);
+      final response =
+          await _client.from('daily_reminders').select().eq('user_id', userId);
 
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
@@ -614,10 +666,8 @@ class SupabaseService {
     if (userId == null) return [];
 
     try {
-      var query = _client
-          .from('daily_reminders')
-          .select()
-          .eq('user_id', userId);
+      var query =
+          _client.from('daily_reminders').select().eq('user_id', userId);
 
       if (petId != null) {
         query = query.eq('pet_id', petId);
@@ -902,11 +952,8 @@ class SupabaseService {
         'created_at': diary.timestamp.toIso8601String(),
       };
 
-      final response = await _client
-          .from('pet_diaries')
-          .insert(diaryData)
-          .select()
-          .single();
+      final response =
+          await _client.from('pet_diaries').insert(diaryData).select().single();
       return response['id'] as String?;
     } catch (e) {
       print('插入宠物日记失败: $e');

@@ -15,6 +15,7 @@ import 'pages/dog_clicker/dog_clicker_screen.dart';
 import 'community_screen.dart';
 import 'medical_record_screen.dart';
 import 'profile_screen.dart';
+import 'widgets/weight_trend_card.dart';
 
 // =========================================================
 // 1. 配色与样式
@@ -195,31 +196,32 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           ),
 
           // 右上角悬浮切换按钮
-          Positioned(
-            top: MediaQuery.of(context).padding.top + 10,
-            right: 20, 
-            child: GestureDetector(
-              onTap: _toggleViewMode,
-              child: ClipOval(
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                  child: Container(
-                    width: 42, height: 42,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.5),
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white.withOpacity(0.8), width: 1),
-                    ),
-                    child: Icon(
-                      _isUniverseMode ? Icons.grid_view_rounded : Icons.hub_rounded, 
-                      color: AppColors.textDark, 
-                      size: 22 
+          if (_currentIndex == 0)
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 10,
+              right: 20, 
+              child: GestureDetector(
+                onTap: _toggleViewMode,
+                child: ClipOval(
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                    child: Container(
+                      width: 42, height: 42,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.5),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white.withOpacity(0.8), width: 1),
+                      ),
+                      child: Icon(
+                        _isUniverseMode ? Icons.grid_view_rounded : Icons.hub_rounded, 
+                        color: AppColors.textDark, 
+                        size: 22 
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
-          ),
 
           // 底部导航
           Positioned(
@@ -437,6 +439,11 @@ class _HomeDashboardContent extends StatelessWidget {
         // 1. AI 智能问诊 (修复版：文字完整显示)
         _buildHeroAiCard(context),
 
+        const SizedBox(height: 16),
+
+        // 1.5 体重趋势卡片
+        const WeightTrendCard(),
+
         const SizedBox(height: 16), 
 
         // 2. 功能网格
@@ -452,6 +459,7 @@ class _HomeDashboardContent extends StatelessWidget {
                 _buildFeatureCard(width, '活力健身', 'Fitness', Icons.directions_run_rounded, AppColors.oceanGradient, const PartnerFitGymPage()),
                 _buildFeatureCard(width, '营养食谱', 'Food', Icons.restaurant_menu_rounded, AppColors.goldGradient, const PetRecipeListPage()),
                 _buildFeatureCard(width, '训宠响片', 'Training', Icons.touch_app_rounded, AppColors.magicGradient, const DogClickerScreen()),
+                _buildFeatureCard(width, '寻宠互助', 'Emergency', Icons.campaign_rounded, AppColors.navTab1, const CommunityScreen()),
               ],
             );
           },

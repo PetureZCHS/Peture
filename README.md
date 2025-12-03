@@ -421,6 +421,9 @@ Supabase 服务封装，提供与 Supabase 数据库交互的接口：
 - 用户数据管理（用户资料、头像等）
 - 对话记录和宠物日记管理
 - 支持 LeanCloud 和 Supabase 双重认证
+- 自动字段类型转换：
+  - `neuter_status`：应用层字符串（"已绝育"/"未绝育"）↔ 数据库布尔值
+  - `birth_date`：自动截取日期部分（去除时间）
 
 ##### `supabase_edge_service.dart`
 Supabase Edge Functions 服务封装，调用 Supabase Edge Functions：
@@ -702,10 +705,10 @@ for (var pet in pets) {
 }
 
 // 更新宠物信息
-await supabaseService.updatePet(
-  petId!,
-  {'weight': 26.0},
-);
+await supabaseService.updatePet({
+  'id': petId,
+  'weight': 26.0,
+});
 
 // 删除宠物
 await supabaseService.deletePet(petId);
@@ -1141,13 +1144,16 @@ final service = SupabaseService();
 // 查询所有宠物
 final pets = await service.getAllPets();
 
-// 插入新宠物
+// 插入新宠物（neuter_status 会自动转换为布尔值存储）
 final petId = await service.insertPet({
   'name': '小白',
   'type': '狗',
   'age': '2岁',
   'gender': '公',
   'breed': '金毛',
+  'birth_date': '2022-01-01',
+  'neuter_status': '已绝育',  // 自动转换为 true
+  'weight': 25.5,
 });
 ```
 
@@ -1420,12 +1426,12 @@ CREATE POLICY "Users can insert own new_features"
 
 ### 步骤选择指南
 
-| 功能类型 | 必需步骤 | 可选步骤 |
-|---------|---------|---------|
-| **纯 UI 功能**（不存储数据） | 步骤1、步骤5 | 步骤6（如需在主界面显示） |
-| **本地数据功能** | 步骤1、步骤2、步骤3、步骤5 | 步骤6 |
-| **云端数据功能** | 步骤1、步骤2、步骤4、步骤5、步骤7 | 步骤6 |
-| **混合存储功能** | 步骤1、步骤2、步骤3、步骤4、步骤5、步骤7 | 步骤6 |
+| 功能类型                     | 必需步骤                                 | 可选步骤                  |
+| ---------------------------- | ---------------------------------------- | ------------------------- |
+| **纯 UI 功能**（不存储数据） | 步骤1、步骤5                             | 步骤6（如需在主界面显示） |
+| **本地数据功能**             | 步骤1、步骤2、步骤3、步骤5               | 步骤6                     |
+| **云端数据功能**             | 步骤1、步骤2、步骤4、步骤5、步骤7        | 步骤6                     |
+| **混合存储功能**             | 步骤1、步骤2、步骤3、步骤4、步骤5、步骤7 | 步骤6                     |
 
 ### 调试技巧
 
@@ -1673,20 +1679,23 @@ await helper.deletePet(petId);
 ```dart
 final service = SupabaseService();
 
-// 插入数据
+// 插入数据（neuter_status 自动转换为布尔值）
 final petId = await service.insertPet({
   'name': '小白',
   'type': '狗',
   'age': '2岁',
   'gender': '公',
   'breed': '金毛',
+  'birth_date': '2022-01-01',
+  'neuter_status': '已绝育',
+  'weight': 25.5,
 });
 
-// 查询数据
+// 查询数据（neuter_status 自动转换回字符串）
 final pets = await service.getAllPets();
 
-// 更新数据
-await service.updatePet(petId, {'name': '小黑'});
+// 更新数据（传入包含 id 的 Map）
+await service.updatePet({'id': petId, 'name': '小黑', 'weight': 26.0});
 
 // 删除数据
 await service.deletePet(petId);
