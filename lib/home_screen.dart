@@ -13,7 +13,7 @@ import 'pages/pet_recipe/pet_recipe_list_page.dart';
 import 'pages/partner_fit/partner_fit_gym_page.dart';
 import 'pages/dog_clicker/dog_clicker_screen.dart';
 import 'community_screen.dart';
-import 'medical_record_screen.dart';
+import 'medical_record_screen.dart' show MedicalRecordScreen, medicalRecordScreenKey;
 import 'profile_screen.dart';
 import 'widgets/weight_trend_card.dart';
 
@@ -92,6 +92,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       _lastHapticIndex = index;
     });
     HapticFeedback.mediumImpact();
+    
+    // 当切换到 MedicalRecordScreen (index 2) 时，刷新数据
+    if (index == 2) {
+      medicalRecordScreenKey.currentState?.refreshData();
+    }
   }
 
   void _toggleViewMode() {
@@ -124,7 +129,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final List<Widget> pages = [
       homePageContent,
       const CommunityScreen(),
-      const MedicalRecordScreen(),
+      MedicalRecordScreen(key: medicalRecordScreenKey),
       const ProfileScreen(),
     ];
 

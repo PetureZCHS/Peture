@@ -326,13 +326,24 @@ class MyApp extends StatelessWidget {
 // =========================================================
 // 4. 主屏幕
 // =========================================================
+
+/// 用于从外部访问 MedicalRecordScreen 状态的 GlobalKey
+final GlobalKey<MedicalRecordScreenState> medicalRecordScreenKey = 
+    GlobalKey<MedicalRecordScreenState>();
+
 class MedicalRecordScreen extends StatefulWidget {
   const MedicalRecordScreen({super.key});
   @override
-  State<MedicalRecordScreen> createState() => _MedicalRecordScreenState();
+  State<MedicalRecordScreen> createState() => MedicalRecordScreenState();
 }
 
-class _MedicalRecordScreenState extends State<MedicalRecordScreen> {
+// 将 State 类改为公开，以便从 GlobalKey 访问
+class MedicalRecordScreenState extends State<MedicalRecordScreen> {
+  /// 公开的刷新方法，用于从外部触发数据刷新
+  Future<void> refreshData() async {
+    await _loadAllData();
+  }
+
   // --- State variables ---
   List<Pet> _allPets = [];
   Pet? _selectedPet;
