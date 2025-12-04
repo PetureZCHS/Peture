@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../models/unified_expense.dart';
 import '../../database/unified_expense_helper.dart';
 import '../../database/medical_record_helper.dart';
+import '../../services/supabase_service.dart'; // 添加这一行
 
 /// 统一的添加/编辑消费页面
 class AddUnifiedExpensePage extends StatefulWidget {
@@ -167,8 +168,7 @@ class _AddUnifiedExpensePageState extends State<AddUnifiedExpensePage> {
         itemName: _selectedExpenseType == ExpenseTypeEnum.recurring
             ? _itemNameController.text.trim()
             : null,
-        estimatedEndDate:
-            _selectedExpenseType == ExpenseTypeEnum.recurring &&
+        estimatedEndDate: _selectedExpenseType == ExpenseTypeEnum.recurring &&
                 _estimatedEndDate != null
             ? DateFormat('yyyy-MM-dd').format(_estimatedEndDate!)
             : null,
@@ -941,9 +941,8 @@ class _AddUnifiedExpensePageState extends State<AddUnifiedExpensePage> {
                           color: isSelected
                               ? const Color(0xFF5D5FEF)
                               : const Color(0xFF8E8E93),
-                          fontWeight: isSelected
-                              ? FontWeight.w600
-                              : FontWeight.normal,
+                          fontWeight:
+                              isSelected ? FontWeight.w600 : FontWeight.normal,
                         ),
                       ),
                     ),
