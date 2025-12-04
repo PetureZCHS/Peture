@@ -8,29 +8,11 @@ import 'settings_page.dart';
 import 'pages/unified_expense/unified_expense_home_page.dart';
 import 'pages/reminder/intelligent_reminder_page.dart';
 import 'pages/pet_profile_form_page.dart';
+import 'utils/ui_helpers.dart';
 
 // =========================================================
 // 全局设计系统 - 美学升级版
 // =========================================================
-class AppColors {
-  static const Color background = Color(0xFFF5F5F7);
-  static const Color primary = Color(0xFF5D5FEF);
-  // 🎨 与首页AI智能问诊相同的渐变色
-  static const Color primaryGradientStart = Color(0xFF5A8EFA); // primaryBlue
-  static const Color primaryGradientEnd = Color(0xFF8B77FF); // primaryPurple
-  static const Color primaryText = Color(0xFF1A1A1A);
-  static const Color secondaryText = Color(0xFF8E8E93);
-  static const Color cardBackground = Colors.white;
-
-  // 宠物类型主题色映射
-  static final Map<String, Color> petTypeColors = {
-    '狗': Colors.orange[100]!,
-    '猫': Colors.cyan[100]!,
-    '兔': Colors.green[100]!,
-    '仓鼠': Colors.pink[100]!,
-    '其他': Colors.grey[100]!,
-  };
-}
 
 class AppStyles {
   static const TextStyle sectionTitle = TextStyle(

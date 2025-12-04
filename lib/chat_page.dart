@@ -1,6 +1,7 @@
 // lib/chat_page.dart
 import 'dart:async';
-import 'dart:math';
+import 'dart:ui';
+import 'dart:math' as math;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -11,6 +12,7 @@ import 'services/supabase_edge_service.dart';
 // ================== 所有必需的导入 ==================
 import 'models/conversation.dart';
 import 'database/database_helper.dart';
+import 'utils/ui_helpers.dart';
 // ===============================================
 
 // =======================================================================
@@ -62,7 +64,7 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
   final String _userId = "flutter_test_user_123";
   bool _hasStartedChat = false;
   bool _isComposing = false;
-  final Random _random = Random();
+  final math.Random _random = math.Random();
   List<String> _currentSuggestions = [];
   String? _conversationId;
 
@@ -98,6 +100,7 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
   ];
 
   late AnimationController _suggestionFadeController;
+  late AnimationController _orbController;
 
   @override
   void initState() {
@@ -106,6 +109,10 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
       vsync: this,
       duration: const Duration(milliseconds: 300),
     );
+    _orbController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 12), 
+    )..repeat(reverse: true);
     _updateSuggestions();
     _textController.addListener(_onTextChange);
   }
@@ -128,6 +135,7 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
     _scrollController.dispose();
     _typingTimer?.cancel();
     _suggestionFadeController.dispose();
+    _orbController.dispose();
     // ✅ Edge Function 服务不需要 dispose
     super.dispose();
   }
@@ -609,44 +617,104 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
       onConversationSelected: _loadConversation,
     );
     return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      backgroundColor: AppColors.background,
+      extendBodyBehindAppBar: true,
       endDrawer: drawer,
-      body: SafeArea(
-        child: Column(
-          children: [
-            _buildTopHeader(),
-            Expanded(
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 500),
-                transitionBuilder: (Widget child, Animation<double> animation) {
-                  final offsetAnimation = Tween<Offset>(
-                    begin: const Offset(0.0, 1.0),
-                    end: Offset.zero,
-                  ).animate(
-                    CurvedAnimation(
-                      parent: animation,
-                      curve: Curves.easeInOutCubic,
-                    ),
-                  );
-                  return SlideTransition(
-                    position: offsetAnimation,
-                    child: child,
+      body: Stack(
+        children: [
+          // 背景层
+          Stack(
+            children: [
+              Container(color: AppColors.background), 
+              AnimatedBuilder(
+                animation: _orbController,
+                builder: (context, child) {
+                  return Positioned(
+                    top: -100 + (_orbController.value * 40),
+                    left: -50 + (_orbController.value * 20),
+                    child: Container(
+                      width: 500, height: 500,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: AppColors.orb1.withOpacity(0.5),
+                      ),
+                    ).blurred(sigmaX: 90, sigmaY: 90),
                   );
                 },
-                child: _hasStartedChat
-                    ? Container(
-                        key: const ValueKey("ChatList"),
-                        child: _buildMessageList(),
-                      )
-                    : Container(
-                        key: const ValueKey("WelcomeScreen"),
-                        child: _buildWelcomeScreen(),
-                      ),
               ),
+              AnimatedBuilder(
+                animation: _orbController,
+                builder: (context, child) {
+                  return Positioned(
+                    top: 300 + (math.sin(_orbController.value * math.pi) * 60),
+                    right: -100,
+                    child: Container(
+                      width: 350, height: 350,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: AppColors.orb3.withOpacity(0.4),
+                      ),
+                    ).blurred(sigmaX: 80, sigmaY: 80),
+                  );
+                },
+              ),
+              AnimatedBuilder(
+                animation: _orbController,
+                builder: (context, child) {
+                  return Positioned(
+                    bottom: -150,
+                    left: -80 + (_orbController.value * 150),
+                    child: Container(
+                      width: 600, height: 400,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: AppColors.orb2.withOpacity(0.5),
+                      ),
+                    ).blurred(sigmaX: 100, sigmaY: 100),
+                  );
+                },
+              ),
+            ],
+          ),
+
+          SafeArea(
+            child: Column(
+              children: [
+                _buildTopHeader(),
+                Expanded(
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 500),
+                    transitionBuilder: (Widget child, Animation<double> animation) {
+                      final offsetAnimation = Tween<Offset>(
+                        begin: const Offset(0.0, 1.0),
+                        end: Offset.zero,
+                      ).animate(
+                        CurvedAnimation(
+                          parent: animation,
+                          curve: Curves.easeInOutCubic,
+                        ),
+                      );
+                      return SlideTransition(
+                        position: offsetAnimation,
+                        child: child,
+                      );
+                    },
+                    child: _hasStartedChat
+                        ? Container(
+                            key: const ValueKey("ChatList"),
+                            child: _buildMessageList(),
+                          )
+                        : Container(
+                            key: const ValueKey("WelcomeScreen"),
+                            child: _buildWelcomeScreen(),
+                          ),
+                  ),
+                ),
+                _buildInputArea(enabled: !_isLoading),
+              ],
             ),
-            _buildInputArea(enabled: !_isLoading),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -674,7 +742,7 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
               child: Center(
                 key: ValueKey(_hasStartedChat ? "chat_title" : "welcome_title"),
                 child: Text(
-                  "智能问诊",
+                  "Peture AI",
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
                         fontWeight: FontWeight.bold,
                         fontSize: 18,
@@ -702,147 +770,103 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
   // --- 以下是其他未修改的 UI 构建方法 ---
 
   Widget _buildWelcomeScreen() {
-    return ListView(
-      padding: const EdgeInsets.symmetric(
-        horizontal: _UIConstants.horizontalPadding,
-      ),
-      children: [
-        const SizedBox(height: 20), // 增加一些顶部间距
-        _buildStepper(),
-        const SizedBox(height: 20),
-        _buildWelcomeCard(),
-      ],
-    );
-  }
-
-  Widget _buildStepper() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceAround,
-      children: [
-        _buildStep("主诉分析", CupertinoIcons.search, isActive: true),
-        _buildStep("症状推理", CupertinoIcons.lightbulb),
-        _buildStep("病历采集", CupertinoIcons.doc_text),
-        _buildStep("报告生成", CupertinoIcons.graph_square),
-      ],
-    );
-  }
-
-  Widget _buildStep(String title, IconData icon, {bool isActive = false}) {
-    final color =
-        isActive ? Theme.of(context).primaryColor : Colors.grey.shade300;
-    final iconColor = isActive ? Colors.white : Colors.grey.shade600;
-    final textColor =
-        isActive ? Theme.of(context).primaryColor : Colors.grey.shade500;
-    return Column(
-      children: [
-        Container(
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(shape: BoxShape.circle, color: color),
-          child: Icon(icon, color: iconColor, size: 20),
-        ),
-        const SizedBox(height: 8),
-        Text(title, style: TextStyle(color: textColor, fontSize: 13)),
-      ],
-    );
-  }
-
-  Widget _buildWelcomeCard() {
-    return Container(
-      padding: const EdgeInsets.all(24.0),
-      decoration: BoxDecoration(
-        // 使用与聊天页面背景色一致的颜色，确保动画过程中背景无缝衔接
-        color: Theme.of(context).scaffoldBackgroundColor,
-        borderRadius: BorderRadius.circular(20.0),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            spreadRadius: 2,
-            blurRadius: 10,
-            offset: const Offset(0, 5),
-          ),
-        ],
-      ),
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 24.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            "Hi, 您好 👋",
-            style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+          const SizedBox(height: 100),
+          // Kimi 风格精灵小球
+          const _KimiBall(),
+          const SizedBox(height: 12),
+          // 标题区域 - 极简大气的排版
+          Text(
+            "Hello, 铲屎官",
+            style: TextStyle(
+              fontSize: 36,
+              fontWeight: FontWeight.bold,
+              color: const Color(0xFF1A1A1A),
+              letterSpacing: -1.0,
+              height: 1.2,
+            ),
           ),
           const SizedBox(height: 12),
           Text(
-            "我是您的 AI 宠物医生\n欢迎来到我们 AI 宠物诊所，请问我今天有什么可以帮助这位可爱的小家伙～",
+            "有什么可以帮助到这个可爱的家伙？",
             style: TextStyle(
-              color: Colors.grey.shade600,
-              fontSize: 16,
-              height: 1.5,
+              fontSize: 20,
+              fontWeight: FontWeight.w400,
+              color: Colors.grey.shade500,
+              letterSpacing: 0.5,
             ),
           ),
-          const SizedBox(height: 24),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                "你可以试着问我",
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-              ),
-              TextButton.icon(
-                onPressed: _updateSuggestions,
-                icon: const Icon(CupertinoIcons.arrow_2_circlepath, size: 18),
-                label: const Text("换一换"),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 40),
+
+          // 建议列表 - 左对齐，宽度自适应，更轻量
           FadeTransition(
             opacity: _suggestionFadeController,
-            child: Column(
+            child: Wrap(
+              spacing: 12,
+              runSpacing: 12,
               children: _currentSuggestions
-                  .map((text) => _buildSuggestionItem(text))
+                  .map((text) => _buildMinimalSuggestion(text))
                   .toList(),
             ),
           ),
+          
+          const SizedBox(height: 24),
+          // 换一换按钮 - 极简风格
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: _updateSuggestions,
+              icon: Icon(Icons.refresh, size: 16, color: Colors.grey.shade400),
+              label: Text(
+                "换一换",
+                style: TextStyle(color: Colors.grey.shade400, fontSize: 14),
+              ),
+              style: TextButton.styleFrom(
+                padding: EdgeInsets.zero,
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ),
+          ),
+          const SizedBox(height: 100),
         ],
       ),
     );
   }
 
-  Widget _buildSuggestionItem(String text) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: () => _sendMessage(text: text),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 12.0, horizontal: 8.0),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Expanded(
-                child: Text(
-                  text,
-                  style: TextStyle(
-                    color: Colors.grey.shade700,
-                    fontSize: 15,
-                    height: 1.4,
-                  ),
-                ),
+  Widget _buildMinimalSuggestion(String text) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.grey.shade200, width: 1),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(24),
+          onTap: () => _sendMessage(text: text),
+          child: Padding(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
+            child: Text(
+              text,
+              style: const TextStyle(
+                color: Color(0xFF1F1F1F),
+                fontSize: 15,
+                height: 1.4,
+                fontWeight: FontWeight.w400,
               ),
-              const SizedBox(width: 16),
-              Icon(
-                Icons.arrow_forward_ios,
-                size: 16,
-                color: Colors.grey.shade400,
-              ),
-            ],
+            ),
           ),
         ),
       ),
     );
-  }
-
-  Widget _buildInputArea({bool enabled = true}) {
+  }  Widget _buildInputArea({bool enabled = true}) {
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
       padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 6.0),
@@ -1494,6 +1518,214 @@ class _MessageBubble extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+// =======================================================================
+// Kimi 风格精灵小球组件
+// =======================================================================
+class _KimiBall extends StatefulWidget {
+  const _KimiBall();
+
+  @override
+  State<_KimiBall> createState() => _KimiBallState();
+}
+
+class _KimiBallState extends State<_KimiBall> with TickerProviderStateMixin {
+  late AnimationController _blinkController;
+  late AnimationController _bounceController;
+  late AnimationController _lookController;
+  late AnimationController _breathController;
+  Timer? _blinkTimer;
+  Timer? _lookTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    // 眨眼动画控制器
+    _blinkController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 200),
+    );
+
+    // 点击跳动动画控制器
+    _bounceController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 500),
+      lowerBound: 0.0,
+      upperBound: 1.0,
+    );
+
+    // 视线移动控制器
+    _lookController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    );
+
+    // 呼吸动画控制器
+    _breathController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 3),
+    )..repeat(reverse: true);
+
+    _startBlinking();
+    _startLooking();
+  }
+
+  void _startBlinking() {
+    // 随机眨眼间隔 (2-6秒)
+    _blinkTimer = Timer.periodic(const Duration(seconds: 4), (timer) {
+      if (mounted) {
+        // 偶尔眨两次眼
+        if (math.Random().nextBool()) {
+          _blinkController.forward().then((_) {
+            _blinkController.reverse().then((_) {
+              Future.delayed(const Duration(milliseconds: 100), () {
+                if (mounted) {
+                  _blinkController
+                      .forward()
+                      .then((_) => _blinkController.reverse());
+                }
+              });
+            });
+          });
+        } else {
+          _blinkController.forward().then((_) => _blinkController.reverse());
+        }
+      }
+    });
+  }
+
+  void _startLooking() {
+    // 随机看向右上角
+    _lookTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
+      if (mounted && !_lookController.isAnimating && math.Random().nextBool()) {
+        // 30% 概率看向右上角
+        _lookController.forward().then((_) {
+          Future.delayed(const Duration(milliseconds: 1200), () {
+            if (mounted) _lookController.reverse();
+          });
+        });
+      }
+    });
+  }
+
+  void _onTap() {
+    if (!_bounceController.isAnimating) {
+      HapticFeedback.mediumImpact();
+      _bounceController.forward().then((_) => _bounceController.reverse());
+      // 点击时也眨眼
+      _blinkController.forward().then((_) => _blinkController.reverse());
+    }
+  }
+
+  @override
+  void dispose() {
+    _blinkController.dispose();
+    _bounceController.dispose();
+    _lookController.dispose();
+    _breathController.dispose();
+    _blinkTimer?.cancel();
+    _lookTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: _onTap,
+      child: AnimatedBuilder(
+        animation: Listenable.merge([_bounceController, _breathController]),
+        builder: (context, child) {
+          // 模拟果冻弹跳效果
+          double bounceScale = 1.0;
+          double translateY = 0.0;
+
+          if (_bounceController.value <= 0.5) {
+            // 下压阶段
+            bounceScale = 1.0 - (_bounceController.value * 0.2);
+            translateY = _bounceController.value * 10;
+          } else {
+            // 回弹阶段
+            bounceScale = 0.9 + ((_bounceController.value - 0.5) * 0.2);
+            translateY = (1.0 - _bounceController.value) * 10;
+          }
+
+          // 呼吸效果 (轻微缩放)
+          double breathScale = 1.0 + (_breathController.value * 0.03);
+
+          return Transform.translate(
+            offset: Offset(0, translateY),
+            child: Transform.scale(
+              scale: bounceScale * breathScale,
+              child: child,
+            ),
+          );
+        },
+        child: Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color(0xFF4facfe), // 亮蓝
+                Color(0xFF00f2fe), // 青蓝
+              ],
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF4facfe).withOpacity(0.4),
+                blurRadius: 16,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Stack(
+            children: [
+              // 左眼
+              Align(
+                alignment: const Alignment(-0.35, -0.2),
+                child: _buildEye(),
+              ),
+              // 右眼
+              Align(
+                alignment: const Alignment(0.35, -0.2),
+                child: _buildEye(),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEye() {
+    return AnimatedBuilder(
+      animation: Listenable.merge([_blinkController, _lookController]),
+      builder: (context, child) {
+        // 眨眼时高度变小
+        final height = 10.0 * (1.0 - _blinkController.value);
+
+        // 看向右上角逻辑 (x: +6, y: -4)
+        final lookProgress = Curves.easeInOut.transform(_lookController.value);
+        final lookOffset = Offset(4.0 * lookProgress, -3.0 * lookProgress);
+
+        return Transform.translate(
+          offset: lookOffset,
+          child: Container(
+            width: 6,
+            height: height > 1.5 ? height : 1.5, // 最小高度1.5
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(3),
+            ),
+          ),
+        );
+      },
     );
   }
 }

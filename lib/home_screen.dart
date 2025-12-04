@@ -12,38 +12,12 @@ import 'pages/pet_passport/pet_passport_page.dart';
 import 'pages/pet_recipe/pet_recipe_list_page.dart';
 import 'pages/partner_fit/partner_fit_gym_page.dart';
 import 'pages/dog_clicker/dog_clicker_screen.dart';
+import 'pages/lost_pet/lost_pet_rescue_page.dart';
 import 'community_screen.dart';
 import 'medical_record_screen.dart';
 import 'profile_screen.dart';
 import 'widgets/weight_trend_card.dart';
-
-// =========================================================
-// 1. 配色与样式
-// =========================================================
-
-class AppColors {
-  static const Color background = Color(0xFFF2F2F7); 
-  static const Color textDark = Color(0xFF1D1D1F); 
-  static const Color textGrey = Color(0xFF8E8E93); 
-
-  static const Color orb1 = Color(0xFFC4E0E5);
-  static const Color orb2 = Color(0xFFE2D1F9);
-  static const Color orb3 = Color(0xFFFFDFC4);
-
-  static const LinearGradient navTab0 = LinearGradient(colors: [Color(0xFF2E3192), Color(0xFF1BFFFF)]);
-  static const LinearGradient navTab1 = LinearGradient(colors: [Color(0xFFFF512F), Color(0xFFDD2476)]);
-  static const LinearGradient navTab2 = LinearGradient(colors: [Color(0xFF00b09b), Color(0xFF96c93d)]);
-  static const LinearGradient navTab3 = LinearGradient(colors: [Color(0xFF667eea), Color(0xFF764ba2)]);
-
-  static const List<LinearGradient> navGradients = [navTab0, navTab1, navTab2, navTab3];
-
-  static const LinearGradient warmGradient = LinearGradient(colors: [Color(0xFFFF5E62), Color(0xFFFF9966)]);
-  static const LinearGradient coolGradient = LinearGradient(colors: [Color(0xFF4FACFE), Color(0xFF00F2FE)]);
-  static const LinearGradient natureGradient = LinearGradient(colors: [Color(0xFF43E97B), Color(0xFF38F9D7)]);
-  static const LinearGradient magicGradient = LinearGradient(colors: [Color(0xFFA18CD1), Color(0xFFFBC2EB)]);
-  static const LinearGradient oceanGradient = LinearGradient(colors: [Color(0xFF30CFD0), Color(0xFF330867)]);
-  static const LinearGradient goldGradient = LinearGradient(colors: [Color(0xFFF6D365), Color(0xFFFDA085)]);
-}
+import 'utils/ui_helpers.dart';
 
 // =========================================================
 // 2. 主页面骨架
@@ -459,7 +433,7 @@ class _HomeDashboardContent extends StatelessWidget {
                 _buildFeatureCard(width, '活力健身', 'Fitness', Icons.directions_run_rounded, AppColors.oceanGradient, const PartnerFitGymPage()),
                 _buildFeatureCard(width, '营养食谱', 'Food', Icons.restaurant_menu_rounded, AppColors.goldGradient, const PetRecipeListPage()),
                 _buildFeatureCard(width, '训宠响片', 'Training', Icons.touch_app_rounded, AppColors.magicGradient, const DogClickerScreen()),
-                _buildFeatureCard(width, '寻宠互助', 'Emergency', Icons.campaign_rounded, AppColors.navTab1, const CommunityScreen()),
+                _buildFeatureCard(width, '寻宠救援', '希望您永远使用不到此功能', Icons.phonelink_ring_rounded, const LinearGradient(colors: [Color(0xFFFF416C), Color(0xFFFF4B2B)]), const LostPetRescuePage(), subtitleMaxLines: 2),
               ],
             );
           },
@@ -546,7 +520,7 @@ class _HomeDashboardContent extends StatelessWidget {
                             children: [
                               Icon(Icons.auto_awesome, size: 12, color: AppColors.warmGradient.colors.first),
                               const SizedBox(width: 4),
-                              Text("AI VET", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.warmGradient.colors.first, letterSpacing: 0.5)),
+                              Text("Peture AI", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.warmGradient.colors.first, letterSpacing: 0.5)),
                             ],
                           ),
                         ),
@@ -611,7 +585,7 @@ class _HomeDashboardContent extends StatelessWidget {
   }
 
   // --- 小卡片 ---
-  Widget _buildFeatureCard(double width, String title, String subtitle, IconData icon, LinearGradient gradient, Widget page) {
+  Widget _buildFeatureCard(double width, String title, String subtitle, IconData icon, LinearGradient gradient, Widget page, {int subtitleMaxLines = 1}) {
     return Builder(
       builder: (context) {
         return GestureDetector(
@@ -681,7 +655,7 @@ class _HomeDashboardContent extends StatelessWidget {
                                 fontWeight: FontWeight.w500,
                                 letterSpacing: 0.3 
                               ),
-                              maxLines: 1, 
+                              maxLines: subtitleMaxLines, 
                               overflow: TextOverflow.ellipsis,
                             ),
                           ],
@@ -728,6 +702,7 @@ class _HomeUniverseContent extends StatelessWidget {
                 SphereItemData(title: '活力健身', icon: Icons.directions_run_rounded, gradient: AppColors.oceanGradient, page: const PartnerFitGymPage()),
                 SphereItemData(title: '营养食谱', icon: Icons.restaurant_menu_rounded, gradient: AppColors.goldGradient, page: const PetRecipeListPage()),
                 SphereItemData(title: '训宠响片', icon: Icons.touch_app_rounded, gradient: AppColors.magicGradient, page: const DogClickerScreen()),
+                SphereItemData(title: '寻宠救援', icon: Icons.phonelink_ring_rounded, gradient: const LinearGradient(colors: [Color(0xFFFF416C), Color(0xFFFF4B2B)]), page: const LostPetRescuePage()),
                 SphereItemData(title: '社区话题', icon: Icons.explore_rounded, gradient: AppColors.warmGradient, page: const CommunityScreen()),
                 SphereItemData(title: '商城', icon: Icons.shopping_bag_rounded, gradient: AppColors.coolGradient, page: const ProfileScreen()),
                 SphereItemData(title: '设置', icon: Icons.settings_rounded, gradient: const LinearGradient(colors: [Color(0xFF606c88), Color(0xFF3f4c6b)]), page: const ProfileScreen()),
@@ -986,13 +961,4 @@ class _ProjectedItem {
   final double z;
   final SphereItemData data;
   _ProjectedItem({required this.x, required this.y, required this.z, required this.data});
-}
-
-extension WidgetBlur on Widget {
-  Widget blurred({double sigmaX = 10.0, double sigmaY = 10.0}) {
-    return ImageFiltered(
-      imageFilter: ImageFilter.blur(sigmaX: sigmaX, sigmaY: sigmaY),
-      child: this,
-    );
-  }
 }
