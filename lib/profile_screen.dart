@@ -73,8 +73,11 @@ class ProfileScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFF5F5F7), // 添加背景色，与Container的渐变底部颜色一致
       // 🎨 美学升级：径向渐变背景，营造深度与呼吸感
       body: Container(
+        width: double.infinity, // 确保Container填充整个宽度
+        height: double.infinity, // 确保Container填充整个高度
         decoration: const BoxDecoration(
           gradient: RadialGradient(
             center: Alignment.topCenter,
