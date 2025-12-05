@@ -29,7 +29,7 @@ class _AddUnifiedExpensePageState extends State<AddUnifiedExpensePage> {
   String? _selectedCategory;
   DateTime _selectedDate = DateTime.now();
   DateTime? _estimatedEndDate;
-  int? _selectedPetId;
+  String? _selectedPetId; // 改为 String? 以支持 UUID
   String? _selectedPetName;
   List<Map<String, dynamic>> _pets = [];
   bool _isLoading = false;
@@ -932,12 +932,13 @@ class _AddUnifiedExpensePageState extends State<AddUnifiedExpensePage> {
                   ),
                 ),
                 ..._pets.map((pet) {
-                  final isSelected = _selectedPetId == pet['id'];
+                  final petId = pet['id']?.toString();
+                  final isSelected = _selectedPetId == petId;
                   return GestureDetector(
                     onTap: () {
                       setState(() {
-                        _selectedPetId = pet['id'] as int;
-                        _selectedPetName = pet['name'] as String;
+                        _selectedPetId = petId;
+                        _selectedPetName = pet['name'] as String?;
                       });
                     },
                     child: Container(

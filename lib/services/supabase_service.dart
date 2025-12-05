@@ -1374,6 +1374,8 @@ class SupabaseService {
         map.remove('pet_id');
         map['petName'] = map['pet_name'];
         map.remove('pet_name');
+        map['petName'] = map['pet_name'];
+        map.remove('pet_name');
         map['createdAt'] = map['created_at'] ?? map['createdAt'];
         return map;
       }).toList();
