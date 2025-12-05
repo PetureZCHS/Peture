@@ -9,6 +9,7 @@ import 'pages/unified_expense/unified_expense_home_page.dart';
 import 'pages/reminder/intelligent_reminder_page.dart';
 import 'pages/pet_profile_form_page.dart';
 import 'utils/ui_helpers.dart';
+import 'home_screen.dart' show DataChangeNotifier;
 
 // =========================================================
 // 全局设计系统 - 美学升级版
@@ -54,8 +55,11 @@ class ProfileScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFF5F5F7), // 添加背景色，与Container的渐变底部颜色一致
       // 🎨 美学升级：径向渐变背景，营造深度与呼吸感
       body: Container(
+        width: double.infinity, // 确保Container填充整个宽度
+        height: double.infinity, // 确保Container填充整个高度
         decoration: const BoxDecoration(
           gradient: RadialGradient(
             center: Alignment.topCenter,
@@ -388,6 +392,8 @@ class _PetProfileSectionState extends State<PetProfileSection> {
           setState(() {
             pets.add(petWithId);
           });
+          // 标记数据已变更，切换到健康记录页时需要刷新
+          DataChangeNotifier.markPetDataChanged();
         }
 
         if (mounted) {
@@ -467,6 +473,8 @@ class _PetProfileSectionState extends State<PetProfileSection> {
                       setState(() {
                         pets.removeWhere((pet) => pet.id == petToDelete.id);
                       });
+                      // 标记数据已变更
+                      DataChangeNotifier.markPetDataChanged();
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(content: Text('${petToDelete.name} 的档案已删除')),
                       );
@@ -933,9 +941,8 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage> {
                 final result = await Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder:
-                        (context) =>
-                            PetProfileFormPage(initialData: initialData),
+                    builder: (context) =>
+                        PetProfileFormPage(initialData: initialData),
                   ),
                 );
 
@@ -948,9 +955,14 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage> {
                       final now = DateTime.now();
                       int years = now.year - birthDate.year;
                       int months = now.month - birthDate.month;
-                      if (months < 0) {
+                      // Adjust for month and day
+                      if (months < 0 ||
+                          (months == 0 && now.day < birthDate.day)) {
                         years--;
                         months += 12;
+                      }
+                      if (now.day < birthDate.day && months > 0) {
+                        months--;
                       }
                       age = '${years}岁${months}个月';
                     } catch (e) {
@@ -986,6 +998,8 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage> {
                     setState(() {
                       _currentPet = updatedPet;
                     });
+                    // 标记数据已变更
+                    DataChangeNotifier.markPetDataChanged();
                     if (mounted) {
                       ScaffoldMessenger.of(
                         context,
