@@ -12,10 +12,12 @@ import 'pages/pet_passport/pet_passport_page.dart';
 import 'pages/pet_recipe/pet_recipe_list_page.dart';
 import 'pages/partner_fit/partner_fit_gym_page.dart';
 import 'pages/dog_clicker/dog_clicker_screen.dart';
+import 'pages/lost_pet/lost_pet_rescue_page.dart';
 import 'community_screen.dart';
 import 'medical_record_screen.dart';
 import 'profile_screen.dart';
 import 'widgets/weight_trend_card.dart';
+import 'utils/ui_helpers.dart';
 
 /// 全局数据变更通知器，用于跨页面通知数据刷新需求
 class DataChangeNotifier {
@@ -522,6 +524,12 @@ class _HomeDashboardContent extends StatelessWidget {
               spacing: 12,
               runSpacing: 12,
               children: [
+                _buildFeatureCard(width, '电子档案', 'Vaccine', Icons.badge_rounded, AppColors.coolGradient, const PetPassportPage()),
+                _buildFeatureCard(width, '成长日记', 'Diary', Icons.menu_book_rounded, AppColors.natureGradient, const PetDiaryComposePage()),
+                _buildFeatureCard(width, '活力健身', 'Fitness', Icons.directions_run_rounded, AppColors.oceanGradient, const PartnerFitGymPage()),
+                _buildFeatureCard(width, '营养食谱', 'Food', Icons.restaurant_menu_rounded, AppColors.goldGradient, const PetRecipeListPage()),
+                _buildFeatureCard(width, '训宠响片', 'Training', Icons.touch_app_rounded, AppColors.magicGradient, const DogClickerScreen()),
+                _buildFeatureCard(width, '寻宠救援', '希望您永远使用不到此功能', Icons.phonelink_ring_rounded, const LinearGradient(colors: [Color(0xFFFF416C), Color(0xFFFF4B2B)]), const LostPetRescuePage(), subtitleMaxLines: 2),
                 _buildFeatureCard(width, '电子档案', 'Vaccine', Icons.badge_rounded,
                     AppColors.coolGradient, const PetPassportPage()),
                 _buildFeatureCard(
@@ -659,6 +667,7 @@ class _HomeDashboardContent extends StatelessWidget {
                                   size: 12,
                                   color: AppColors.warmGradient.colors.first),
                               const SizedBox(width: 4),
+                              Text("Peture AI", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.warmGradient.colors.first, letterSpacing: 0.5)),
                               Text("AI VET",
                                   style: TextStyle(
                                       fontSize: 11,
@@ -739,6 +748,40 @@ class _HomeDashboardContent extends StatelessWidget {
   }
 
   // --- 小卡片 ---
+  Widget _buildFeatureCard(double width, String title, String subtitle, IconData icon, LinearGradient gradient, Widget page, {int subtitleMaxLines = 1}) {
+    return Builder(
+      builder: (context) {
+        return GestureDetector(
+          onTap: () {
+            HapticFeedback.lightImpact();
+            Navigator.of(context).push(CupertinoPageRoute(builder: (_) => page));
+          },
+          child: Container(
+            width: width,
+            height: width * 0.82,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: [
+                BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 15, offset: const Offset(0, 8)),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(24),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+                child: Container(
+                  padding: const EdgeInsets.all(16), 
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.65),
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: Colors.white.withOpacity(0.6), width: 1),
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft, end: Alignment.bottomRight,
+                      colors: [
+                        Colors.white.withOpacity(0.8),
+                        Colors.white.withOpacity(0.4),
+                      ],
+                    ),
   Widget _buildFeatureCard(double width, String title, String subtitle,
       IconData icon, LinearGradient gradient, Widget page) {
     return Builder(builder: (context) {
@@ -814,6 +857,13 @@ class _HomeDashboardContent extends StatelessWidget {
                                 fontSize: 11,
                                 color: AppColors.textGrey,
                                 fontWeight: FontWeight.w500,
+                                letterSpacing: 0.3 
+                              ),
+                              maxLines: subtitleMaxLines, 
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
                                 letterSpacing: 0.3),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -855,6 +905,16 @@ class _HomeUniverseContent extends StatelessWidget {
             child: HolographicSphereMenu(
               radius: screenWidth * 0.38,
               items: [
+                SphereItemData(title: 'AI 问诊', icon: Icons.medical_services_rounded, gradient: AppColors.warmGradient, page: const ChatPageWithDatabase()),
+                SphereItemData(title: '电子档案', icon: Icons.badge_rounded, gradient: AppColors.coolGradient, page: const PetPassportPage()),
+                SphereItemData(title: '成长日记', icon: Icons.menu_book_rounded, gradient: AppColors.natureGradient, page: const PetDiaryComposePage()),
+                SphereItemData(title: '活力健身', icon: Icons.directions_run_rounded, gradient: AppColors.oceanGradient, page: const PartnerFitGymPage()),
+                SphereItemData(title: '营养食谱', icon: Icons.restaurant_menu_rounded, gradient: AppColors.goldGradient, page: const PetRecipeListPage()),
+                SphereItemData(title: '训宠响片', icon: Icons.touch_app_rounded, gradient: AppColors.magicGradient, page: const DogClickerScreen()),
+                SphereItemData(title: '寻宠救援', icon: Icons.phonelink_ring_rounded, gradient: const LinearGradient(colors: [Color(0xFFFF416C), Color(0xFFFF4B2B)]), page: const LostPetRescuePage()),
+                SphereItemData(title: '社区话题', icon: Icons.explore_rounded, gradient: AppColors.warmGradient, page: const CommunityScreen()),
+                SphereItemData(title: '商城', icon: Icons.shopping_bag_rounded, gradient: AppColors.coolGradient, page: const ProfileScreen()),
+                SphereItemData(title: '设置', icon: Icons.settings_rounded, gradient: const LinearGradient(colors: [Color(0xFF606c88), Color(0xFF3f4c6b)]), page: const ProfileScreen()),
                 SphereItemData(
                     title: 'AI 问诊',
                     icon: Icons.medical_services_rounded,
@@ -1172,6 +1232,8 @@ class _ProjectedItem {
   final double y;
   final double z;
   final SphereItemData data;
+  _ProjectedItem({required this.x, required this.y, required this.z, required this.data});
+}
   _ProjectedItem(
       {required this.x, required this.y, required this.z, required this.data});
 }
