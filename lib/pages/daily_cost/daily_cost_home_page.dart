@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../models/daily_cost_item.dart';
-import '../../database/daily_cost_helper.dart';
+import '../../services/supabase_service.dart';
 import 'add_daily_cost_page.dart';
 
 /// 宠物消费日均成本追踪器主页
@@ -13,6 +13,7 @@ class DailyCostHomePage extends StatefulWidget {
 }
 
 class _DailyCostHomePageState extends State<DailyCostHomePage> {
+  final SupabaseService _supabaseService = SupabaseService();
   List<DailyCostItem> _items = [];
   double _totalDailyCost = 0.0;
   bool _isLoading = true;
@@ -30,8 +31,15 @@ class _DailyCostHomePageState extends State<DailyCostHomePage> {
     });
 
     try {
-      final items = await DailyCostHelper.instance.getAllItems();
-      final totalDailyCost = await DailyCostHelper.instance.getTotalDailyCost();
+      // 优先从 Supabase 加载
+      final itemsData = await _supabaseService.getAllDailyCostItems();
+      final items = itemsData.map((e) => DailyCostItem.fromMap(e)).toList();
+      
+      // 前端计算总日均成本
+      double totalDailyCost = 0.0;
+      for (final item in items) {
+        totalDailyCost += item.dailyCost;
+      }
 
       if (mounted) {
         setState(() {
@@ -74,7 +82,7 @@ class _DailyCostHomePageState extends State<DailyCostHomePage> {
     );
 
     if (confirmed == true && item.id != null) {
-      await DailyCostHelper.instance.deleteItem(item.id!);
+      await _supabaseService.deleteDailyCostItem(item.id!);
       _loadItems();
       if (mounted) {
         ScaffoldMessenger.of(

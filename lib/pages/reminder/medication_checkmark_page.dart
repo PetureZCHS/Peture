@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../../database/reminder_helper.dart';
 
 /// 用药打卡详情页
 /// 显示某个用药记录的每日打卡清单
@@ -18,6 +17,7 @@ class _MedicationCheckmarkPageState extends State<MedicationCheckmarkPage> {
   List<Map<String, dynamic>> _checkmarks = [];
   bool _isLoading = true;
   DateTime _selectedDate = DateTime.now();
+  // 预留后续云端打卡实现，目前未使用
 
   @override
   void initState() {
@@ -26,49 +26,16 @@ class _MedicationCheckmarkPageState extends State<MedicationCheckmarkPage> {
   }
 
   Future<void> _loadCheckmarks() async {
+    // 云端暂未存储打卡明细，这里仅展示提醒概览
     setState(() {
-      _isLoading = true;
+      _isLoading = false;
+      _checkmarks = [];
     });
-
-    try {
-      final dateStr = _selectedDate.toIso8601String().split('T')[0];
-      final data = await ReminderHelper.instance.getCheckmarksByDate(
-        widget.reminder['id'] as int,
-        dateStr,
-      );
-
-      if (mounted) {
-        setState(() {
-          _checkmarks = data;
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    }
   }
 
   /// 切换打卡状态
   Future<void> _toggleCheckmark(Map<String, dynamic> checkmark) async {
-    final currentStatus = checkmark['is_completed'] == 1;
-    await ReminderHelper.instance.updateCheckmarkStatus(
-      checkmark['id'] as int,
-      !currentStatus,
-    );
-    _loadCheckmarks();
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(!currentStatus ? '已标记完成 ✓' : '已取消标记'),
-          duration: const Duration(seconds: 1),
-        ),
-      );
-    }
+    // 云端未实现打卡明细，暂不操作
   }
 
   /// 切换日期

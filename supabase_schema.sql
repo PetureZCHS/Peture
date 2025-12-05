@@ -233,6 +233,153 @@ CREATE INDEX IF NOT EXISTS idx_chat_messages_user_id ON chat_messages(user_id);
 CREATE INDEX IF NOT EXISTS idx_chat_messages_created_at ON chat_messages(created_at ASC);
 
 -- ============================================================
+-- 10. 统一消费记录表 (unified_expenses)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS unified_expenses (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id TEXT NOT NULL REFERENCES users_profiles(id) ON DELETE CASCADE,
+  amount REAL NOT NULL,
+  category TEXT NOT NULL,
+  expense_type TEXT NOT NULL, -- 'one-off' or 'recurring'
+  date TEXT NOT NULL, -- yyyy-MM-dd
+  pet_id UUID REFERENCES pets(id) ON DELETE SET NULL,
+  pet_name TEXT,
+  note TEXT,
+  photo_path TEXT,
+  item_name TEXT,
+  estimated_end_date TEXT,
+  item_type TEXT, -- 'consumable' or 'durable'
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_unified_expenses_user_id ON unified_expenses(user_id);
+CREATE INDEX IF NOT EXISTS idx_unified_expenses_date ON unified_expenses(date);
+CREATE INDEX IF NOT EXISTS idx_unified_expenses_expense_type ON unified_expenses(expense_type);
+
+CREATE TRIGGER update_unified_expenses_updated_at
+  BEFORE UPDATE ON unified_expenses
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column();
+
+-- ============================================================
+-- 11. 日常消费品记录表 (daily_cost_items)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS daily_cost_items (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id TEXT NOT NULL REFERENCES users_profiles(id) ON DELETE CASCADE,
+  item_name TEXT NOT NULL,
+  total_price REAL NOT NULL,
+  purchase_date TEXT NOT NULL,
+  finish_date TEXT,
+  pet_id UUID REFERENCES pets(id) ON DELETE SET NULL,
+  pet_name TEXT,
+  image_path TEXT,
+  note TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_daily_cost_items_user_id ON daily_cost_items(user_id);
+CREATE INDEX IF NOT EXISTS idx_daily_cost_items_purchase_date ON daily_cost_items(purchase_date);
+
+CREATE TRIGGER update_daily_cost_items_updated_at
+  BEFORE UPDATE ON daily_cost_items
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column();
+
+-- ============================================================
+-- 12. 健身记录表 (fitness_records)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS fitness_records (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id TEXT NOT NULL REFERENCES users_profiles(id) ON DELETE CASCADE,
+  course_id TEXT NOT NULL,
+  course_name TEXT NOT NULL,
+  completed_at TEXT NOT NULL,
+  duration_minutes INTEGER NOT NULL,
+  calories_burned INTEGER NOT NULL,
+  pet_calories_burned INTEGER NOT NULL,
+  notes TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_fitness_records_user_id ON fitness_records(user_id);
+CREATE INDEX IF NOT EXISTS idx_fitness_records_completed_at ON fitness_records(completed_at);
+
+CREATE TRIGGER update_fitness_records_updated_at
+  BEFORE UPDATE ON fitness_records
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column();
+
+-- ============================================================
+-- 13. 健康计划表 (health_plans)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS health_plans (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id TEXT NOT NULL REFERENCES users_profiles(id) ON DELETE CASCADE,
+  pet_id UUID REFERENCES pets(id) ON DELETE SET NULL,
+  title TEXT NOT NULL,
+  description TEXT,
+  start_date TEXT NOT NULL,
+  end_date TEXT NOT NULL,
+  is_completed BOOLEAN DEFAULT false,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_health_plans_user_id ON health_plans(user_id);
+CREATE INDEX IF NOT EXISTS idx_health_plans_pet_id ON health_plans(pet_id);
+
+CREATE TRIGGER update_health_plans_updated_at
+  BEFORE UPDATE ON health_plans
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column();
+
+-- ============================================================
+-- 14. 宠物护照表 (pet_passports) 与成就表 (pet_passport_achievements)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS pet_passports (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id TEXT NOT NULL REFERENCES users_profiles(id) ON DELETE CASCADE,
+  pet_id UUID NOT NULL REFERENCES pets(id) ON DELETE CASCADE,
+  photo_path TEXT,
+  owner_name TEXT,
+  adoption_date TEXT,
+  mbti_type TEXT,
+  mbti_description TEXT,
+  interest_tags TEXT,
+  bio TEXT,
+  friend_count INTEGER DEFAULT 0,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  UNIQUE (user_id, pet_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_pet_passports_user_id ON pet_passports(user_id);
+CREATE INDEX IF NOT EXISTS idx_pet_passports_pet_id ON pet_passports(pet_id);
+
+CREATE TRIGGER update_pet_passports_updated_at
+  BEFORE UPDATE ON pet_passports
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TABLE IF NOT EXISTS pet_passport_achievements (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  passport_id UUID NOT NULL REFERENCES pet_passports(id) ON DELETE CASCADE,
+  achievement_id TEXT NOT NULL,
+  achievement_name TEXT NOT NULL,
+  achievement_description TEXT NOT NULL,
+  icon_name TEXT NOT NULL,
+  category TEXT NOT NULL,
+  unlocked_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_pet_passport_achievements_passport_id
+  ON pet_passport_achievements(passport_id);
+
+-- ============================================================
 -- Row Level Security (RLS) 策略
 -- 确保用户只能访问自己的数据
 -- ============================================================
@@ -247,6 +394,12 @@ ALTER TABLE daily_reminders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE conversations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE pet_diaries ENABLE ROW LEVEL SECURITY;
 ALTER TABLE chat_messages ENABLE ROW LEVEL SECURITY;
+ALTER TABLE unified_expenses ENABLE ROW LEVEL SECURITY;
+ALTER TABLE daily_cost_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE fitness_records ENABLE ROW LEVEL SECURITY;
+ALTER TABLE health_plans ENABLE ROW LEVEL SECURITY;
+ALTER TABLE pet_passports ENABLE ROW LEVEL SECURITY;
+ALTER TABLE pet_passport_achievements ENABLE ROW LEVEL SECURITY;
 
 -- 注意：由于使用 LeanCloud 认证，我们需要创建一个函数来获取当前用户 ID
 -- 这个函数将从应用程序传递的 user_id 参数中获取，而不是从 auth.uid()
@@ -398,5 +551,107 @@ CREATE POLICY "Users can update own chat messages"
 
 CREATE POLICY "Users can delete own chat messages"
   ON chat_messages FOR DELETE
+  USING (true);
+
+-- 统一消费记录表策略
+CREATE POLICY "Users can view own unified expenses"
+  ON unified_expenses FOR SELECT
+  USING (true);
+
+CREATE POLICY "Users can insert own unified expenses"
+  ON unified_expenses FOR INSERT
+  WITH CHECK (true);
+
+CREATE POLICY "Users can update own unified expenses"
+  ON unified_expenses FOR UPDATE
+  USING (true);
+
+CREATE POLICY "Users can delete own unified expenses"
+  ON unified_expenses FOR DELETE
+  USING (true);
+
+-- 日常消费品记录表策略
+CREATE POLICY "Users can view own daily cost items"
+  ON daily_cost_items FOR SELECT
+  USING (true);
+
+CREATE POLICY "Users can insert own daily cost items"
+  ON daily_cost_items FOR INSERT
+  WITH CHECK (true);
+
+CREATE POLICY "Users can update own daily cost items"
+  ON daily_cost_items FOR UPDATE
+  USING (true);
+
+CREATE POLICY "Users can delete own daily cost items"
+  ON daily_cost_items FOR DELETE
+  USING (true);
+
+-- 健身记录表策略
+CREATE POLICY "Users can view own fitness records"
+  ON fitness_records FOR SELECT
+  USING (true);
+
+CREATE POLICY "Users can insert own fitness records"
+  ON fitness_records FOR INSERT
+  WITH CHECK (true);
+
+CREATE POLICY "Users can update own fitness records"
+  ON fitness_records FOR UPDATE
+  USING (true);
+
+CREATE POLICY "Users can delete own fitness records"
+  ON fitness_records FOR DELETE
+  USING (true);
+
+-- 健康计划表策略
+CREATE POLICY "Users can view own health plans"
+  ON health_plans FOR SELECT
+  USING (true);
+
+CREATE POLICY "Users can insert own health plans"
+  ON health_plans FOR INSERT
+  WITH CHECK (true);
+
+CREATE POLICY "Users can update own health plans"
+  ON health_plans FOR UPDATE
+  USING (true);
+
+CREATE POLICY "Users can delete own health plans"
+  ON health_plans FOR DELETE
+  USING (true);
+
+-- 宠物护照表策略
+CREATE POLICY "Users can view own pet passports"
+  ON pet_passports FOR SELECT
+  USING (true);
+
+CREATE POLICY "Users can insert own pet passports"
+  ON pet_passports FOR INSERT
+  WITH CHECK (true);
+
+CREATE POLICY "Users can update own pet passports"
+  ON pet_passports FOR UPDATE
+  USING (true);
+
+CREATE POLICY "Users can delete own pet passports"
+  ON pet_passports FOR DELETE
+  USING (true);
+
+-- 宠物护照成就表策略
+CREATE POLICY "Users can view own pet passport achievements"
+  ON pet_passport_achievements FOR SELECT
+  USING (true);
+
+CREATE POLICY "Users can insert own pet passport achievements"
+  ON pet_passport_achievements FOR INSERT
+  WITH CHECK (true);
+
+CREATE POLICY "Users can update own pet passport achievements"
+  ON pet_passport_achievements FOR UPDATE
+  USING (true);
+
+CREATE POLICY "Users can delete own pet passport achievements"
+  ON pet_passport_achievements FOR DELETE
   USING (true);
 

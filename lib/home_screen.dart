@@ -12,6 +12,7 @@ import 'pages/pet_passport/pet_passport_page.dart';
 import 'pages/pet_recipe/pet_recipe_list_page.dart';
 import 'pages/partner_fit/partner_fit_gym_page.dart';
 import 'pages/dog_clicker/dog_clicker_screen.dart';
+import 'pages/shop/shop_page.dart';
 import 'community_screen.dart';
 import 'medical_record_screen.dart';
 import 'profile_screen.dart';
@@ -554,6 +555,13 @@ class _HomeDashboardContent extends StatelessWidget {
                     const DogClickerScreen()),
                 _buildFeatureCard(
                     width,
+                    '宠物商城',
+                    'Shop',
+                    Icons.shopping_bag_rounded,
+                    AppColors.coolGradient,
+                    const PetShopPage()),
+                _buildFeatureCard(
+                    width,
                     '寻宠互助',
                     'Emergency',
                     Icons.campaign_rounded,
@@ -638,6 +646,7 @@ class _HomeDashboardContent extends StatelessWidget {
                   Padding(
                     padding: const EdgeInsets.all(20),
                     child: Column(
+                      mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         // 顶部 AI VET 标签
@@ -671,7 +680,7 @@ class _HomeDashboardContent extends StatelessWidget {
                         ),
 
                         // 使用 SizedBox 代替 Spacer，防止文字被挤到最下面
-                        const SizedBox(height: 24),
+                        const SizedBox(height: 20),
 
                         // 大标题
                         const Text("AI 智能问诊",
@@ -681,7 +690,7 @@ class _HomeDashboardContent extends StatelessWidget {
                                 color: AppColors.textDark,
                                 letterSpacing: -0.8)),
 
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 6),
 
                         // 副标题
                         Container(
@@ -691,7 +700,7 @@ class _HomeDashboardContent extends StatelessWidget {
                             style: TextStyle(
                                 fontSize: 13,
                                 color: Color(0xFF636366),
-                                height: 1.5,
+                                  height: 1.4,
                                 fontWeight: FontWeight.w400),
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
@@ -894,7 +903,7 @@ class _HomeUniverseContent extends StatelessWidget {
                     title: '商城',
                     icon: Icons.shopping_bag_rounded,
                     gradient: AppColors.coolGradient,
-                    page: const ProfileScreen()),
+                    page: const PetShopPage()),
                 SphereItemData(
                     title: '设置',
                     icon: Icons.settings_rounded,

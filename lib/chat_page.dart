@@ -10,7 +10,7 @@ import 'package:share_plus/share_plus.dart';
 import 'services/supabase_edge_service.dart';
 // ================== 所有必需的导入 ==================
 import 'models/conversation.dart';
-import 'database/database_helper.dart';
+import 'services/supabase_service.dart';
 // ===============================================
 
 // =======================================================================
@@ -82,6 +82,7 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
   // ✅ 使用新的 Supabase Edge Function 服务
   final SupabaseEdgeFunctionService _difyService =
       SupabaseEdgeFunctionService();
+  final SupabaseService _supabaseService = SupabaseService();
 
   final List<String> _allSuggestions = [
     "猫咪呼吸似乎有点困难，嘴巴张开呼吸，像小狗一样喘气",
@@ -143,11 +144,9 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
       answer: answer,
       timestamp: DateTime.now(),
     );
-    await DatabaseHelper.instance.insertConversation(conversation);
-    debugPrint("✅ 对话已保存: Q: $question");
-    debugPrint("✅ 答案长度: ${answer.length} 字符");
-    debugPrint(
-        "✅ 答案前100字: ${answer.substring(0, answer.length > 100 ? 100 : answer.length)}");
+    final id = await _supabaseService.insertConversation(conversation);
+    _conversationId = id ?? _conversationId;
+    debugPrint("✅ 对话已保存到 Supabase: Q: $question, id=$id");
   }
 
   void _startNewChat() {
@@ -995,6 +994,7 @@ class AppDrawer extends StatefulWidget {
 
 class _AppDrawerState extends State<AppDrawer> {
   late Future<List<Conversation>> _conversationsFuture;
+  final SupabaseService _supabaseService = SupabaseService();
 
   @override
   void initState() {
@@ -1004,16 +1004,14 @@ class _AppDrawerState extends State<AppDrawer> {
 
   void _loadConversations() {
     setState(() {
-      _conversationsFuture = DatabaseHelper.instance.getAllConversations().then(
-        (data) {
-          data.sort((a, b) {
-            if (a.isPinned && !b.isPinned) return -1;
-            if (!a.isPinned && b.isPinned) return 1;
-            return b.timestamp.compareTo(a.timestamp);
-          });
-          return data;
-        },
-      );
+      _conversationsFuture = _supabaseService.getAllConversations().then((data) {
+        data.sort((a, b) {
+          if (a.isPinned && !b.isPinned) return -1;
+          if (!a.isPinned && b.isPinned) return 1;
+          return b.timestamp.compareTo(a.timestamp);
+        });
+        return data;
+      });
     });
   }
 
@@ -1072,7 +1070,7 @@ class _AppDrawerState extends State<AppDrawer> {
 
   void _togglePinConversation(Conversation conversation) async {
     final updated = conversation.copyWith(isPinned: !conversation.isPinned);
-    await DatabaseHelper.instance.updateConversation(updated);
+    await _supabaseService.updateConversation(updated);
     _loadConversations();
   }
 
@@ -1102,7 +1100,7 @@ class _AppDrawerState extends State<AppDrawer> {
                   final updated = conversation.copyWith(
                     question: controller.text,
                   );
-                  await DatabaseHelper.instance.updateConversation(updated);
+                  await _supabaseService.updateConversation(updated);
                   _loadConversations();
                 }
                 Navigator.pop(context);
@@ -1133,9 +1131,7 @@ class _AppDrawerState extends State<AppDrawer> {
             TextButton(
               onPressed: () async {
                 if (conversation.id != null) {
-                  await DatabaseHelper.instance.deleteConversation(
-                    int.parse(conversation.id!),
-                  );
+                  await _supabaseService.deleteConversation(conversation.id!);
                   _loadConversations();
                 }
                 Navigator.pop(context);

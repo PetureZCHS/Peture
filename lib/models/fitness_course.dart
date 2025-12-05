@@ -72,7 +72,7 @@ class FitnessAction {
 
 /// 健身记录模型
 class FitnessRecord {
-  final int? id;
+  final String? id; // 改为 String? 以支持 Supabase UUID
   final String courseId;
   final String courseName;
   final DateTime completedAt;
@@ -107,14 +107,14 @@ class FitnessRecord {
 
   factory FitnessRecord.fromMap(Map<String, dynamic> map) {
     return FitnessRecord(
-      id: map['id'],
-      courseId: map['courseId'],
-      courseName: map['courseName'],
-      completedAt: DateTime.parse(map['completedAt']),
-      durationMinutes: map['durationMinutes'],
-      caloriesBurned: map['caloriesBurned'],
-      petCaloriesBurned: map['petCaloriesBurned'],
-      notes: map['notes'],
+      id: map['id']?.toString(), // 支持 int 和 String
+      courseId: map['courseId'] as String,
+      courseName: map['courseName'] as String,
+      completedAt: DateTime.parse(map['completedAt'] as String),
+      durationMinutes: (map['durationMinutes'] as num).toInt(),
+      caloriesBurned: (map['caloriesBurned'] as num).toInt(),
+      petCaloriesBurned: (map['petCaloriesBurned'] as num).toInt(),
+      notes: map['notes'] as String?,
     );
   }
 }

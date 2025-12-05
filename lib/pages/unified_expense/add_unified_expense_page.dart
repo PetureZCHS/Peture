@@ -2,8 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../../models/unified_expense.dart';
-import '../../database/unified_expense_helper.dart';
-import '../../database/medical_record_helper.dart';
+import '../../services/supabase_service.dart';
 
 /// 统一的添加/编辑消费页面
 class AddUnifiedExpensePage extends StatefulWidget {
@@ -76,7 +75,8 @@ class _AddUnifiedExpensePageState extends State<AddUnifiedExpensePage> {
 
   /// 加载宠物列表
   Future<void> _loadPets() async {
-    final pets = await MedicalRecordHelper.instance.getAllPets();
+    final supabaseService = SupabaseService();
+    final pets = await supabaseService.getAllPets();
     if (mounted) {
       setState(() {
         _pets = pets;
@@ -179,12 +179,32 @@ class _AddUnifiedExpensePageState extends State<AddUnifiedExpensePage> {
             widget.expense?.createdAt ?? DateTime.now().toIso8601String(),
       );
 
+      final supabaseService = SupabaseService();
+      bool success = false;
       if (widget.expense == null) {
         // 新增
-        await UnifiedExpenseHelper.instance.insertExpense(expense);
+        final result = await supabaseService.insertUnifiedExpense(expense.toMap());
+        if (result != null) {
+          success = true;
+        }
       } else {
         // 更新
-        await UnifiedExpenseHelper.instance.updateExpense(expense);
+        success = await supabaseService.updateUnifiedExpense(expense.toMap());
+      }
+
+      if (!success) {
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(
+            content: Text('保存失败，请检查网络连接'),
+            backgroundColor: Colors.red,
+          ));
+        }
+        return;
       }
 
       if (mounted) {
@@ -200,7 +220,10 @@ class _AddUnifiedExpensePageState extends State<AddUnifiedExpensePage> {
         });
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('保存失败: $e')));
+        ).showSnackBar(const SnackBar(
+          content: Text('保存失败，请检查网络连接'),
+          backgroundColor: Colors.red,
+        ));
       }
     }
   }

@@ -1,6 +1,6 @@
 /// 统一的宠物消费数据模型
 class UnifiedExpense {
-  final int? id;
+  final String? id; // 改为 String? 以支持 Supabase UUID
   final double amount; // 金额
   final String category; // 分类（医疗、美容、零食、消耗品、耐用品等）
   final String expenseType; // 支出类型：'one-off'(一次性) 或 'recurring'(周期性)
@@ -96,7 +96,7 @@ class UnifiedExpense {
   /// 从 Map 创建对象（从数据库读取）
   factory UnifiedExpense.fromMap(Map<String, dynamic> map) {
     return UnifiedExpense(
-      id: map['id'] as int?,
+      id: map['id']?.toString(), // 支持 int 和 String
       amount: (map['amount'] as num).toDouble(),
       category: map['category'] as String,
       expenseType: map['expenseType'] as String,
@@ -114,7 +114,7 @@ class UnifiedExpense {
 
   /// 复制对象（用于编辑）
   UnifiedExpense copyWith({
-    int? id,
+    String? id,
     double? amount,
     String? category,
     String? expenseType,

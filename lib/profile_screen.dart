@@ -420,7 +420,11 @@ class _PetProfileSectionState extends State<PetProfileSection> {
         if (mounted) {
           ScaffoldMessenger.of(
             context,
-          ).showSnackBar(const SnackBar(content: Text('宠物档案添加失败，请检查网络连接')));
+          ).showSnackBar(const SnackBar(
+            content: Text('保存失败，请检查网络连接'),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 3),
+          ));
         }
       }
     }).catchError((error, stackTrace) {
@@ -432,21 +436,27 @@ class _PetProfileSectionState extends State<PetProfileSection> {
 
       // 检查是否是数据库约束错误（可能是 user_id 类型不匹配）
       final errorStr = error.toString().toLowerCase();
-      String errorMessage = '添加失败，请检查终端日志';
+      String errorMessage = '保存失败，请检查网络连接';
 
       if (errorStr.contains('foreign key') || errorStr.contains('user_id')) {
-        errorMessage = '添加失败：用户ID格式错误，请重新登录';
+        errorMessage = '保存失败：用户ID格式错误，请重新登录';
       } else if (errorStr.contains('null') || errorStr.contains('not null')) {
-        errorMessage = '添加失败：缺少必要字段';
+        errorMessage = '保存失败：缺少必要字段';
       } else if (errorStr.contains('network') ||
-          errorStr.contains('connection')) {
-        errorMessage = '添加失败，请检查网络连接';
+          errorStr.contains('connection') ||
+          errorStr.contains('timeout') ||
+          errorStr.contains('failed')) {
+        errorMessage = '保存失败，请检查网络连接';
       }
 
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(errorMessage)));
+        ).showSnackBar(SnackBar(
+          content: Text(errorMessage),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 3),
+        ));
       }
     });
   }
@@ -1005,7 +1015,11 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage> {
                     if (!success) {
                       if (mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('更新失败，请检查网络连接')),
+                          const SnackBar(
+                            content: Text('保存失败，请检查网络连接'),
+                            backgroundColor: Colors.red,
+                            duration: Duration(seconds: 3),
+                          ),
                         );
                       }
                       return;
@@ -1024,7 +1038,11 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage> {
                     if (mounted) {
                       ScaffoldMessenger.of(
                         context,
-                      ).showSnackBar(const SnackBar(content: Text('更新失败，请重试')));
+                      ).showSnackBar(const SnackBar(
+                        content: Text('保存失败，请检查网络连接'),
+                        backgroundColor: Colors.red,
+                        duration: Duration(seconds: 3),
+                      ));
                     }
                   }
                 }

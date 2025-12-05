@@ -53,19 +53,10 @@ class _AppSettingsState extends State<AppSettings> {
   bool _notificationsEnabled = true;
 
   // --- 样式常量 ---
-  static const Color _backgroundColor = Color(0xFFF2F2F7);
   static const Color _cardColor = Colors.white;
   static const Color _iconBlue = Color(0xFF0A84FF);
-  static const Color _iconStar = Color(0xFFFFCC00);
-  static const Color _iconInfo = Color(0xFF5856D6);
   static const Color _logoutButtonTextColor = Color(0xFFE53935);
   static const Color _logoutButtonBackgroundColor = Color(0xFFFFEBEE);
-
-  static const TextStyle _appBarTextStyle = TextStyle(
-    color: Colors.black,
-    fontSize: 17,
-    fontWeight: FontWeight.w600,
-  );
 
   static const TextStyle _sectionTitleStyle = TextStyle(
     color: Color(0xFF6D6D72),

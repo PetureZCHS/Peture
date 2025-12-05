@@ -4,8 +4,7 @@ import 'dart:math' as math;
 import 'dart:io';
 import '../../models/pet.dart';
 import '../../models/pet_passport.dart';
-import '../../database/medical_record_helper.dart';
-import '../../database/pet_passport_helper.dart';
+import '../../services/supabase_service.dart';
 import 'edit_pet_passport_page.dart';
 
 /// 宠物身份证（护照风格）页面
@@ -44,7 +43,8 @@ class _PetPassportPageState extends State<PetPassportPage>
   Future<void> _loadPets() async {
     setState(() => _isLoading = true);
     try {
-      final pets = await MedicalRecordHelper.instance.getAllPets();
+      final supabaseService = SupabaseService();
+      final pets = await supabaseService.getAllPets();
       setState(() {
         _pets = pets.map((p) => Pet.fromMap(p)).toList();
       });
@@ -53,14 +53,15 @@ class _PetPassportPageState extends State<PetPassportPage>
       for (var pet in _pets) {
         if (pet.id != null) {
           // 先尝试从数据库加载
-          var passport = await PetPassportHelper.instance.getPassportByPetId(
-            pet.id!,
-          );
-
-          // 如果数据库中没有，生成默认数据并保存
-          if (passport == null) {
+          var passportData = await supabaseService.getPassportByPetId(pet.id!);
+          PetPassport? passport;
+          
+          if (passportData != null) {
+            passport = PetPassport.fromMap(passportData);
+          } else {
+            // 如果数据库中没有，生成默认数据并保存
             passport = _generateDefaultPassport(pet);
-            await PetPassportHelper.instance.savePassport(passport);
+            await supabaseService.upsertPetPassport(passport.toMap());
           }
 
           _passports[pet.id!] = passport;

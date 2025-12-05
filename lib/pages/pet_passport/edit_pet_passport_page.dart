@@ -3,7 +3,7 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import '../../models/pet.dart';
 import '../../models/pet_passport.dart';
-import '../../database/pet_passport_helper.dart';
+import '../../services/supabase_service.dart';
 
 /// 编辑宠物身份证页面
 class EditPetPassportPage extends StatefulWidget {
@@ -820,7 +820,20 @@ class _EditPetPassportPageState extends State<EditPetPassportPage> {
         );
 
         // 保存到数据库
-        await PetPassportHelper.instance.savePassport(updatedPassport);
+        final supabaseService = SupabaseService();
+        final result = await supabaseService.upsertPetPassport(updatedPassport.toMap());
+
+        if (result == null) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('保存失败，请检查网络连接'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+          return;
+        }
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(

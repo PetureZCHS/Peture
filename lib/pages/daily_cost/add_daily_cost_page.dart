@@ -4,8 +4,7 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import '../../models/daily_cost_item.dart';
 import '../../models/pet.dart';
-import '../../database/daily_cost_helper.dart';
-import '../../database/medical_record_helper.dart';
+import '../../services/supabase_service.dart';
 
 /// 添加/编辑日均成本项目页面
 class AddDailyCostPage extends StatefulWidget {
@@ -60,7 +59,8 @@ class _AddDailyCostPageState extends State<AddDailyCostPage> {
   /// 加载宠物列表
   Future<void> _loadPets() async {
     try {
-      final petsData = await MedicalRecordHelper.instance.getAllPets();
+      final supabaseService = SupabaseService();
+      final petsData = await supabaseService.getAllPets();
       final pets = petsData.map((petMap) => Pet.fromMap(petMap)).toList();
 
       setState(() {
@@ -164,22 +164,39 @@ class _AddDailyCostPageState extends State<AddDailyCostPage> {
         createdAt: widget.item?.createdAt ?? DateTime.now().toIso8601String(),
       );
 
+      final supabaseService = SupabaseService();
+      bool success = false;
       if (widget.item == null) {
         // 新增
-        await DailyCostHelper.instance.insertItem(item);
-        if (mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text('添加成功')));
+        final result = await supabaseService.insertDailyCostItem(item.toMap());
+        if (result != null) {
+          success = true;
+          if (mounted) {
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(const SnackBar(content: Text('添加成功')));
+          }
         }
       } else {
         // 编辑
-        await DailyCostHelper.instance.updateItem(item);
-        if (mounted) {
+        success = await supabaseService.updateDailyCostItem(item.toMap());
+        if (success && mounted) {
           ScaffoldMessenger.of(
             context,
           ).showSnackBar(const SnackBar(content: Text('更新成功')));
         }
+      }
+
+      if (!success) {
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(
+            content: Text('保存失败，请检查网络连接'),
+            backgroundColor: Colors.red,
+          ));
+        }
+        return;
       }
 
       if (mounted) {
@@ -189,7 +206,10 @@ class _AddDailyCostPageState extends State<AddDailyCostPage> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('保存失败: $e')));
+        ).showSnackBar(const SnackBar(
+          content: Text('保存失败，请检查网络连接'),
+          backgroundColor: Colors.red,
+        ));
       }
     } finally {
       if (mounted) {
@@ -593,3 +613,4 @@ class _AddDailyCostPageState extends State<AddDailyCostPage> {
     );
   }
 }
+

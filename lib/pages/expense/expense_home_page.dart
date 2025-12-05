@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../models/expense.dart';
-import '../../database/expense_helper.dart';
+import '../../services/supabase_service.dart';
 import 'add_expense_page.dart';
 import 'expense_statistics_page.dart';
 
@@ -14,6 +14,7 @@ class ExpenseHomePage extends StatefulWidget {
 }
 
 class _ExpenseHomePageState extends State<ExpenseHomePage> {
+  final SupabaseService _supabaseService = SupabaseService();
   List<Expense> _expenses = [];
   double _monthlyTotal = 0.0;
   double _yearlyTotal = 0.0;
@@ -32,13 +33,24 @@ class _ExpenseHomePageState extends State<ExpenseHomePage> {
     });
 
     try {
-      final expenses = await ExpenseHelper.instance.getAllExpenses();
+      // 优先从 Supabase 加载
+      final expensesData = await _supabaseService.getAllExpenses();
+      final expenses = expensesData.map((e) => Expense.fromMap(e)).toList();
+      
+      // 前端计算统计
       final now = DateTime.now();
-      final monthlyTotal = await ExpenseHelper.instance.getMonthlyTotal(
-        now.year,
-        now.month,
-      );
-      final yearlyTotal = await ExpenseHelper.instance.getYearlyTotal(now.year);
+      double monthlyTotal = 0.0;
+      double yearlyTotal = 0.0;
+      
+      for (final expense in expenses) {
+        final expenseDate = DateTime.parse(expense.date);
+        if (expenseDate.year == now.year && expenseDate.month == now.month) {
+          monthlyTotal += expense.amount;
+        }
+        if (expenseDate.year == now.year) {
+          yearlyTotal += expense.amount;
+        }
+      }
 
       if (mounted) {
         setState(() {
@@ -82,7 +94,7 @@ class _ExpenseHomePageState extends State<ExpenseHomePage> {
     );
 
     if (confirmed == true && expense.id != null) {
-      await ExpenseHelper.instance.deleteExpense(expense.id!);
+      await _supabaseService.deleteExpense(expense.id!);
       _loadExpenses();
       if (mounted) {
         ScaffoldMessenger.of(

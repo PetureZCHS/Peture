@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../models/fitness_course.dart';
-import '../../database/fitness_helper.dart';
+import '../../services/supabase_service.dart';
 
 /// 训练历史记录页面
 class PartnerFitHistoryPage extends StatefulWidget {
@@ -11,6 +11,7 @@ class PartnerFitHistoryPage extends StatefulWidget {
 }
 
 class _PartnerFitHistoryPageState extends State<PartnerFitHistoryPage> {
+  final SupabaseService _supabaseService = SupabaseService();
   List<FitnessRecord> records = [];
   Map<String, int> stats = {};
   bool isLoading = true;
@@ -26,14 +27,35 @@ class _PartnerFitHistoryPageState extends State<PartnerFitHistoryPage> {
       isLoading = true;
     });
 
-    final loadedRecords = await FitnessHelper.instance.getAllRecords();
-    final loadedStats = await FitnessHelper.instance.getTotalStats();
+    try {
+      // 优先从 Supabase 加载
+      final recordsData = await _supabaseService.getAllFitnessRecords();
+      final loadedRecords = recordsData.map((e) => FitnessRecord.fromMap(e)).toList();
+      
+      // 前端计算统计
+      int totalWorkouts = loadedRecords.length;
+      int totalCalories = 0;
+      int totalMinutes = 0;
+      for (final record in loadedRecords) {
+        totalCalories += record.caloriesBurned;
+        totalMinutes += record.durationMinutes;
+      }
+      final loadedStats = {
+        'totalWorkouts': totalWorkouts,
+        'totalCalories': totalCalories,
+        'totalMinutes': totalMinutes,
+      };
 
-    setState(() {
-      records = loadedRecords;
-      stats = loadedStats;
-      isLoading = false;
-    });
+      setState(() {
+        records = loadedRecords;
+        stats = loadedStats;
+        isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        isLoading = false;
+      });
+    }
   }
 
   @override
@@ -280,7 +302,7 @@ class _PartnerFitHistoryPageState extends State<PartnerFitHistoryPage> {
     );
 
     if (confirmed == true && record.id != null) {
-      await FitnessHelper.instance.deleteRecord(record.id!);
+      await _supabaseService.deleteFitnessRecord(record.id!);
       _loadData(); // 重新加载数据
       if (mounted) {
         ScaffoldMessenger.of(

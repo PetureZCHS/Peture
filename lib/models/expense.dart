@@ -1,6 +1,6 @@
 /// 宠物账单数据模型
 class Expense {
-  final int? id;
+  final String? id; // 改为 String? 以支持 Supabase UUID
   final double amount; // 金额
   final String category; // 分类（食品、医疗、玩具、洗护、用品等）
   final String date; // 日期（格式：yyyy-MM-dd）
@@ -40,7 +40,7 @@ class Expense {
   /// 从 Map 创建对象（从数据库读取）
   factory Expense.fromMap(Map<String, dynamic> map) {
     return Expense(
-      id: map['id'] as int?,
+      id: map['id']?.toString(), // 支持 int 和 String
       amount: (map['amount'] as num).toDouble(),
       category: map['category'] as String,
       date: map['date'] as String,
@@ -54,7 +54,7 @@ class Expense {
 
   /// 复制对象（用于编辑）
   Expense copyWith({
-    int? id,
+    String? id,
     double? amount,
     String? category,
     String? date,
