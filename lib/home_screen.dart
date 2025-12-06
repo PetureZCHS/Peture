@@ -658,23 +658,16 @@ class _HomeDashboardContent extends StatelessWidget {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Icon(Icons.auto_awesome,
-                                  size: 10,
+                                  size: 12,
                                   color: AppColors.warmGradient.colors.first),
-                              const SizedBox(width: 3),
-                              Text("Peture AI ",
-                                  style: TextStyle(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.bold,
-                                      color:
-                                          AppColors.warmGradient.colors.first,
-                                      letterSpacing: 0.3)),
+                              const SizedBox(width: 4),
                               Text("AI VET",
                                   style: TextStyle(
-                                      fontSize: 10,
+                                      fontSize: 11,
                                       fontWeight: FontWeight.bold,
                                       color:
                                           AppColors.warmGradient.colors.first,
-                                      letterSpacing: 0.3)),
+                                      letterSpacing: 0.5)),
                             ],
                           ),
                         ),
