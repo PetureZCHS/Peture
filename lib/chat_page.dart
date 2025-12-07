@@ -145,8 +145,13 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
       timestamp: DateTime.now(),
     );
     final id = await _supabaseService.insertConversation(conversation);
-    _conversationId = id ?? _conversationId;
-    debugPrint("✅ 对话已保存到 Supabase: Q: $question, id=$id");
+    if (id != null) {
+      // 注意：这里不设置 _conversationId，因为 _conversationId 应该只保存 Dify 返回的 conversation_id
+      // Supabase 的 UUID 和 Dify 的 conversation_id 是不同的
+      debugPrint("✅ 对话已保存到 Supabase: Q: $question, supabase_id=$id");
+    } else {
+      debugPrint("❌ 对话保存失败: Q: $question");
+    }
   }
 
   void _startNewChat() {

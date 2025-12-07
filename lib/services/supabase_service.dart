@@ -1036,6 +1036,7 @@ class SupabaseService {
         'question': conversation.question,
         'answer': conversation.answer,
         'is_pinned': conversation.isPinned,
+        'timestamp': conversation.timestamp.toIso8601String(),
         'created_at': conversation.timestamp.toIso8601String(),
       };
 
