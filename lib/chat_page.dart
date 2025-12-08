@@ -64,7 +64,8 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
   bool _isComposing = false;
   final Random _random = Random();
   List<String> _currentSuggestions = [];
-  String? _conversationId;
+  String? _conversationId; // Dify 的 conversation_id
+  String? _supabaseConversationId; // Supabase 的 conversation ID
 
   // 打字机效果相关
   String _currentTypingText = '';
@@ -139,18 +140,56 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
         answer.startsWith("出现错误")) {
       return;
     }
-    final conversation = Conversation(
-      question: question,
-      answer: answer,
-      timestamp: DateTime.now(),
+    
+    // 生成对话标题（使用问题的前30个字符，或完整问题如果更短）
+    final title = question.length > 30 
+        ? '${question.substring(0, 30)}...' 
+        : question;
+    
+    // 1. 先创建或获取 conversation（只保存标题）
+    String? conversationId = _supabaseConversationId;
+    if (conversationId == null) {
+      // 创建新的 conversation，同时保存 Dify 的 conversation_id
+      final conversation = Conversation(
+        title: title,
+        timestamp: DateTime.now(),
+        difyConversationId: _conversationId, // 保存 Dify 的 conversation_id
+      );
+      final id = await _supabaseService.insertConversation(conversation);
+      if (id == null) {
+        debugPrint("❌ 对话保存失败: 无法创建 conversation");
+        return;
+      }
+      conversationId = id;
+      // 保存 Supabase conversation ID 以便后续使用
+      _supabaseConversationId = id;
+    } else if (_conversationId != null) {
+      // 如果已有 Supabase conversation，但 Dify conversation_id 更新了，只更新 dify_conversation_id
+      // 注意：不更新 title，因为 title 在创建时已经确定，不应该变动
+      await _supabaseService.updateConversationDifyId(
+        conversationId: conversationId,
+        difyConversationId: _conversationId,
+      );
+    }
+    
+    // 2. 保存用户消息到 chat_message 表
+    final userMessageId = await _supabaseService.insertChatMessage(
+      conversationId: conversationId,
+      text: question,
+      isUser: true,
     );
-    final id = await _supabaseService.insertConversation(conversation);
-    if (id != null) {
-      // 注意：这里不设置 _conversationId，因为 _conversationId 应该只保存 Dify 返回的 conversation_id
-      // Supabase 的 UUID 和 Dify 的 conversation_id 是不同的
-      debugPrint("✅ 对话已保存到 Supabase: Q: $question, supabase_id=$id");
+    
+    // 3. 保存 AI 回复到 chat_message 表
+    final aiMessageId = await _supabaseService.insertChatMessage(
+      conversationId: conversationId,
+      text: answer,
+      isUser: false,
+    );
+    
+    if (userMessageId != null && aiMessageId != null) {
+      debugPrint("✅ 对话已保存到 Supabase: conversation_id=$conversationId, title=$title");
     } else {
-      debugPrint("❌ 对话保存失败: Q: $question");
+      debugPrint("❌ 消息保存失败: conversation_id=$conversationId");
     }
   }
 
@@ -160,7 +199,8 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
       _textController.clear();
       _hasStartedChat = false;
       _isLoading = false;
-      _conversationId = null;
+      _conversationId = null; // 清空 Dify conversation_id
+      _supabaseConversationId = null; // 清空 Supabase conversation ID
       _typingTimer?.cancel();
       _pendingChunks.clear();
       _isTyping = false;
@@ -173,38 +213,52 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
   }
 
   // 添加这个新方法来加载历史对话
-  void _loadConversation(Conversation conversation) {
+  Future<void> _loadConversation(Conversation conversation) async {
+    if (conversation.id == null) {
+      debugPrint("❌ 无法加载对话：conversation.id 为 null");
+      return;
+    }
+    
     debugPrint("📖 开始加载历史对话...");
-    debugPrint("📖 问题: ${conversation.question}");
-    debugPrint("📖 答案长度: ${conversation.answer.length} 字符");
+    debugPrint("📖 标题: ${conversation.title}");
+    debugPrint("📖 Conversation ID: ${conversation.id}");
 
-    setState(() {
-      _messages.clear();
-      _textController.clear();
-      _hasStartedChat = true;
-      _isLoading = false;
-      _conversationId = null;
-      _typingTimer?.cancel();
-      _pendingChunks.clear();
-      _isTyping = false;
-      _currentTypingText = '';
-      _fullResponseText = '';
-      _pendingSaveQuestion = null;
+    // 从 chat_message 表加载该 conversation 的所有消息
+    final messages = await _supabaseService.getMessagesByConversationId(conversation.id!);
+    
+    if (mounted) {
+      setState(() {
+        _messages.clear();
+        _textController.clear();
+        _hasStartedChat = true;
+        _isLoading = false;
+        // 从 conversation 中恢复 Dify 的 conversation_id（用于接上上文）
+        _conversationId = conversation.difyConversationId;
+        _supabaseConversationId = conversation.id; // 设置当前 Supabase conversation ID
+        _typingTimer?.cancel();
+        _pendingChunks.clear();
+        _isTyping = false;
+        _currentTypingText = '';
+        _fullResponseText = '';
+        _pendingSaveQuestion = null;
 
-      // 添加用户问题
-      _messages.add(ChatMessage(text: conversation.question, isUser: true));
-      // 添加AI回答（确保使用完整的answer内容）
-      _messages.add(ChatMessage(text: conversation.answer, isUser: false));
+        // 按时间顺序添加消息
+        for (final msg in messages) {
+          _messages.add(ChatMessage(
+            text: msg['text'] as String,
+            isUser: msg['is_user'] == true || msg['is_user'] == 1,
+          ));
+        }
 
-      debugPrint("📖 消息列表已更新，共 ${_messages.length} 条消息");
-      debugPrint("📖 AI消息内容长度: ${_messages.last.text.length} 字符");
-    });
+        debugPrint("📖 消息列表已更新，共 ${_messages.length} 条消息");
+      });
 
-    // 加载完成后滚动到底部
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _scrollToBottom();
-      debugPrint("📖 已滚动到底部");
-    });
+      // 加载完成后滚动到底部
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scrollToBottom();
+        debugPrint("📖 已滚动到底部");
+      });
+    }
 
     debugPrint("✅ 历史对话加载完成");
   }
@@ -357,6 +411,19 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
               _conversationId = event.conversationId;
             });
             debugPrint("✅ Conversation ID 已更新: $_conversationId");
+            
+            // 如果已有 Supabase conversation，更新 Dify conversation_id 到数据库
+            // 注意：只更新 dify_conversation_id，不更新 title
+            if (_supabaseConversationId != null) {
+              _supabaseService.updateConversationDifyId(
+                conversationId: _supabaseConversationId!,
+                difyConversationId: _conversationId,
+              ).then((success) {
+                if (success) {
+                  debugPrint("✅ Dify conversation_id 已保存到数据库");
+                }
+              });
+            }
           }
           // ✅ 不在这里保存，而是在打字机效果完成后保存
           // 如果没有打字机效果（_pendingChunks为空且不在打字中），立即保存
@@ -1033,11 +1100,17 @@ class _AppDrawerState extends State<AppDrawer> {
               ListTile(
                 leading: const Icon(Icons.share),
                 title: const Text('分享'),
-                onTap: () {
+                onTap: () async {
                   Navigator.pop(context);
-                  final String shareContent =
-                      "Q: ${conversation.question}\nA: ${conversation.answer}";
-                  Share.share(shareContent);
+                  // 从 chat_message 表加载消息用于分享
+                  if (conversation.id != null) {
+                    final messages = await _supabaseService.getMessagesByConversationId(conversation.id!);
+                    final shareContent = messages.map((msg) {
+                      final prefix = (msg['is_user'] == true || msg['is_user'] == 1) ? 'Q' : 'A';
+                      return "$prefix: ${msg['text']}";
+                    }).join('\n\n');
+                    Share.share(shareContent);
+                  }
                 },
               ),
               ListTile(
@@ -1083,7 +1156,7 @@ class _AppDrawerState extends State<AppDrawer> {
     BuildContext context,
     Conversation conversation,
   ) async {
-    final controller = TextEditingController(text: conversation.question);
+    final controller = TextEditingController(text: conversation.title);
     showDialog(
       context: context,
       builder: (context) {
@@ -1103,7 +1176,7 @@ class _AppDrawerState extends State<AppDrawer> {
               onPressed: () async {
                 if (controller.text.isNotEmpty) {
                   final updated = conversation.copyWith(
-                    question: controller.text,
+                    title: controller.text,
                   );
                   await _supabaseService.updateConversation(updated);
                   _loadConversations();
@@ -1127,7 +1200,7 @@ class _AppDrawerState extends State<AppDrawer> {
       builder: (context) {
         return AlertDialog(
           title: const Text("确认删除？"),
-          content: Text("删除后无法恢复：\n\"${conversation.question}\""),
+          content: Text("删除后无法恢复：\n\"${conversation.title}\""),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
@@ -1226,7 +1299,7 @@ class _AppDrawerState extends State<AppDrawer> {
                               )
                             : null,
                         title: Text(
-                          conversation.question,
+                          conversation.title,
                           overflow: TextOverflow.ellipsis,
                           maxLines: 1,
                         ),
@@ -1240,9 +1313,8 @@ class _AppDrawerState extends State<AppDrawer> {
                               _showConversationOptions(context, conversation),
                         ),
                         onTap: () {
-                          debugPrint("🔘 点击历史对话: ${conversation.question}");
-                          debugPrint(
-                              "🔘 答案长度: ${conversation.answer.length} 字符");
+                          debugPrint("🔘 点击历史对话: ${conversation.title}");
+                          debugPrint("🔘 Conversation ID: ${conversation.id}");
                           Navigator.pop(context);
                           if (widget.onConversationSelected != null) {
                             widget.onConversationSelected!(conversation);

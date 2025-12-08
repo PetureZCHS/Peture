@@ -1022,7 +1022,7 @@ class SupabaseService {
   // 对话相关方法
   // ============================================================
 
-  /// 插入对话
+  /// 插入对话（只保存标题）
   Future<String?> insertConversation(Conversation conversation) async {
     final userId = await currentUserId;
     if (userId == null) return null;
@@ -1033,11 +1033,12 @@ class SupabaseService {
 
       final conversationData = {
         'user_id': userId,
-        'question': conversation.question,
-        'answer': conversation.answer,
+        'title': conversation.title,
         'is_pinned': conversation.isPinned,
         'timestamp': conversation.timestamp.toIso8601String(),
         'created_at': conversation.timestamp.toIso8601String(),
+        if (conversation.difyConversationId != null)
+          'dify_conversation_id': conversation.difyConversationId,
       };
 
       final response = await _client
@@ -1093,7 +1094,8 @@ class SupabaseService {
     }
   }
 
-  /// 更新对话
+  /// 更新对话（只更新标题和置顶状态，不更新 dify_conversation_id）
+  /// 注意：title 通常不应该被更新，此方法主要用于重命名和置顶操作
   Future<bool> updateConversation(Conversation conversation) async {
     final userId = await currentUserId;
     if (userId == null || conversation.id == null) return false;
@@ -1102,8 +1104,7 @@ class SupabaseService {
       await _client
           .from('conversations')
           .update({
-            'question': conversation.question,
-            'answer': conversation.answer,
+            'title': conversation.title,
             'is_pinned': conversation.isPinned,
             'updated_at': DateTime.now().toIso8601String(),
           })
@@ -1117,12 +1118,41 @@ class SupabaseService {
     }
   }
 
-  /// 删除对话
+  /// 只更新 Dify conversation_id（不更新 title）
+  Future<bool> updateConversationDifyId({
+    required String conversationId,
+    required String? difyConversationId,
+  }) async {
+    final userId = await currentUserId;
+    if (userId == null) return false;
+
+    try {
+      await _client
+          .from('conversations')
+          .update({
+            'dify_conversation_id': difyConversationId,
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', conversationId)
+          .eq('user_id', userId);
+
+      return true;
+    } catch (e) {
+      print('更新 Dify conversation_id 失败: $e');
+      return false;
+    }
+  }
+
+  /// 删除对话（同时删除相关的消息）
   Future<bool> deleteConversation(String id) async {
     final userId = await currentUserId;
     if (userId == null) return false;
 
     try {
+      // 先删除该 conversation 的所有消息
+      await deleteMessagesByConversationId(id);
+      
+      // 再删除 conversation
       await _client
           .from('conversations')
           .delete()

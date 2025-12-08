@@ -550,7 +550,7 @@ class _DataMigrationPageState extends State<DataMigrationPage> {
             _migratedItems++;
             setState(() {
               _progress = _migratedItems / _totalItems;
-              _status += '✅ 对话 "${conversation.question.length > 20 ? conversation.question.substring(0, 20) + '...' : conversation.question}" 迁移成功\n';
+              _status += '✅ 对话 "${conversation.title.length > 20 ? conversation.title.substring(0, 20) + '...' : conversation.title}" 迁移成功\n';
             });
 
             final localConversationId = int.tryParse(conversation.id ?? '');
@@ -578,7 +578,7 @@ class _DataMigrationPageState extends State<DataMigrationPage> {
             }
           } else {
             setState(() {
-              _status += '⚠️ 对话 "${conversation.question}" 迁移失败\n';
+              _status += '⚠️ 对话 "${conversation.title}" 迁移失败\n';
             });
           }
         } catch (e) {
