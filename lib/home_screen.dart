@@ -563,36 +563,6 @@ class _HomeDashboardContent extends StatelessWidget {
                         colors: [Color(0xFFFF416C), Color(0xFFFF4B2B)]),
                     const LostPetRescuePage(),
                     subtitleMaxLines: 2),
-                _buildFeatureCard(width, '电子档案', 'Vaccine', Icons.badge_rounded,
-                    AppColors.coolGradient, const PetPassportPage()),
-                _buildFeatureCard(
-                    width,
-                    '成长日记',
-                    'Diary',
-                    Icons.menu_book_rounded,
-                    AppColors.natureGradient,
-                    const PetDiaryComposePage()),
-                _buildFeatureCard(
-                    width,
-                    '活力健身',
-                    'Fitness',
-                    Icons.directions_run_rounded,
-                    AppColors.oceanGradient,
-                    const PartnerFitGymPage()),
-                _buildFeatureCard(
-                    width,
-                    '营养食谱',
-                    'Food',
-                    Icons.restaurant_menu_rounded,
-                    AppColors.goldGradient,
-                    const PetRecipeListPage()),
-                _buildFeatureCard(
-                    width,
-                    '训宠响片',
-                    'Training',
-                    Icons.touch_app_rounded,
-                    AppColors.magicGradient,
-                    const DogClickerScreen()),
                 _buildFeatureCard(
                     width,
                     '寻宠互助',
@@ -934,52 +904,6 @@ class _HomeUniverseContent extends StatelessWidget {
                     gradient: const LinearGradient(
                         colors: [Color(0xFFFF416C), Color(0xFFFF4B2B)]),
                     page: const LostPetRescuePage()),
-                SphereItemData(
-                    title: '社区话题',
-                    icon: Icons.explore_rounded,
-                    gradient: AppColors.warmGradient,
-                    page: const CommunityScreen()),
-                SphereItemData(
-                    title: '商城',
-                    icon: Icons.shopping_bag_rounded,
-                    gradient: AppColors.coolGradient,
-                    page: const ProfileScreen()),
-                SphereItemData(
-                    title: '设置',
-                    icon: Icons.settings_rounded,
-                    gradient: const LinearGradient(
-                        colors: [Color(0xFF606c88), Color(0xFF3f4c6b)]),
-                    page: const ProfileScreen()),
-                SphereItemData(
-                    title: 'AI 问诊',
-                    icon: Icons.medical_services_rounded,
-                    gradient: AppColors.warmGradient,
-                    page: const ChatPageWithDatabase()),
-                SphereItemData(
-                    title: '电子档案',
-                    icon: Icons.badge_rounded,
-                    gradient: AppColors.coolGradient,
-                    page: const PetPassportPage()),
-                SphereItemData(
-                    title: '成长日记',
-                    icon: Icons.menu_book_rounded,
-                    gradient: AppColors.natureGradient,
-                    page: const PetDiaryComposePage()),
-                SphereItemData(
-                    title: '活力健身',
-                    icon: Icons.directions_run_rounded,
-                    gradient: AppColors.oceanGradient,
-                    page: const PartnerFitGymPage()),
-                SphereItemData(
-                    title: '营养食谱',
-                    icon: Icons.restaurant_menu_rounded,
-                    gradient: AppColors.goldGradient,
-                    page: const PetRecipeListPage()),
-                SphereItemData(
-                    title: '训宠响片',
-                    icon: Icons.touch_app_rounded,
-                    gradient: AppColors.magicGradient,
-                    page: const DogClickerScreen()),
                 SphereItemData(
                     title: '社区话题',
                     icon: Icons.explore_rounded,
