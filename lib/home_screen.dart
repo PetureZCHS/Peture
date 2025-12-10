@@ -671,7 +671,7 @@ class _HomeDashboardContent extends StatelessWidget {
                                   size: 12,
                                   color: AppColors.warmGradient.colors.first),
                               const SizedBox(width: 4),
-                              Text("AI VET",
+                              Text("Peture AI",
                                   style: TextStyle(
                                       fontSize: 11,
                                       fontWeight: FontWeight.bold,
