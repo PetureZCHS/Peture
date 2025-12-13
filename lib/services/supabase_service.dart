@@ -190,8 +190,9 @@ class SupabaseService {
         final mapped = Map<String, dynamic>.from(pet);
         // neuter_status: 布尔值 -> 字符串
         if (mapped.containsKey('neuter_status')) {
-          mapped['neuter_status'] =
-              mapped['neuter_status'] == true ? '已绝育' : '未绝育';
+          mapped['neuter_status'] = mapped['neuter_status'] == true
+              ? '已绝育'
+              : '未绝育';
         }
         return mapped;
       }).toList();
@@ -664,8 +665,10 @@ class SupabaseService {
     if (userId == null) return [];
 
     try {
-      final response =
-          await _client.from('daily_reminders').select().eq('user_id', userId);
+      final response = await _client
+          .from('daily_reminders')
+          .select()
+          .eq('user_id', userId);
 
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
@@ -682,8 +685,10 @@ class SupabaseService {
     if (userId == null) return [];
 
     try {
-      var query =
-          _client.from('daily_reminders').select().eq('user_id', userId);
+      var query = _client
+          .from('daily_reminders')
+          .select()
+          .eq('user_id', userId);
 
       if (petId != null) {
         query = query.eq('pet_id', petId);
@@ -1277,8 +1282,11 @@ class SupabaseService {
         'created_at': diary.timestamp.toIso8601String(),
       };
 
-      final response =
-          await _client.from('pet_diaries').insert(diaryData).select().single();
+      final response = await _client
+          .from('pet_diaries')
+          .insert(diaryData)
+          .select()
+          .single();
       return response['id'] as String?;
     } catch (e) {
       print('插入宠物日记失败: $e');
@@ -1983,5 +1991,444 @@ class SupabaseService {
       print('删除所有宠物日记失败: $e');
       return false;
     }
+  }
+
+  // ============================================================
+  // 统一消费记录相关方法
+  // ============================================================
+
+  /// 插入统一消费记录
+  Future<String?> insertUnifiedExpense(Map<String, dynamic> expense) async {
+    final userId = await currentUserId;
+    if (userId == null) return null;
+
+    try {
+      // 确保用户资料存在（因为 unified_expenses 表有外键约束）
+      await _ensureUserProfileExists(userId);
+
+      // 准备插入数据，转换字段名
+      final expenseData = Map<String, dynamic>.from(expense);
+      expenseData.remove('id'); // 移除 id，让数据库自动生成 UUID
+      expenseData['user_id'] = userId;
+
+      // 字段名映射：驼峰命名 -> 下划线命名
+      expenseData['expense_type'] = expenseData['expenseType'];
+      expenseData.remove('expenseType');
+
+      if (expenseData.containsKey('petId')) {
+        // petId 可能是 int（本地）或 String（UUID），需要转换
+        final petId = expenseData['petId'];
+        if (petId != null) {
+          if (petId is int) {
+            // 如果是整数（本地数据库的 ID），设为 null
+            // 因为云端数据库使用 UUID，无法直接映射
+            expenseData['pet_id'] = null;
+          } else {
+            // 如果是字符串（UUID），直接使用
+            expenseData['pet_id'] = petId;
+          }
+        } else {
+          expenseData['pet_id'] = null;
+        }
+        expenseData.remove('petId');
+      }
+
+      if (expenseData.containsKey('petName')) {
+        expenseData['pet_name'] = expenseData['petName'];
+        expenseData.remove('petName');
+      }
+
+      if (expenseData.containsKey('photoPath')) {
+        expenseData['photo_path'] = expenseData['photoPath'];
+        expenseData.remove('photoPath');
+      }
+
+      if (expenseData.containsKey('itemName')) {
+        expenseData['item_name'] = expenseData['itemName'];
+        expenseData.remove('itemName');
+      }
+
+      if (expenseData.containsKey('estimatedEndDate')) {
+        expenseData['estimated_end_date'] = expenseData['estimatedEndDate'];
+        expenseData.remove('estimatedEndDate');
+      }
+
+      if (expenseData.containsKey('itemType')) {
+        expenseData['item_type'] = expenseData['itemType'];
+        expenseData.remove('itemType');
+      }
+
+      if (expenseData.containsKey('createdAt')) {
+        expenseData['created_at'] = expenseData['createdAt'];
+        expenseData.remove('createdAt');
+      }
+
+      final response = await _client
+          .from('unified_expenses')
+          .insert(expenseData)
+          .select()
+          .single();
+
+      return response['id'] as String?;
+    } catch (e) {
+      print('插入统一消费记录失败: $e');
+      return null;
+    }
+  }
+
+  /// 获取所有统一消费记录
+  Future<List<Map<String, dynamic>>> getAllUnifiedExpenses() async {
+    final userId = await currentUserId;
+    if (userId == null) return [];
+
+    try {
+      final response = await _client
+          .from('unified_expenses')
+          .select()
+          .eq('user_id', userId)
+          .order('date', ascending: false)
+          .order('created_at', ascending: false);
+
+      // 转换字段名以匹配应用层
+      return _convertUnifiedExpenseList(response);
+    } catch (e) {
+      print('获取统一消费记录失败: $e');
+      return [];
+    }
+  }
+
+  /// 获取所有一次性支出
+  Future<List<Map<String, dynamic>>> getOneOffUnifiedExpenses() async {
+    final userId = await currentUserId;
+    if (userId == null) return [];
+
+    try {
+      final response = await _client
+          .from('unified_expenses')
+          .select()
+          .eq('user_id', userId)
+          .eq('expense_type', 'one-off')
+          .order('date', ascending: false)
+          .order('created_at', ascending: false);
+
+      return _convertUnifiedExpenseList(response);
+    } catch (e) {
+      print('获取一次性支出失败: $e');
+      return [];
+    }
+  }
+
+  /// 获取所有周期性成本
+  Future<List<Map<String, dynamic>>> getRecurringUnifiedExpenses() async {
+    final userId = await currentUserId;
+    if (userId == null) return [];
+
+    try {
+      final response = await _client
+          .from('unified_expenses')
+          .select()
+          .eq('user_id', userId)
+          .eq('expense_type', 'recurring')
+          .order('date', ascending: false)
+          .order('created_at', ascending: false);
+
+      return _convertUnifiedExpenseList(response);
+    } catch (e) {
+      print('获取周期性成本失败: $e');
+      return [];
+    }
+  }
+
+  /// 根据宠物ID获取消费记录
+  Future<List<Map<String, dynamic>>> getUnifiedExpensesByPetId(
+    String petId,
+  ) async {
+    final userId = await currentUserId;
+    if (userId == null) return [];
+
+    try {
+      final response = await _client
+          .from('unified_expenses')
+          .select()
+          .eq('pet_id', petId)
+          .eq('user_id', userId)
+          .order('date', ascending: false)
+          .order('created_at', ascending: false);
+
+      return _convertUnifiedExpenseList(response);
+    } catch (e) {
+      print('获取宠物消费记录失败: $e');
+      return [];
+    }
+  }
+
+  /// 根据日期范围获取消费记录
+  Future<List<Map<String, dynamic>>> getUnifiedExpensesByDateRange(
+    String startDate,
+    String endDate,
+  ) async {
+    final userId = await currentUserId;
+    if (userId == null) return [];
+
+    try {
+      final response = await _client
+          .from('unified_expenses')
+          .select()
+          .eq('user_id', userId)
+          .gte('date', startDate)
+          .lte('date', endDate)
+          .order('date', ascending: false)
+          .order('created_at', ascending: false);
+
+      return _convertUnifiedExpenseList(response);
+    } catch (e) {
+      print('获取日期范围消费记录失败: $e');
+      return [];
+    }
+  }
+
+  /// 更新统一消费记录
+  Future<bool> updateUnifiedExpense(Map<String, dynamic> expense) async {
+    final userId = await currentUserId;
+    if (userId == null || expense['id'] == null) return false;
+
+    try {
+      final expenseId = expense['id'] as String;
+      final updateData = Map<String, dynamic>.from(expense);
+      updateData.remove('id');
+      updateData.remove('user_id');
+      updateData['updated_at'] = DateTime.now().toIso8601String();
+
+      // 字段名映射
+      if (updateData.containsKey('expenseType')) {
+        updateData['expense_type'] = updateData['expenseType'];
+        updateData.remove('expenseType');
+      }
+
+      if (updateData.containsKey('petId')) {
+        final petId = updateData['petId'];
+        if (petId != null && petId is int) {
+          // 如果是整数，设为 null（无法映射到 UUID）
+          updateData['pet_id'] = null;
+        } else {
+          updateData['pet_id'] = petId;
+        }
+        updateData.remove('petId');
+      }
+
+      if (updateData.containsKey('petName')) {
+        updateData['pet_name'] = updateData['petName'];
+        updateData.remove('petName');
+      }
+
+      if (updateData.containsKey('photoPath')) {
+        updateData['photo_path'] = updateData['photoPath'];
+        updateData.remove('photoPath');
+      }
+
+      if (updateData.containsKey('itemName')) {
+        updateData['item_name'] = updateData['itemName'];
+        updateData.remove('itemName');
+      }
+
+      if (updateData.containsKey('estimatedEndDate')) {
+        updateData['estimated_end_date'] = updateData['estimatedEndDate'];
+        updateData.remove('estimatedEndDate');
+      }
+
+      if (updateData.containsKey('itemType')) {
+        updateData['item_type'] = updateData['itemType'];
+        updateData.remove('itemType');
+      }
+
+      if (updateData.containsKey('createdAt')) {
+        updateData['created_at'] = updateData['createdAt'];
+        updateData.remove('createdAt');
+      }
+
+      await _client
+          .from('unified_expenses')
+          .update(updateData)
+          .eq('id', expenseId)
+          .eq('user_id', userId);
+
+      return true;
+    } catch (e) {
+      print('更新统一消费记录失败: $e');
+      return false;
+    }
+  }
+
+  /// 删除统一消费记录
+  Future<bool> deleteUnifiedExpense(String expenseId) async {
+    final userId = await currentUserId;
+    if (userId == null) return false;
+
+    try {
+      await _client
+          .from('unified_expenses')
+          .delete()
+          .eq('id', expenseId)
+          .eq('user_id', userId);
+
+      return true;
+    } catch (e) {
+      print('删除统一消费记录失败: $e');
+      return false;
+    }
+  }
+
+  /// 获取指定月份的总支出
+  Future<double> getUnifiedExpensesMonthlyTotal(int year, int month) async {
+    final userId = await currentUserId;
+    if (userId == null) return 0.0;
+
+    try {
+      final startDate = '$year-${month.toString().padLeft(2, '0')}-01';
+      final endDate = '$year-${month.toString().padLeft(2, '0')}-31';
+
+      final response = await _client
+          .from('unified_expenses')
+          .select('amount')
+          .eq('user_id', userId)
+          .gte('date', startDate)
+          .lte('date', endDate);
+
+      double total = 0.0;
+      for (var row in response) {
+        total += (row['amount'] as num).toDouble();
+      }
+
+      return total;
+    } catch (e) {
+      print('获取月度总支出失败: $e');
+      return 0.0;
+    }
+  }
+
+  /// 获取指定年份的总支出
+  Future<double> getUnifiedExpensesYearlyTotal(int year) async {
+    final userId = await currentUserId;
+    if (userId == null) return 0.0;
+
+    try {
+      final startDate = '$year-01-01';
+      final endDate = '$year-12-31';
+
+      final response = await _client
+          .from('unified_expenses')
+          .select('amount')
+          .eq('user_id', userId)
+          .gte('date', startDate)
+          .lte('date', endDate);
+
+      double total = 0.0;
+      for (var row in response) {
+        total += (row['amount'] as num).toDouble();
+      }
+
+      return total;
+    } catch (e) {
+      print('获取年度总支出失败: $e');
+      return 0.0;
+    }
+  }
+
+  /// 获取分类统计（指定日期范围）
+  Future<Map<String, double>> getUnifiedExpensesCategoryStatistics(
+    String startDate,
+    String endDate,
+  ) async {
+    final userId = await currentUserId;
+    if (userId == null) return {};
+
+    try {
+      final response = await _client
+          .from('unified_expenses')
+          .select('category, amount')
+          .eq('user_id', userId)
+          .gte('date', startDate)
+          .lte('date', endDate);
+
+      Map<String, double> statistics = {};
+      for (var row in response) {
+        final category = row['category'] as String;
+        final amount = (row['amount'] as num).toDouble();
+        statistics[category] = (statistics[category] ?? 0.0) + amount;
+      }
+
+      // 按金额排序
+      final sortedEntries = statistics.entries.toList()
+        ..sort((a, b) => b.value.compareTo(a.value));
+
+      return Map.fromEntries(sortedEntries);
+    } catch (e) {
+      print('获取分类统计失败: $e');
+      return {};
+    }
+  }
+
+  /// 获取所有支出总额
+  Future<double> getUnifiedExpensesTotal() async {
+    final userId = await currentUserId;
+    if (userId == null) return 0.0;
+
+    try {
+      final response = await _client
+          .from('unified_expenses')
+          .select('amount')
+          .eq('user_id', userId);
+
+      double total = 0.0;
+      for (var row in response) {
+        total += (row['amount'] as num).toDouble();
+      }
+
+      return total;
+    } catch (e) {
+      print('获取总支出失败: $e');
+      return 0.0;
+    }
+  }
+
+  /// 转换统一消费记录列表（字段名映射：下划线 -> 驼峰）
+  List<Map<String, dynamic>> _convertUnifiedExpenseList(
+    List<dynamic> response,
+  ) {
+    return response.map((row) {
+      final map = Map<String, dynamic>.from(row);
+
+      // 字段名映射：下划线命名 -> 驼峰命名
+      map['expenseType'] = map['expense_type'];
+      map.remove('expense_type');
+
+      map['petId'] = map['pet_id'];
+      map.remove('pet_id');
+
+      map['petName'] = map['pet_name'];
+      map.remove('pet_name');
+
+      map['photoPath'] = map['photo_path'];
+      map.remove('photo_path');
+
+      map['itemName'] = map['item_name'];
+      map.remove('item_name');
+
+      map['estimatedEndDate'] = map['estimated_end_date'];
+      map.remove('estimated_end_date');
+
+      map['itemType'] = map['item_type'];
+      map.remove('item_type');
+
+      map['createdAt'] = map['created_at'];
+      map.remove('created_at');
+
+      // id 从 UUID 转换为 String（保持一致性）
+      if (map['id'] != null) {
+        map['id'] = map['id'].toString();
+      }
+
+      return map;
+    }).toList();
   }
 }

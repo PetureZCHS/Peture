@@ -16,10 +16,12 @@ import 'pages/shop/shop_page.dart';
 import 'pages/unified_expense/unified_expense_home_page.dart';
 import 'pages/reminder/intelligent_reminder_page.dart';
 import 'settings_page.dart';
+import 'pages/lost_pet/lost_pet_rescue_page.dart';
 import 'community_screen.dart';
 import 'medical_record_screen.dart';
 import 'profile_screen.dart';
 import 'widgets/weight_trend_card.dart';
+import 'utils/ui_helpers.dart';
 
 /// 搜索结果数据模型
 class SearchResult {
@@ -657,6 +659,14 @@ class _HomeDashboardContentState extends State<_HomeDashboardContent> {
                     AppColors.coolGradient,
                     const PetShopPage()),
                 _buildFeatureCard(
+                    '寻宠救援',
+                    '希望您永远使用不到此功能',
+                    Icons.phonelink_ring_rounded,
+                    const LinearGradient(
+                        colors: [Color(0xFFFF416C), Color(0xFFFF4B2B)]),
+                    const LostPetRescuePage(),
+                    subtitleMaxLines: 2),
+                _buildFeatureCard(
                     width,
                     '寻宠互助',
                     'Emergency',
@@ -847,7 +857,7 @@ class _HomeDashboardContentState extends State<_HomeDashboardContent> {
                                   size: 12,
                                   color: AppColors.warmGradient.colors.first),
                               const SizedBox(width: 4),
-                              Text("AI VET",
+                              Text("Peture AI",
                                   style: TextStyle(
                                       fontSize: 11,
                                       fontWeight: FontWeight.bold,
@@ -879,7 +889,7 @@ class _HomeDashboardContentState extends State<_HomeDashboardContent> {
                             style: TextStyle(
                                 fontSize: 13,
                                 color: Color(0xFF636366),
-                                  height: 1.4,
+                                height: 1.4,
                                 fontWeight: FontWeight.w400),
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
@@ -928,7 +938,8 @@ class _HomeDashboardContentState extends State<_HomeDashboardContent> {
 
   // --- 小卡片 ---
   Widget _buildFeatureCard(double width, String title, String subtitle,
-      IconData icon, LinearGradient gradient, Widget page) {
+      IconData icon, LinearGradient gradient, Widget page,
+      {int subtitleMaxLines = 1}) {
     return Builder(builder: (context) {
       return GestureDetector(
         onTap: () {
@@ -1003,7 +1014,7 @@ class _HomeDashboardContentState extends State<_HomeDashboardContent> {
                                 color: AppColors.textGrey,
                                 fontWeight: FontWeight.w500,
                                 letterSpacing: 0.3),
-                            maxLines: 1,
+                            maxLines: subtitleMaxLines,
                             overflow: TextOverflow.ellipsis,
                           ),
                         ],
@@ -1073,6 +1084,12 @@ class _HomeUniverseContent extends StatelessWidget {
                     icon: Icons.touch_app_rounded,
                     gradient: AppColors.magicGradient,
                     page: const DogClickerScreen()),
+                SphereItemData(
+                    title: '寻宠救援',
+                    icon: Icons.phonelink_ring_rounded,
+                    gradient: const LinearGradient(
+                        colors: [Color(0xFFFF416C), Color(0xFFFF4B2B)]),
+                    page: const LostPetRescuePage()),
                 SphereItemData(
                     title: '社区话题',
                     icon: Icons.explore_rounded,
@@ -1362,13 +1379,4 @@ class _ProjectedItem {
   final SphereItemData data;
   _ProjectedItem(
       {required this.x, required this.y, required this.z, required this.data});
-}
-
-extension WidgetBlur on Widget {
-  Widget blurred({double sigmaX = 10.0, double sigmaY = 10.0}) {
-    return ImageFiltered(
-      imageFilter: ImageFilter.blur(sigmaX: sigmaX, sigmaY: sigmaY),
-      child: this,
-    );
-  }
 }
