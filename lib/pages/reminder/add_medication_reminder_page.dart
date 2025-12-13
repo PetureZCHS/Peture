@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../../database/medical_record_helper.dart';
-import '../../database/reminder_helper.dart';
+import '../../services/supabase_service.dart';
 
 /// 添加/编辑用药记录
 class AddMedicationReminderPage extends StatefulWidget {
@@ -17,7 +16,7 @@ class AddMedicationReminderPage extends StatefulWidget {
 class _AddMedicationReminderPageState extends State<AddMedicationReminderPage> {
   final _formKey = GlobalKey<FormState>();
 
-  int? _selectedPetId;
+  String? _selectedPetId;
   String? _selectedPetName;
   final TextEditingController _medNameController = TextEditingController();
   final TextEditingController _dosageController = TextEditingController();
@@ -30,6 +29,7 @@ class _AddMedicationReminderPageState extends State<AddMedicationReminderPage> {
 
   List<Map<String, dynamic>> _pets = [];
   bool _isLoading = false;
+  final SupabaseService _supabaseService = SupabaseService();
 
   @override
   void initState() {
@@ -39,7 +39,8 @@ class _AddMedicationReminderPageState extends State<AddMedicationReminderPage> {
   }
 
   Future<void> _loadPets() async {
-    final pets = await MedicalRecordHelper.instance.getAllPets();
+    final pets = await _supabaseService.getAllPets();
+    if (!mounted) return;
     setState(() {
       _pets = pets;
     });
@@ -48,8 +49,8 @@ class _AddMedicationReminderPageState extends State<AddMedicationReminderPage> {
   void _loadExistingData() {
     if (widget.existingReminder != null) {
       final data = widget.existingReminder!;
-      _selectedPetId = data['pet_id'] as int;
-      _selectedPetName = data['pet_name'] as String;
+      _selectedPetId = data['pet_id'] as String?;
+      _selectedPetName = data['pet_name'] as String?;
       _medNameController.text = data['med_name'] as String;
       _dosageController.text = data['dosage'] as String;
       _frequencyType = data['frequency_type'] as String;
@@ -110,19 +111,26 @@ class _AddMedicationReminderPageState extends State<AddMedicationReminderPage> {
         'status': 'active',
       };
 
-      int medicationId;
+      bool success = false;
       if (widget.existingReminder != null) {
         data['id'] = widget.existingReminder!['id'];
-        await ReminderHelper.instance.updateMedicationReminder(data);
-        medicationId = widget.existingReminder!['id'] as int;
+        success = await _supabaseService.updateMedicationReminder(data);
       } else {
-        medicationId = await ReminderHelper.instance.createMedicationReminder(
-          data,
-        );
+        final result = await _supabaseService.insertMedicationReminder(data);
+        success = result != null;
       }
 
-      // 生成今日打卡清单
-      await ReminderHelper.instance.generateTodayCheckmarks(medicationId);
+      if (!success) {
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(
+            content: Text('保存失败，请检查网络连接'),
+            backgroundColor: Colors.red,
+          ));
+        }
+        return;
+      }
 
       if (mounted) {
         Navigator.pop(context, true);
@@ -131,7 +139,10 @@ class _AddMedicationReminderPageState extends State<AddMedicationReminderPage> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('保存失败: $e')));
+        ).showSnackBar(const SnackBar(
+          content: Text('保存失败，请检查网络连接'),
+          backgroundColor: Colors.red,
+        ));
       }
     } finally {
       setState(() {
@@ -212,7 +223,7 @@ class _AddMedicationReminderPageState extends State<AddMedicationReminderPage> {
   }
 
   Widget _buildPetSelector() {
-    return DropdownButtonFormField<int>(
+    return DropdownButtonFormField<String>(
       value: _selectedPetId,
       decoration: const InputDecoration(
         labelText: '选择宠物 *',
@@ -220,17 +231,18 @@ class _AddMedicationReminderPageState extends State<AddMedicationReminderPage> {
         filled: true,
         fillColor: Colors.white,
       ),
-      items: _pets.map((pet) {
-        return DropdownMenuItem<int>(
-          value: pet['id'] as int,
-          child: Text(pet['name'] as String),
-        );
-      }).toList(),
+      items: _pets
+          .map((pet) => DropdownMenuItem<String>(
+                value: pet['id']?.toString(),
+                child: Text(pet['name'] as String),
+              ))
+          .toList(),
       onChanged: (value) {
         setState(() {
           _selectedPetId = value;
-          _selectedPetName =
-              _pets.firstWhere((pet) => pet['id'] == value)['name'] as String;
+          _selectedPetName = _pets
+              .firstWhere((pet) => pet['id']?.toString() == value)['name']
+              as String;
         });
       },
       validator: (value) => value == null ? '请选择宠物' : null,

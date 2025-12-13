@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'dart:math'; // 用于生成随机角度
 import 'package:confetti/confetti.dart'; // 必须导入 confetti 包
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 // 添加数据迁移页面导入
 import 'pages/data_migration_page.dart';
+import 'login_page.dart';
 
 // ==========================================
 // 1. 主设置页面框架 (SettingsPage)
@@ -53,19 +55,10 @@ class _AppSettingsState extends State<AppSettings> {
   bool _notificationsEnabled = true;
 
   // --- 样式常量 ---
-  static const Color _backgroundColor = Color(0xFFF2F2F7);
   static const Color _cardColor = Colors.white;
   static const Color _iconBlue = Color(0xFF0A84FF);
-  static const Color _iconStar = Color(0xFFFFCC00);
-  static const Color _iconInfo = Color(0xFF5856D6);
   static const Color _logoutButtonTextColor = Color(0xFFE53935);
   static const Color _logoutButtonBackgroundColor = Color(0xFFFFEBEE);
-
-  static const TextStyle _appBarTextStyle = TextStyle(
-    color: Colors.black,
-    fontSize: 17,
-    fontWeight: FontWeight.w600,
-  );
 
   static const TextStyle _sectionTitleStyle = TextStyle(
     color: Color(0xFF6D6D72),
@@ -269,9 +262,7 @@ class _AppSettingsState extends State<AppSettings> {
 
   Widget _buildLogoutButton(BuildContext context) {
     return TextButton(
-      onPressed: () {
-        // _showLogoutConfirmDialog(context);
-      },
+      onPressed: () => _signOut(context),
       style: TextButton.styleFrom(
         backgroundColor: _logoutButtonBackgroundColor,
         foregroundColor: _logoutButtonTextColor,
@@ -280,6 +271,52 @@ class _AppSettingsState extends State<AppSettings> {
       ),
       child: const Text('退出登录', style: _logoutTextStyle),
     );
+  }
+
+  /// 退出登录
+  Future<void> _signOut(BuildContext context) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('确认退出'),
+        content: const Text('您确定要退出登录吗？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('取消'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('退出'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        final supabase = Supabase.instance.client;
+        await supabase.auth.signOut();
+
+        if (context.mounted) {
+          // 返回登录页面并清除所有路由栈
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (context) => const LoginPage()),
+            (route) => false,
+          );
+        }
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('退出失败: $e')),
+          );
+        }
+      }
+    }
   }
 
   Widget _buildSettingsTile({

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../../database/medical_record_helper.dart';
-import '../../database/reminder_helper.dart';
+import '../../services/supabase_service.dart';
 
 /// 添加/编辑疫苗提醒
 class AddVaccineReminderPage extends StatefulWidget {
@@ -16,7 +15,7 @@ class AddVaccineReminderPage extends StatefulWidget {
 class _AddVaccineReminderPageState extends State<AddVaccineReminderPage> {
   final _formKey = GlobalKey<FormState>();
 
-  int? _selectedPetId;
+  String? _selectedPetId;
   String? _selectedPetName;
   String _vaccineName = '';
   DateTime _injectionDate = DateTime.now();
@@ -27,6 +26,7 @@ class _AddVaccineReminderPageState extends State<AddVaccineReminderPage> {
   List<Map<String, dynamic>> _pets = [];
   bool _isLoading = false;
   bool _useTemplate = false;
+  final SupabaseService _supabaseService = SupabaseService();
 
   final List<String> _commonVaccines = ['猫三联', '狂犬疫苗', '犬八联', '犬六联', '自定义'];
 
@@ -38,7 +38,8 @@ class _AddVaccineReminderPageState extends State<AddVaccineReminderPage> {
   }
 
   Future<void> _loadPets() async {
-    final pets = await MedicalRecordHelper.instance.getAllPets();
+    final pets = await _supabaseService.getAllPets();
+    if (!mounted) return;
     setState(() {
       _pets = pets;
     });
@@ -47,8 +48,8 @@ class _AddVaccineReminderPageState extends State<AddVaccineReminderPage> {
   void _loadExistingData() {
     if (widget.existingReminder != null) {
       final data = widget.existingReminder!;
-      _selectedPetId = data['pet_id'] as int;
-      _selectedPetName = data['pet_name'] as String;
+      _selectedPetId = data['pet_id'] as String?;
+      _selectedPetName = data['pet_name'] as String?;
       _vaccineName = data['vaccine_name'] as String;
       _injectionDate = DateTime.parse(data['injection_date'] as String);
       _doseType = data['dose_type'] as String;
@@ -75,7 +76,18 @@ class _AddVaccineReminderPageState extends State<AddVaccineReminderPage> {
     try {
       if (_useTemplate) {
         // 使用智能模板创建疫苗计划
-        await _createVaccineTemplate();
+        final templateSuccess = await _createVaccineTemplate();
+        if (!templateSuccess) {
+          if (mounted) {
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(const SnackBar(
+              content: Text('保存失败，请检查网络连接'),
+              backgroundColor: Colors.red,
+            ));
+          }
+          return;
+        }
       } else {
         // 创建单个疫苗记录
         final data = {
@@ -89,11 +101,25 @@ class _AddVaccineReminderPageState extends State<AddVaccineReminderPage> {
           'status': 'upcoming',
         };
 
+        bool success = false;
         if (widget.existingReminder != null) {
           data['id'] = widget.existingReminder!['id'];
-          await ReminderHelper.instance.updateVaccineReminder(data);
+          success = await _supabaseService.updateVaccineReminder(data);
         } else {
-          await ReminderHelper.instance.createVaccineReminder(data);
+          final result = await _supabaseService.insertVaccineReminder(data);
+          success = result != null;
+        }
+
+        if (!success) {
+          if (mounted) {
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(const SnackBar(
+              content: Text('保存失败，请检查网络连接'),
+              backgroundColor: Colors.red,
+            ));
+          }
+          return;
         }
       }
 
@@ -104,7 +130,10 @@ class _AddVaccineReminderPageState extends State<AddVaccineReminderPage> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('保存失败: $e')));
+        ).showSnackBar(const SnackBar(
+          content: Text('保存失败，请检查网络连接'),
+          backgroundColor: Colors.red,
+        ));
       }
     } finally {
       setState(() {
@@ -113,23 +142,22 @@ class _AddVaccineReminderPageState extends State<AddVaccineReminderPage> {
     }
   }
 
-  Future<void> _createVaccineTemplate() async {
-    final pet = _pets.firstWhere((p) => p['id'] == _selectedPetId);
-    final petType = pet['type'] as String;
+  Future<bool> _createVaccineTemplate() async {
+    // 这里可按宠物类型决定模板，目前仅演示单条插入
 
-    String templateType = 'adult';
-    if (petType == '狗' || petType == '猫') {
-      // 简单判断：可以根据年龄判断是否幼宠
-      templateType = petType == '狗' ? 'puppy' : 'kitten';
-    }
+    // 简单判断是否幼宠（目前未使用，可按需拓展逻辑）
 
-    await ReminderHelper.instance.createVaccineTemplate(
-      petId: _selectedPetId!,
-      petName: _selectedPetName!,
-      vaccineName: _vaccineName,
-      firstDoseDate: _injectionDate,
-      templateType: templateType,
-    );
+    final result = await _supabaseService.insertVaccineReminder({
+      'pet_id': _selectedPetId,
+      'pet_name': _selectedPetName,
+      'vaccine_name': _vaccineName,
+      'injection_date': _injectionDate.toIso8601String(),
+      'dose_type': _doseType,
+      'next_due_date': _injectionDate.add(const Duration(days: 21)).toIso8601String(),
+      'notes': _notesController.text.isEmpty ? null : _notesController.text,
+      'status': 'upcoming',
+    });
+    return result != null;
   }
 
   @override
@@ -219,7 +247,7 @@ class _AddVaccineReminderPageState extends State<AddVaccineReminderPage> {
   }
 
   Widget _buildPetSelector() {
-    return DropdownButtonFormField<int>(
+    return DropdownButtonFormField<String>(
       value: _selectedPetId,
       decoration: const InputDecoration(
         labelText: '选择宠物 *',
@@ -227,17 +255,18 @@ class _AddVaccineReminderPageState extends State<AddVaccineReminderPage> {
         filled: true,
         fillColor: Colors.white,
       ),
-      items: _pets.map((pet) {
-        return DropdownMenuItem<int>(
-          value: pet['id'] as int,
-          child: Text(pet['name'] as String),
-        );
-      }).toList(),
+      items: _pets
+          .map((pet) => DropdownMenuItem<String>(
+                value: pet['id']?.toString(),
+                child: Text(pet['name'] as String),
+              ))
+          .toList(),
       onChanged: (value) {
         setState(() {
           _selectedPetId = value;
-          _selectedPetName =
-              _pets.firstWhere((pet) => pet['id'] == value)['name'] as String;
+          _selectedPetName = _pets
+              .firstWhere((pet) => pet['id']?.toString() == value)['name']
+              as String;
         });
       },
       validator: (value) => value == null ? '请选择宠物' : null,

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../../models/expense.dart';
-import '../../database/expense_helper.dart';
+import '../../services/supabase_service.dart';
 
 /// 统计分析页面
 class ExpenseStatisticsPage extends StatefulWidget {
@@ -12,6 +12,7 @@ class ExpenseStatisticsPage extends StatefulWidget {
 }
 
 class _ExpenseStatisticsPageState extends State<ExpenseStatisticsPage> {
+  final SupabaseService _supabaseService = SupabaseService();
   String _selectedPeriod = 'month'; // 'month' 或 'year'
   Map<String, double> _statistics = {};
   double _totalAmount = 0.0;
@@ -30,25 +31,33 @@ class _ExpenseStatisticsPageState extends State<ExpenseStatisticsPage> {
     });
 
     try {
+      // 优先从 Supabase 加载
+      final expensesData = await _supabaseService.getAllExpenses();
+      final expenses = expensesData.map((e) => Expense.fromMap(e)).toList();
+      
       final now = DateTime.now();
-      String startDate, endDate;
+      DateTime startDate, endDate;
 
       if (_selectedPeriod == 'month') {
-        startDate = '${now.year}-${now.month.toString().padLeft(2, '0')}-01';
-        endDate = '${now.year}-${now.month.toString().padLeft(2, '0')}-31';
+        startDate = DateTime(now.year, now.month, 1);
+        endDate = DateTime(now.year, now.month + 1, 0);
       } else {
-        startDate = '${now.year}-01-01';
-        endDate = '${now.year}-12-31';
+        startDate = DateTime(now.year, 1, 1);
+        endDate = DateTime(now.year, 12, 31);
       }
 
-      final statistics = await ExpenseHelper.instance.getCategoryStatistics(
-        startDate,
-        endDate,
-      );
-
+      // 前端计算分类统计
+      Map<String, double> statistics = {};
       double total = 0.0;
-      for (var amount in statistics.values) {
-        total += amount;
+      
+      for (final expense in expenses) {
+        final expenseDate = DateTime.parse(expense.date);
+        if (expenseDate.isAfter(startDate.subtract(const Duration(days: 1))) &&
+            expenseDate.isBefore(endDate.add(const Duration(days: 1)))) {
+          statistics[expense.category] = 
+              (statistics[expense.category] ?? 0.0) + expense.amount;
+          total += expense.amount;
+        }
       }
 
       if (mounted) {

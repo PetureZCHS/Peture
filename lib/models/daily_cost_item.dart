@@ -1,6 +1,6 @@
 /// 宠物消费品日均成本数据模型
 class DailyCostItem {
-  final int? id;
+  final String? id; // 改为 String? 以支持 Supabase UUID
   final String itemName; // 物品名称
   final double totalPrice; // 总价格
   final String purchaseDate; // 购买日期（格式：yyyy-MM-dd）
@@ -62,7 +62,7 @@ class DailyCostItem {
   /// 从 Map 创建对象（从数据库读取）
   factory DailyCostItem.fromMap(Map<String, dynamic> map) {
     return DailyCostItem(
-      id: map['id'] as int?,
+      id: map['id']?.toString(), // 支持 int 和 String
       itemName: map['itemName'] as String,
       totalPrice: (map['totalPrice'] as num).toDouble(),
       purchaseDate: map['purchaseDate'] as String,
@@ -77,7 +77,7 @@ class DailyCostItem {
 
   /// 复制对象（用于编辑）
   DailyCostItem copyWith({
-    int? id,
+    String? id,
     String? itemName,
     double? totalPrice,
     String? purchaseDate,

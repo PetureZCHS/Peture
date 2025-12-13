@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 // 添加数据库助手导入
 import 'services/supabase_service.dart';
 import 'models/pet.dart';
+import 'home_screen.dart'; // 导入 DataChangeNotifier
 
 // =========================================================
 // 1. 设计系统 (无改动)
@@ -157,7 +158,7 @@ class PetProfile {
 }
 
 class MedicalRecord extends HealthEvent {
-  final int? id;
+  final String? id; // 改为 String? 以支持 UUID
   final String description;
   MedicalRecord({this.id, required String date, required this.description})
       : super(date);
@@ -167,10 +168,16 @@ class MedicalRecord extends HealthEvent {
   }
 
   factory MedicalRecord.fromMap(Map<String, dynamic> map) {
+    // 处理 id：支持 int、String 和 null，统一转换为 String
+    String? id;
+    if (map['id'] != null) {
+      id = map['id'].toString();
+    }
+    
     return MedicalRecord(
-      id: map['id'] as int?,
-      date: map['date'] as String,
-      description: map['description'] as String,
+      id: id,
+      date: map['date']?.toString() ?? '',
+      description: map['description']?.toString() ?? '',
     );
   }
 
@@ -181,7 +188,7 @@ class MedicalRecord extends HealthEvent {
 }
 
 class DailyReminder {
-  final int? id;
+  final String? id; // 改为 String? 以支持 UUID
   final String time;
   final String task;
   DailyReminder({this.id, required this.time, required this.task});
@@ -191,10 +198,16 @@ class DailyReminder {
   }
 
   factory DailyReminder.fromMap(Map<String, dynamic> map) {
+    // 处理 id：支持 int、String 和 null，统一转换为 String
+    String? id;
+    if (map['id'] != null) {
+      id = map['id'].toString();
+    }
+    
     return DailyReminder(
-      id: map['id'] as int?,
-      time: map['time'] as String,
-      task: map['task'] as String,
+      id: id,
+      time: map['time']?.toString() ?? '',
+      task: map['task']?.toString() ?? '',
     );
   }
 
@@ -205,7 +218,7 @@ class DailyReminder {
 }
 
 class WeightRecord extends HealthEvent {
-  final int? id;
+  final String? id; // 改为 String? 以支持 UUID
   final double weight;
   final String? notes;
   WeightRecord({
@@ -220,11 +233,27 @@ class WeightRecord extends HealthEvent {
   }
 
   factory WeightRecord.fromMap(Map<String, dynamic> map) {
+    // 处理 id：支持 int、String 和 null，统一转换为 String
+    String? id;
+    if (map['id'] != null) {
+      id = map['id'].toString();
+    }
+    
+    // 处理 weight：支持 int 和 double
+    double weightValue;
+    if (map['weight'] is double) {
+      weightValue = map['weight'] as double;
+    } else if (map['weight'] is int) {
+      weightValue = (map['weight'] as int).toDouble();
+    } else {
+      weightValue = double.tryParse(map['weight']?.toString() ?? '0') ?? 0.0;
+    }
+    
     return WeightRecord(
-      id: map['id'] as int?,
-      date: map['date'] as String,
-      weight: map['weight'] as double,
-      notes: map['notes'] as String?,
+      id: id,
+      date: map['date']?.toString() ?? '',
+      weight: weightValue,
+      notes: map['notes']?.toString(),
     );
   }
 
@@ -243,7 +272,7 @@ class WeightRecord extends HealthEvent {
 }
 
 class VaccineRecord extends HealthEvent {
-  final int? id;
+  final String? id; // 改为 String? 以支持 UUID
   final String type;
   final String name;
   final String nextDueDate;
@@ -266,12 +295,25 @@ class VaccineRecord extends HealthEvent {
   }
 
   factory VaccineRecord.fromMap(Map<String, dynamic> map) {
+    // 处理 id：支持 int、String 和 null，统一转换为 String
+    String? id;
+    if (map['id'] != null) {
+      id = map['id'].toString();
+    }
+    
+    // 处理字段名：支持 camelCase 和 snake_case
+    final date = map['date']?.toString() ?? '';
+    final type = map['type']?.toString() ?? '';
+    final name = map['name']?.toString() ?? '';
+    final nextDueDate = map['nextDueDate']?.toString() ?? 
+                       map['next_due_date']?.toString() ?? '';
+    
     return VaccineRecord(
-      id: map['id'] as int?,
-      date: map['date'] as String,
-      type: map['type'] as String,
-      name: map['name'] as String,
-      nextDueDate: map['nextDueDate'] as String,
+      id: id,
+      date: date,
+      type: type,
+      name: name,
+      nextDueDate: nextDueDate,
     );
   }
 
@@ -358,6 +400,17 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // 每次页面可见时刷新数据，确保宠物列表是最新的
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _loadAllData();
+      }
+    });
+  }
+
+  @override
   void dispose() {
     widget.refreshNotifier?.removeListener(_onRefreshRequested);
     super.dispose();
@@ -378,14 +431,33 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> {
     final pets = await _supabaseService.getAllPets();
     if (!mounted) return; // 异步操作后检查是否仍然挂载
 
-    _allPets = pets.map((p) => Pet.fromMap(p)).toList();
+    print('医疗记录页面：加载到 ${pets.length} 个宠物');
+    for (var pet in pets) {
+      print('  - ${pet['name']} (id: ${pet['id']})');
+    }
 
-    // 设置默认选中的宠物
-    if (_allPets.isNotEmpty) {
-      setState(() {
-        _selectedPet = _allPets.first;
-      });
-      // 加载选中宠物的数据
+    setState(() {
+      _allPets = pets.map((p) => Pet.fromMap(p)).toList();
+      
+      print('医疗记录页面：_allPets 长度 = ${_allPets.length}');
+      
+      // 设置默认选中的宠物
+      if (_allPets.isNotEmpty) {
+        // 如果当前没有选中的宠物，或者当前选中的宠物不在列表中，则选择第一个
+        if (_selectedPet == null || 
+            !_allPets.any((pet) => pet.id?.toString() == _selectedPet?.id?.toString())) {
+          _selectedPet = _allPets.first;
+          print('医疗记录页面：选择第一个宠物 ${_selectedPet?.name}');
+        } else {
+          print('医疗记录页面：保持当前选中的宠物 ${_selectedPet?.name}');
+        }
+      } else {
+        _selectedPet = null;
+      }
+    });
+    
+    // 加载选中宠物的数据
+    if (_selectedPet != null) {
       await _loadDataForSelectedPet();
     } else {
       // 如果没有宠物，则加载默认数据
@@ -398,29 +470,48 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> {
 
     final petId = _selectedPet!.id!;
 
-    // 加载病历记录
-    final records =
-        await _supabaseService.getMedicalRecordsForPet(petId.toString());
-    _records = records.map((r) => MedicalRecord.fromMap(r)).toList();
+    try {
+      // 加载病历记录
+      final records =
+          await _supabaseService.getMedicalRecordsForPet(petId.toString());
+      _records = records.map((r) {
+        try {
+          return MedicalRecord.fromMap(r);
+        } catch (e) {
+          print('解析病历记录失败: $e, 数据: $r');
+          rethrow;
+        }
+      }).toList();
 
-    // 加载提醒事项
-    final reminders =
-        await _supabaseService.getDailyRemindersForPet(petId.toString());
-    _reminders = reminders.map((r) => DailyReminder.fromMap(r)).toList();
+      // 加载提醒事项
+      final reminders =
+          await _supabaseService.getDailyRemindersForPet(petId.toString());
+      _reminders = reminders.map((r) => DailyReminder.fromMap(r)).toList();
 
-    // 加载体重记录
-    final weightRecords =
-        await _supabaseService.getWeightRecordsForPet(petId.toString());
-    _weightRecords = weightRecords.map((r) => WeightRecord.fromMap(r)).toList();
+      // 加载体重记录
+      final weightRecords =
+          await _supabaseService.getWeightRecordsForPet(petId.toString());
+      _weightRecords = weightRecords.map((r) => WeightRecord.fromMap(r)).toList();
 
-    // 加载疫苗记录
-    final vaccineRecords = await _supabaseService.getVaccineRecordsForPet(
-      petId.toString(),
-    );
-    _vaccineRecords =
-        vaccineRecords.map((r) => VaccineRecord.fromMap(r)).toList();
+      // 加载疫苗记录
+      final vaccineRecords = await _supabaseService.getVaccineRecordsForPet(
+        petId.toString(),
+      );
+      _vaccineRecords =
+          vaccineRecords.map((r) => VaccineRecord.fromMap(r)).toList();
 
-    _compileAndSortHealthLog();
+      _compileAndSortHealthLog();
+      
+      // 更新UI
+      if (mounted) {
+        setState(() {});
+      }
+    } catch (e) {
+      print('加载宠物数据失败: $e');
+      if (mounted) {
+        _showErrorSnackBar('加载数据失败，请检查网络连接');
+      }
+    }
   }
 
   Future<void> _loadDefaultData() async {
@@ -439,7 +530,9 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> {
   void _compileAndSortHealthLog() {
     _healthLog = [..._records, ..._weightRecords, ..._vaccineRecords];
     _healthLog.sort((a, b) => b.date.compareTo(a.date));
-    setState(() {});
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   String _getLatestWeight() {
@@ -513,11 +606,65 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> {
     if (newId != null) {
       recordMap['id'] = newId;
       final recordWithPetId = WeightRecord.fromMap(recordMap);
-      _weightRecords.add(recordWithPetId);
+      setState(() {
+        _weightRecords.add(recordWithPetId);
+      });
       _compileAndSortHealthLog();
+      
+      // 同步更新宠物档案中的体重
+      await _syncPetWeight();
+      
       if (mounted) _showSuccessSnackBar('体重记录成功!');
     } else {
       if (mounted) _showSuccessSnackBar('体重记录失败，请检查网络连接');
+    }
+  }
+
+  /// 同步更新宠物档案中的体重（使用最新的体重记录）
+  Future<void> _syncPetWeight() async {
+    if (_selectedPet == null || _selectedPet!.id == null) return;
+    
+    try {
+      double? latestWeight;
+      
+      // 获取最新的体重记录
+      if (_weightRecords.isNotEmpty) {
+        final sortedWeights = [..._weightRecords];
+        sortedWeights.sort((a, b) => b.date.compareTo(a.date));
+        latestWeight = sortedWeights.first.weight;
+      } else {
+        // 如果没有体重记录，设置为 null
+        latestWeight = null;
+      }
+      
+      // 更新宠物档案中的体重
+      final petMap = _selectedPet!.toMap();
+      petMap['weight'] = latestWeight;
+      
+      print('同步宠物体重: ${_selectedPet!.name} -> $latestWeight kg');
+      
+      final success = await _supabaseService.updatePet(petMap);
+      if (success) {
+        print('宠物体重同步成功');
+        // 更新本地宠物对象
+        if (mounted) {
+          setState(() {
+            _selectedPet = Pet.fromMap({...petMap, 'id': _selectedPet!.id});
+            // 同时更新 _allPets 列表中的对应宠物
+            final petIndex = _allPets.indexWhere((p) => p.id == _selectedPet!.id);
+            if (petIndex != -1) {
+              _allPets[petIndex] = _selectedPet!;
+            }
+          });
+        }
+        
+        // 通知全局数据变更
+        DataChangeNotifier.markPetDataChanged();
+      } else {
+        print('宠物体重同步失败');
+      }
+    } catch (e) {
+      print('同步宠物体重时出错: $e');
     }
   }
 
@@ -563,8 +710,14 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> {
         record.id.toString(),
       );
       if (success) {
-        _weightRecords.remove(record);
+        setState(() {
+          _weightRecords.remove(record);
+        });
         _compileAndSortHealthLog();
+        
+        // 同步更新宠物档案中的体重（删除后使用最新的体重记录）
+        await _syncPetWeight();
+        
         if (mounted) _showSuccessSnackBar('体重记录已删除!');
       } else {
         if (mounted) _showSuccessSnackBar('体重记录删除失败，请检查网络连接');
@@ -607,9 +760,14 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> {
 
   // --- 新的宠物选择器方法 ---
   void _toggleSelectorExpansion() {
-    if (_allPets.length <= 1) return;
+    print('医疗记录页面：点击切换选择器 - 当前状态: $_isSelectorExpanded, 宠物数: ${_allPets.length}');
+    if (_allPets.length <= 1) {
+      print('医疗记录页面：宠物数 <= 1，不展开');
+      return;
+    }
     setState(() {
       _isSelectorExpanded = !_isSelectorExpanded;
+      print('医疗记录页面：切换后状态: $_isSelectorExpanded');
     });
   }
 
@@ -624,11 +782,40 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> {
 
   Widget _buildExpandedPetSelector() {
     // 过滤出除当前选中宠物外的其他宠物
-    final availablePets =
-        _allPets.where((pet) => pet.id != _selectedPet?.id).toList();
+    // 使用 toString() 确保正确比较，并处理 null 值
+    final selectedPetId = _selectedPet?.id?.toString();
+    print('医疗记录页面：展开选择器 - 当前选中宠物: ${_selectedPet?.name} (ID: $selectedPetId)');
+    print('医疗记录页面：展开选择器 - 总宠物数: ${_allPets.length}');
+    for (var pet in _allPets) {
+      print('  宠物列表: ${pet.name} (id: ${pet.id?.toString()})');
+    }
+    
+    final availablePets = _allPets.where((pet) {
+      final petId = pet.id?.toString();
+      final isMatch = petId != null && petId != selectedPetId;
+      print('  检查宠物 ${pet.name} (id: $petId): ${isMatch ? "显示" : "隐藏"} (选中ID: $selectedPetId)');
+      return isMatch;
+    }).toList();
+
+    print('医疗记录页面：展开选择器 - 可用宠物数: ${availablePets.length}');
+    for (var pet in availablePets) {
+      print('  可用宠物: ${pet.name}');
+    }
 
     if (availablePets.isEmpty) {
-      return const SizedBox.shrink();
+      print('医疗记录页面：没有可用宠物，隐藏选择器');
+      return Container(
+        margin: const EdgeInsets.only(top: 8),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppTheme.surface,
+          borderRadius: BorderRadius.circular(AppTheme.borderRadius),
+        ),
+        child: Text(
+          '没有其他宠物可切换',
+          style: AppTheme.bodyText.copyWith(color: AppTheme.textSecondary),
+        ),
+      );
     }
 
     return Container(
@@ -645,6 +832,7 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> {
         ],
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children:
             availablePets.map((pet) => _buildPetSelectorItem(pet)).toList(),
       ),
@@ -919,14 +1107,7 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> {
           ),
         ),
         // 展开的宠物选择器
-        AnimatedCrossFade(
-          duration: const Duration(milliseconds: 300),
-          crossFadeState: _isSelectorExpanded
-              ? CrossFadeState.showSecond
-              : CrossFadeState.showFirst,
-          firstChild: const SizedBox.shrink(),
-          secondChild: _buildExpandedPetSelector(),
-        ),
+        if (_isSelectorExpanded) _buildExpandedPetSelector(),
       ],
     );
   }
@@ -1983,6 +2164,15 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> {
                         _weightRecords[index] = updatedRecord;
                       });
                       _compileAndSortHealthLog();
+                      
+                      // 同步更新宠物档案中的体重
+                      await _syncPetWeight();
+                      
+                      // 强制刷新UI，确保顶部体重显示更新
+                      if (mounted) {
+                        setState(() {});
+                      }
+                      
                       if (mounted) _showSuccessSnackBar('体重记录更新成功!');
                     }
                   } catch (e) {
@@ -2292,6 +2482,18 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> {
           ),
         ) ??
         false;
+  }
+
+  void _showErrorSnackBar(String message) {
+    if (!mounted) return;
+    HapticFeedback.lightImpact();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
   void _showSuccessSnackBar(String message) {

@@ -176,7 +176,7 @@ class PetPassportHelper {
     }).toList();
 
     return PetPassport(
-      id: passportId,
+      id: passportId.toString(), // 转换为 String
       petId: passportData['pet_id'] as String,
       photoPath: passportData['photo_path'] as String?,
       ownerName: passportData['owner_name'] as String?,
@@ -228,7 +228,7 @@ class PetPassportHelper {
 
       passports.add(
         PetPassport(
-          id: passportId,
+          id: passportId.toString(), // 转换为 String
           petId: passportData['pet_id'] as String,
           photoPath: passportData['photo_path'] as String?,
           ownerName: passportData['owner_name'] as String?,

@@ -8,6 +8,7 @@ import 'settings_page.dart';
 import 'pages/unified_expense/unified_expense_home_page.dart';
 import 'pages/reminder/intelligent_reminder_page.dart';
 import 'pages/pet_profile_form_page.dart';
+import 'account_settings_page.dart';
 import 'utils/ui_helpers.dart';
 import 'home_screen.dart' show DataChangeNotifier;
 
@@ -49,8 +50,36 @@ class AppSpaces {
 // =========================================================
 // 主个人主页屏幕
 // =========================================================
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
+
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  final _supabaseService = SupabaseService();
+  String? _userNickname;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserNickname();
+  }
+
+  /// 加载用户昵称
+  Future<void> _loadUserNickname() async {
+    try {
+      final profile = await _supabaseService.getUserProfile();
+      if (mounted) {
+        setState(() {
+          _userNickname = profile?['nickname'] as String?;
+        });
+      }
+    } catch (e) {
+      debugPrint('加载用户昵称失败: $e');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -92,20 +121,28 @@ class ProfileScreen extends StatelessWidget {
   }
 
   Widget _buildHeader(BuildContext context) {
-    // TODO: 从用户数据库或SharedPreferences中获取用户昵称
-    final String userNickname = ''; // 暂时为空，需要接入数据库
+    final String userNickname = _userNickname ?? '';
     final String displayName = userNickname.isEmpty ? '点击设置昵称' : userNickname;
-    final String avatarText = userNickname.isEmpty ? '?' : userNickname[0];
+    final String avatarText = userNickname.isEmpty 
+        ? '?' 
+        : (userNickname.length > 0 ? userNickname[0].toUpperCase() : '?');
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         GestureDetector(
-          onTap: () {
-            // TODO: 跳转到设置昵称页面
-            ScaffoldMessenger.of(
+          onTap: () async {
+            // 跳转到账户设置页面
+            final result = await Navigator.push(
               context,
-            ).showSnackBar(const SnackBar(content: Text('昵称设置功能开发中...')));
+              MaterialPageRoute(
+                builder: (context) => const AccountSettingsPage(),
+              ),
+            );
+            // 返回后刷新昵称
+            if (result == true || mounted) {
+              _loadUserNickname();
+            }
           },
           child: Row(
             children: [
@@ -361,6 +398,15 @@ class _PetProfileSectionState extends State<PetProfileSection> {
     _loadPets();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // 每次页面可见时检查是否需要刷新
+    if (DataChangeNotifier.checkAndReset()) {
+      _loadPets();
+    }
+  }
+
   Future<void> _loadPets() async {
     final List<Map<String, dynamic>> petsData =
         await _supabaseService.getAllPets();
@@ -405,7 +451,11 @@ class _PetProfileSectionState extends State<PetProfileSection> {
         if (mounted) {
           ScaffoldMessenger.of(
             context,
-          ).showSnackBar(const SnackBar(content: Text('宠物档案添加失败，请检查网络连接')));
+          ).showSnackBar(const SnackBar(
+            content: Text('保存失败，请检查网络连接'),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 3),
+          ));
         }
       }
     }).catchError((error, stackTrace) {
@@ -417,21 +467,27 @@ class _PetProfileSectionState extends State<PetProfileSection> {
 
       // 检查是否是数据库约束错误（可能是 user_id 类型不匹配）
       final errorStr = error.toString().toLowerCase();
-      String errorMessage = '添加失败，请检查终端日志';
+      String errorMessage = '保存失败，请检查网络连接';
 
       if (errorStr.contains('foreign key') || errorStr.contains('user_id')) {
-        errorMessage = '添加失败：用户ID格式错误，请重新登录';
+        errorMessage = '保存失败：用户ID格式错误，请重新登录';
       } else if (errorStr.contains('null') || errorStr.contains('not null')) {
-        errorMessage = '添加失败：缺少必要字段';
+        errorMessage = '保存失败：缺少必要字段';
       } else if (errorStr.contains('network') ||
-          errorStr.contains('connection')) {
-        errorMessage = '添加失败，请检查网络连接';
+          errorStr.contains('connection') ||
+          errorStr.contains('timeout') ||
+          errorStr.contains('failed')) {
+        errorMessage = '保存失败，请检查网络连接';
       }
 
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text(errorMessage)));
+        ).showSnackBar(SnackBar(
+          content: Text(errorMessage),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 3),
+        ));
       }
     });
   }
@@ -848,6 +904,86 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage> {
     _currentPet = widget.pet;
   }
 
+  /// 删除宠物
+  Future<void> _deletePet(BuildContext context) async {
+    // 显示确认对话框
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('确认删除'),
+          content: Text('确定要删除 ${_currentPet.name} 的档案吗？此操作不可恢复。'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('取消'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.red,
+              ),
+              child: const Text('删除'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) {
+      return; // 用户取消删除
+    }
+
+    // 执行删除操作
+    try {
+      final success = await _supabaseService.deletePet(_currentPet.id!);
+      
+      if (success) {
+        // 标记数据已变更
+        DataChangeNotifier.markPetDataChanged();
+        
+        if (mounted) {
+          // 先显示成功提示
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('宠物档案已删除'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 2),
+            ),
+          );
+          
+          // 延迟返回上一页，避免 Navigator 锁定错误
+          await Future.delayed(const Duration(milliseconds: 100));
+          
+          if (mounted) {
+            // 返回 null 表示已删除，而不是返回 Pet 对象
+            Navigator.of(context).pop(null);
+          }
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('删除失败，请检查网络连接'),
+              backgroundColor: Colors.red,
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('删除失败: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    }
+  }
+
   Widget _buildInfoCard(String label, String value) {
     return Container(
       decoration: BoxDecoration(
@@ -925,6 +1061,10 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage> {
           ),
           actions: [
             IconButton(
+              icon: const Icon(Icons.delete_outline, color: Colors.red),
+              onPressed: () => _deletePet(context),
+            ),
+            IconButton(
               icon: const Icon(Icons.edit, color: AppColors.primary),
               onPressed: () async {
                 final initialData = {
@@ -990,7 +1130,11 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage> {
                     if (!success) {
                       if (mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('更新失败，请检查网络连接')),
+                          const SnackBar(
+                            content: Text('保存失败，请检查网络连接'),
+                            backgroundColor: Colors.red,
+                            duration: Duration(seconds: 3),
+                          ),
                         );
                       }
                       return;
@@ -1009,7 +1153,11 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage> {
                     if (mounted) {
                       ScaffoldMessenger.of(
                         context,
-                      ).showSnackBar(const SnackBar(content: Text('更新失败，请重试')));
+                      ).showSnackBar(const SnackBar(
+                        content: Text('保存失败，请检查网络连接'),
+                        backgroundColor: Colors.red,
+                        duration: Duration(seconds: 3),
+                      ));
                     }
                   }
                 }

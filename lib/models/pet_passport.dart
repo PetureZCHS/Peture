@@ -1,6 +1,6 @@
 /// 宠物身份证模型
 class PetPassport {
-  final int? id;
+  final String? id; // 改为 String? 以支持 Supabase UUID
   final String petId; // 关联的宠物ID
 
   // 基础信息
@@ -89,7 +89,7 @@ class PetPassport {
   }
 
   PetPassport copyWith({
-    int? id,
+    String? id,
     String? petId,
     String? photoPath,
     String? ownerName,
