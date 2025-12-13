@@ -535,18 +535,29 @@ class _HomeDashboardContentState extends State<_HomeDashboardContent> {
 
   /// 搜索功能列表
   static final List<SearchResult> _allSearchItems = [
-    SearchResult('AI智能问诊', 'chat', Icons.chat_bubble_outline, () => const ChatPageWithDatabase()),
-    SearchResult('电子档案', 'passport', Icons.badge_rounded, () => const PetPassportPage()),
-    SearchResult('成长日记', 'diary', Icons.menu_book_rounded, () => const PetDiaryComposePage()),
-    SearchResult('活力健身', 'fitness', Icons.directions_run_rounded, () => const PartnerFitGymPage()),
-    SearchResult('营养食谱', 'recipe', Icons.restaurant_menu_rounded, () => const PetRecipeListPage()),
-    SearchResult('训宠响片', 'clicker', Icons.touch_app_rounded, () => const DogClickerScreen()),
-    SearchResult('宠物商城', 'shop', Icons.shopping_bag_rounded, () => const PetShopPage()),
-    SearchResult('医疗记录', 'medical', Icons.medical_services_outlined, () => MedicalRecordScreen(refreshNotifier: ValueNotifier<int>(0))),
-    SearchResult('宠物消费', 'expense', Icons.account_balance_wallet, () => const UnifiedExpenseHomePage()),
-    SearchResult('智能提醒', 'reminder', Icons.notifications_active, () => const IntelligentReminderPage()),
+    SearchResult('AI智能问诊', 'chat', Icons.chat_bubble_outline,
+        () => const ChatPageWithDatabase()),
+    SearchResult(
+        '电子档案', 'passport', Icons.badge_rounded, () => const PetPassportPage()),
+    SearchResult('成长日记', 'diary', Icons.menu_book_rounded,
+        () => const PetDiaryComposePage()),
+    SearchResult('活力健身', 'fitness', Icons.directions_run_rounded,
+        () => const PartnerFitGymPage()),
+    SearchResult('营养食谱', 'recipe', Icons.restaurant_menu_rounded,
+        () => const PetRecipeListPage()),
+    SearchResult('训宠响片', 'clicker', Icons.touch_app_rounded,
+        () => const DogClickerScreen()),
+    SearchResult(
+        '宠物商城', 'shop', Icons.shopping_bag_rounded, () => const PetShopPage()),
+    SearchResult('医疗记录', 'medical', Icons.medical_services_outlined,
+        () => MedicalRecordScreen(refreshNotifier: ValueNotifier<int>(0))),
+    SearchResult('宠物消费', 'expense', Icons.account_balance_wallet,
+        () => const UnifiedExpenseHomePage()),
+    SearchResult('智能提醒', 'reminder', Icons.notifications_active,
+        () => const IntelligentReminderPage()),
     SearchResult('宠物档案', 'profile', Icons.pets, () => const ProfileScreen()),
-    SearchResult('社区话题', 'community', Icons.forum_outlined, () => const CommunityScreen()),
+    SearchResult('社区话题', 'community', Icons.forum_outlined,
+        () => const CommunityScreen()),
     SearchResult('设置', 'settings', Icons.settings, () => const SettingsPage()),
   ];
 
@@ -593,8 +604,8 @@ class _HomeDashboardContentState extends State<_HomeDashboardContent> {
       children: [
         ListView(
           // [关键点1] 强制开启滚动物理效果，即使内容少也能滑动
-          physics:
-              const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+          physics: const AlwaysScrollableScrollPhysics(
+              parent: BouncingScrollPhysics()),
 
           // [关键点2] 增加底部 Padding (130)，确保内容不被悬浮导航栏遮挡，且预留滑动空间
           padding: EdgeInsets.fromLTRB(20, topPadding + 60, 20, 130),
@@ -606,77 +617,83 @@ class _HomeDashboardContentState extends State<_HomeDashboardContent> {
             // 1. AI 智能问诊 (修复版：文字完整显示)
             _buildHeroAiCard(context),
 
-        const SizedBox(height: 16),
+            const SizedBox(height: 16),
 
-        // 1.5 体重趋势卡片
-        const WeightTrendCard(),
+            // 1.5 体重趋势卡片
+            const WeightTrendCard(),
 
-        const SizedBox(height: 16),
+            const SizedBox(height: 16),
 
-        // 2. 功能网格
-        LayoutBuilder(
-          builder: (context, constraints) {
-            double width = (constraints.maxWidth - 12) / 2;
-            return Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: [
-                _buildFeatureCard(width, '电子档案', 'Vaccine', Icons.badge_rounded,
-                    AppColors.coolGradient, const PetPassportPage()),
-                _buildFeatureCard(
-                    width,
-                    '成长日记',
-                    'Diary',
-                    Icons.menu_book_rounded,
-                    AppColors.natureGradient,
-                    const PetDiaryComposePage()),
-                _buildFeatureCard(
-                    width,
-                    '活力健身',
-                    'Fitness',
-                    Icons.directions_run_rounded,
-                    AppColors.oceanGradient,
-                    const PartnerFitGymPage()),
-                _buildFeatureCard(
-                    width,
-                    '营养食谱',
-                    'Food',
-                    Icons.restaurant_menu_rounded,
-                    AppColors.goldGradient,
-                    const PetRecipeListPage()),
-                _buildFeatureCard(
-                    width,
-                    '训宠响片',
-                    'Training',
-                    Icons.touch_app_rounded,
-                    AppColors.magicGradient,
-                    const DogClickerScreen()),
-                _buildFeatureCard(
-                    width,
-                    '宠物商城',
-                    'Shop',
-                    Icons.shopping_bag_rounded,
-                    AppColors.coolGradient,
-                    const PetShopPage()),
-                _buildFeatureCard(
-                    '寻宠救援',
-                    '希望您永远使用不到此功能',
-                    Icons.phonelink_ring_rounded,
-                    const LinearGradient(
-                        colors: [Color(0xFFFF416C), Color(0xFFFF4B2B)]),
-                    const LostPetRescuePage(),
-                    subtitleMaxLines: 2),
-                _buildFeatureCard(
-                    width,
-                    '寻宠互助',
-                    'Emergency',
-                    Icons.campaign_rounded,
-                    AppColors.navTab1,
-                    const CommunityScreen()),
-              ],
-            );
-          },
-        ),
+            // 2. 功能网格
+            LayoutBuilder(
+              builder: (context, constraints) {
+                double width = (constraints.maxWidth - 12) / 2;
+                return Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: [
+                    _buildFeatureCard(
+                        width,
+                        '电子档案',
+                        'Vaccine',
+                        Icons.badge_rounded,
+                        AppColors.coolGradient,
+                        const PetPassportPage()),
+                    _buildFeatureCard(
+                        width,
+                        '成长日记',
+                        'Diary',
+                        Icons.menu_book_rounded,
+                        AppColors.natureGradient,
+                        const PetDiaryComposePage()),
+                    _buildFeatureCard(
+                        width,
+                        '活力健身',
+                        'Fitness',
+                        Icons.directions_run_rounded,
+                        AppColors.oceanGradient,
+                        const PartnerFitGymPage()),
+                    _buildFeatureCard(
+                        width,
+                        '营养食谱',
+                        'Food',
+                        Icons.restaurant_menu_rounded,
+                        AppColors.goldGradient,
+                        const PetRecipeListPage()),
+                    _buildFeatureCard(
+                        width,
+                        '训宠响片',
+                        'Training',
+                        Icons.touch_app_rounded,
+                        AppColors.magicGradient,
+                        const DogClickerScreen()),
+                    _buildFeatureCard(
+                        width,
+                        '宠物商城',
+                        'Shop',
+                        Icons.shopping_bag_rounded,
+                        AppColors.coolGradient,
+                        const PetShopPage()),
+                    _buildFeatureCard(
+                        width,
+                        '寻宠救援',
+                        '希望您永远使用不到此功能',
+                        Icons.phonelink_ring_rounded,
+                        const LinearGradient(
+                            colors: [Color(0xFFFF416C), Color(0xFFFF4B2B)]),
+                        const LostPetRescuePage(),
+                        subtitleMaxLines: 2),
+                    _buildFeatureCard(
+                        width,
+                        '寻宠互助',
+                        'Emergency',
+                        Icons.campaign_rounded,
+                        AppColors.navTab1,
+                        const CommunityScreen()),
+                  ],
+                );
+              },
+            ),
 
             // 3. 底部占位演示 (表明可滑动)
             const SizedBox(height: 30),
@@ -685,11 +702,11 @@ class _HomeDashboardContentState extends State<_HomeDashboardContent> {
                 "更多功能敬请期待...",
                 style: TextStyle(
                   color: AppColors.textGrey.withOpacity(0.5),
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
             ),
-          ),
-        ),
             const SizedBox(height: 20), // 额外留白
           ],
         ),
@@ -721,7 +738,8 @@ class _HomeDashboardContentState extends State<_HomeDashboardContent> {
                   itemBuilder: (context, index) {
                     final result = _searchResults[index];
                     return ListTile(
-                      leading: Icon(result.icon, color: const Color(0xFF5D5FEF)),
+                      leading:
+                          Icon(result.icon, color: const Color(0xFF5D5FEF)),
                       title: Text(result.name),
                       onTap: () => _navigateToResult(result),
                     );
@@ -772,7 +790,8 @@ class _HomeDashboardContentState extends State<_HomeDashboardContent> {
           ),
           filled: true,
           fillColor: Colors.white,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         ),
       ),
     );
