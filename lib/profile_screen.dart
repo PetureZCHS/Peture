@@ -9,7 +9,6 @@ import 'pages/unified_expense/unified_expense_home_page.dart';
 import 'pages/reminder/intelligent_reminder_page.dart';
 import 'pages/pet_profile_form_page.dart';
 import 'utils/ui_helpers.dart';
-import 'home_screen.dart' show DataChangeNotifier;
 
 // =========================================================
 // 全局设计系统 - 美学升级版
@@ -49,17 +48,27 @@ class AppSpaces {
 // =========================================================
 // 主个人主页屏幕
 // =========================================================
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
+
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  String _userNickname = ''; // 用户昵称状态
+
+  void _updateNickname(String newName) {
+    setState(() {
+      _userNickname = newName;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F7), // 添加背景色，与Container的渐变底部颜色一致
       // 🎨 美学升级：径向渐变背景，营造深度与呼吸感
       body: Container(
-        width: double.infinity, // 确保Container填充整个宽度
-        height: double.infinity, // 确保Container填充整个高度
         decoration: const BoxDecoration(
           gradient: RadialGradient(
             center: Alignment.topCenter,
@@ -81,7 +90,7 @@ class ProfileScreen extends StatelessWidget {
                 const SizedBox(height: AppSpaces.sectionSpacing),
                 _buildMedicalRecordsSection(context),
                 const SizedBox(height: AppSpaces.sectionSpacing),
-                const PetProfileSection(),
+                PetProfileSection(onProfileUpdate: _updateNickname),
                 const SizedBox(height: 50),
               ],
             ),
@@ -92,10 +101,9 @@ class ProfileScreen extends StatelessWidget {
   }
 
   Widget _buildHeader(BuildContext context) {
-    // TODO: 从用户数据库或SharedPreferences中获取用户昵称
-    final String userNickname = ''; // 暂时为空，需要接入数据库
-    final String displayName = userNickname.isEmpty ? '点击设置昵称' : userNickname;
-    final String avatarText = userNickname.isEmpty ? '?' : userNickname[0];
+    // 使用状态中的昵称
+    final String displayName = _userNickname.isEmpty ? '点击设置昵称' : _userNickname;
+    final String avatarText = _userNickname.isEmpty ? '?' : _userNickname[0];
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -135,12 +143,12 @@ class ProfileScreen extends StatelessWidget {
                     style: AppStyles.ownerId.copyWith(
                       fontSize: 15,
                       fontWeight: FontWeight.w500,
-                      color: userNickname.isEmpty
+                      color: _userNickname.isEmpty
                           ? AppColors.secondaryText.withOpacity(0.6)
                           : AppColors.primaryText,
                     ),
                   ),
-                  if (userNickname.isEmpty)
+                  if (_userNickname.isEmpty)
                     Text(
                       '轻触设置',
                       style: AppStyles.ownerId.copyWith(
@@ -345,7 +353,9 @@ class _CustomSection extends StatelessWidget {
 // 宠物档案部分
 // =========================================================
 class PetProfileSection extends StatefulWidget {
-  const PetProfileSection({super.key});
+  final Function(String)? onProfileUpdate;
+
+  const PetProfileSection({super.key, this.onProfileUpdate});
 
   @override
   State<PetProfileSection> createState() => _PetProfileSectionState();
@@ -392,8 +402,6 @@ class _PetProfileSectionState extends State<PetProfileSection> {
           setState(() {
             pets.add(petWithId);
           });
-          // 标记数据已变更，切换到健康记录页时需要刷新
-          DataChangeNotifier.markPetDataChanged();
         }
 
         if (mounted) {
@@ -473,8 +481,6 @@ class _PetProfileSectionState extends State<PetProfileSection> {
                       setState(() {
                         pets.removeWhere((pet) => pet.id == petToDelete.id);
                       });
-                      // 标记数据已变更
-                      DataChangeNotifier.markPetDataChanged();
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(content: Text('${petToDelete.name} 的档案已删除')),
                       );
@@ -517,6 +523,12 @@ class _PetProfileSectionState extends State<PetProfileSection> {
                 if (result != null && mounted) {
                   // 从表单页面返回的数据
                   final petData = result as Map<String, dynamic>;
+
+                  // 更新主人昵称
+                  if (petData['owner_name'] != null &&
+                      widget.onProfileUpdate != null) {
+                    widget.onProfileUpdate!(petData['owner_name']);
+                  }
 
                   // 计算年龄（根据出生日期）
                   String age = '1岁0个月';
@@ -941,8 +953,9 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage> {
                 final result = await Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) =>
-                        PetProfileFormPage(initialData: initialData),
+                    builder:
+                        (context) =>
+                            PetProfileFormPage(initialData: initialData),
                   ),
                 );
 
@@ -955,14 +968,9 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage> {
                       final now = DateTime.now();
                       int years = now.year - birthDate.year;
                       int months = now.month - birthDate.month;
-                      // Adjust for month and day
-                      if (months < 0 ||
-                          (months == 0 && now.day < birthDate.day)) {
+                      if (months < 0) {
                         years--;
                         months += 12;
-                      }
-                      if (now.day < birthDate.day && months > 0) {
-                        months--;
                       }
                       age = '${years}岁${months}个月';
                     } catch (e) {
@@ -998,8 +1006,6 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage> {
                     setState(() {
                       _currentPet = updatedPet;
                     });
-                    // 标记数据已变更
-                    DataChangeNotifier.markPetDataChanged();
                     if (mounted) {
                       ScaffoldMessenger.of(
                         context,

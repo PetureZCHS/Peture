@@ -13,6 +13,8 @@ import 'services/supabase_edge_service.dart';
 import 'models/conversation.dart';
 import 'database/database_helper.dart';
 import 'utils/ui_helpers.dart';
+import 'widgets/diagnostic_report_card.dart';
+import 'dart:convert'; // Ensure dart:convert is available for JSON parsing
 // ===============================================
 
 // =======================================================================
@@ -81,9 +83,45 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
   String? _pendingSaveQuestion;
   String _fullResponseText = '';
 
+  bool _isDoctorMode = false; // 默认为普通模式
+
   // ✅ 使用新的 Supabase Edge Function 服务
   final SupabaseEdgeFunctionService _difyService =
       SupabaseEdgeFunctionService();
+
+  static const String _systemPrompt = """
+# System Prompt for Peture AI (Doctor Mode)
+
+## Role
+你现在是 Peture AI 的首席兽医专家。你的目标是通过多轮对话，收集患病宠物的详细信息，并最终给出一份结构化的诊断报告。
+
+## Constraints (核心规则)
+1. **循序渐进**：用户第一次描述病情时，**绝对不要**直接给结论。
+2. **单步追问**：每次回复 **只问 1 个** 最需要厘清的问题（例如：先问频率，再问颜色，最后问精神状态）。禁止一次性抛出多个问题。
+3. **语气风格**：温暖、治愈、专业。使用中文。
+4. **决策时刻**：当你收集了足够的信息（通常在 3-5 轮对话后），或者发现情况危急（如呼吸困难、吞食异物），请立即停止追问，生成诊断单。
+
+## Output Format (输出格式)
+这是一个状态机逻辑：
+
+**状态 A：问诊中**
+直接输出纯文本对话。
+示例："哎呀，听起来宝宝很难受。请问它最后一次进食是什么时候？"
+
+**状态 B：生成诊断**
+当你决定结束问诊时，**仅输出** 以下 JSON 格式的数据，不要包含 Markdown 标记或其他废话：
+
+{
+  "type": "report",
+  "data": {
+    "diagnosis": "这里填写初步判断，如：急性肠胃炎",
+    "urgency_level": 3,  // 1-5的整数，5最紧急
+    "urgency_color": "yellow", // green/yellow/red
+    "possible_causes": ["这里填写原因1", "这里填写原因2"],
+    "advice_summary": "这里填写简短的行动建议，如：禁食禁水12小时，观察..."
+  }
+}
+""";
 
   final List<String> _allSuggestions = [
     "猫咪呼吸似乎有点困难，嘴巴张开呼吸，像小狗一样喘气",
@@ -333,8 +371,15 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
     _scrollToBottom();
 
     // ✅ 使用 Supabase Dify 服务
+    String queryToSend = messageText;
+    if (_conversationId == null && _isDoctorMode) {
+      // 如果是新对话且开启了医生模式，注入系统提示词
+      queryToSend = "$_systemPrompt\n\n用户问题：$messageText";
+      debugPrint("💉 已注入系统提示词 (Doctor Mode)");
+    }
+
     final stream = _difyService.callDifyChat(
-      query: messageText,
+      query: queryToSend,
       user: _userId,
       conversationId: _conversationId,
     );
@@ -742,7 +787,7 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
               child: Center(
                 key: ValueKey(_hasStartedChat ? "chat_title" : "welcome_title"),
                 child: Text(
-                  "Peture AI",
+                  _isDoctorMode ? "深度问诊" : "Peture AI",
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
                         fontWeight: FontWeight.bold,
                         fontSize: 18,
@@ -775,7 +820,7 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SizedBox(height: 100),
+          const SizedBox(height: 40),
           // Kimi 风格精灵小球
           const _KimiBall(),
           const SizedBox(height: 12),
@@ -866,72 +911,181 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
         ),
       ),
     );
-  }  Widget _buildInputArea({bool enabled = true}) {
+  }
+
+
+
+  Widget _buildInputArea({bool enabled = true}) {
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-      padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 6.0),
-      decoration: BoxDecoration(
-        color: enabled ? Colors.white : Colors.grey.shade200,
-        borderRadius: BorderRadius.circular(30.0),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.06),
-            spreadRadius: 1,
-            blurRadius: 10,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 顶部功能芯片栏
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _buildActionChip(
+                  icon: Icons.medical_services_outlined,
+                  label: "深度问诊",
+                  isActive: _isDoctorMode,
+                  onTap: () {
+                    setState(() {
+                      _isDoctorMode = !_isDoctorMode;
+                    });
+                    HapticFeedback.selectionClick();
+                  },
+                ),
+                const SizedBox(width: 8),
+                _buildActionChip(
+                  icon: Icons.support_agent_rounded,
+                  label: "在线问诊",
+                  isActive: false,
+                  onTap: () {}, // 占位功能
+                ),
+                const SizedBox(width: 8),
+                _buildActionChip(
+                  icon: Icons.auto_awesome_outlined,
+                  label: "AI 创作",
+                  isActive: false,
+                  onTap: () {}, // 占位功能
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          // 底部输入框
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8), // 调整内边距以对齐图标中心
+            decoration: BoxDecoration(
+              color: enabled ? Colors.white : Colors.grey.shade200,
+              borderRadius: BorderRadius.circular(30.0),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  spreadRadius: 0,
+                  blurRadius: 10,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                // 相机图标
+                IconButton(
+                  icon: const Icon(Icons.camera_alt_outlined, color: Colors.black87),
+                  onPressed: enabled ? () {} : null,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                ),
+                const SizedBox(width: 8),
+                // 输入框
+                Expanded(
+                  child: TextField(
+                    controller: _textController,
+                    enabled: enabled,
+                    maxLines: 5,
+                    minLines: 1,
+                    decoration: InputDecoration(
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
+                      hintText: '发消息或按住说话...',
+                      hintStyle: TextStyle(
+                        color: Colors.grey.shade400,
+                        fontSize: 15,
+                      ),
+                      border: InputBorder.none,
+                      isDense: true,
+                    ),
+                    onSubmitted: enabled ? (value) => _sendMessage() : null,
+                    style: const TextStyle(color: Colors.black87, fontSize: 16),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                // 语音图标
+                if (!_isComposing)
+                  IconButton(
+                    icon: const Icon(Icons.keyboard_voice_outlined, color: Colors.black87),
+                    onPressed: enabled ? () {} : null,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                  ),
+                if (!_isComposing) const SizedBox(width: 12),
+                // 加号图标 或 发送按钮
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 200),
+                  transitionBuilder: (child, animation) =>
+                      ScaleTransition(scale: animation, child: child),
+                  child: _isComposing
+                      ? GestureDetector(
+                          key: const ValueKey('send_btn_active'),
+                          onTap: enabled ? () => _sendMessage() : null,
+                          child: Container(
+                            width: 32,
+                            height: 32,
+                            decoration: const BoxDecoration(
+                              color: Color(0xFF5D5FEF), // 主题紫色
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.arrow_upward_rounded,
+                                color: Colors.white, size: 18),
+                          ),
+                        )
+                      : IconButton(
+                          key: const ValueKey('plus_btn'),
+                          icon: const Icon(Icons.add_circle_outline, color: Colors.black87),
+                          onPressed: enabled ? () {} : null,
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                        ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
-      child: Row(
-        children: [
-          Expanded(
-            child: TextField(
-              controller: _textController,
-              enabled: enabled,
-              decoration: InputDecoration(
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16.0),
-                hintText: '请输入您宠物遇到的问题',
-                hintStyle: TextStyle(
-                  color: Colors.grey.shade400,
-                  fontWeight: FontWeight.normal,
-                  fontSize: 16,
-                ),
-                border: InputBorder.none,
-              ),
-              onSubmitted: enabled ? (value) => _sendMessage() : null,
-              style: const TextStyle(color: Colors.black87, fontSize: 16),
+    );
+  }
+
+  Widget _buildActionChip({
+    required IconData icon,
+    required String label,
+    required bool isActive,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: isActive ? const Color(0xFFEEF0FF) : Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isActive ? const Color(0xFF5D5FEF) : Colors.grey.shade200,
+            width: 1,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 16,
+              color: isActive ? const Color(0xFF5D5FEF) : Colors.black87,
             ),
-          ),
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 200),
-            transitionBuilder: (child, animation) =>
-                ScaleTransition(scale: animation, child: child),
-            child: _isComposing
-                ? Semantics(
-                    button: true,
-                    child: IconButton(
-                      key: const ValueKey('send_button'),
-                      icon: Icon(
-                        Icons.send,
-                        color: Theme.of(context).primaryColor,
-                      ),
-                      onPressed: enabled ? () => _sendMessage() : null,
-                      tooltip: '发送',
-                    ),
-                  )
-                : Semantics(
-                    button: true,
-                    child: IconButton(
-                      key: const ValueKey('mic_button'),
-                      icon: Icon(
-                        CupertinoIcons.mic,
-                        color: Colors.grey.shade500,
-                      ),
-                      onPressed: enabled ? () {} : null,
-                      tooltip: '语音输入（暂未实现）',
-                    ),
-                  ),
-          ),
-        ],
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                color: isActive ? const Color(0xFF5D5FEF) : Colors.black87,
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1175,109 +1329,141 @@ class _AppDrawerState extends State<AppDrawer> {
   @override
   Widget build(BuildContext context) {
     return Drawer(
-      child: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Padding(
-              padding: const EdgeInsets.all(20.0),
-              child: Text(
-                'Peture',
-                style: Theme.of(
-                  context,
-                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      child: ClipRRect(
+        borderRadius: const BorderRadius.only(
+          topLeft: Radius.circular(30),
+          bottomLeft: Radius.circular(30),
+        ),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.75),
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(30),
+                bottomLeft: Radius.circular(30),
               ),
-            ),
-            ListTile(
-              leading: const Icon(Icons.edit_outlined),
-              title: const Text('发起新对话'),
-              onTap: () {
-                Navigator.pop(context);
-                widget.onNewChatPressed();
-              },
-            ),
-            ListTile(
-              leading: const Icon(CupertinoIcons.compass),
-              title: const Text('探索 Peture'),
-              onTap: () => Navigator.pop(context),
-            ),
-            const Divider(height: 30),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-              child: Text(
-                '近期对话',
-                style: TextStyle(
-                  color: Colors.grey,
-                  fontWeight: FontWeight.bold,
+              border: Border(
+                left: BorderSide(color: Colors.white.withOpacity(0.5), width: 1),
+                top: BorderSide(color: Colors.white.withOpacity(0.5), width: 1),
+                bottom: BorderSide(color: Colors.white.withOpacity(0.5), width: 1),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 20,
+                  spreadRadius: 5,
                 ),
-              ),
+              ],
             ),
-            Expanded(
-              child: FutureBuilder<List<Conversation>>(
-                future: _conversationsFuture,
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-                  if (snapshot.hasError) {
-                    return Center(child: Text('加载失败: ${snapshot.error}'));
-                  }
-                  if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                    return const Center(
-                      child: Padding(
-                        padding: EdgeInsets.all(20),
-                        child: Text(
-                          '暂无对话记录\n点击"发起新对话"开始咨询',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: Colors.grey),
-                        ),
-                      ),
-                    );
-                  }
-                  final conversations = snapshot.data!;
-                  return ListView.builder(
-                    padding: EdgeInsets.zero,
-                    itemCount: conversations.length,
-                    itemBuilder: (context, index) {
-                      final conversation = conversations[index];
-                      return ListTile(
-                        leading: conversation.isPinned
-                            ? const Icon(
-                                Icons.star,
-                                size: 20,
-                                color: Colors.amber,
-                              )
-                            : null,
-                        title: Text(
-                          conversation.question,
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 1,
-                        ),
-                        trailing: IconButton(
-                          icon: const Icon(
-                            Icons.more_vert,
-                            color: Colors.grey,
-                            size: 20,
-                          ),
-                          onPressed: () =>
-                              _showConversationOptions(context, conversation),
-                        ),
-                        onTap: () {
-                          debugPrint("🔘 点击历史对话: ${conversation.question}");
-                          debugPrint(
-                              "🔘 答案长度: ${conversation.answer.length} 字符");
-                          Navigator.pop(context);
-                          if (widget.onConversationSelected != null) {
-                            widget.onConversationSelected!(conversation);
-                          }
-                        },
-                      );
+            child: SafeArea(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Padding(
+                    padding: const EdgeInsets.all(20.0),
+                    child: Text(
+                      'Peture',
+                      style: Theme.of(
+                        context,
+                      ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.edit_outlined),
+                    title: const Text('发起新对话'),
+                    onTap: () {
+                      Navigator.pop(context);
+                      widget.onNewChatPressed();
                     },
-                  );
-                },
+                  ),
+                  ListTile(
+                    leading: const Icon(CupertinoIcons.compass),
+                    title: const Text('探索 Peture'),
+                    onTap: () => Navigator.pop(context),
+                  ),
+                  const Divider(height: 30),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                    child: Text(
+                      '近期对话',
+                      style: TextStyle(
+                        color: Colors.grey,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: FutureBuilder<List<Conversation>>(
+                      future: _conversationsFuture,
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState == ConnectionState.waiting) {
+                          return const Center(child: CircularProgressIndicator());
+                        }
+                        if (snapshot.hasError) {
+                          return Center(child: Text('加载失败: ${snapshot.error}'));
+                        }
+                        if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                          return const Center(
+                            child: Padding(
+                              padding: EdgeInsets.all(20),
+                              child: Text(
+                                '暂无对话记录\n点击"发起新对话"开始咨询',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(color: Colors.grey),
+                              ),
+                            ),
+                          );
+                        }
+                        final conversations = snapshot.data!;
+                        return ListView.builder(
+                          padding: EdgeInsets.zero,
+                          itemCount: conversations.length,
+                          itemBuilder: (context, index) {
+                            final conversation = conversations[index];
+                            return ListTile(
+                              leading: conversation.isPinned
+                                  ? const Icon(
+                                      Icons.star,
+                                      size: 20,
+                                      color: Colors.amber,
+                                    )
+                                  : null,
+                              title: Text(
+                                conversation.question,
+                                overflow: TextOverflow.ellipsis,
+                                maxLines: 1,
+                              ),
+                              trailing: IconButton(
+                                icon: const Icon(
+                                  Icons.more_vert,
+                                  color: Colors.grey,
+                                  size: 20,
+                                ),
+                                onPressed: () =>
+                                    _showConversationOptions(context, conversation),
+                              ),
+                              onTap: () {
+                                debugPrint("🔘 点击历史对话: ${conversation.question}");
+                                debugPrint(
+                                    "🔘 答案长度: ${conversation.answer.length} 字符");
+                                Navigator.pop(context);
+                                if (widget.onConversationSelected != null) {
+                                  widget.onConversationSelected!(conversation);
+                                }
+                              },
+                            );
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -1402,6 +1588,101 @@ class _MessageBubble extends StatelessWidget {
       ),
     );
     final showLoadingIndicator = isLoading && message.text.isEmpty;
+
+    // Check if message is JSON report
+    Widget messageContent;
+    if (!isUser &&
+        message.text.trim().startsWith('{') &&
+        message.text.contains('"type": "report"')) {
+      try {
+        // Find the JSON part if there is any text before/after
+        final startIndex = message.text.indexOf('{');
+        final endIndex = message.text.lastIndexOf('}');
+        if (startIndex != -1 && endIndex != -1 && endIndex > startIndex) {
+          final jsonString = message.text.substring(startIndex, endIndex + 1);
+          final jsonMap = jsonDecode(jsonString);
+          if (jsonMap['type'] == 'report') {
+            messageContent = DiagnosticReportCard(data: jsonMap['data']);
+          } else {
+            messageContent = MarkdownBody(
+              data: message.text,
+              selectable: true,
+              styleSheet: markdownStyleSheet,
+            );
+          }
+        } else {
+          // JSON 结构不完整（例如正在流式传输中）
+          if (!isResponseComplete) {
+            messageContent = Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Color(0xFF5D5FEF),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                const Text(
+                  "正在生成诊断报告...",
+                  style: TextStyle(
+                    color: Color(0xFF5D5FEF),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            );
+          } else {
+            messageContent = MarkdownBody(
+              data: message.text,
+              selectable: true,
+              styleSheet: markdownStyleSheet,
+            );
+          }
+        }
+      } catch (e) {
+        // Fallback if JSON parsing fails
+        if (!isResponseComplete) {
+          // 如果正在生成且看起来像报告，显示加载状态而不是原始 JSON
+          messageContent = Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Color(0xFF5D5FEF),
+                ),
+              ),
+              const SizedBox(width: 10),
+              const Text(
+                "正在生成诊断报告...",
+                style: TextStyle(
+                  color: Color(0xFF5D5FEF),
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          );
+        } else {
+          messageContent = MarkdownBody(
+            data: message.text,
+            selectable: true,
+            styleSheet: markdownStyleSheet,
+          );
+        }
+      }
+    } else {
+      messageContent = MarkdownBody(
+        data: message.text.isEmpty && !isUser ? "思考中..." : message.text,
+        selectable: true,
+        styleSheet: markdownStyleSheet,
+      );
+    }
+
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 8.0),
       child: Row(
@@ -1441,13 +1722,7 @@ class _MessageBubble extends StatelessWidget {
                   decoration: bubbleDecoration,
                   child: showLoadingIndicator
                       ? const _TypingIndicator()
-                      : MarkdownBody(
-                          data: message.text.isEmpty && !isUser
-                              ? "思考中..."
-                              : message.text,
-                          selectable: true,
-                          styleSheet: markdownStyleSheet,
-                        ),
+                      : messageContent,
                 ),
                 if (!isUser && isResponseComplete && message.text.isNotEmpty)
                   _buildActionBar(context),

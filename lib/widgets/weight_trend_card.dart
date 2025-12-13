@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:math' as math;
 import 'dart:ui';
+import 'package:intl/intl.dart';
+import '../services/supabase_service.dart';
+import '../utils/ui_helpers.dart';
 
 class WeightTrendCard extends StatefulWidget {
   const WeightTrendCard({super.key});
@@ -12,27 +15,279 @@ class WeightTrendCard extends StatefulWidget {
 }
 
 class _WeightTrendCardState extends State<WeightTrendCard> {
+  final SupabaseService _supabaseService = SupabaseService();
   bool _isExpanded = false; // 控制折叠状态
-  int _selectedTimeRangeIndex = 3; // 默认选中 "6个月"
+  int _selectedTimeRangeIndex = 2; // Default to "Month" (index 2)
   final List<String> _timeRanges = ['日', '周', '月', '6个月', '年'];
   
-  // 模拟数据
-  final List<double> _sixMonthData = [7.3, 7.5, 7.4, 7.8, 8.2, 8.0];
-  final List<String> _sixMonthLabels = ['7月', '8月', '9月', '10月', '11月', '12月'];
+  String _currentPetId = '';
+  String _currentPetName = '';
+  List<Map<String, dynamic>> _allWeightRecords = [];
   
-  int? _touchedIndex;
+  // Chart Data
+  List<FlSpot> _chartSpots = [];
+  double _averageWeight = 0.0;
+  String _dateRangeText = '';
+  double _minY = 0;
+  double _maxY = 100;
+  DateTime _currentStartDate = DateTime.now();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    if (!mounted) return;
+    try {
+      // 1. Get Pets
+      final pets = await _supabaseService.getAllPets();
+      if (pets.isNotEmpty) {
+        // Default to first pet for now
+        _currentPetId = pets.first['id'] as String;
+        _currentPetName = pets.first['name'] as String;
+        
+        // 2. Get Weight Records
+        await _refreshWeightRecords();
+      } else {
+        // No pets
+        if (mounted) {
+          setState(() {
+          });
+        }
+      }
+    } catch (e) {
+      print('Error loading weight data: $e');
+      if (mounted) setState(() {});
+    }
+  }
+
+  Future<void> _refreshWeightRecords() async {
+    if (_currentPetId.isEmpty) return;
+    
+    final records = await _supabaseService.getWeightRecordsForPet(_currentPetId);
+    // Sort by date ascending
+    records.sort((a, b) => DateTime.parse(a['date']).compareTo(DateTime.parse(b['date'])));
+    
+    if (mounted) {
+      setState(() {
+        _allWeightRecords = records;
+        _processData();
+      });
+    }
+  }
+
+  void _processData() {
+    if (_allWeightRecords.isEmpty) {
+      _resetChartData();
+      return;
+    }
+
+    final now = DateTime.now();
+    DateTime startDate;
+    
+    // Determine start date based on range
+    switch (_selectedTimeRangeIndex) {
+      case 0: // Day (Today)
+        startDate = DateTime(now.year, now.month, now.day);
+        break;
+      case 1: // Week (Last 7 days)
+        startDate = now.subtract(const Duration(days: 6));
+        break;
+      case 2: // Month (Last 30 days)
+        startDate = now.subtract(const Duration(days: 29));
+        break;
+      case 3: // 6 Months
+        startDate = DateTime(now.year, now.month - 5, now.day);
+        break;
+      case 4: // Year
+        startDate = DateTime(now.year - 1, now.month, now.day);
+        break;
+      default:
+        startDate = now.subtract(const Duration(days: 29));
+    }
+    _currentStartDate = startDate;
+
+    // Filter records
+    final filteredRecords = _allWeightRecords.where((r) {
+      final date = DateTime.parse(r['date']);
+      final endOfNow = DateTime(now.year, now.month, now.day, 23, 59, 59);
+      return date.isAfter(startDate.subtract(const Duration(seconds: 1))) && date.isBefore(endOfNow);
+    }).toList();
+
+    if (filteredRecords.isEmpty) {
+      _resetChartData();
+      _dateRangeText = _formatDateRange(startDate, now);
+      return;
+    }
+
+    // Generate Spots
+    List<FlSpot> spots = [];
+    Map<int, List<double>> groupedData = {};
+    
+    for (var r in filteredRecords) {
+      final date = DateTime.parse(r['date']);
+      final weight = (r['weight'] as num).toDouble();
+      int key;
+      
+      if (_selectedTimeRangeIndex == 0) {
+        key = date.hour; // Group by hour
+      } else if (_selectedTimeRangeIndex == 1 || _selectedTimeRangeIndex == 2) {
+        key = date.difference(startDate).inDays; // Group by day offset
+      } else {
+        // 6M, Year: Group by month offset
+        key = (date.year - startDate.year) * 12 + date.month - startDate.month;
+      }
+      
+      groupedData.putIfAbsent(key, () => []).add(weight);
+    }
+    
+    final sortedKeys = groupedData.keys.toList()..sort();
+    
+    for (var key in sortedKeys) {
+      final weights = groupedData[key]!;
+      final avg = weights.reduce((a, b) => a + b) / weights.length;
+      spots.add(FlSpot(key.toDouble(), avg));
+    }
+    
+    _chartSpots = spots;
+    
+    // Calculate Average
+    double totalWeight = filteredRecords.fold(0.0, (sum, r) => sum + (r['weight'] as num).toDouble());
+    _averageWeight = totalWeight / filteredRecords.length;
+
+    // Min/Max Y
+    if (spots.isNotEmpty) {
+      double minW = spots.map((s) => s.y).reduce(math.min);
+      double maxW = spots.map((s) => s.y).reduce(math.max);
+      _minY = (minW - 2).floorToDouble();
+      _maxY = (maxW + 2).ceilToDouble();
+      if (_minY < 0) _minY = 0;
+    } else {
+      _minY = 0;
+      _maxY = 100;
+    }
+
+    // Date Range Text
+    _dateRangeText = _formatDateRange(startDate, now);
+  }
+
+  void _resetChartData() {
+    _chartSpots = [];
+    _averageWeight = 0.0;
+    _dateRangeText = '';
+    _minY = 0;
+    _maxY = 100;
+  }
+
+  String _formatDateRange(DateTime start, DateTime end) {
+    final fmt = DateFormat('yyyy年MM月dd日');
+    return '${fmt.format(start)}至${fmt.format(end)}';
+  }
+
+  Future<void> _showAddWeightDialog() async {
+    if (_currentPetId.isEmpty) return;
+    
+    final TextEditingController weightController = TextEditingController();
+    DateTime selectedDate = DateTime.now();
+
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.white,
+        title: const Text('记录体重', style: TextStyle(color: Colors.black)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: weightController,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              style: const TextStyle(color: Colors.black),
+              decoration: const InputDecoration(
+                labelText: '体重 (kg)',
+                labelStyle: TextStyle(color: Colors.grey),
+                suffixText: 'kg',
+                suffixStyle: TextStyle(color: Colors.grey),
+                enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.grey)),
+                focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFFBF5AF2))),
+              ),
+              autofocus: true,
+            ),
+            const SizedBox(height: 16),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('日期', style: TextStyle(color: Colors.grey)),
+              trailing: Text(
+                DateFormat('yyyy-MM-dd').format(selectedDate),
+                style: const TextStyle(color: Colors.black),
+              ),
+              onTap: () async {
+                final picked = await showDatePicker(
+                  context: context,
+                  initialDate: selectedDate,
+                  firstDate: DateTime(2000),
+                  lastDate: DateTime.now(),
+                  builder: (context, child) {
+                    return Theme(
+                      data: ThemeData.light().copyWith(
+                        colorScheme: const ColorScheme.light(
+                          primary: Color(0xFFBF5AF2),
+                          onPrimary: Colors.white,
+                          surface: Colors.white,
+                          onSurface: Colors.black,
+                        ),
+                      ),
+                      child: child!,
+                    );
+                  },
+                );
+                if (picked != null) {
+                  selectedDate = picked;
+                  (context as Element).markNeedsBuild(); // Force rebuild to update date text
+                }
+              },
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('取消', style: TextStyle(color: Colors.grey)),
+          ),
+          TextButton(
+            onPressed: () async {
+              final weight = double.tryParse(weightController.text);
+              if (weight != null) {
+                await _supabaseService.insertWeightRecord({
+                  'pet_id': _currentPetId,
+                  'weight': weight,
+                  'date': selectedDate.toIso8601String(),
+                });
+                if (mounted) {
+                  Navigator.pop(context);
+                  _refreshWeightRecords();
+                }
+              }
+            },
+            child: const Text('保存', style: TextStyle(color: Color(0xFFBF5AF2))),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 0, vertical: 8),
+      // margin: const EdgeInsets.symmetric(horizontal: 0, vertical: 8), // Removed to let parent control spacing
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.05),
-            blurRadius: 20,
-            offset: const Offset(0, 4),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
@@ -47,8 +302,7 @@ class _WeightTrendCardState extends State<WeightTrendCard> {
               borderRadius: BorderRadius.circular(24),
               border: Border.all(color: Colors.white.withOpacity(0.6), width: 1),
               gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
+                begin: Alignment.topLeft, end: Alignment.bottomRight,
                 colors: [
                   Colors.white.withOpacity(0.8),
                   Colors.white.withOpacity(0.4),
@@ -56,357 +310,348 @@ class _WeightTrendCardState extends State<WeightTrendCard> {
               ),
             ),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-            // 顶部标题栏
-            GestureDetector(
-              onTap: () {
-                setState(() {
-                  _isExpanded = !_isExpanded;
-                });
-                HapticFeedback.selectionClick();
-              },
-              behavior: HitTestBehavior.translucent,
-              child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 顶部标题栏
+              Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFF5E62).withOpacity(0.1),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.monitor_weight_rounded,
-                          color: Color(0xFFFF5E62),
-                          size: 20,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      const Text(
-                        '体重趋势',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF1D1D1F),
-                        ),
-                      ),
-                    ],
-                  ),
-                  Row(
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.add_circle_outline_rounded),
-                        color: const Color(0xFFFF5E62),
-                        onPressed: () {
-                          // TODO: 添加体重记录
-                          HapticFeedback.lightImpact();
-                        },
-                      ),
-                      Icon(
-                        _isExpanded
-                            ? Icons.keyboard_arrow_up_rounded
-                            : Icons.keyboard_arrow_down_rounded,
-                        color: const Color(0xFF8E8E93),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-
-            // 可折叠内容区域
-            AnimatedCrossFade(
-              firstChild: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SizedBox(height: 24),
-
-                  // 时间范围选择器
-                  Container(
-                    height: 32,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF2F2F7),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      children: List.generate(_timeRanges.length, (index) {
-                        final isSelected = index == _selectedTimeRangeIndex;
-                        return Expanded(
-                          child: GestureDetector(
-                            onTap: () {
-                              setState(() {
-                                _selectedTimeRangeIndex = index;
-                              });
-                              HapticFeedback.selectionClick();
-                            },
-                            child: Container(
-                              margin: const EdgeInsets.all(2),
-                              decoration: BoxDecoration(
-                                color: isSelected
-                                    ? Colors.white
-                                    : Colors.transparent,
-                                borderRadius: BorderRadius.circular(6),
-                                boxShadow: isSelected
-                                    ? [
-                                        BoxShadow(
-                                          color: Colors.black.withOpacity(0.1),
-                                          blurRadius: 4,
-                                          offset: const Offset(0, 2),
-                                        )
-                                      ]
-                                    : null,
-                              ),
-                              alignment: Alignment.center,
-                              child: Text(
-                                _timeRanges[index],
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: isSelected
-                                      ? FontWeight.w600
-                                      : FontWeight.w400,
-                                  color:
-                                      isSelected ? Colors.black : Colors.grey,
-                                ),
-                              ),
-                            ),
-                          ),
-                        );
-                      }),
-                    ),
-                  ),
-
-                  const SizedBox(height: 24),
-
-                  // 当前数值展示
-                  const Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '平均 7.8 kg',
-                        style: TextStyle(
-                          fontSize: 28,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF1D1D1F),
-                          letterSpacing: -0.5,
-                        ),
-                      ),
-                      SizedBox(height: 4),
-                      Text(
-                        '2025年7月8日至12月6日',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Color(0xFF8E8E93),
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 24),
-
-                  // 图表区域
-                  SizedBox(
-                    height: 200,
-                    child: BarChart(
-                      BarChartData(
-                        alignment: BarChartAlignment.spaceAround,
-                        maxY: _sixMonthData.reduce(math.max) * 1.2,
-                        minY: 0,
-                        barTouchData: BarTouchData(
-                          touchTooltipData: BarTouchTooltipData(
-                            getTooltipColor: (group) => Colors.black87,
-                            getTooltipItem: (group, groupIndex, rod, rodIndex) {
-                              return BarTooltipItem(
-                                '${rod.toY} kg\n${_sixMonthLabels[group.x.toInt()]}',
-                                const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 12,
-                                ),
-                              );
-                            },
-                          ),
-                          touchCallback:
-                              (FlTouchEvent event, barTouchResponse) {
-                            setState(() {
-                              if (!event.isInterestedForInteractions ||
-                                  barTouchResponse == null ||
-                                  barTouchResponse.spot == null) {
-                                _touchedIndex = -1;
-                                return;
-                              }
-                              _touchedIndex =
-                                  barTouchResponse.spot!.touchedBarGroupIndex;
-                            });
-                          },
-                        ),
-                        titlesData: FlTitlesData(
-                          show: true,
-                          bottomTitles: AxisTitles(
-                            sideTitles: SideTitles(
-                              showTitles: true,
-                              getTitlesWidget: (double value, TitleMeta meta) {
-                                if (value.toInt() >= 0 &&
-                                    value.toInt() < _sixMonthLabels.length) {
-                                  return Padding(
-                                    padding: const EdgeInsets.only(top: 8.0),
-                                    child: Text(
-                                      _sixMonthLabels[value.toInt()],
-                                      style: const TextStyle(
-                                        color: Color(0xFF8E8E93),
-                                        fontSize: 11,
-                                      ),
-                                    ),
-                                  );
-                                }
-                                return const SizedBox();
-                              },
-                              reservedSize: 30,
-                            ),
-                          ),
-                          leftTitles: const AxisTitles(
-                            sideTitles: SideTitles(showTitles: false),
-                          ),
-                          topTitles: const AxisTitles(
-                            sideTitles: SideTitles(showTitles: false),
-                          ),
-                          rightTitles: AxisTitles(
-                            sideTitles: SideTitles(
-                              showTitles: true,
-                              reservedSize: 40,
-                              getTitlesWidget: (value, meta) {
-                                if (value == 5 || value == 10) {
-                                  return Text(
-                                    '${value.toInt()}',
-                                    style: const TextStyle(
-                                      color: Color(0xFFC7C7CC),
-                                      fontSize: 11,
-                                    ),
-                                  );
-                                }
-                                return const SizedBox();
-                              },
-                            ),
-                          ),
-                        ),
-                        gridData: FlGridData(
-                          show: true,
-                          drawVerticalLine: false,
-                          getDrawingHorizontalLine: (value) {
-                            return FlLine(
-                              color: const Color(0xFFE5E5EA),
-                              strokeWidth: 1,
-                              dashArray: [4, 4],
-                            );
-                          },
-                        ),
-                        extraLinesData: ExtraLinesData(
-                          horizontalLines: [
-                            HorizontalLine(
-                              y: 7.7, // 模拟平均值
-                              color: const Color(0xFF8E8E93),
-                              strokeWidth: 2,
-                              dashArray: [5, 5],
-                              label: HorizontalLineLabel(
-                                show: true,
-                                alignment: Alignment.topRight,
-                                padding:
-                                    const EdgeInsets.only(right: 5, bottom: 5),
-                                style: const TextStyle(
-                                  color: Color(0xFF8E8E93),
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                                labelResolver: (line) => '平均',
-                              ),
-                            ),
-                          ],
-                        ),
-                        borderData: FlBorderData(show: false),
-                        barGroups: List.generate(_sixMonthData.length, (index) {
-                          return BarChartGroupData(
-                            x: index,
-                            barRods: [
-                              BarChartRodData(
-                                toY: _sixMonthData[index],
-                                color: _touchedIndex == index
-                                    ? const Color(0xFFFF5E62)
-                                    : const Color(0xFFFF5E62).withOpacity(0.3),
-                                width: 16,
-                                borderRadius: const BorderRadius.vertical(
-                                    top: Radius.circular(4)),
-                                backDrawRodData: BackgroundBarChartRodData(
-                                  show: true,
-                                  toY: _sixMonthData.reduce(math.max) * 1.2,
-                                  color: const Color(0xFFF2F2F7),
-                                ),
-                              ),
-                            ],
-                          );
-                        }),
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 20),
-
-                  // 趋势分析
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF2F2F7),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
+                  GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _isExpanded = !_isExpanded;
+                      });
+                      HapticFeedback.selectionClick();
+                    },
+                    behavior: HitTestBehavior.translucent,
                     child: Row(
                       children: [
-                        const Icon(
-                          Icons.trending_up_rounded,
-                          color: Color(0xFFFF5E62),
-                          size: 24,
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF2F2F7),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.monitor_weight_rounded,
+                            color: Color(0xFFBF5AF2),
+                            size: 20,
+                          ),
                         ),
                         const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                '趋势',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(0xFF1D1D1F),
-                                ),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              '体重趋势',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.textDark,
                               ),
-                              const SizedBox(height: 4),
+                            ),
+                            if (_currentPetName.isNotEmpty)
                               Text(
-                                '你过去6个月的体重有所上升。',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  color:
-                                      const Color(0xFF1D1D1F).withOpacity(0.8),
+                                _currentPetName,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Color(0xFF8E8E93),
                                 ),
                               ),
-                            ],
-                          ),
+                          ],
                         ),
                       ],
                     ),
                   ),
+                  Row(
+                    children: [
+                      IconButton(
+                        icon: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF2F2F7),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.add, size: 20, color: Color(0xFFBF5AF2)),
+                        ),
+                        onPressed: () {
+                          _showAddWeightDialog();
+                          HapticFeedback.lightImpact();
+                        },
+                      ),
+                      GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            _isExpanded = !_isExpanded;
+                          });
+                          HapticFeedback.selectionClick();
+                        },
+                        child: Padding(
+                          padding: const EdgeInsets.all(8.0),
+                          child: Icon(
+                            _isExpanded
+                                ? Icons.keyboard_arrow_up_rounded
+                                : Icons.keyboard_arrow_down_rounded,
+                            color: const Color(0xFF8E8E93),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ],
               ),
-              secondChild: const SizedBox(width: double.infinity),
-              crossFadeState: _isExpanded
-                  ? CrossFadeState.showFirst
-                  : CrossFadeState.showSecond,
-              duration: const Duration(milliseconds: 300),
-            ),
-          ],
+
+              // 可折叠内容区域
+              AnimatedCrossFade(
+                firstChild: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 24),
+
+                    // Time Range Selector
+                    Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF2F2F7),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        children: List.generate(_timeRanges.length, (index) {
+                          final isSelected = index == _selectedTimeRangeIndex;
+                          return Expanded(
+                            child: GestureDetector(
+                              onTap: () {
+                                setState(() {
+                                  _selectedTimeRangeIndex = index;
+                                  _processData();
+                                });
+                                HapticFeedback.selectionClick();
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: isSelected ? Colors.white : Colors.transparent,
+                                  borderRadius: BorderRadius.circular(16),
+                                  boxShadow: isSelected ? [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.05),
+                                      blurRadius: 4,
+                                      offset: const Offset(0, 2),
+                                    )
+                                  ] : [],
+                                ),
+                                alignment: Alignment.center,
+                                child: Text(
+                                  _timeRanges[index],
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                                    color: isSelected ? AppColors.textDark : const Color(0xFF8E8E93),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        }),
+                      ),
+                    ),
+
+                    const SizedBox(height: 24),
+
+                    // Summary
+                    const Text('平均', style: TextStyle(color: Color(0xFF8E8E93), fontSize: 14)),
+                    const SizedBox(height: 4),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.baseline,
+                      textBaseline: TextBaseline.alphabetic,
+                      children: [
+                        Text(
+                          _averageWeight.toStringAsFixed(1),
+                          style: const TextStyle(
+                            color: AppColors.textDark,
+                            fontSize: 36,
+                            fontWeight: FontWeight.w600,
+                            fontFamily: 'SF Pro Display',
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        const Text(
+                          '公斤',
+                          style: TextStyle(color: Color(0xFF8E8E93), fontSize: 16),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _dateRangeText.length >= 5 
+                          ? _dateRangeText.split('至')[0].substring(0, 5) 
+                          : '', // Just show Year like "2025年"
+                      style: const TextStyle(color: Color(0xFF8E8E93), fontSize: 13),
+                    ),
+
+                    const SizedBox(height: 32),
+
+                    // Chart
+                    SizedBox(
+                      height: 300,
+                      child: LineChart(
+                        LineChartData(
+                          gridData: FlGridData(
+                            show: true,
+                            drawHorizontalLine: false,
+                            drawVerticalLine: true,
+                            getDrawingVerticalLine: (value) {
+                              return FlLine(
+                                color: const Color(0xFFE5E5EA),
+                                strokeWidth: 1,
+                                dashArray: [4, 4],
+                              );
+                            },
+                          ),
+                          titlesData: FlTitlesData(
+                            show: true,
+                            rightTitles: AxisTitles(
+                              sideTitles: SideTitles(
+                                showTitles: true,
+                                reservedSize: 40,
+                                getTitlesWidget: (value, meta) {
+                                  if (value == _minY || value == _maxY) return const SizedBox();
+                                  return Text(
+                                    value.toInt().toString(),
+                                    style: const TextStyle(color: Color(0xFFC7C7CC), fontSize: 12),
+                                  );
+                                },
+                                interval: (_maxY - _minY) / 4,
+                              ),
+                            ),
+                            topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                            leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                            bottomTitles: AxisTitles(
+                              sideTitles: SideTitles(
+                                showTitles: true,
+                                reservedSize: 30,
+                                interval: 1,
+                                getTitlesWidget: (value, meta) {
+                                  String text = '';
+                                  int valInt = value.toInt();
+                                  
+                                  if (_selectedTimeRangeIndex == 0) { // Day
+                                    if (valInt % 6 == 0) text = '$valInt:00';
+                                  } else if (_selectedTimeRangeIndex == 1) { // Week
+                                    final date = _currentStartDate.add(Duration(days: valInt));
+                                    text = DateFormat('E', 'zh_CN').format(date);
+                                  } else if (_selectedTimeRangeIndex == 2) { // Month
+                                    if (valInt % 7 == 0) {
+                                      final date = _currentStartDate.add(Duration(days: valInt));
+                                      text = '${date.day}';
+                                    }
+                                  } else if (_selectedTimeRangeIndex == 3) { // 6 Months
+                                    final date = DateTime(_currentStartDate.year, _currentStartDate.month + valInt);
+                                    text = '${date.month}';
+                                  } else { // Year
+                                    if (valInt % 2 == 0) {
+                                      final date = DateTime(_currentStartDate.year, _currentStartDate.month + valInt);
+                                      text = '${date.month}';
+                                    }
+                                  }
+                                  
+                                  return Padding(
+                                    padding: const EdgeInsets.only(top: 8.0),
+                                    child: Text(
+                                      text,
+                                      style: const TextStyle(color: Color(0xFFC7C7CC), fontSize: 12),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
+                          borderData: FlBorderData(show: false),
+                          minX: 0,
+                          maxX: _getMaxX(),
+                          minY: _minY,
+                          maxY: _maxY,
+                          lineBarsData: [
+                            LineChartBarData(
+                              spots: _chartSpots,
+                              isCurved: true,
+                              color: const Color(0xFFBF5AF2),
+                              barWidth: 3,
+                              isStrokeCapRound: true,
+                              dotData: FlDotData(
+                                show: true,
+                                getDotPainter: (spot, percent, barData, index) {
+                                  return FlDotCirclePainter(
+                                    radius: 4,
+                                    color: Colors.white,
+                                    strokeWidth: 2,
+                                    strokeColor: const Color(0xFFBF5AF2),
+                                  );
+                                },
+                              ),
+                              belowBarData: BarAreaData(show: false),
+                            ),
+                          ],
+                          lineTouchData: LineTouchData(
+                            touchTooltipData: LineTouchTooltipData(
+                              getTooltipColor: (touchedSpot) => Colors.white,
+                              getTooltipItems: (touchedSpots) {
+                                return touchedSpots.map((spot) {
+                                  return LineTooltipItem(
+                                    '${spot.y.toStringAsFixed(1)} kg',
+                                    const TextStyle(color: AppColors.textDark, fontWeight: FontWeight.bold),
+                                  );
+                                }).toList();
+                              },
+                            ),
+                            handleBuiltInTouches: true,
+                            getTouchedSpotIndicator: (barData, spotIndexes) {
+                              return spotIndexes.map((index) {
+                                return TouchedSpotIndicatorData(
+                                  FlLine(color: const Color(0xFFBF5AF2), strokeWidth: 1),
+                                  FlDotData(
+                                    getDotPainter: (spot, percent, barData, index) {
+                                      return FlDotCirclePainter(
+                                        radius: 6,
+                                        color: const Color(0xFFBF5AF2),
+                                        strokeWidth: 2,
+                                        strokeColor: Colors.white,
+                                      );
+                                    },
+                                  ),
+                                );
+                              }).toList();
+                            },
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 20),
+                  ],
+                ),
+                secondChild: const SizedBox(width: double.infinity),
+                crossFadeState: _isExpanded
+                    ? CrossFadeState.showFirst
+                    : CrossFadeState.showSecond,
+                duration: const Duration(milliseconds: 300),
+              ),
+            ],
+          ),
         ),
       ),
-        ),
       ),
     );
+  }
+
+  double _getMaxX() {
+    switch (_selectedTimeRangeIndex) {
+      case 0: return 24; // Day
+      case 1: return 6; // Week
+      case 2: return 30; // Month
+      case 3: return 5; // 6 Months
+      case 4: return 11; // Year
+      default: return 30;
+    }
   }
 }

@@ -25,6 +25,7 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
   String? _neuterStatus; // 已绝育/未绝育
   double? _weight; // kg
   String? _userAvatarPath; // 用户头像路径
+  String? _ownerName; // 对主人的称呼，默认"主人"
 
   final Map<String, List<String>> _speciesOptions = {
     '猫咪': [
@@ -218,6 +219,9 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
       }
       if (data['weight'] != null) {
         _weight = data['weight'] as double?;
+      }
+      if (data['owner_name'] != null) {
+        _ownerName = data['owner_name'] as String?;
       }
     });
   }
@@ -1557,6 +1561,144 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
     );
   }
 
+  void _showOwnerNameInput() {
+    final controller = TextEditingController(text: _ownerName ?? '主人');
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
+      barrierColor: Colors.black54,
+      transitionDuration: const Duration(milliseconds: 300),
+      pageBuilder: (
+        BuildContext buildContext,
+        Animation animation,
+        Animation secondaryAnimation,
+      ) {
+        return Center(
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 30),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          '设置主人称呼',
+                          style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close, size: 22),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          onPressed: () => Navigator.pop(buildContext),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      '你希望宠物对你的称呼，默认为“主人”',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Color(0xFF999999),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    TextField(
+                      controller: controller,
+                      autofocus: false,
+                      decoration: InputDecoration(
+                        hintText: '请输入对主人的称呼',
+                        hintStyle: TextStyle(color: Colors.grey.shade400),
+                        filled: true,
+                        fillColor: const Color(0xFFF7F8FA),
+                        border: OutlineInputBorder(
+                          borderSide: BorderSide.none,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 14,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextButton(
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 14,
+                              ),
+                              backgroundColor: const Color(0xFFF5F5F5),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            onPressed: () => Navigator.pop(buildContext),
+                            child: Text(
+                              '取消',
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: Colors.grey.shade700,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF5A8EFA),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 14,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              elevation: 0,
+                            ),
+                            onPressed: () {
+                              setState(() => _ownerName = controller.text);
+                              Navigator.pop(buildContext);
+                            },
+                            child: const Text(
+                              '确认',
+                              style: TextStyle(fontSize: 16),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+      transitionBuilder: (context, animation, secondaryAnimation, child) {
+        return ScaleTransition(
+          scale: CurvedAnimation(parent: animation, curve: Curves.easeOutBack),
+          child: FadeTransition(opacity: animation, child: child),
+        );
+      },
+    );
+  }
+
   void _showNameInput() {
     final controller = TextEditingController(text: _petName);
     showGeneralDialog(
@@ -1715,8 +1857,8 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              SizedBox(
-                width: 70,
+              Container(
+                constraints: const BoxConstraints(minWidth: 70),
                 child: Text(
                   label,
                   style: const TextStyle(
@@ -1726,24 +1868,30 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
                   ),
                 ),
               ),
-              Row(
-                children: [
-                  Text(
-                    value ?? placeholder,
-                    style: TextStyle(
-                      fontSize: 15,
-                      color: value != null
-                          ? Colors.black87
-                          : const Color(0xFFCCCCCC),
+              Expanded(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    Flexible(
+                      child: Text(
+                        value ?? placeholder,
+                        style: TextStyle(
+                          fontSize: 15,
+                          color: value != null
+                              ? Colors.black87
+                              : const Color(0xFFCCCCCC),
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  const Icon(
-                    Icons.arrow_forward_ios,
-                    size: 14,
-                    color: Color(0xFFCCCCCC),
-                  ),
-                ],
+                    const SizedBox(width: 8),
+                    const Icon(
+                      Icons.arrow_forward_ios,
+                      size: 14,
+                      color: Color(0xFFCCCCCC),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -1785,6 +1933,7 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
 
     final result = {
       'avatar': _avatarFile?.path,
+      'owner_name': _ownerName ?? '主人',
       'name': _petName,
       'type': typeForDb, // 宠物类型：狗、猫
       'breed': _petSpecies, // 品种：边牧犬、布偶猫
@@ -1972,6 +2121,12 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
                               ? '${_weight!.toStringAsFixed(1)} kg'
                               : null,
                           onTap: _showWeightPicker,
+                        ),
+                        _buildListItem(
+                          label: '对主人称呼',
+                          placeholder: '主人',
+                          value: _ownerName,
+                          onTap: _showOwnerNameInput,
                           isLast: true,
                         ),
                       ],

@@ -1,7 +1,10 @@
 import 'dart:async';
+import 'dart:ui';
 import 'dart:math' as math;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import '../../utils/ui_helpers.dart';
 import '../../services/supabase_edge_service.dart';
 import '../../models/pet_diary.dart';
 import '../../services/supabase_service.dart';
@@ -33,6 +36,7 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
   late AnimationController _cursorAnimationController; // 光标闪烁
   late AnimationController _loadingAnimationController; // 加载动画
   late AnimationController _shimmerAnimationController; // 微光动画
+  late AnimationController _orbController; // 背景光球动画
   late ScrollController _scrollController; // 滚动控制器
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
@@ -43,9 +47,15 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
   String _loadingMessage = '正在连接 AI...'; // 加载提示信息
   Timer? _messageTimer; // 提示信息定时器
   String _fullTextBuffer = ''; // 完整文本缓冲区
+  String _gibberishBuffer = ''; // 乱码缓冲区
   Timer? _typingTimer; // 打字效果定时器
-  int _displayedLength = 0; // 已显示的字符数
+  int _displayedLength = 0; // 已显示的字符数 (打字机光标位置)
+  int _decodedLength = 0; // 已解码的字符数 (真实文本位置)
   int _lastScrollLength = 0; // 上次滚动时的字符数
+
+  // 宠物乱码字符集
+  final List<String> _petSounds = ['喵', '汪', '嗷', '呜', '吱', '~', '！', '？', '...'];
+  final math.Random _random = math.Random();
 
   @override
   void initState() {
@@ -72,6 +82,11 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
       duration: const Duration(milliseconds: 1500),
       vsync: this,
     )..repeat();
+
+    _orbController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 10),
+    )..repeat(reverse: true);
 
     _fadeAnimation = CurvedAnimation(
       parent: _animationController,
@@ -109,6 +124,7 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
     _cursorAnimationController.dispose();
     _loadingAnimationController.dispose();
     _shimmerAnimationController.dispose();
+    _orbController.dispose();
     _scrollController.dispose();
     _messageTimer?.cancel();
     _typingTimer?.cancel();
@@ -137,6 +153,13 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
     });
   }
 
+  /// 更新乱码缓冲区以匹配文本长度
+  void _updateGibberish() {
+    while (_gibberishBuffer.length < _fullTextBuffer.length) {
+      _gibberishBuffer += _petSounds[_random.nextInt(_petSounds.length)];
+    }
+  }
+
   /// 开始流式生成日记
   Future<void> _startGenerating() async {
     try {
@@ -157,24 +180,27 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
               _showLoading = false;
               _messageTimer?.cancel();
               _fullTextBuffer = newText;
+              _updateGibberish(); // 生成对应的乱码
               _startTypingEffect();
             } else {
               // 后续数据到达时，直接更新缓冲区
-              // 打字定时器会自动追赶
               _fullTextBuffer = newText;
+              _updateGibberish(); // 补充乱码
             }
           }
         } else if (event is DiaryDoneEvent) {
           if (mounted) {
-            // 更新缓冲区为最终文本，让打字效果继续完成
+            // 更新缓冲区为最终文本
             _fullTextBuffer = event.finalText;
+            _updateGibberish();
+            
             setState(() {
               _isGenerating = false;
+              _generatedContent = event.finalText;
             });
             _messageTimer?.cancel();
             
             // 等待打字效果完成后再真正结束
-            // 打字定时器会在显示完所有内容后自动停止
           }
           break;
         } else if (event is DiaryErrorEvent) {
@@ -230,43 +256,60 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
     }
   }
 
-  /// 开始打字效果
+  /// 开始打字和解码效果
   void _startTypingEffect() {
     _typingTimer?.cancel();
     
-    // 每次显示多个字符，实现更快的"流式"效果
+    // 50ms 刷新一次
     _typingTimer = Timer.periodic(const Duration(milliseconds: 50), (timer) {
       if (!mounted) {
         timer.cancel();
         return;
       }
 
+      bool needsUpdate = false;
+
+      // 1. 打字机效果：增加显示的字符总数 (包含乱码)
       if (_displayedLength < _fullTextBuffer.length) {
-        setState(() {
-          // 计算还需要显示多少字符
-          final remaining = _fullTextBuffer.length - _displayedLength;
-          
-          // 每次显示1-3个字符，让效果既流畅又不会太慢
-          // 如果剩余字符很多，每次多显示几个字符加快追赶
-          final charsToAdd = remaining > 50 ? 3 : (remaining > 20 ? 2 : 1);
-          
-          _displayedLength = (_displayedLength + charsToAdd).clamp(0, _fullTextBuffer.length);
-          _generatedContent = _fullTextBuffer.substring(0, _displayedLength);
-        });
+        // 每次增加 1-3 个字符
+        final remaining = _fullTextBuffer.length - _displayedLength;
+        final charsToAdd = remaining > 50 ? 3 : (remaining > 20 ? 2 : 1);
+        _displayedLength = (_displayedLength + charsToAdd).clamp(0, _fullTextBuffer.length);
+        needsUpdate = true;
+      }
+
+      // 2. 解码效果：只有当乱码全部打完，且生成已完成时，才开始解码
+      // 这样就实现了"先写完乱码，再翻译成人类语言"的效果
+      bool typingFinished = _displayedLength >= _fullTextBuffer.length;
+      bool generationFinished = !_isGenerating;
+
+      if (typingFinished && generationFinished && _decodedLength < _fullTextBuffer.length) {
+        // 解码速度
+        final remaining = _fullTextBuffer.length - _decodedLength;
+        // 加速解码，避免等待太久
+        final decodeSpeed = remaining > 50 ? 3 : (remaining > 20 ? 2 : 1);
         
-        // 每显示约20个字符才滚动一次，进一步减少滚动频率
+        _decodedLength = (_decodedLength + decodeSpeed).clamp(0, _fullTextBuffer.length);
+        needsUpdate = true;
+      }
+
+      if (needsUpdate) {
+        setState(() {
+          // 拼接：已解码部分 + 未解码部分(乱码)
+          // _buildDiaryContent 会根据 _decodedLength 和 _displayedLength 自动处理
+        });
+
+        // 自动滚动
         if (_displayedLength - _lastScrollLength >= 20 || 
             _displayedLength >= _fullTextBuffer.length) {
           _autoScrollToBottom();
           _lastScrollLength = _displayedLength;
         }
-      } else if (!_isGenerating) {
-        // 如果已经显示完所有内容且生成已完成，停止定时器
+      } else if (!_isGenerating && _decodedLength == _fullTextBuffer.length) {
+        // 全部生成完毕，且全部解码完毕
         timer.cancel();
         _typingTimer = null;
       }
-      // 如果还在生成中，即使显示完了当前内容，也继续运行
-      // 因为可能还会有新数据到达
     });
   }
 
@@ -375,7 +418,8 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FD),
+      backgroundColor: AppColors.background,
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -383,15 +427,8 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
           icon: Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: Colors.white.withOpacity(0.8),
               borderRadius: BorderRadius.circular(12),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
             ),
             child: const Icon(
               CupertinoIcons.back,
@@ -416,15 +453,8 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
             icon: Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: Colors.white.withOpacity(0.8),
                 borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
               ),
               child: const Icon(
                 Icons.share_outlined,
@@ -448,204 +478,286 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
           const SizedBox(width: 8),
         ],
       ),
-      body: SafeArea(
-        child: FadeTransition(
-          opacity: _fadeAnimation,
-          child: SlideTransition(
-            position: _slideAnimation,
-            child: SingleChildScrollView(
-              controller: _scrollController,
-              physics: const BouncingScrollPhysics(),
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // 原始记录卡片 - 简约设计
-                  _buildOriginalCard(),
+      body: Stack(
+        children: [
+          // 背景层
+          Stack(
+            children: [
+              Container(color: AppColors.background),
+              AnimatedBuilder(
+                animation: _orbController,
+                builder: (context, child) {
+                  return Positioned(
+                    top: -100 + (_orbController.value * 40),
+                    left: -50 + (_orbController.value * 20),
+                    child: Container(
+                      width: 500, height: 500,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: AppColors.orb1.withOpacity(0.5),
+                      ),
+                    ).blurred(sigmaX: 90, sigmaY: 90),
+                  );
+                },
+              ),
+              AnimatedBuilder(
+                animation: _orbController,
+                builder: (context, child) {
+                  return Positioned(
+                    top: 300 + (math.sin(_orbController.value * math.pi) * 60),
+                    right: -100,
+                    child: Container(
+                      width: 350, height: 350,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: AppColors.orb3.withOpacity(0.4),
+                      ),
+                    ).blurred(sigmaX: 80, sigmaY: 80),
+                  );
+                },
+              ),
+              AnimatedBuilder(
+                animation: _orbController,
+                builder: (context, child) {
+                  return Positioned(
+                    bottom: -150,
+                    left: -80 + (_orbController.value * 150),
+                    child: Container(
+                      width: 600, height: 400,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: AppColors.orb2.withOpacity(0.5),
+                      ),
+                    ).blurred(sigmaX: 100, sigmaY: 100),
+                  );
+                },
+              ),
+            ],
+          ),
 
-                  const SizedBox(height: 20),
+          SafeArea(
+            child: FadeTransition(
+              opacity: _fadeAnimation,
+              child: SlideTransition(
+                position: _slideAnimation,
+                child: SingleChildScrollView(
+                  controller: _scrollController,
+                  physics: const BouncingScrollPhysics(),
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // 顶部 Kimi Ball
+                      const Center(child: _KimiBall()),
+                      const SizedBox(height: 20),
 
-                  // 十六的日记卡片 - 精致设计
-                  _buildDiaryCard(),
+                      // 原始记录卡片
+                      _buildOriginalCard(),
 
-                  const SizedBox(height: 32),
+                      const SizedBox(height: 20),
 
-                  // 操作按钮 - 只在加载完成后显示
-                  if (!_showLoading)
-                    _buildActionButtons(),
+                      // 十六的日记卡片
+                      _buildDiaryCard(),
 
-                  const SizedBox(height: 20),
-                ],
+                      const SizedBox(height: 32),
+
+                      // 操作按钮 - 只在加载完成后显示
+                      if (!_showLoading)
+                        _buildActionButtons(),
+
+                      const SizedBox(height: 20),
+                    ],
+                  ),
+                ),
               ),
             ),
           ),
-        ),
+        ],
       ),
     );
   }
 
   Widget _buildOriginalCard() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF7B95FF).withOpacity(0.08),
-            blurRadius: 20,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      const Color(0xFF7B95FF).withOpacity(0.15),
-                      const Color(0xFF9B7FFF).withOpacity(0.15),
-                    ],
-                  ),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(
-                  Icons.history_edu_outlined,
-                  size: 20,
-                  color: Color(0xFF7B95FF),
-                ),
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(24),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.6),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: Colors.white.withOpacity(0.6), width: 1),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF7B95FF).withOpacity(0.08),
+                blurRadius: 20,
+                offset: const Offset(0, 4),
               ),
-              const SizedBox(width: 12),
-              const Text(
-                '原始记录',
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF7B95FF).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.history_edu_outlined,
+                          size: 14,
+                          color: Color(0xFF7B95FF),
+                        ),
+                        SizedBox(width: 6),
+                        Text(
+                          'Original',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF7B95FF),
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Text(
+                widget.originalText,
                 style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  color: Color(0xFF2D3142),
-                  letterSpacing: 0.3,
+                  fontSize: 14,
+                  height: 1.6,
+                  color: Colors.grey[700],
+                  letterSpacing: 0.2,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 16),
-          Text(
-            widget.originalText,
-            style: TextStyle(
-              fontSize: 14,
-              height: 1.7,
-              color: Colors.grey[600],
-              letterSpacing: 0.2,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
 
   Widget _buildDiaryCard() {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFFF0F4FF), Color(0xFFE8EEFF)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF7B95FF).withOpacity(0.15),
-            blurRadius: 30,
-            offset: const Offset(0, 8),
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(28),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.75),
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(color: Colors.white.withOpacity(0.8), width: 1.5),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF7B95FF).withOpacity(0.15),
+                blurRadius: 40,
+                offset: const Offset(0, 10),
+              ),
+            ],
           ),
-        ],
-      ),
-      child: Stack(
-        children: [
-          // 装饰性图案
-          Positioned(
-            right: -20,
-            top: -20,
-            child: Container(
-              width: 100,
-              height: 100,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: [
-                    const Color(0xFF7B95FF).withOpacity(0.1),
-                    Colors.transparent,
-                  ],
+          child: Stack(
+            children: [
+              // 装饰性背景
+              Positioned(
+                right: -20,
+                top: -20,
+                child: Container(
+                  width: 120,
+                  height: 120,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: RadialGradient(
+                      colors: [
+                        const Color(0xFF7B95FF).withOpacity(0.1),
+                        Colors.transparent,
+                      ],
+                    ),
+                  ),
                 ),
               ),
-            ),
-          ),
-          Positioned(
-            left: -30,
-            bottom: -30,
-            child: Container(
-              width: 120,
-              height: 120,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: [
-                    const Color(0xFF9B7FFF).withOpacity(0.08),
-                    Colors.transparent,
-                  ],
-                ),
-              ),
-            ),
-          ),
 
-          // 内容
-          Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // 标题部分
-                Row(
+              Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    // 标题部分
+                    Row(
                       children: [
-                        Text(
-                          '十六正在写日记',
-                          style: TextStyle(
-                            fontSize: 19,
-                            fontWeight: FontWeight.w800,
-                            color: Color(0xFF7B95FF),
-                            letterSpacing: 0.5,
+                        // 宠物头像占位
+                        Container(
+                          width: 48,
+                          height: 48,
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFFE0C3FC), Color(0xFF8EC5FC)],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFF8EC5FC).withOpacity(0.4),
+                                blurRadius: 10,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
                           ),
+                          child: const Icon(Icons.pets, color: Colors.white, size: 24),
                         ),
-                        SizedBox(height: 2),
-                        Text(
-                          'Sixteen\'s Diary',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: Color(0xFF9B7FFF),
-                            fontWeight: FontWeight.w500,
-                            letterSpacing: 0.8,
-                          ),
+                        const SizedBox(width: 16),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              '十六的日记',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w800,
+                                color: Color(0xFF2D3142),
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                Icon(Icons.calendar_today_outlined, size: 12, color: Colors.grey[500]),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '${DateTime.now().year}.${DateTime.now().month}.${DateTime.now().day} | AI 宠物视角',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey[500],
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
                       ],
                     ),
+
+                    const SizedBox(height: 24),
+
+                    // 日记内容或加载动画
+                    _showLoading ? _buildLoadingState() : _buildDiaryContent(),
                   ],
                 ),
-
-                const SizedBox(height: 20),
-
-                // 日记内容或加载动画
-                _showLoading ? _buildLoadingState() : _buildDiaryContent(),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -657,138 +769,18 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
       children: [
         const SizedBox(height: 20),
         
-        // "正在写日记"动画 - 呼吸 + 粒子闪烁 + 书写晃动
-        SizedBox(
-          width: 200,
-          height: 200,
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              // 呼吸光晕 - 外层脉冲
-              AnimatedBuilder(
-                animation: _shimmerAnimationController,
-                builder: (context, child) {
-                  final breathe = 1.0 + 0.15 * math.sin(2 * math.pi * _shimmerAnimationController.value);
-                  return Transform.scale(
-                    scale: breathe,
-                    child: Container(
-                      width: 180,
-                      height: 180,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: RadialGradient(
-                          colors: [
-                            const Color(0xFF7B95FF).withOpacity(0.3),
-                            const Color(0xFF9B7FFF).withOpacity(0.1),
-                            Colors.transparent,
-                          ],
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-              
-              // 中层呼吸光晕
-              AnimatedBuilder(
-                animation: _shimmerAnimationController,
-                builder: (context, child) {
-                  final breathe = 1.0 + 0.1 * math.sin(2 * math.pi * _shimmerAnimationController.value + 0.5);
-                  return Transform.scale(
-                    scale: breathe,
-                    child: Container(
-                      width: 160,
-                      height: 160,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: RadialGradient(
-                          colors: [
-                            const Color(0xFF9B7FFF).withOpacity(0.25),
-                            Colors.transparent,
-                          ],
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-              
-              // 主体 - 书写晃动 + 呼吸
-              AnimatedBuilder(
-                animation: Listenable.merge([_loadingAnimationController, _shimmerAnimationController]),
-                builder: (context, child) {
-                  // 书写晃动效果 - 模拟手写时的轻微摆动
-                  final tilt = 0.08 * math.sin(4 * math.pi * _loadingAnimationController.value);
-                  // 轻微呼吸
-                  final breathe = 1.0 + 0.05 * math.sin(2 * math.pi * _shimmerAnimationController.value);
-                  
-                  return Transform.rotate(
-                    angle: tilt,
-                    child: Transform.scale(
-                      scale: breathe,
-                      child: Container(
-                        width: 140,
-                        height: 140,
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [
-                              Color(0xFF7B95FF),
-                              Color(0xFF9B7FFF),
-                              Color(0xFFB896FF),
-                            ],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                          borderRadius: BorderRadius.circular(38),
-                          boxShadow: [
-                            BoxShadow(
-                              color: const Color(0xFF7B95FF).withOpacity(0.5),
-                              blurRadius: 30,
-                              offset: const Offset(0, 10),
-                              spreadRadius: 3,
-                            ),
-                            BoxShadow(
-                              color: const Color(0xFF9B7FFF).withOpacity(0.4),
-                              blurRadius: 50,
-                            ),
-                          ],
-                        ),
-                        child: Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            // 主图标（稍微缩小，为粒子留空间）
-                            const Icon(
-                              Icons.auto_awesome,
-                              color: Colors.white,
-                              size: 48,
-                            ),
-                            // 粒子闪烁效果 - 三个小星星
-                            ..._buildSparkleParticles(),
-                          ],
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ],
-          ),
-        ),
-
-        const SizedBox(height: 32),
-
-        // 主标题 - 动态变化的提示
+        // 简单的加载提示，因为顶部已经有 Kimi Ball 了
         Text(
           _loadingMessage,
-          style: const TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w700,
-            color: Color(0xFF2D3142),
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: Colors.grey.shade600,
             letterSpacing: 0.5,
           ),
         ),
 
-        const SizedBox(height: 40),
+        const SizedBox(height: 30),
 
         // 微光骨架屏 - 3行
         ...List.generate(
@@ -843,66 +835,45 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
     );
   }
 
-  /// 构建闪烁粒子效果 - 三个小星星轮流闪烁
-  List<Widget> _buildSparkleParticles() {
-    return List.generate(3, (index) {
-      // 每个星星有不同的延迟和位置
-      final positions = [
-        const Offset(25, -25),  // 右上
-        const Offset(-30, -20), // 左上
-        const Offset(28, 20),   // 右下
-      ];
-      
-      return AnimatedBuilder(
-        animation: _loadingAnimationController,
-        builder: (context, child) {
-          // 计算闪烁：每个星星在不同时间闪烁
-          final phase = (_loadingAnimationController.value + index * 0.33) % 1.0;
-          // 使用正弦波创建平滑的闪烁效果
-          final opacity = 0.3 + 0.7 * math.sin(phase * 2 * math.pi).abs();
-          final scale = 0.8 + 0.4 * math.sin(phase * 2 * math.pi).abs();
-          
-          return Positioned(
-            left: 70 + positions[index].dx,
-            top: 70 + positions[index].dy,
-            child: Transform.scale(
-              scale: scale,
-              child: Icon(
-                Icons.star,
-                color: Colors.white.withOpacity(opacity),
-                size: 12,
-              ),
-            ),
-          );
-        },
-      );
-    });
-  }
-
   // 日记内容显示
   Widget _buildDiaryContent() {
-    return Stack(
+    // 计算两部分的文本
+    String decodedPart = '';
+    String gibberishPart = '';
+    
+    if (_fullTextBuffer.isNotEmpty) {
+      // 确保索引不越界
+      final safeDecodedLen = _decodedLength.clamp(0, _fullTextBuffer.length);
+      final safeDisplayedLen = _displayedLength.clamp(0, _fullTextBuffer.length);
+      
+      if (safeDecodedLen > 0) {
+        decodedPart = _fullTextBuffer.substring(0, safeDecodedLen);
+      }
+      
+      if (safeDisplayedLen > safeDecodedLen) {
+        // 确保乱码缓冲区足够长
+        if (_gibberishBuffer.length < safeDisplayedLen) {
+          // 紧急补充乱码 (理论上 _updateGibberish 应该处理好了，但为了安全)
+          while (_gibberishBuffer.length < safeDisplayedLen) {
+            _gibberishBuffer += _petSounds[_random.nextInt(_petSounds.length)];
+          }
+        }
+        gibberishPart = _gibberishBuffer.substring(safeDecodedLen, safeDisplayedLen);
+      }
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
           width: double.infinity,
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.04),
-                blurRadius: 10,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: _generatedContent.isEmpty
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: _fullTextBuffer.isEmpty && _isGenerating
               ? const Text(
                   '等待生成中...',
                   style: TextStyle(
-                    fontSize: 15.5,
-                    height: 2.0,
+                    fontSize: 16,
+                    height: 1.8,
                     color: Color(0xFF2D3142),
                     letterSpacing: 0.5,
                     fontWeight: FontWeight.w400,
@@ -911,14 +882,28 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
               : RichText(
                   text: TextSpan(
                     children: [
+                      // 已解码部分 (正常显示)
                       TextSpan(
-                        text: _generatedContent,
+                        text: decodedPart,
                         style: const TextStyle(
-                          fontSize: 15.5,
-                          height: 2.0,
+                          fontSize: 16,
+                          height: 1.8,
                           color: Color(0xFF2D3142),
-                          letterSpacing: 0.5,
+                          letterSpacing: 0.6,
                           fontWeight: FontWeight.w400,
+                          fontFamily: '.SF UI Text',
+                        ),
+                      ),
+                      // 乱码部分 (特殊样式: 稍微淡一点，或者用特殊字体)
+                      TextSpan(
+                        text: gibberishPart,
+                        style: TextStyle(
+                          fontSize: 16,
+                          height: 1.8,
+                          color: const Color(0xFF7B95FF).withOpacity(0.8), // 使用主题色
+                          letterSpacing: 0.6,
+                          fontWeight: FontWeight.w600, // 稍微加粗
+                          fontFamily: 'Courier', // 等宽字体更有代码感/乱码感
                         ),
                       ),
                       // 打字光标
@@ -927,8 +912,7 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
                           child: FadeTransition(
                             opacity: _cursorAnimationController,
                             child: Container(
-                              margin:
-                                  const EdgeInsets.only(left: 2),
+                              margin: const EdgeInsets.only(left: 2),
                               width: 2,
                               height: 20,
                               decoration: BoxDecoration(
@@ -938,8 +922,7 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
                                     Color(0xFF9B7FFF),
                                   ],
                                 ),
-                                borderRadius:
-                                    BorderRadius.circular(1),
+                                borderRadius: BorderRadius.circular(1),
                               ),
                             ),
                           ),
@@ -947,6 +930,30 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
                     ],
                   ),
                 ),
+        ),
+        const SizedBox(height: 20),
+        // 底部装饰：爪印签名
+        Align(
+          alignment: Alignment.centerRight,
+          child: Opacity(
+            opacity: 0.5,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Created by Peture AI',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontStyle: FontStyle.italic,
+                    color: Colors.grey[500],
+                    fontFamily: 'Georgia', // 衬线体更有签名感
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Icon(Icons.pets, size: 14, color: Colors.grey[400]),
+              ],
+            ),
+          ),
         ),
       ],
     );
@@ -1057,6 +1064,193 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
           ),
         ),
       ],
+    );
+  }
+}
+
+// =======================================================================
+// Kimi 风格精灵小球组件 (复用自 ChatPage)
+// =======================================================================
+class _KimiBall extends StatefulWidget {
+  const _KimiBall();
+
+  @override
+  State<_KimiBall> createState() => _KimiBallState();
+}
+
+class _KimiBallState extends State<_KimiBall> with TickerProviderStateMixin {
+  late AnimationController _blinkController;
+  late AnimationController _bounceController;
+  late AnimationController _lookController;
+  late AnimationController _breathController;
+  Timer? _blinkTimer;
+  Timer? _lookTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _blinkController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 200),
+    );
+    _bounceController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 500),
+      lowerBound: 0.0,
+      upperBound: 1.0,
+    );
+    _lookController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    );
+    _breathController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 3),
+    )..repeat(reverse: true);
+
+    _startBlinking();
+    _startLooking();
+  }
+
+  void _startBlinking() {
+    _blinkTimer = Timer.periodic(const Duration(seconds: 4), (timer) {
+      if (mounted) {
+        if (math.Random().nextBool()) {
+          _blinkController.forward().then((_) {
+            _blinkController.reverse().then((_) {
+              Future.delayed(const Duration(milliseconds: 100), () {
+                if (mounted) {
+                  _blinkController
+                      .forward()
+                      .then((_) => _blinkController.reverse());
+                }
+              });
+            });
+          });
+        } else {
+          _blinkController.forward().then((_) => _blinkController.reverse());
+        }
+      }
+    });
+  }
+
+  void _startLooking() {
+    _lookTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
+      if (mounted && !_lookController.isAnimating && math.Random().nextBool()) {
+        _lookController.forward().then((_) {
+          Future.delayed(const Duration(milliseconds: 1200), () {
+            if (mounted) _lookController.reverse();
+          });
+        });
+      }
+    });
+  }
+
+  void _onTap() {
+    if (!_bounceController.isAnimating) {
+      HapticFeedback.mediumImpact();
+      _bounceController.forward().then((_) => _bounceController.reverse());
+      _blinkController.forward().then((_) => _blinkController.reverse());
+    }
+  }
+
+  @override
+  void dispose() {
+    _blinkController.dispose();
+    _bounceController.dispose();
+    _lookController.dispose();
+    _breathController.dispose();
+    _blinkTimer?.cancel();
+    _lookTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: _onTap,
+      child: AnimatedBuilder(
+        animation: Listenable.merge([_bounceController, _breathController]),
+        builder: (context, child) {
+          double bounceScale = 1.0;
+          double translateY = 0.0;
+
+          if (_bounceController.value <= 0.5) {
+            bounceScale = 1.0 - (_bounceController.value * 0.2);
+            translateY = _bounceController.value * 10;
+          } else {
+            bounceScale = 0.9 + ((_bounceController.value - 0.5) * 0.2);
+            translateY = (1.0 - _bounceController.value) * 10;
+          }
+
+          double breathScale = 1.0 + (_breathController.value * 0.03);
+
+          return Transform.translate(
+            offset: Offset(0, translateY),
+            child: Transform.scale(
+              scale: bounceScale * breathScale,
+              child: child,
+            ),
+          );
+        },
+        child: Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color(0xFF4facfe),
+                Color(0xFF00f2fe),
+              ],
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF4facfe).withOpacity(0.4),
+                blurRadius: 16,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: Stack(
+            children: [
+              Align(
+                alignment: const Alignment(-0.35, -0.2),
+                child: _buildEye(),
+              ),
+              Align(
+                alignment: const Alignment(0.35, -0.2),
+                child: _buildEye(),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEye() {
+    return AnimatedBuilder(
+      animation: Listenable.merge([_blinkController, _lookController]),
+      builder: (context, child) {
+        final height = 10.0 * (1.0 - _blinkController.value);
+        final lookProgress = Curves.easeInOut.transform(_lookController.value);
+        final lookOffset = Offset(4.0 * lookProgress, -3.0 * lookProgress);
+
+        return Transform.translate(
+          offset: lookOffset,
+          child: Container(
+            width: 6,
+            height: height > 1.5 ? height : 1.5,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(3),
+            ),
+          ),
+        );
+      },
     );
   }
 }
