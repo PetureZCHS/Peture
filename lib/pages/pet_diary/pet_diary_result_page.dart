@@ -80,11 +80,11 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
 
     _slideAnimation =
         Tween<Offset>(begin: const Offset(0, 0.1), end: Offset.zero).animate(
-          CurvedAnimation(
-            parent: _animationController,
-            curve: Curves.easeOutCubic,
-          ),
-        );
+      CurvedAnimation(
+        parent: _animationController,
+        curve: Curves.easeOutCubic,
+      ),
+    );
 
     _animationController.forward();
 
@@ -143,7 +143,7 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
       final stream = widget.diaryService!.generatePetDiary(
         query: widget.originalText,
         style: widget.style,
-        userId: 'pet_diary_user_${DateTime.now().millisecondsSinceEpoch}',
+        // nickname 和 breed 可以根据需要从用户数据中获取
       );
 
       await for (final event in stream) {
@@ -151,7 +151,7 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
           if (mounted) {
             // 更新完整文本缓冲区
             final newText = event.fullText;
-            
+
             // 第一次收到数据时，隐藏加载动画并开始打字效果
             if (_showLoading && newText.isNotEmpty) {
               _showLoading = false;
@@ -172,7 +172,7 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
               _isGenerating = false;
             });
             _messageTimer?.cancel();
-            
+
             // 等待打字效果完成后再真正结束
             // 打字定时器会在显示完所有内容后自动停止
           }
@@ -233,7 +233,7 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
   /// 开始打字效果
   void _startTypingEffect() {
     _typingTimer?.cancel();
-    
+
     // 每次显示多个字符，实现更快的"流式"效果
     _typingTimer = Timer.periodic(const Duration(milliseconds: 50), (timer) {
       if (!mounted) {
@@ -245,17 +245,18 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
         setState(() {
           // 计算还需要显示多少字符
           final remaining = _fullTextBuffer.length - _displayedLength;
-          
+
           // 每次显示1-3个字符，让效果既流畅又不会太慢
           // 如果剩余字符很多，每次多显示几个字符加快追赶
           final charsToAdd = remaining > 50 ? 3 : (remaining > 20 ? 2 : 1);
-          
-          _displayedLength = (_displayedLength + charsToAdd).clamp(0, _fullTextBuffer.length);
+
+          _displayedLength =
+              (_displayedLength + charsToAdd).clamp(0, _fullTextBuffer.length);
           _generatedContent = _fullTextBuffer.substring(0, _displayedLength);
         });
-        
+
         // 每显示约20个字符才滚动一次，进一步减少滚动频率
-        if (_displayedLength - _lastScrollLength >= 20 || 
+        if (_displayedLength - _lastScrollLength >= 20 ||
             _displayedLength >= _fullTextBuffer.length) {
           _autoScrollToBottom();
           _lastScrollLength = _displayedLength;
@@ -276,7 +277,7 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
     if (_loadingMessage == '马上就好...') {
       return;
     }
-    
+
     // 延迟滚动，避免与UI更新冲突
     Future.delayed(const Duration(milliseconds: 100), () {
       if (!mounted) return;
@@ -471,8 +472,7 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
                   const SizedBox(height: 32),
 
                   // 操作按钮 - 只在加载完成后显示
-                  if (!_showLoading)
-                    _buildActionButtons(),
+                  if (!_showLoading) _buildActionButtons(),
 
                   const SizedBox(height: 20),
                 ],
@@ -656,7 +656,7 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         const SizedBox(height: 20),
-        
+
         // "正在写日记"动画 - 呼吸 + 粒子闪烁 + 书写晃动
         SizedBox(
           width: 200,
@@ -668,7 +668,10 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
               AnimatedBuilder(
                 animation: _shimmerAnimationController,
                 builder: (context, child) {
-                  final breathe = 1.0 + 0.15 * math.sin(2 * math.pi * _shimmerAnimationController.value);
+                  final breathe = 1.0 +
+                      0.15 *
+                          math.sin(
+                              2 * math.pi * _shimmerAnimationController.value);
                   return Transform.scale(
                     scale: breathe,
                     child: Container(
@@ -688,12 +691,16 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
                   );
                 },
               ),
-              
+
               // 中层呼吸光晕
               AnimatedBuilder(
                 animation: _shimmerAnimationController,
                 builder: (context, child) {
-                  final breathe = 1.0 + 0.1 * math.sin(2 * math.pi * _shimmerAnimationController.value + 0.5);
+                  final breathe = 1.0 +
+                      0.1 *
+                          math.sin(
+                              2 * math.pi * _shimmerAnimationController.value +
+                                  0.5);
                   return Transform.scale(
                     scale: breathe,
                     child: Container(
@@ -712,16 +719,21 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
                   );
                 },
               ),
-              
+
               // 主体 - 书写晃动 + 呼吸
               AnimatedBuilder(
-                animation: Listenable.merge([_loadingAnimationController, _shimmerAnimationController]),
+                animation: Listenable.merge(
+                    [_loadingAnimationController, _shimmerAnimationController]),
                 builder: (context, child) {
                   // 书写晃动效果 - 模拟手写时的轻微摆动
-                  final tilt = 0.08 * math.sin(4 * math.pi * _loadingAnimationController.value);
+                  final tilt = 0.08 *
+                      math.sin(4 * math.pi * _loadingAnimationController.value);
                   // 轻微呼吸
-                  final breathe = 1.0 + 0.05 * math.sin(2 * math.pi * _shimmerAnimationController.value);
-                  
+                  final breathe = 1.0 +
+                      0.05 *
+                          math.sin(
+                              2 * math.pi * _shimmerAnimationController.value);
+
                   return Transform.rotate(
                     angle: tilt,
                     child: Transform.scale(
@@ -800,7 +812,7 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
             ),
           ),
         ),
-        
+
         const SizedBox(height: 20),
       ],
     );
@@ -813,7 +825,7 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
       builder: (context, child) {
         // 计算带延迟的动画进度
         final progress = (_shimmerAnimationController.value + delay) % 1.0;
-        
+
         return Container(
           height: 10,
           width: double.infinity,
@@ -848,20 +860,21 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
     return List.generate(3, (index) {
       // 每个星星有不同的延迟和位置
       final positions = [
-        const Offset(25, -25),  // 右上
+        const Offset(25, -25), // 右上
         const Offset(-30, -20), // 左上
-        const Offset(28, 20),   // 右下
+        const Offset(28, 20), // 右下
       ];
-      
+
       return AnimatedBuilder(
         animation: _loadingAnimationController,
         builder: (context, child) {
           // 计算闪烁：每个星星在不同时间闪烁
-          final phase = (_loadingAnimationController.value + index * 0.33) % 1.0;
+          final phase =
+              (_loadingAnimationController.value + index * 0.33) % 1.0;
           // 使用正弦波创建平滑的闪烁效果
           final opacity = 0.3 + 0.7 * math.sin(phase * 2 * math.pi).abs();
           final scale = 0.8 + 0.4 * math.sin(phase * 2 * math.pi).abs();
-          
+
           return Positioned(
             left: 70 + positions[index].dx,
             top: 70 + positions[index].dy,
@@ -927,8 +940,7 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
                           child: FadeTransition(
                             opacity: _cursorAnimationController,
                             child: Container(
-                              margin:
-                                  const EdgeInsets.only(left: 2),
+                              margin: const EdgeInsets.only(left: 2),
                               width: 2,
                               height: 20,
                               decoration: BoxDecoration(
@@ -938,8 +950,7 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
                                     Color(0xFF9B7FFF),
                                   ],
                                 ),
-                                borderRadius:
-                                    BorderRadius.circular(1),
+                                borderRadius: BorderRadius.circular(1),
                               ),
                             ),
                           ),
@@ -973,11 +984,10 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
                     ),
               boxShadow: [
                 BoxShadow(
-                  color:
-                      (_isSaved
-                              ? const Color(0xFF4CAF50)
-                              : const Color(0xFF7B95FF))
-                          .withOpacity(0.4),
+                  color: (_isSaved
+                          ? const Color(0xFF4CAF50)
+                          : const Color(0xFF7B95FF))
+                      .withOpacity(0.4),
                   blurRadius: 16,
                   offset: const Offset(0, 6),
                 ),
