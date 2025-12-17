@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'dart:async';
 import 'email_login_page.dart';
 
 /// 用户注册页面
 ///
 /// 这是一个完整的用户注册组件，实现了以下功能：
 /// 1. 邮箱和密码输入表单
-/// 2. 客户端输入验证
-/// 3. API请求处理（POST /api/auth/register）
-/// 4. 加载状态管理
-/// 5. 成功/错误消息展示
+/// 2. 邮箱验证码验证
+/// 3. 客户端输入验证
+/// 4. API请求处理
+/// 5. 加载状态管理
+/// 6. 成功/错误消息展示
 class EmailRegisterPage extends StatefulWidget {
   const EmailRegisterPage({super.key});
 
@@ -30,6 +32,9 @@ class _EmailRegisterPageState extends State<EmailRegisterPage> {
   final TextEditingController _confirmPasswordController =
       TextEditingController();
 
+  /// 验证码输入控制器
+  final TextEditingController _codeController = TextEditingController();
+
   /// 表单验证Key
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
 
@@ -43,6 +48,13 @@ class _EmailRegisterPageState extends State<EmailRegisterPage> {
   bool _isPasswordVisible = false;
   bool _isConfirmPasswordVisible = false;
 
+  /// 是否已发送验证码
+  bool _isCodeSent = false;
+
+  /// 验证码倒计时
+  int _countdown = 0;
+  Timer? _countdownTimer;
+
   /// 成功消息：注册成功后显示
   String? _successMessage;
 
@@ -55,7 +67,27 @@ class _EmailRegisterPageState extends State<EmailRegisterPage> {
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
+    _codeController.dispose();
+    _countdownTimer?.cancel();
     super.dispose();
+  }
+
+  /// 开始倒计时
+  void _startCountdown() {
+    setState(() {
+      _countdown = 60;
+    });
+
+    _countdownTimer?.cancel();
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      setState(() {
+        if (_countdown > 0) {
+          _countdown--;
+        } else {
+          timer.cancel();
+        }
+      });
+    });
   }
 
   // ========== 客户端验证方法 ==========
@@ -78,16 +110,42 @@ class _EmailRegisterPageState extends State<EmailRegisterPage> {
 
   // ========== API请求方法 ==========
 
-  /// 使用 Supabase 注册新用户
-  Future<void> _register() async {
+  /// 发送邮箱验证码
+  Future<void> _sendVerificationCode() async {
     // 清空之前的消息
     setState(() {
       _successMessage = null;
       _errorMessage = null;
     });
 
-    // 表单验证
-    if (!_formKey.currentState!.validate()) {
+    // 验证邮箱格式
+    final email = _emailController.text.trim();
+    if (email.isEmpty) {
+      setState(() {
+        _errorMessage = '请输入邮箱地址';
+      });
+      return;
+    }
+
+    if (!_isValidEmail(email)) {
+      setState(() {
+        _errorMessage = '请输入有效的邮箱地址';
+      });
+      return;
+    }
+
+    // 验证密码
+    if (_passwordController.text.isEmpty) {
+      setState(() {
+        _errorMessage = '请输入密码';
+      });
+      return;
+    }
+
+    if (!_isValidPassword(_passwordController.text)) {
+      setState(() {
+        _errorMessage = '密码必须至少8位字符';
+      });
       return;
     }
 
@@ -105,61 +163,95 @@ class _EmailRegisterPageState extends State<EmailRegisterPage> {
     });
 
     try {
-      print('🔍 开始注册用户: ${_emailController.text.trim()}');
+      print('🔍 检查用户是否已存在: $email');
 
-      // 使用 Supabase 注册，禁用邮箱确认
-      final response = await _supabase.auth.signUp(
-        email: _emailController.text.trim(),
-        password: _passwordController.text,
-        emailRedirectTo: null,
-      );
-
-      print('✅ 注册请求完成');
-      print('User: ${response.user?.email}');
-      print('Session: ${response.session != null}');
-
-      if (response.user != null) {
-        // 注册成功
+      // 先尝试发送 OTP 但不创建用户，用于检查用户是否已存在
+      // 如果用户不存在，会返回错误；如果用户存在，会成功发送验证码
+      try {
+        await _supabase.auth.signInWithOtp(
+          email: email,
+          shouldCreateUser: false, // 不创建新用户，只检查是否存在
+          emailRedirectTo: null,
+        );
+        // 如果能执行到这里，说明用户已存在，验证码已发送
+        // 但这是注册流程，不应该允许已存在的用户注册
         setState(() {
-          _successMessage = '注册成功！正在跳转到登录页面...';
-          _errorMessage = null;
-          _isLoading = false;
-        });
-
-        // 清空输入框
-        _emailController.clear();
-        _passwordController.clear();
-        _confirmPasswordController.clear();
-
-        // 2秒后自动跳转到登录页面
-        Future.delayed(const Duration(seconds: 2), () {
-          if (mounted) {
-            Navigator.of(context).pushReplacement(
-              MaterialPageRoute(builder: (context) => const EmailLoginPage()),
-            );
-          }
-        });
-      } else {
-        // 注册失败
-        setState(() {
-          _errorMessage = '注册失败，请稍后重试';
+          _errorMessage = '该邮箱已被注册，请直接登录';
           _successMessage = null;
           _isLoading = false;
         });
+        return;
+      } on AuthException catch (checkError) {
+        // 检查错误类型
+        print('🔍 检查用户存在性结果: ${checkError.message}');
+        
+        // 如果错误是"用户不存在"或"邮箱未确认"，说明是新用户，可以继续注册
+        if (checkError.message.contains('User not found') ||
+            checkError.message.contains('Email not confirmed') ||
+            checkError.message.contains('not found')) {
+          // 用户不存在，继续发送验证码（这次会创建用户）
+          print('✅ 用户不存在，可以注册');
+        } else {
+          // 其他错误，可能是用户已存在或其他问题
+          if (checkError.message.contains('already registered') ||
+              checkError.message.contains('already exists') ||
+              checkError.message.contains('User already registered')) {
+            setState(() {
+              _errorMessage = '该邮箱已被注册，请直接登录';
+              _successMessage = null;
+              _isLoading = false;
+            });
+            return;
+          }
+          // 如果是其他错误（如邮件服务问题），继续尝试发送验证码
+        }
       }
+
+      // 用户不存在，发送验证码（不创建用户，等验证通过后再创建）
+      print('🔍 发送验证码到: $email');
+      await _supabase.auth.signInWithOtp(
+        email: email,
+        shouldCreateUser: false, // 不创建用户，只发送验证码
+        emailRedirectTo: null,
+      );
+
+      print('✅ 验证码已发送');
+
+      setState(() {
+        _isCodeSent = true;
+        _successMessage = '验证码已发送到您的邮箱，请查收';
+        _errorMessage = null;
+        _isLoading = false;
+      });
+
+      _startCountdown();
     } on AuthException catch (e) {
-      print('❌ 注册失败: ${e.message}');
+      print('❌ 发送验证码失败: ${e.message}');
       print('Status Code: ${e.statusCode}');
 
-      String errorMessage = '注册失败';
+      // 如果邮件服务未配置（500错误），提供备用方案
+      if (e.statusCode?.toString() == '500' && 
+          (e.message.contains('magic link') || 
+           e.message.contains('email') ||
+           e.message.contains('unexpected_failure'))) {
+        setState(() {
+          _errorMessage = '邮件服务未配置。请在 Supabase Dashboard → Authentication → Settings 中配置邮件服务，或联系管理员。\n\n错误详情: ${e.message} (状态码: ${e.statusCode})';
+          _successMessage = null;
+          _isLoading = false;
+        });
+        return;
+      }
 
+      String errorMessage = '发送验证码失败';
+
+      // 检查用户是否已存在
       if (e.message.contains('already registered') ||
-          e.message.contains('already exists')) {
+          e.message.contains('already exists') ||
+          e.message.contains('User already registered') ||
+          e.message.contains('email address is already registered')) {
         errorMessage = '该邮箱已被注册，请直接登录';
       } else if (e.message.contains('Invalid email')) {
         errorMessage = '邮箱格式不正确';
-      } else if (e.message.contains('Password')) {
-        errorMessage = '密码不符合要求（至少6位）';
       } else if (e.message.contains('rate limit')) {
         errorMessage = '请求过于频繁，请稍后再试';
       } else {
@@ -173,7 +265,142 @@ class _EmailRegisterPageState extends State<EmailRegisterPage> {
       });
     } catch (e) {
       print('❌ 其他错误: $e');
-      // 处理网络错误或其他异常
+      setState(() {
+        _errorMessage = '网络连接失败，请检查您的网络设置后重试';
+        _successMessage = null;
+        _isLoading = false;
+      });
+    }
+  }
+
+  /// 验证验证码并完成注册
+  Future<void> _verifyCodeAndRegister() async {
+    // 清空之前的消息
+    setState(() {
+      _successMessage = null;
+      _errorMessage = null;
+    });
+
+    // 验证验证码
+    final code = _codeController.text.trim();
+    if (code.isEmpty) {
+      setState(() {
+        _errorMessage = '请输入验证码';
+      });
+      return;
+    }
+
+    if (code.length != 6) {
+      setState(() {
+        _errorMessage = '验证码应为6位数字';
+      });
+      return;
+    }
+
+    // 开始加载状态
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final email = _emailController.text.trim();
+      final password = _passwordController.text;
+
+      print('🔍 验证验证码并注册: $email');
+
+      // 验证 OTP 验证码
+      final response = await _supabase.auth.verifyOTP(
+        type: OtpType.email,
+        email: email,
+        token: code,
+      );
+
+      print('✅ 验证码验证成功');
+      print('User: ${response.user?.email}');
+      print('Session: ${response.session != null}');
+
+      // 验证码验证成功
+      // 如果用户不存在（response.user == null 或没有 session），创建新用户
+      // 如果用户已存在（有 session），拒绝注册
+      if (response.session != null) {
+        // 用户已存在，拒绝注册
+        await _supabase.auth.signOut(); // 登出，避免误登录
+        setState(() {
+          _errorMessage = '该邮箱已被注册，请直接登录';
+          _successMessage = null;
+          _isLoading = false;
+        });
+        return;
+      }
+
+      // 用户不存在，验证码验证成功，现在创建账户
+      try {
+        // 使用 signUp 创建新用户并设置密码
+        final signUpResponse = await _supabase.auth.signUp(
+          email: email,
+          password: password,
+          emailRedirectTo: null,
+        );
+
+        if (signUpResponse.user == null) {
+          throw Exception('用户创建失败');
+        }
+
+        print('✅ 账户创建成功');
+
+        // 注册/登录成功
+        setState(() {
+          _successMessage = '注册成功！正在跳转到登录页面...';
+          _errorMessage = null;
+          _isLoading = false;
+        });
+
+        // 清空输入框
+        _emailController.clear();
+        _passwordController.clear();
+        _confirmPasswordController.clear();
+        _codeController.clear();
+
+        // 2秒后自动跳转到登录页面
+        Future.delayed(const Duration(seconds: 2), () {
+          if (mounted) {
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(builder: (context) => const EmailLoginPage()),
+            );
+          }
+        });
+      } catch (e) {
+        print('❌ 创建账户失败: $e');
+        // 如果创建失败，先登出
+        await _supabase.auth.signOut();
+        setState(() {
+          _errorMessage = '创建账户失败，请重新注册';
+          _isLoading = false;
+        });
+        return;
+      }
+    } on AuthException catch (e) {
+      print('❌ 验证失败: ${e.message}');
+      print('Status Code: ${e.statusCode}');
+
+      String errorMessage = '验证失败';
+
+      if (e.message.contains('Invalid token') ||
+          e.message.contains('expired')) {
+        errorMessage = '验证码无效或已过期，请重新获取';
+      } else if (e.message.contains('rate limit')) {
+        errorMessage = '请求过于频繁，请稍后再试';
+      } else {
+        errorMessage = '${e.message} (状态码: ${e.statusCode})';
+      }
+
+      setState(() {
+        _errorMessage = errorMessage;
+        _successMessage = null;
+        _isLoading = false;
+      });
+    } catch (e) {
+      print('❌ 其他错误: $e');
       setState(() {
         _errorMessage = '网络连接失败，请检查您的网络设置后重试';
         _successMessage = null;
@@ -371,7 +598,7 @@ class _EmailRegisterPageState extends State<EmailRegisterPage> {
                 TextFormField(
                   controller: _confirmPasswordController,
                   obscureText: !_isConfirmPasswordVisible,
-                  enabled: !_isLoading, // 加载时禁用输入
+                  enabled: !_isLoading && !_isCodeSent, // 已发送验证码后禁用
                   decoration: InputDecoration(
                     labelText: '确认密码 *',
                     hintText: '请再次输入密码',
@@ -411,9 +638,76 @@ class _EmailRegisterPageState extends State<EmailRegisterPage> {
                     return null;
                   },
                 ),
-                const SizedBox(height: 32),
+                const SizedBox(height: 24),
 
-                // ===== 注册按钮 =====
+                // ===== 验证码输入区域 =====
+                if (_isCodeSent) ...[
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextFormField(
+                          controller: _codeController,
+                          keyboardType: TextInputType.number,
+                          maxLength: 6,
+                          enabled: !_isLoading,
+                          decoration: InputDecoration(
+                            labelText: '验证码 *',
+                            hintText: '请输入6位验证码',
+                            prefixIcon: const Icon(Icons.verified_user),
+                            counterText: '',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(16.0),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(16.0),
+                              borderSide: const BorderSide(
+                                color: Color(0xFF5D5FEF),
+                                width: 2,
+                              ),
+                            ),
+                            errorBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(16.0),
+                              borderSide: const BorderSide(color: Colors.red, width: 2),
+                            ),
+                          ),
+                          validator: (value) {
+                            if (value == null || value.isEmpty) {
+                              return '请输入验证码';
+                            }
+                            if (value.length != 6) {
+                              return '验证码应为6位数字';
+                            }
+                            return null;
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      SizedBox(
+                        width: 120,
+                        child: ElevatedButton(
+                          onPressed: (_countdown > 0 || _isLoading)
+                              ? null
+                              : _sendVerificationCode,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF5D5FEF),
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16.0),
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 18.0),
+                            elevation: 0,
+                          ),
+                          child: _countdown > 0
+                              ? Text('${_countdown}s')
+                              : const Text('重新发送'),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                ],
+
+                // ===== 发送验证码/注册按钮 =====
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
@@ -429,7 +723,9 @@ class _EmailRegisterPageState extends State<EmailRegisterPage> {
                       disabledBackgroundColor: Colors.grey.shade300,
                       disabledForegroundColor: Colors.grey.shade600,
                     ),
-                    onPressed: _isLoading ? null : _register,
+                    onPressed: _isLoading
+                        ? null
+                        : (_isCodeSent ? _verifyCodeAndRegister : _sendVerificationCode),
                     child: _isLoading
                         ? Row(
                             mainAxisAlignment: MainAxisAlignment.center,
@@ -446,7 +742,7 @@ class _EmailRegisterPageState extends State<EmailRegisterPage> {
                               ),
                               SizedBox(width: 12),
                               Text(
-                                '注册中...',
+                                '处理中...',
                                 style: TextStyle(
                                   fontSize: 18,
                                   fontWeight: FontWeight.bold,
@@ -454,9 +750,9 @@ class _EmailRegisterPageState extends State<EmailRegisterPage> {
                               ),
                             ],
                           )
-                        : const Text(
-                            '注册',
-                            style: TextStyle(
+                        : Text(
+                            _isCodeSent ? '完成注册' : '发送验证码',
+                            style: const TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
                             ),
