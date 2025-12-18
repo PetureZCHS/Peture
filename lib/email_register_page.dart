@@ -170,7 +170,7 @@ class _EmailRegisterPageState extends State<EmailRegisterPage> {
       try {
         await _supabase.auth.signInWithOtp(
           email: email,
-          shouldCreateUser: false, // 不创建新用户，只检查是否存在
+          shouldCreateUser: false, // 不创建新用户，只检查是否存在（已有用户会成功）
           emailRedirectTo: null,
         );
         // 如果能执行到这里，说明用户已存在，验证码已发送
@@ -184,12 +184,13 @@ class _EmailRegisterPageState extends State<EmailRegisterPage> {
       } on AuthException catch (checkError) {
         // 检查错误类型
         print('🔍 检查用户存在性结果: ${checkError.message}');
-        
-        // 如果错误是"用户不存在"或"邮箱未确认"，说明是新用户，可以继续注册
+
+        // 如果错误是"用户不存在" / "邮箱未确认" / "Signups not allowed for otp"
+        // 说明当前邮箱还没有可用账号，可以走注册流程
         if (checkError.message.contains('User not found') ||
             checkError.message.contains('Email not confirmed') ||
-            checkError.message.contains('not found')) {
-          // 用户不存在，继续发送验证码（这次会创建用户）
+            checkError.message.contains('not found') ||
+            checkError.message.contains('Signups not allowed for otp')) {
           print('✅ 用户不存在，可以注册');
         } else {
           // 其他错误，可能是用户已存在或其他问题
@@ -203,15 +204,16 @@ class _EmailRegisterPageState extends State<EmailRegisterPage> {
             });
             return;
           }
-          // 如果是其他错误（如邮件服务问题），继续尝试发送验证码
+          // 其他错误（如邮件服务问题），交给外层 catch 统一处理
+          rethrow;
         }
       }
 
-      // 用户不存在，发送验证码（不创建用户，等验证通过后再创建）
+      // 用户不存在，发送验证码（这次允许创建用户，等验证码验证通过后才真正生效）
       print('🔍 发送验证码到: $email');
       await _supabase.auth.signInWithOtp(
         email: email,
-        shouldCreateUser: false, // 不创建用户，只发送验证码
+        shouldCreateUser: true, // 允许通过 OTP 为新邮箱创建用户
         emailRedirectTo: null,
       );
 
