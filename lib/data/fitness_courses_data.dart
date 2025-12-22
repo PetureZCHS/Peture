@@ -2,7 +2,19 @@ import '../models/fitness_course.dart';
 
 /// 预设的健身课程数据
 class FitnessCoursesData {
-  static List<FitnessCourse> getAllCourses() {
+  // 核心课程ID列表 - 这些课程永远本地可用
+  // 注意：此列表必须与 FitnessCoursesManager 中的 coreCourseIds 保持一致
+  // 当前本地课程包括：
+  // - 核心课程：dog_high_chase, dog_medium_core, dog_medium_strength, 
+  //   dog_low_yoga, cat_medium_core, cat_low_yoga
+  // - 扩展课程（本地）：cat_medium_flexibility（此课程将作为扩展课程处理）
+  static const List<String> coreCourseIds = [
+    'dog_high_chase', 'dog_medium_core', 'dog_medium_strength',
+    'dog_low_yoga', 'cat_medium_core', 'cat_low_yoga'
+  ];
+
+  // 重命名原方法为 getLocalCourses
+  static List<FitnessCourse> getLocalCourses() {
     return [
       // ========== 狗狗课程 ==========
       // 高强度
@@ -446,6 +458,25 @@ class FitnessCoursesData {
         ],
       ),
     ];
+  }
+
+  // 新增：获取核心课程
+  static List<FitnessCourse> getCoreCourses() {
+    return getLocalCourses()
+        .where((course) => coreCourseIds.contains(course.id))
+        .toList();
+  }
+
+  // 新增：获取扩展课程（非核心课程）
+  static List<FitnessCourse> getExtensionCourses() {
+    return getLocalCourses()
+        .where((course) => !coreCourseIds.contains(course.id))
+        .toList();
+  }
+
+  // 保留原方法名作为兼容性接口
+  static List<FitnessCourse> getAllCourses() {
+    return getLocalCourses();
   }
 
   /// 根据筛选条件获取课程
