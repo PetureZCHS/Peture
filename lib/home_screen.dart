@@ -1018,10 +1018,11 @@ class _HomeDashboardContentState extends State<_HomeDashboardContent> {
                           Text(
                             title,
                             style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.textDark,
-                                letterSpacing: -0.4),
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.textDark,
+                              letterSpacing: -0.4,
+                            ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -1048,6 +1049,7 @@ class _HomeDashboardContentState extends State<_HomeDashboardContent> {
       );
     });
   }
+
 }
 
 // =========================================================
