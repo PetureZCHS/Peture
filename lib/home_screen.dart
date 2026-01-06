@@ -312,7 +312,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   // =========================================================
 
   Widget _buildFloatingGlassNavBar() {
-    final double totalWidth = MediaQuery.of(context).size.width - 48;
+    final double rawWidth = MediaQuery.of(context).size.width;
+    // 避免在极窄/初始化阶段出现负宽度，导致 BoxConstraints 抛异常
+    final double safeWidth = (rawWidth - 48).clamp(0.0, double.infinity);
+    if (safeWidth <= 0) {
+      return const SizedBox.shrink();
+    }
+
+    final double totalWidth = safeWidth;
     final double itemWidth = totalWidth / 4;
     const double indicatorWidth = 56.0;
     const double indicatorHeight = 40.0;

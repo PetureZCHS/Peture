@@ -3,6 +3,28 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:async';
 import 'email_login_page.dart';
 
+/// 密码强度等级
+enum PasswordStrength {
+  weak,   // 弱：只有单一种类（大写/小写/数字）
+  medium, // 中：有两种种类
+  strong, // 强：有三种种类（大写+小写+数字）
+}
+
+/// 密码强度检测结果
+class _PasswordStrengthResult {
+  final PasswordStrength strength;
+  final String message;
+  final Color color;
+  final bool isValid; // 是否满足注册要求（强度≥中 且 长度≥8）
+
+  _PasswordStrengthResult({
+    required this.strength,
+    required this.message,
+    required this.color,
+    required this.isValid,
+  });
+}
+
 /// 用户注册页面
 ///
 /// 这是一个完整的用户注册组件，实现了以下功能：
@@ -47,6 +69,10 @@ class _EmailRegisterPageState extends State<EmailRegisterPage> {
   /// 密码可见性状态
   bool _isPasswordVisible = false;
   bool _isConfirmPasswordVisible = false;
+
+  /// 密码强度结果
+  _PasswordStrengthResult get _passwordStrength =>
+      _evaluatePassword(_passwordController.text);
 
   /// 是否已发送验证码
   bool _isCodeSent = false;
@@ -100,12 +126,84 @@ class _EmailRegisterPageState extends State<EmailRegisterPage> {
     return RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(email);
   }
 
+  /// 评估密码强度
+  ///
+  /// @param password 用户输入的密码
+  /// @return 密码强度结果
+  _PasswordStrengthResult _evaluatePassword(String password) {
+    if (password.isEmpty) {
+      return _PasswordStrengthResult(
+        strength: PasswordStrength.weak,
+        message: '',
+        color: Colors.grey,
+        isValid: false,
+      );
+    }
+
+    // 检查是否包含不允许的字符（只允许大小写字母和数字）
+    final allowedPattern = RegExp(r'^[a-zA-Z0-9]+$');
+    if (!allowedPattern.hasMatch(password)) {
+      return _PasswordStrengthResult(
+        strength: PasswordStrength.weak,
+        message: '密码只能包含字母和数字',
+        color: Colors.red,
+        isValid: false,
+      );
+    }
+
+    // 检查包含的字符类型
+    bool hasUpperCase = password.contains(RegExp(r'[A-Z]'));
+    bool hasLowerCase = password.contains(RegExp(r'[a-z]'));
+    bool hasDigit = password.contains(RegExp(r'[0-9]'));
+
+    int typeCount = 0;
+    if (hasUpperCase) typeCount++;
+    if (hasLowerCase) typeCount++;
+    if (hasDigit) typeCount++;
+
+    PasswordStrength strength;
+    String message;
+    Color color;
+
+    if (typeCount == 1) {
+      // 只有单一种类 → 弱
+      strength = PasswordStrength.weak;
+      message = '弱：密码应包含大小写字母和数字中的至少两种';
+      color = Colors.red;
+    } else if (typeCount == 2) {
+      // 有两种种类 → 中
+      strength = PasswordStrength.medium;
+      message = '中：密码强度良好';
+      color = Colors.orange;
+    } else {
+      // 有三种种类 → 强
+      strength = PasswordStrength.strong;
+      message = '强：密码强度优秀';
+      color = Colors.green;
+    }
+
+    // 判断是否满足注册要求：强度≥中 且 长度≥8
+    bool isValid = strength != PasswordStrength.weak && password.length >= 8;
+
+    if (!isValid && password.length < 8) {
+      message = '密码长度至少8位，且应包含大小写字母和数字中的至少两种';
+    }
+
+    return _PasswordStrengthResult(
+      strength: strength,
+      message: message,
+      color: color,
+      isValid: isValid,
+    );
+  }
+
   /// 验证密码强度
   ///
   /// @param password 用户输入的密码
-  /// @return 如果密码符合要求（至少8位）返回true
+  /// @return 如果密码符合要求（强度≥中 且 长度≥8）返回true
   bool _isValidPassword(String password) {
-    return password.length >= 8;
+    final result = _evaluatePassword(password);
+    return result.isValid;
   }
 
   // ========== API请求方法 ==========
@@ -143,8 +241,13 @@ class _EmailRegisterPageState extends State<EmailRegisterPage> {
     }
 
     if (!_isValidPassword(_passwordController.text)) {
+      final result = _evaluatePassword(_passwordController.text);
       setState(() {
-        _errorMessage = '密码必须至少8位字符';
+        if (result.message.contains('只能包含')) {
+          _errorMessage = result.message;
+        } else {
+          _errorMessage = '密码长度至少8位，且应包含大小写字母和数字中的至少两种';
+        }
       });
       return;
     }
@@ -174,12 +277,21 @@ class _EmailRegisterPageState extends State<EmailRegisterPage> {
           emailRedirectTo: null,
         );
         // 如果能执行到这里，说明用户已存在，验证码已发送
-        // 但这是注册流程，不应该允许已存在的用户注册
-        setState(() {
-          _errorMessage = '该邮箱已被注册，请直接登录';
-          _successMessage = null;
-          _isLoading = false;
-        });
+        // 直接跳转到邮箱验证码登录页，提示“已注册，可用验证码直接登录”
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(
+              builder: (context) => EmailLoginPage(
+                initialEmail: email,
+                initialMessage: '该邮箱已被注册，验证码已发送，可直接使用验证码登录',
+                forceOtp: true,
+              ),
+            ),
+          );
+        }
         return;
       } on AuthException catch (checkError) {
         // 检查错误类型
@@ -197,11 +309,20 @@ class _EmailRegisterPageState extends State<EmailRegisterPage> {
           if (checkError.message.contains('already registered') ||
               checkError.message.contains('already exists') ||
               checkError.message.contains('User already registered')) {
-            setState(() {
-              _errorMessage = '该邮箱已被注册，请直接登录';
-              _successMessage = null;
-              _isLoading = false;
-            });
+            if (mounted) {
+              setState(() {
+                _isLoading = false;
+              });
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(
+                  builder: (context) => EmailLoginPage(
+                    initialEmail: email,
+                    initialMessage: '该邮箱已被注册，验证码已发送，可直接使用验证码登录',
+                    forceOtp: true,
+                  ),
+                ),
+              );
+            }
             return;
           }
           // 其他错误（如邮件服务问题），交给外层 catch 统一处理
@@ -553,9 +674,13 @@ class _EmailRegisterPageState extends State<EmailRegisterPage> {
                   controller: _passwordController,
                   obscureText: !_isPasswordVisible,
                   enabled: !_isLoading, // 加载时禁用输入
+                  onChanged: (value) {
+                    // 实时更新密码强度显示
+                    setState(() {});
+                  },
                   decoration: InputDecoration(
                     labelText: '密码 *',
-                    hintText: '至少8位字符',
+                    hintText: '至少8位，包含大小写字母和数字中的至少两种',
                     prefixIcon: const Icon(Icons.lock_outlined),
                     suffixIcon: IconButton(
                       icon: Icon(
@@ -574,8 +699,10 @@ class _EmailRegisterPageState extends State<EmailRegisterPage> {
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(16.0),
-                      borderSide: const BorderSide(
-                        color: Color(0xFF5D5FEF),
+                      borderSide: BorderSide(
+                        color: _passwordController.text.isNotEmpty
+                            ? _passwordStrength.color
+                            : const Color(0xFF5D5FEF),
                         width: 2,
                       ),
                     ),
@@ -588,12 +715,74 @@ class _EmailRegisterPageState extends State<EmailRegisterPage> {
                     if (value == null || value.isEmpty) {
                       return '请输入密码';
                     }
-                    if (!_isValidPassword(value)) {
-                      return '密码必须至少8位字符';
+                    final result = _evaluatePassword(value);
+                    if (!result.isValid) {
+                      if (result.message.contains('只能包含')) {
+                        return result.message;
+                      }
+                      return '密码长度至少8位，且应包含大小写字母和数字中的至少两种';
                     }
                     return null;
                   },
                 ),
+                // 密码强度显示
+                if (_passwordController.text.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      // 强度指示条
+                      Expanded(
+                        child: Container(
+                          height: 4,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(2),
+                            color: Colors.grey[200],
+                          ),
+                          child: FractionallySizedBox(
+                            alignment: Alignment.centerLeft,
+                            widthFactor: _passwordStrength.strength == PasswordStrength.weak
+                                ? 0.33
+                                : _passwordStrength.strength == PasswordStrength.medium
+                                    ? 0.66
+                                    : 1.0,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(2),
+                                color: _passwordStrength.color,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      // 强度文字
+                      Text(
+                        _passwordStrength.strength == PasswordStrength.weak
+                            ? '弱'
+                            : _passwordStrength.strength == PasswordStrength.medium
+                                ? '中'
+                                : '强',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: _passwordStrength.color,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  // 强度提示信息
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      _passwordStrength.message,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: _passwordStrength.color,
+                      ),
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 24),
 
                 // ===== 确认密码输入框 =====

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:adaptive_theme/adaptive_theme.dart';
 import 'package:intl/date_symbol_data_local.dart'; // 添加 intl 包
@@ -22,12 +24,66 @@ void main() async {
     url: 'https://tcftpcvcldfudzxgemdh.supabase.co',
     anonKey:
         'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRjZnRwY3ZjbGRmdWR6eGdlbWRoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA2NjMzMTQsImV4cCI6MjA3NjIzOTMxNH0.uiusEWfuAw37fL6neZfK3q9NV4HZF7k-kX6hFIJQ83s',
+    // 持久化会话并自动刷新 token，保证重开 App 后仍保持登录
+    authOptions: const FlutterAuthClientOptions(
+      autoRefreshToken: true,
+    ),
   );
   print('✅ Supabase 初始化成功');
 
-  // 将您的登录页面包裹在一个 MaterialApp 中
-  runApp(
-    MaterialApp(
+  // 启动根路由，根据登录状态自动切换
+  runApp(const RootRouter());
+}
+
+/// 根路由：监听 Supabase Auth 状态，自动在登录页和主页之间切换
+class RootRouter extends StatefulWidget {
+  const RootRouter({super.key});
+
+  @override
+  State<RootRouter> createState() => _RootRouterState();
+}
+
+class _RootRouterState extends State<RootRouter> {
+  Session? _session;
+  StreamSubscription<AuthState>? _authSub;
+
+  @override
+  void initState() {
+    super.initState();
+    // 读取本地已持久化的会话
+    _session = Supabase.instance.client.auth.currentSession;
+
+    // 监听登录/登出/Token 刷新事件
+    _authSub =
+        Supabase.instance.client.auth.onAuthStateChange.listen((authState) {
+      final event = authState.event;
+      final session = authState.session;
+
+      // token 刷新失败、签出、用户删除等都会触发 session 为空，此时回到登录页
+      if (event == AuthChangeEvent.signedIn ||
+          event == AuthChangeEvent.tokenRefreshed) {
+        setState(() {
+          _session = session;
+        });
+      } else if (event == AuthChangeEvent.signedOut ||
+          event == AuthChangeEvent.userDeleted ||
+          session == null) {
+        setState(() {
+          _session = null;
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _authSub?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
       debugShowCheckedModeBanner: false,
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
@@ -38,9 +94,9 @@ void main() async {
         Locale('zh', 'CN'), // 中文简体
         Locale('en', 'US'), // 英文
       ],
-      home: const LoginPage(),
-    ),
-  );
+      home: _session != null ? const MyApp() : const LoginPage(),
+    );
+  }
 }
 
 class MyApp extends StatelessWidget {
