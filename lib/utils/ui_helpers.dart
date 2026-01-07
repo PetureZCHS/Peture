@@ -14,9 +14,8 @@ class AppColors {
   static const LinearGradient navTab1 = LinearGradient(colors: [Color(0xFFFF512F), Color(0xFFDD2476)]);
   static const LinearGradient navTab2 = LinearGradient(colors: [Color(0xFF00b09b), Color(0xFF96c93d)]);
   static const LinearGradient navTab3 = LinearGradient(colors: [Color(0xFF667eea), Color(0xFF764ba2)]);
-  static const LinearGradient navTab4 = LinearGradient(colors: [Color(0xFF8E2DE2), Color(0xFF4A00E0)]); // New gradient for Library
 
-  static const List<LinearGradient> navGradients = [navTab0, navTab1, navTab2, navTab3, navTab4];
+  static const List<LinearGradient> navGradients = [navTab0, navTab1, navTab2, navTab3];
 
   static const LinearGradient warmGradient = LinearGradient(colors: [Color(0xFFFF5E62), Color(0xFFFF9966)]);
   static const LinearGradient coolGradient = LinearGradient(colors: [Color(0xFF4FACFE), Color(0xFF00F2FE)]);

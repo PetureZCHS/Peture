@@ -21,16 +21,11 @@ class PetDiary {
     'timestamp': timestamp.toIso8601String(),
   };
 
-  factory PetDiary.fromMap(Map<String, dynamic> map) {
-    // Handle both 'timestamp' and 'created_at' keys
-    final timestampStr = map['timestamp'] as String? ?? map['created_at'] as String?;
-    
-    return PetDiary(
-      id: map['id']?.toString(), // 确保转换为 String
-      originalText: map['original_text'] as String? ?? '',
-      content: map['content'] as String,
-      style: map['style'] as String? ?? '小红书',
-      timestamp: timestampStr != null ? DateTime.parse(timestampStr) : DateTime.now(),
-    );
-  }
+  factory PetDiary.fromMap(Map<String, dynamic> map) => PetDiary(
+    id: map['id']?.toString(), // 确保转换为 String
+    originalText: map['original_text'] as String? ?? '',
+    content: map['content'] as String,
+    style: map['style'] as String? ?? '小红书',
+    timestamp: DateTime.parse(map['timestamp'] as String),
+  );
 }

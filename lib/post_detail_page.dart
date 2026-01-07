@@ -24,12 +24,12 @@ class _PostDetailPageState extends State<PostDetailPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: Colors.white,
       body: CustomScrollView(
         slivers: [
           // 顶部 AppBar（带返回按钮、头像、用户名）
           SliverAppBar(
-            backgroundColor: Colors.transparent,
+            backgroundColor: Colors.white,
             elevation: 0,
             pinned: true,
             leading: IconButton(

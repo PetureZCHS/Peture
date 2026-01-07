@@ -7,7 +7,7 @@ import 'login_page.dart'; // <-- 这是新添加的导入
 
 import 'home_screen.dart';
 import 'settings/theme_constants.dart';
-import 'widgets/flowing_health_background.dart';
+
 
 void main() async {
   // 确保 Flutter 框架初始化
@@ -38,21 +38,6 @@ void main() async {
         Locale('zh', 'CN'), // 中文简体
         Locale('en', 'US'), // 英文
       ],
-      theme: ThemeData(
-        scaffoldBackgroundColor: Colors.transparent,
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-        ),
-      ),
-      builder: (context, child) {
-        return Stack(
-          children: [
-            const FlowingHealthBackground(),
-            child ?? const SizedBox.shrink(),
-          ],
-        );
-      },
       home: const LoginPage(),
     ),
   );

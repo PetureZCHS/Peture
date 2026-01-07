@@ -58,9 +58,6 @@ dependencies:
   # --- Supabase 依赖（用于 RAG AI 对话） ---
   supabase_flutter: ^2.10.3
   liquid_glass_renderer: ^0.2.0-dev.4
-  page_flip: ^0.2.5+1
-  gal: ^2.3.2
-  cached_network_image: ^3.4.0
 
 dev_dependencies:
   flutter_test:

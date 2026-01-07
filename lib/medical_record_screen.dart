@@ -1,25 +1,22 @@
-import 'dart:ui';
-import 'dart:math' as math;
-import 'package:flutter/physics.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 // 添加数据库助手导入
 import 'services/supabase_service.dart';
 import 'models/pet.dart';
-import 'utils/ui_helpers.dart'; // Import AppColors
+import 'home_screen.dart'; // 导入 DataChangeNotifier
 
 // =========================================================
-// 1. 设计系统 (升级版)
+// 1. 设计系统 (无改动)
 // =========================================================
 class AppTheme {
-  // --- Colors (Mapped to AppColors from ui_helpers) ---
-  static const Color primary = AppColors.primary;
+  // --- Colors ---
+  static const Color primary = Color(0xFF5A8EFA);
   static const Color primaryVariant = Color(0xFF8B77FF);
-  static const Color background = AppColors.background;
+  static const Color background = Color(0xFFF7F8FC);
   static const Color surface = Colors.white;
-  static const Color textPrimary = AppColors.primaryText;
-  static const Color textSecondary = AppColors.secondaryText;
+  static const Color textPrimary = Color(0xFF1E1E1E);
+  static const Color textSecondary = Color(0xFF555770);
   static const Color textTertiary = Color(0xFF8E8E93);
   static const Color lightBlue = Color(0xFFEAF2FF);
   static const Color shadow = Color(0xFFB0C4DE);
@@ -28,7 +25,7 @@ class AppTheme {
   static const Color accentYellowDark = Color(0xFFB45309);
 
   static const LinearGradient primaryGradient = LinearGradient(
-    colors: [AppColors.primaryGradientStart, AppColors.primaryGradientEnd],
+    colors: [primary, primaryVariant],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
@@ -36,14 +33,14 @@ class AppTheme {
   // --- Text Styles & Spacing ---
   static const TextStyle heading1 = TextStyle(
     fontSize: 28,
-    fontWeight: FontWeight.w800,
+    fontWeight: FontWeight.w700,
     color: textPrimary,
     letterSpacing: -0.5,
     height: 1.2,
   );
   static const TextStyle heading2 = TextStyle(
     fontSize: 22,
-    fontWeight: FontWeight.w700,
+    fontWeight: FontWeight.w600,
     color: textPrimary,
     letterSpacing: -0.3,
     height: 1.3,
@@ -90,10 +87,10 @@ class AppTheme {
     height: 1.2,
   );
 
-  static const double borderRadius = 24.0;
+  static const double borderRadius = 20.0;
   static const double horizontalPadding = 20.0;
   static const double cardPadding = 24.0;
-  static const double sectionSpacing = 24.0;
+  static const double sectionSpacing = 32.0;
 }
 
 // =========================================================
@@ -382,7 +379,7 @@ class MedicalRecordScreen extends StatefulWidget {
   State<MedicalRecordScreen> createState() => _MedicalRecordScreenState();
 }
 
-class _MedicalRecordScreenState extends State<MedicalRecordScreen> with TickerProviderStateMixin {
+class _MedicalRecordScreenState extends State<MedicalRecordScreen> {
   // --- State variables ---
   List<Pet> _allPets = [];
   Pet? _selectedPet;
@@ -394,27 +391,9 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> with TickerPr
   int _selectedTabIndex = 0;
   bool _isSelectorExpanded = false; // 新增：控制宠物选择器展开状态
 
-  // --- Tab Animation State ---
-  late AnimationController _tabController;
-  double _currentPosition = 0.0;
-  bool _isDragging = false;
-  int _lastHapticIndex = 0;
-
   @override
   void initState() {
     super.initState();
-    _tabController = AnimationController(
-      vsync: this,
-      lowerBound: double.negativeInfinity,
-      upperBound: double.infinity,
-      value: 0.0,
-    );
-    _tabController.addListener(() {
-      setState(() {
-        _currentPosition = _tabController.value;
-      });
-    });
-
     _loadAllData();
     // 监听刷新通知
     widget.refreshNotifier?.addListener(_onRefreshRequested);
@@ -433,34 +412,8 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> with TickerPr
 
   @override
   void dispose() {
-    _tabController.dispose();
     widget.refreshNotifier?.removeListener(_onRefreshRequested);
     super.dispose();
-  }
-
-  void _animateToPage(int page, {double velocity = 0.0}) {
-    final SpringDescription spring = SpringDescription(
-      mass: 0.6,
-      stiffness: 140.0,
-      damping: 12.0,
-    );
-    final simulation = SpringSimulation(
-      spring,
-      _currentPosition,
-      page.toDouble(),
-      velocity,
-    );
-    _tabController.animateWith(simulation);
-  }
-
-  void _onTabTapped(int index) {
-    if (_selectedTabIndex == index) return;
-    _animateToPage(index);
-    setState(() {
-      _selectedTabIndex = index;
-      _lastHapticIndex = index;
-    });
-    HapticFeedback.mediumImpact();
   }
 
   /// 当收到刷新通知时调用
@@ -951,13 +904,10 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> with TickerPr
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.transparent,
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
         title: const Text(''),
         systemOverlayStyle: SystemUiOverlayStyle.dark,
-        toolbarHeight: 0, // Hide AppBar but keep status bar handling if needed, or just remove it.
+        toolbarHeight: 40, // 减少AppBar高度
       ),
       body: _allPets.isEmpty
           ? _buildEmptyState()
@@ -966,20 +916,23 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> with TickerPr
                 SliverPadding(
                   padding: const EdgeInsets.fromLTRB(
                     AppTheme.horizontalPadding,
-                    60, // Increased top padding to account for status bar/header space since AppBar is gone
+                    8, // 减少顶部内边距从默认16到8
                     AppTheme.horizontalPadding,
-                    AppTheme.horizontalPadding + 80, // Add bottom padding for nav bar
+                    AppTheme.horizontalPadding,
                   ),
                   sliver: SliverList(
                     delegate: SliverChildListDelegate([
                       _buildPetProfileCard(),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 20), // 减少间距从28到20
+                      _buildAddHealthEventCard(),
+                      const SizedBox(height: 20), // 减少间距从28到20
                       _buildRecordsAndRemindersSection(),
                     ]),
                   ),
                 ),
               ],
             ),
+      // Here you would add the BottomNavigationBar
     );
   }
 
@@ -1019,204 +972,135 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> with TickerPr
         // 主信息卡片
         Container(
           decoration: BoxDecoration(
+            gradient: AppTheme.primaryGradient,
             borderRadius: BorderRadius.circular(AppTheme.borderRadius),
             boxShadow: [
               BoxShadow(
                 color: AppTheme.primary.withOpacity(0.3),
-                blurRadius: 20,
-                offset: const Offset(0, 10),
+                blurRadius: 25,
+                offset: const Offset(0, 15),
               ),
             ],
           ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(AppTheme.borderRadius),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.6),
-                  borderRadius: BorderRadius.circular(AppTheme.borderRadius),
-                  border: Border.all(
-                    color: Colors.white.withOpacity(0.6),
-                    width: 1,
-                  ),
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      Colors.white.withOpacity(0.8),
-                      Colors.white.withOpacity(0.4),
-                    ],
-                  ),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: _allPets.length > 1 ? _toggleSelectorExpansion : null,
+              borderRadius: BorderRadius.circular(AppTheme.borderRadius),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppTheme.cardPadding,
+                  AppTheme.cardPadding - 4,
+                  AppTheme.cardPadding,
+                  AppTheme.cardPadding - 2,
                 ),
-                child: Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    onTap: _allPets.length > 1 ? _toggleSelectorExpansion : null,
-                    borderRadius: BorderRadius.circular(AppTheme.borderRadius),
-                    child: Padding(
-                      padding: const EdgeInsets.all(AppTheme.cardPadding),
-                      child: Column(
-                        children: [
-                          Row(
-                            children: [
-                              // 宠物头像
-                              Hero(
-                                tag: 'pet_avatar_${_selectedPet?.id}',
-                                child: Container(
-                                  width: 80,
-                                  height: 80,
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(20),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.black.withOpacity(0.1),
-                                        blurRadius: 10,
-                                        offset: const Offset(0, 4),
-                                      ),
-                                    ],
-                                  ),
-                                  child: ClipRRect(
-                                    borderRadius: BorderRadius.circular(20),
-                                    child: _selectedPet?.avatar != null &&
-                                            _selectedPet!.avatar!.isNotEmpty
-                                        ? Image.network(
-                                            _selectedPet!.avatar!,
-                                            width: 80,
-                                            height: 80,
-                                            fit: BoxFit.cover,
-                                            errorBuilder:
-                                                (context, error, stackTrace) {
-                                              return Container(
-                                                color: AppColors.petTypeColors[
-                                                        _selectedPet?.type] ??
-                                                    AppColors
-                                                        .petTypeColors['其他'],
-                                                child: Icon(
-                                                  Icons.pets,
-                                                  color: Colors.white
-                                                      .withOpacity(0.8),
-                                                  size: 30,
-                                                ),
-                                              );
-                                            },
-                                          )
-                                        : Container(
-                                            color: AppColors.petTypeColors[
-                                                    _selectedPet?.type] ??
-                                                AppColors.petTypeColors['其他'],
-                                            child: Icon(
-                                              Icons.pets,
-                                              color: Colors.white
-                                                  .withOpacity(0.8),
-                                              size: 30,
-                                            ),
-                                          ),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 20),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Flexible(
-                                          child: Text(
-                                            _selectedPet?.name ?? '未命名',
-                                            style: AppTheme.heading2.copyWith(
-                                              fontSize: 24,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ),
-                                        if (_allPets.length > 1) ...[
-                                          const SizedBox(width: 8),
-                                          AnimatedRotation(
-                                            duration: const Duration(
-                                                milliseconds: 200),
-                                            turns:
-                                                _isSelectorExpanded ? 0.5 : 0,
-                                            child: Icon(
-                                              Icons.keyboard_arrow_down,
-                                              color: AppTheme.textSecondary,
-                                              size: 24,
-                                            ),
-                                          ),
-                                        ],
-                                      ],
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Row(
-                                      children: [
-                                        Text(
-                                          _selectedPet?.age ?? '',
-                                          style: AppTheme.bodyText.copyWith(
-                                            fontSize: 14,
-                                          ),
-                                        ),
-                                        Padding(
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 8),
-                                          child: Container(
-                                            width: 1,
-                                            height: 12,
-                                            color: AppTheme.textSecondary
-                                                .withOpacity(0.3),
-                                          ),
-                                        ),
-                                        Expanded(
-                                          child: Text(
-                                            _selectedPet?.breed ?? '',
-                                            style: AppTheme.bodyText.copyWith(
-                                              fontSize: 14,
-                                            ),
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: Colors.white.withOpacity(0.3),
+                              width: 2,
+                            ),
                           ),
-                          const SizedBox(height: 20),
+                          child: const CircleAvatar(
+                            radius: 35,
+                            backgroundColor: Colors.white,
+                            backgroundImage: NetworkImage(
+                              'https://loremflickr.com/150/150/cutedog',
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 20),
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.only(right: 12),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  _selectedPet?.name ?? '未命名',
+                                  style: AppTheme.heading2.copyWith(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  '${_selectedPet?.age ?? ''} • ${_selectedPet?.breed ?? ''}',
+                                  style: AppTheme.bodyText.copyWith(
+                                    color: Colors.white.withOpacity(0.7),
+                                    fontSize: 15,
+                                    height: 1.3,
+                                  ),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  softWrap: true,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        if (_allPets.length > 1) ...[
+                          const SizedBox(width: 8),
                           Container(
-                            height: 1,
-                            color: AppTheme.textSecondary.withOpacity(0.1),
-                          ),
-                          const SizedBox(height: 16),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: _buildGradientInfoColumn(
-                                  '体重',
-                                  _getLatestWeight(),
-                                  Icons.monitor_weight_outlined,
-                                ),
+                            padding: const EdgeInsets.all(4),
+                            child: AnimatedRotation(
+                              duration: const Duration(milliseconds: 200),
+                              turns: _isSelectorExpanded ? 0.5 : 0,
+                              child: const Icon(
+                                Icons.keyboard_arrow_down,
+                                color: Colors.white,
+                                size: 24,
                               ),
-                              Container(
-                                width: 1,
-                                height: 40,
-                                color: AppTheme.textSecondary.withOpacity(0.1),
-                              ),
-                              Expanded(
-                                child: _buildGradientInfoColumn(
-                                  '体态',
-                                  _getHealthStatus(),
-                                  Icons.favorite_outline,
-                                ),
-                              ),
-                            ],
+                            ),
                           ),
                         ],
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Container(
+                      height: 1,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            Colors.transparent,
+                            Colors.white.withOpacity(0.3),
+                            Colors.transparent,
+                          ],
+                        ),
                       ),
                     ),
-                  ),
+                    const SizedBox(height: 14),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildGradientInfoColumn(
+                            '体重',
+                            _getLatestWeight(),
+                            Icons.monitor_weight_outlined,
+                          ),
+                        ),
+                        Container(
+                          width: 1,
+                          height: 40,
+                          color: Colors.white.withOpacity(0.2),
+                        ),
+                        Expanded(
+                          child: _buildGradientInfoColumn(
+                            '体态',
+                            _getHealthStatus(),
+                            Icons.favorite_outline,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -1235,7 +1119,7 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> with TickerPr
         Text(
           title,
           style: AppTheme.captionText.copyWith(
-            color: AppTheme.textSecondary,
+            color: Colors.white.withOpacity(0.75),
             fontSize: 13,
           ),
         ),
@@ -1243,261 +1127,181 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> with TickerPr
         Text(
           value,
           style: AppTheme.bodyTextMedium.copyWith(
-            color: AppTheme.textPrimary,
-            fontSize: 18,
-            fontWeight: FontWeight.w700,
+            color: Colors.white,
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
           ),
         ),
       ],
     );
   }
 
-
-
-  Widget _buildRecordsAndRemindersSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Liquid Glass Tab Bar
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final double totalWidth = constraints.maxWidth;
-            final double itemWidth = totalWidth / 2;
-            const double indicatorHeight = 40.0;
-            const double navHeight = 56.0;
-
-            // Use primary gradient for the indicator
-            const LinearGradient currentGradient = AppTheme.primaryGradient;
-
-            return GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTapUp: (details) {
-                final int index = (details.localPosition.dx / itemWidth).floor().clamp(0, 1);
-                _onTabTapped(index);
-              },
-              onHorizontalDragStart: (details) {
-                _tabController.stop();
-                setState(() {
-                  _isDragging = true;
-                });
-              },
-              onHorizontalDragUpdate: (details) {
-                double newPosition = (details.localPosition.dx / itemWidth) - 0.5;
-                setState(() {
-                  _currentPosition = newPosition.clamp(0.0, 1.0);
-                  _tabController.value = _currentPosition;
-                });
-                
-                int potentialIndex = _currentPosition.round();
-                if (potentialIndex != _lastHapticIndex) {
-                  HapticFeedback.selectionClick();
-                  _lastHapticIndex = potentialIndex;
-                }
-              },
-              onHorizontalDragEnd: (details) {
-                final double velocity = details.velocity.pixelsPerSecond.dx / itemWidth;
-                int targetIndex = _currentPosition.round();
-                
-                if (velocity.abs() > 0.3) {
-                  if (velocity > 0) {
-                    targetIndex = 1;
-                  } else {
-                    targetIndex = 0;
-                  }
-                }
-                targetIndex = targetIndex.clamp(0, 1);
-                _animateToPage(targetIndex, velocity: velocity * 1.2);
-
-                setState(() {
-                  _isDragging = false;
-                  _selectedTabIndex = targetIndex;
-                  _lastHapticIndex = targetIndex;
-                });
-                HapticFeedback.lightImpact();
-              },
-              child: Container(
-                height: navHeight,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(28),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
-                      blurRadius: 16,
-                      offset: const Offset(0, 8),
-                    ),
-                  ],
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(28),
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-                    child: Stack(
-                      alignment: Alignment.centerLeft,
-                      children: [
-                        // Background
-                        Container(
-                          width: totalWidth,
-                          height: navHeight,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(28),
-                            color: Colors.white.withOpacity(0.4),
-                            border: Border.all(
-                              color: Colors.white.withOpacity(0.6),
-                              width: 1.0,
-                            ),
-                          ),
-                        ),
-                        
-                        // Sliding Indicator
-                        AnimatedBuilder(
-                          animation: _tabController,
-                          builder: (context, child) {
-                            double velocity = 0.0;
-                            if (_tabController.isAnimating) {
-                               velocity = _tabController.velocity;
-                            }
-                            double absVelocity = velocity.abs();
-                            double stretchFactor = (absVelocity * 0.08).clamp(0.0, 0.4);
-                            
-                            // Indicator width is slightly less than item width for padding
-                            double baseIndicatorWidth = itemWidth - 8; 
-                            double currentWidth = baseIndicatorWidth * (1 + stretchFactor);
-                            double currentHeight = indicatorHeight * (1 - stretchFactor * 0.2);
-
-                            // Center position calculation
-                            double centerPos = (_currentPosition * itemWidth) + (itemWidth / 2);
-                            double leftPos = centerPos - (currentWidth / 2);
-
-                            return Positioned(
-                              left: leftPos,
-                              child: Container(
-                                width: currentWidth,
-                                height: currentHeight,
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(currentHeight / 2),
-                                  gradient: currentGradient,
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: AppTheme.primary.withOpacity(0.3 + (stretchFactor * 0.2)),
-                                      blurRadius: 12 + (stretchFactor * 10),
-                                      offset: const Offset(0, 4),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-
-                        // Text Labels (Overlay)
-                        Row(
-                          children: [
-                            _buildLiquidTabItem(0, '健康日志', itemWidth),
-                            _buildLiquidTabItem(1, '每日提醒', itemWidth),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            );
-          },
-        ),
-        const SizedBox(height: 16),
-        // Content List
-        AnimatedSwitcher(
-          duration: const Duration(milliseconds: 350),
-          transitionBuilder: (Widget child, Animation<double> animation) {
-            final slideAnimation = Tween<Offset>(
-              begin: const Offset(0.05, 0),
-              end: Offset.zero,
-            ).animate(animation);
-            return FadeTransition(
-              opacity: animation,
-              child: SlideTransition(position: slideAnimation, child: child),
-            );
-          },
-          child: _selectedTabIndex == 0
-              ? _buildHealthLogList()
-              : Column(
+  Widget _buildAddHealthEventCard() {
+    return Material(
+      color: AppTheme.lightBlue,
+      borderRadius: BorderRadius.circular(AppTheme.borderRadius),
+      child: InkWell(
+        onTap: () {
+          HapticFeedback.lightImpact();
+          _showAddEventChoiceDialog();
+        },
+        borderRadius: BorderRadius.circular(AppTheme.borderRadius),
+        child: Container(
+          padding: const EdgeInsets.all(AppTheme.cardPadding),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(AppTheme.borderRadius),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Add Reminder Button (Only visible in Reminders tab)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 16),
-                      child: Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          onTap: _showAddReminderDialog,
-                          borderRadius: BorderRadius.circular(16),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            decoration: BoxDecoration(
-                              border: Border.all(
-                                color: AppTheme.primary.withOpacity(0.3),
-                                width: 1,
-                              ),
-                              borderRadius: BorderRadius.circular(16),
-                              color: AppTheme.primary.withOpacity(0.05),
-                            ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  Icons.add_circle_outline,
-                                  color: AppTheme.primary,
-                                  size: 20,
-                                ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  '添加提醒',
-                                  style: TextStyle(
-                                    color: AppTheme.primary,
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 15,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
+                    Text(
+                      '记录健康',
+                      style: AppTheme.heading2.copyWith(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
-                    _buildRemindersList(),
+                    const SizedBox(height: 6),
+                    Text(
+                      '为 ${_selectedPet?.name ?? ''} 记录健康数据',
+                      style: AppTheme.subtitleText.copyWith(
+                        fontSize: 15,
+                        color: AppTheme.textSecondary.withOpacity(0.8),
+                      ),
+                    ),
                   ],
                 ),
+              ),
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: AppTheme.primary.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(
+                    color: AppTheme.primary.withOpacity(0.2),
+                    width: 1,
+                  ),
+                ),
+                child: const Icon(
+                  Icons.add_circle_outline,
+                  size: 24,
+                  color: AppTheme.primary,
+                ),
+              ),
+            ],
+          ),
         ),
-      ],
+      ),
     );
   }
 
-
-
-  Widget _buildLiquidTabItem(int index, String title, double width) {
-    return SizedBox(
-      width: width,
-      child: Center(
-        child: AnimatedBuilder(
-          animation: _tabController,
-          builder: (context, child) {
-            // Calculate opacity/color based on distance from current position
-            double distance = (_currentPosition - index).abs();
-            // 0 means selected, 1 means unselected
-            double selectedness = (1.0 - distance).clamp(0.0, 1.0);
-            
-            return Text(
-              title,
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-                color: Color.lerp(
-                  AppTheme.textSecondary, 
-                  Colors.white, 
-                  selectedness
-                ),
+  Widget _buildRecordsAndRemindersSection() {
+    return Container(
+      padding: const EdgeInsets.all(16.0), // 减少内边距从20到16
+      decoration: BoxDecoration(
+        color: AppTheme.surface,
+        borderRadius: BorderRadius.circular(AppTheme.borderRadius),
+        boxShadow: [
+          BoxShadow(
+            color: AppTheme.shadow.withOpacity(0.1),
+            blurRadius: 20,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  _buildTabButton(0, '健康日志'),
+                  const SizedBox(width: 16),
+                  _buildTabButton(1, '每日提醒'),
+                ],
               ),
-            );
-          },
+              if (_selectedTabIndex == 1)
+                IconButton(
+                  onPressed: _showAddReminderDialog,
+                  icon: const Icon(
+                    Icons.add_circle_outline,
+                    color: AppTheme.primary,
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 16), // 减少间距从20到16
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 350),
+            transitionBuilder: (Widget child, Animation<double> animation) {
+              final slideAnimation = Tween<Offset>(
+                begin: const Offset(0.1, 0),
+                end: Offset.zero,
+              ).animate(animation);
+              return FadeTransition(
+                opacity: animation,
+                child: SlideTransition(position: slideAnimation, child: child),
+              );
+            },
+            child: _selectedTabIndex == 0
+                ? _buildHealthLogList()
+                : _buildRemindersList(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTabButton(int index, String text) {
+    bool isSelected = _selectedTabIndex == index;
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.lightImpact();
+        setState(() => _selectedTabIndex = index);
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? AppTheme.primary.withOpacity(0.1)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              text,
+              style: isSelected
+                  ? AppTheme.heading3.copyWith(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.primary,
+                    )
+                  : AppTheme.heading3.copyWith(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w500,
+                      color: AppTheme.textTertiary,
+                    ),
+            ),
+            const SizedBox(height: 6),
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              height: 2,
+              width: isSelected ? 24 : 0,
+              decoration: BoxDecoration(
+                color: AppTheme.primary,
+                borderRadius: BorderRadius.circular(1),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -1506,69 +1310,27 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> with TickerPr
   Widget _buildHealthLogList() {
     return Container(
       key: const ValueKey<int>(1),
-      child: Column(
-        children: [
-          // Add Health Record Button (Moved here)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 16),
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: () {
-                  HapticFeedback.lightImpact();
-                  _showAddEventChoiceDialog();
-                },
-                borderRadius: BorderRadius.circular(16),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  decoration: BoxDecoration(
-                    border: Border.all(
-                      color: AppTheme.primary.withOpacity(0.3),
-                      width: 1,
-                    ),
-                    borderRadius: BorderRadius.circular(16),
-                    color: AppTheme.primary.withOpacity(0.05),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.add_circle_outline,
-                        color: AppTheme.primary,
-                        size: 20,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        '记录健康',
-                        style: AppTheme.buttonText.copyWith(
-                          color: AppTheme.primary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-          if (_healthLog.isEmpty)
-            const Center(
+      child: _healthLog.isEmpty
+          ? const Center(
               child: _EmptyState(
                 icon: Icons.history_edu_outlined,
                 message: '暂无健康日志',
               ),
             )
-          else
-            Column(
+          : Column(
               children: [
                 for (int i = 0; i < _healthLog.length; i++) ...[
                   _buildHealthEventItem(_healthLog[i], i),
                   if (i < _healthLog.length - 1)
-                    const SizedBox(height: 12), // 使用间距代替分割线
+                    Divider(
+                      key: ValueKey('divider_$i'), // 为分隔线添加唯一 key
+                      height: 16, // 减少分隔线高度从24到16
+                      color: AppTheme.shadow.withOpacity(0.3),
+                      thickness: 0.5,
+                    ),
                 ],
               ],
             ),
-        ],
-      ),
     );
   }
 
@@ -1704,7 +1466,7 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> with TickerPr
                       padding: const EdgeInsets.only(right: 20),
                       decoration: BoxDecoration(
                         color: Colors.red,
-                        borderRadius: BorderRadius.circular(16),
+                        borderRadius: BorderRadius.circular(12),
                       ),
                       child: const Icon(
                         Icons.delete,
@@ -1725,7 +1487,12 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> with TickerPr
                     ),
                   ),
                   if (i < _reminders.length - 1)
-                    const SizedBox(height: 12),
+                    Divider(
+                      key: ValueKey('reminder_divider_$i'),
+                      height: 16,
+                      color: AppTheme.shadow.withOpacity(0.3),
+                      thickness: 0.5,
+                    ),
                 ],
               ],
             ),
@@ -2800,19 +2567,13 @@ class HealthLogCard extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         child: Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: AppTheme.shadow.withOpacity(0.1),
-                blurRadius: 12,
-                offset: const Offset(0, 4),
-              ),
-            ],
+            color: AppTheme.surface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: themeColor.withOpacity(0.15), width: 1),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -2822,12 +2583,9 @@ class HealthLogCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // 统一的圆形图标区域
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: themeColor.withOpacity(0.1),
-                      shape: BoxShape.circle,
-                    ),
+                  CircleAvatar(
+                    radius: 20,
+                    backgroundColor: themeColor.withOpacity(0.1),
                     child: Icon(icon, color: themeColor, size: 20),
                   ),
                   const SizedBox(width: 16),
@@ -2839,22 +2597,13 @@ class HealthLogCard extends StatelessWidget {
                         // 标题行：类别标签 + 主数据
                         Row(
                           children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: themeColor.withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Text(
-                                categoryLabel,
-                                style: AppTheme.captionText.copyWith(
-                                  color: themeColor,
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 11,
-                                ),
+                            Text(
+                              categoryLabel,
+                              style: AppTheme.captionText.copyWith(
+                                color: AppTheme.textTertiary,
+                                fontWeight: FontWeight.w500,
+                                fontSize: 12,
+                                letterSpacing: 0.5,
                               ),
                             ),
                             const SizedBox(width: 8),
@@ -2866,30 +2615,18 @@ class HealthLogCard extends StatelessWidget {
                                   fontSize: 16,
                                   color: AppTheme.textPrimary,
                                 ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 6),
                         // 日期行
-                        Row(
-                          children: [
-                            Icon(
-                              Icons.access_time,
-                              size: 12,
-                              color: AppTheme.textSecondary.withOpacity(0.6),
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              date,
-                              style: AppTheme.captionText.copyWith(
-                                color: AppTheme.textSecondary,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
+                        Text(
+                          date,
+                          style: AppTheme.captionText.copyWith(
+                            color: AppTheme.textSecondary,
+                            fontSize: 13,
+                          ),
                         ),
                       ],
                     ),
@@ -2921,7 +2658,11 @@ class HealthLogCard extends StatelessWidget {
                   ),
                   decoration: BoxDecoration(
                     color: AppTheme.accentYellow.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: AppTheme.accentYellow.withOpacity(0.3),
+                      width: 1,
+                    ),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -2937,7 +2678,7 @@ class HealthLogCard extends StatelessWidget {
                           highlightText!,
                           style: AppTheme.captionText.copyWith(
                             color: AppTheme.accentYellowDark,
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.w500,
                             fontSize: 12,
                           ),
                         ),
@@ -3013,19 +2754,16 @@ class _ReminderListItem extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         child: Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: AppTheme.shadow.withOpacity(0.1),
-                blurRadius: 12,
-                offset: const Offset(0, 4),
-              ),
-            ],
+            color: AppTheme.surface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: AppTheme.primary.withOpacity(0.2),
+              width: 1,
+            ),
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -3034,7 +2772,7 @@ class _ReminderListItem extends StatelessWidget {
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
                   color: AppTheme.primary.withOpacity(0.1),
-                  shape: BoxShape.circle,
+                  borderRadius: BorderRadius.circular(10),
                 ),
                 child: const Icon(
                   Icons.alarm,
@@ -3060,7 +2798,7 @@ class _ReminderListItem extends StatelessWidget {
                       children: [
                         Icon(
                           Icons.access_time,
-                          size: 14,
+                          size: 16,
                           color: AppTheme.primary.withOpacity(0.7),
                         ),
                         const SizedBox(width: 6),
@@ -3077,8 +2815,7 @@ class _ReminderListItem extends StatelessWidget {
                             reminder.time,
                             style: AppTheme.captionText.copyWith(
                               color: AppTheme.primary,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
                             ),
                           ),
                         ),
@@ -3089,7 +2826,7 @@ class _ReminderListItem extends StatelessWidget {
               ),
               Icon(
                 Icons.arrow_forward_ios,
-                size: 14,
+                size: 16,
                 color: AppTheme.textTertiary.withOpacity(0.6),
               ),
             ],
