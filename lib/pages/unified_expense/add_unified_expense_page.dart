@@ -4,7 +4,6 @@ import 'package:intl/intl.dart';
 import '../../models/unified_expense.dart';
 import '../../database/unified_expense_helper.dart';
 import '../../database/medical_record_helper.dart';
-import '../../services/supabase_service.dart'; // 添加这一行
 
 /// 统一的添加/编辑消费页面
 class AddUnifiedExpensePage extends StatefulWidget {

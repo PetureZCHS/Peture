@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'dart:ui';
+import 'dart:math' as math;
 import 'package:audioplayers/audioplayers.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../utils/ui_helpers.dart';
 
 /// 训宠响片游戏页面
 /// 点击屏幕中央的按钮播放点击音效
@@ -11,7 +14,8 @@ class DogClickerScreen extends StatefulWidget {
   State<DogClickerScreen> createState() => _DogClickerScreenState();
 }
 
-class _DogClickerScreenState extends State<DogClickerScreen> {
+class _DogClickerScreenState extends State<DogClickerScreen> with TickerProviderStateMixin {
+  late AnimationController _orbController;
   late AudioPlayer _audioPlayer;
   int _clickCount = 0;
   int _failCount = 0; // 失败记录次数
@@ -41,6 +45,12 @@ class _DogClickerScreenState extends State<DogClickerScreen> {
   @override
   void initState() {
     super.initState();
+    
+    _orbController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 12), 
+    )..repeat(reverse: true);
+
     // 初始化音频播放器
     _audioPlayer = AudioPlayer();
     // 设置为低延迟模式，确保快速响应
@@ -51,6 +61,7 @@ class _DogClickerScreenState extends State<DogClickerScreen> {
 
   @override
   void dispose() {
+    _orbController.dispose();
     // 释放音频播放器资源
     _audioPlayer.dispose();
     super.dispose();
@@ -501,25 +512,26 @@ class _DogClickerScreenState extends State<DogClickerScreen> {
   Widget build(BuildContext context) {
     if (_isLoading) {
       return const Scaffold(
-        backgroundColor: Color(0xFFF8F8F8),
+        backgroundColor: AppColors.background,
         body: Center(child: CircularProgressIndicator()),
       );
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F8F8),
+      backgroundColor: AppColors.background,
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
-        backgroundColor: const Color(0xFFF8F8F8),
+        backgroundColor: Colors.transparent,
         elevation: 0,
-        iconTheme: const IconThemeData(color: Color(0xFF1E1E1E)),
+        iconTheme: const IconThemeData(color: AppColors.textDark),
+        title: const Text('训宠响片', style: TextStyle(color: AppColors.textDark, fontWeight: FontWeight.bold)),
+        centerTitle: true,
         actions: [
-          // 统计按钮
           IconButton(
             icon: const Icon(Icons.bar_chart, size: 28),
             onPressed: () => _showStatistics(context),
             tooltip: '训练统计',
           ),
-          // 帮助按钮
           IconButton(
             icon: const Icon(Icons.help_outline, size: 28),
             onPressed: () => _showHelpGuide(context),
@@ -527,285 +539,417 @@ class _DogClickerScreenState extends State<DogClickerScreen> {
           ),
         ],
       ),
-      body: Column(
+      body: Stack(
         children: [
-          // 优化后的固定标签栏 - 更紧凑
-          Container(
-            margin: const EdgeInsets.fromLTRB(16, 6, 16, 10),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(14),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.04),
-                  blurRadius: 8,
-                  offset: const Offset(0, 1),
-                ),
-              ],
-            ),
-            child: Container(
-              height: 52,
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                itemCount: _filterOptions.length + 1, // +1 为添加按钮
-                itemBuilder: (context, index) {
-                  // 添加按钮
-                  if (index == _filterOptions.length) {
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 3),
-                      child: InkWell(
-                        onTap: _showAddProjectDialog,
-                        borderRadius: BorderRadius.circular(12),
-                        child: Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF5F5F5),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: const Color(0xFFE0E0E0),
-                              width: 1,
-                            ),
-                          ),
-                          child: Icon(
-                            Icons.add_circle_outline,
-                            color: const Color(0xFF5A8EFA),
-                            size: 18,
-                          ),
-                        ),
+          // 背景层
+          Stack(
+            children: [
+              Container(color: AppColors.background), 
+              AnimatedBuilder(
+                animation: _orbController,
+                builder: (context, child) {
+                  return Positioned(
+                    top: -100 + (_orbController.value * 40),
+                    left: -50 + (_orbController.value * 20),
+                    child: Container(
+                      width: 500, height: 500,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: AppColors.orb1.withOpacity(0.5),
                       ),
-                    );
-                  }
-
-                  final isSelected = _selectedFilterIndex == index;
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 3),
-                    child: InkWell(
-                      onTap: () {
-                        setState(() {
-                          _selectedFilterIndex = index;
-                          _updateCurrentCounts();
-                        });
-                      },
-                      borderRadius: BorderRadius.circular(12),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 7,
-                        ),
-                        decoration: BoxDecoration(
-                          gradient: isSelected
-                              ? const LinearGradient(
-                                  colors: [
-                                    Color(0xFF5A8EFA),
-                                    Color(0xFF8B77FF),
-                                  ],
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                )
-                              : null,
-                          color: isSelected ? null : const Color(0xFFF5F5F5),
-                          borderRadius: BorderRadius.circular(12),
-                          boxShadow: isSelected
-                              ? [
-                                  BoxShadow(
-                                    color: const Color(
-                                      0xFF5A8EFA,
-                                    ).withOpacity(0.3),
-                                    blurRadius: 6,
-                                    offset: const Offset(0, 2),
-                                  ),
-                                ]
-                              : null,
-                        ),
-                        child: Center(
-                          child: Text(
-                            _filterOptions[index],
-                            style: TextStyle(
-                              color: isSelected
-                                  ? Colors.white
-                                  : const Color(0xFF666666),
-                              fontWeight: isSelected
-                                  ? FontWeight.bold
-                                  : FontWeight.w600,
-                              fontSize: 13,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
+                    ).blurred(sigmaX: 90, sigmaY: 90),
                   );
                 },
               ),
-            ),
+              AnimatedBuilder(
+                animation: _orbController,
+                builder: (context, child) {
+                  return Positioned(
+                    top: 300 + (math.sin(_orbController.value * math.pi) * 60),
+                    right: -100,
+                    child: Container(
+                      width: 350, height: 350,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: AppColors.orb3.withOpacity(0.4),
+                      ),
+                    ).blurred(sigmaX: 80, sigmaY: 80),
+                  );
+                },
+              ),
+              AnimatedBuilder(
+                animation: _orbController,
+                builder: (context, child) {
+                  return Positioned(
+                    bottom: -150,
+                    left: -80 + (_orbController.value * 150),
+                    child: Container(
+                      width: 600, height: 400,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: AppColors.orb2.withOpacity(0.5),
+                      ),
+                    ).blurred(sigmaX: 100, sigmaY: 100),
+                  );
+                },
+              ),
+            ],
           ),
 
-          // 原有的内容区域
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 20.0),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const SizedBox(height: 12),
-                  // 可点击的圆形按钮 - 放大尺寸
-                  Column(
-                    children: [
-                      // 成功标记按钮引导文案 - 简化
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFE8F5E9),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.stars,
-                              color: Colors.green[700],
-                              size: 18,
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              '宠物成功时点击 → 立即给予奖励',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.green[800],
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-
-                      // 成功按钮 - 更大尺寸
-                      AnimatedScale(
-                        scale: _isPressed ? 0.92 : 1.0,
-                        duration: const Duration(milliseconds: 150),
-                        curve: Curves.easeOut,
-                        child: Material(
-                          color: Colors.transparent,
-                          child: InkWell(
-                            onTap: () {
-                              _playClickSound(); // 发出响片声音
-                            },
-                            onTapDown: (_) {
-                              setState(() => _isPressed = true);
-                            },
-                            onTapUp: (_) {
-                              setState(() => _isPressed = false);
-                            },
-                            onTapCancel: () {
-                              setState(() => _isPressed = false);
-                            },
-                            borderRadius: BorderRadius.circular(190),
-                            splashColor: Colors.white.withOpacity(0.3),
-                            highlightColor: Colors.white.withOpacity(0.1),
-                            child: Ink(
-                              width: 380,
-                              height: 380,
-                              decoration: const BoxDecoration(
-                                shape: BoxShape.circle,
-                                gradient: LinearGradient(
-                                  colors: [
-                                    Color(0xFF5A8EFA),
-                                    Color(0xFF8B77FF),
-                                  ],
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                ),
-                              ),
-                              child: const Center(
-                                child: Text(
-                                  'Click!',
-                                  style: TextStyle(
-                                    fontSize: 64,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                    letterSpacing: 1,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
+          // 内容层
+          SafeArea(
+            child: Column(
+              children: [
+                // 优化后的固定标签栏 - 更紧凑
+                Container(
+                  margin: const EdgeInsets.fromLTRB(16, 6, 16, 10),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.6),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: Colors.white.withOpacity(0.4)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.04),
+                        blurRadius: 8,
+                        offset: const Offset(0, 1),
                       ),
                     ],
                   ),
-
-                  const SizedBox(height: 24),
-
-                  // 失败按钮区域 - 简化
-                  Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      onTap: () async {
-                        // 只记录失败，不发出声音
-                        setState(() => _failCount++);
-                        await _saveFailureCount();
-                        if (mounted) {
-                          _showFailureTip(context);
-                        }
-                      },
-                      borderRadius: BorderRadius.circular(14),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(14),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                       child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 24,
-                          vertical: 12,
-                        ),
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [
-                              Colors.orange[400]!,
-                              Colors.deepOrange[400]!,
-                            ],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                          borderRadius: BorderRadius.circular(14),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.orange.withOpacity(0.25),
-                              blurRadius: 8,
-                              offset: const Offset(0, 3),
-                            ),
-                          ],
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.close_rounded,
-                              color: Colors.white,
-                              size: 20,
-                            ),
-                            const SizedBox(width: 8),
-                            const Text(
-                              '标记失败',
-                              style: TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.white,
+                        height: 52,
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+                        child: ListView.builder(
+                          scrollDirection: Axis.horizontal,
+                          itemCount: _filterOptions.length + 1, // +1 为添加按钮
+                          itemBuilder: (context, index) {
+                            // 添加按钮
+                            if (index == _filterOptions.length) {
+                              return Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 3),
+                                child: InkWell(
+                                  onTap: _showAddProjectDialog,
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: Container(
+                                    padding: const EdgeInsets.all(10),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFF5F5F5).withOpacity(0.8),
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: const Color(0xFFE0E0E0),
+                                        width: 1,
+                                      ),
+                                    ),
+                                    child: Icon(
+                                      Icons.add_circle_outline,
+                                      color: const Color(0xFF5A8EFA),
+                                      size: 18,
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }
+
+                            final isSelected = _selectedFilterIndex == index;
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 3),
+                              child: InkWell(
+                                onTap: () {
+                                  setState(() {
+                                    _selectedFilterIndex = index;
+                                    _updateCurrentCounts();
+                                  });
+                                },
+                                borderRadius: BorderRadius.circular(12),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 14,
+                                    vertical: 7,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    gradient: isSelected
+                                        ? const LinearGradient(
+                                            colors: [
+                                              Color(0xFF5A8EFA),
+                                              Color(0xFF8B77FF),
+                                            ],
+                                            begin: Alignment.topLeft,
+                                            end: Alignment.bottomRight,
+                                          )
+                                        : null,
+                                    color: isSelected ? null : const Color(0xFFF5F5F5).withOpacity(0.8),
+                                    borderRadius: BorderRadius.circular(12),
+                                    boxShadow: isSelected
+                                        ? [
+                                            BoxShadow(
+                                              color: const Color(
+                                                0xFF5A8EFA,
+                                              ).withOpacity(0.3),
+                                              blurRadius: 6,
+                                              offset: const Offset(0, 2),
+                                            ),
+                                          ]
+                                        : null,
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      _filterOptions[index],
+                                      style: TextStyle(
+                                        color: isSelected
+                                            ? Colors.white
+                                            : const Color(0xFF666666),
+                                        fontWeight: isSelected
+                                            ? FontWeight.bold
+                                            : FontWeight.w600,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                  ),
+                                ),
                               ),
-                            ),
-                          ],
+                            );
+                          },
                         ),
                       ),
                     ),
                   ),
+                ),
 
-                  const SizedBox(height: 20),
+                // 原有的内容区域
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const SizedBox(height: 12),
+                        // 可点击的圆形按钮 - 放大尺寸
+                        Column(
+                          children: [
+                            // 成功标记按钮引导文案 - 简化
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 8,
+                              ),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFE8F5E9).withOpacity(0.9),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.stars,
+                                    color: Colors.green[700],
+                                    size: 18,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    '宠物成功时点击 → 立即给予奖励',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.green[800],
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 24),
 
-                  // 统计信息卡片 - 带呼吸感动画
-                  _buildBreathingStatsCard(),
-                  const SizedBox(height: 16),
-                ],
-              ),
+                            // 成功按钮 - 更大尺寸
+                            AnimatedScale(
+                              scale: _isPressed ? 0.92 : 1.0,
+                              duration: const Duration(milliseconds: 150),
+                              curve: Curves.easeOut,
+                              child: Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                  onTap: () {
+                                    _playClickSound(); // 发出响片声音
+                                  },
+                                  onTapDown: (_) {
+                                    setState(() => _isPressed = true);
+                                  },
+                                  onTapUp: (_) {
+                                    setState(() => _isPressed = false);
+                                  },
+                                  onTapCancel: () {
+                                    setState(() => _isPressed = false);
+                                  },
+                                  borderRadius: BorderRadius.circular(190),
+                                  splashColor: Colors.white.withOpacity(0.3),
+                                  highlightColor: Colors.white.withOpacity(0.1),
+                                  child: Ink(
+                                    width: 380,
+                                    height: 380,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      gradient: const LinearGradient(
+                                        colors: [
+                                          Color(0xFF5A8EFA),
+                                          Color(0xFF8B77FF),
+                                        ],
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
+                                      ),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: const Color(0xFF5A8EFA).withOpacity(0.4),
+                                          blurRadius: 30,
+                                          offset: const Offset(0, 10),
+                                        ),
+                                      ],
+                                    ),
+                                    child: const Center(
+                                      child: Text(
+                                        'Click!',
+                                        style: TextStyle(
+                                          fontSize: 64,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.white,
+                                          letterSpacing: 1,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        const SizedBox(height: 24),
+
+                        // 失败按钮区域 - 简化
+                        Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onTap: () async {
+                              // 只记录失败，不发出声音
+                              setState(() => _failCount++);
+                              await _saveFailureCount();
+                              if (mounted) {
+                                _showFailureTip(context);
+                              }
+                            },
+                            borderRadius: BorderRadius.circular(14),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 24,
+                                vertical: 12,
+                              ),
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [
+                                    Colors.orange[400]!,
+                                    Colors.deepOrange[400]!,
+                                  ],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                borderRadius: BorderRadius.circular(14),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.orange.withOpacity(0.25),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 3),
+                                  ),
+                                ],
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.close_rounded,
+                                    color: Colors.white,
+                                    size: 20,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  const Text(
+                                    '标记失败',
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        
+                        const SizedBox(height: 40),
+                        
+                        // 底部统计卡片
+                        Container(
+                          padding: const EdgeInsets.all(20),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.6),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: Colors.white.withOpacity(0.4)),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.04),
+                                blurRadius: 10,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(20),
+                            child: BackdropFilter(
+                              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                                children: [
+                                  _buildStatItem(
+                                    Icons.check_circle_outline,
+                                    '成功',
+                                    _clickCount,
+                                    Colors.green,
+                                  ),
+                                  Container(
+                                    height: 40,
+                                    width: 1,
+                                    color: Colors.grey.withOpacity(0.2),
+                                  ),
+                                  _buildStatItem(
+                                    Icons.refresh,
+                                    '重试',
+                                    _failCount,
+                                    Colors.orange,
+                                  ),
+                                  Container(
+                                    height: 40,
+                                    width: 1,
+                                    color: Colors.grey.withOpacity(0.2),
+                                  ),
+                                  _buildStatItem(
+                                    Icons.trending_up,
+                                    '成功率',
+                                    (_clickCount + _failCount) > 0
+                                        ? ((_clickCount / (_clickCount + _failCount)) * 100).toInt()
+                                        : 0,
+                                    Colors.blue,
+                                    suffix: '%',
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -2154,73 +2298,7 @@ class _DogClickerScreenState extends State<DogClickerScreen> {
     );
   }
 
-  /// 构建带呼吸感的统计卡片
-  Widget _buildBreathingStatsCard() {
-    return TweenAnimationBuilder<double>(
-      tween: Tween(begin: 0.98, end: 1.0),
-      duration: const Duration(milliseconds: 2000),
-      curve: Curves.easeInOut,
-      builder: (context, scale, child) {
-        return Transform.scale(
-          scale: scale,
-          child: Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.04),
-                  blurRadius: 10,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                // 成功次数
-                _buildStatItem(
-                  Icons.check_circle_rounded,
-                  '成功',
-                  _clickCount,
-                  Colors.green,
-                ),
-                // 竖线分隔
-                Container(width: 1, height: 35, color: Colors.grey[200]),
-                // 重试次数
-                _buildStatItem(
-                  Icons.refresh_rounded,
-                  '重试',
-                  _failCount,
-                  Colors.orange,
-                ),
-                // 竖线分隔
-                Container(width: 1, height: 35, color: Colors.grey[200]),
-                // 成功率
-                _buildStatItem(
-                  Icons.trending_up_rounded,
-                  '成功率',
-                  (_clickCount + _failCount) > 0
-                      ? ((_clickCount / (_clickCount + _failCount)) * 100)
-                            .toInt()
-                      : 0,
-                  Colors.blue,
-                  suffix: '%',
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-      onEnd: () {
-        // 动画结束后反向播放，创建呼吸效果
-        if (mounted) {
-          setState(() {});
-        }
-      },
-    );
-  }
+
 
   /// 构建统计项
   Widget _buildStatItem(

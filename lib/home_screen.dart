@@ -1,9 +1,10 @@
 import 'dart:ui';
 import 'dart:math' as math;
+import 'package:flutter/physics.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
-// import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
+// import 'package:liquid_glass_renderer/liquid_glass_renderer.dart'; 
 
 // --- 您的页面引用 (保持不变) ---
 import 'chat_page.dart';
@@ -20,80 +21,11 @@ import 'pages/lost_pet/lost_pet_rescue_page.dart';
 import 'community_screen.dart';
 import 'medical_record_screen.dart';
 import 'profile_screen.dart';
+import 'pages/unified_expense/unified_expense_home_page.dart';
+import 'pages/reminder/intelligent_reminder_page.dart';
 import 'widgets/weight_trend_card.dart';
 import 'utils/ui_helpers.dart';
-
-/// 搜索结果数据模型
-class SearchResult {
-  final String name;
-  final String keyword;
-  final IconData icon;
-  final Widget Function() pageBuilder;
-
-  SearchResult(this.name, this.keyword, this.icon, this.pageBuilder);
-}
-
-/// 全局数据变更通知器，用于跨页面通知数据刷新需求
-class DataChangeNotifier {
-  static bool petDataChanged = false;
-
-  /// 标记宠物数据已变更，需要刷新
-  static void markPetDataChanged() {
-    petDataChanged = true;
-  }
-
-  /// 检查并重置标记
-  static bool checkAndReset() {
-    if (petDataChanged) {
-      petDataChanged = false;
-      return true;
-    }
-    return false;
-  }
-}
-
-// =========================================================
-// 1. 配色与样式
-// =========================================================
-
-class AppColors {
-  static const Color background = Color(0xFFF2F2F7);
-  static const Color textDark = Color(0xFF1D1D1F);
-  static const Color textGrey = Color(0xFF8E8E93);
-
-  static const Color orb1 = Color(0xFFC4E0E5);
-  static const Color orb2 = Color(0xFFE2D1F9);
-  static const Color orb3 = Color(0xFFFFDFC4);
-
-  static const LinearGradient navTab0 =
-      LinearGradient(colors: [Color(0xFF2E3192), Color(0xFF1BFFFF)]);
-  static const LinearGradient navTab1 =
-      LinearGradient(colors: [Color(0xFFFF512F), Color(0xFFDD2476)]);
-  static const LinearGradient navTab2 =
-      LinearGradient(colors: [Color(0xFF00b09b), Color(0xFF96c93d)]);
-  static const LinearGradient navTab3 =
-      LinearGradient(colors: [Color(0xFF667eea), Color(0xFF764ba2)]);
-
-  static const List<LinearGradient> navGradients = [
-    navTab0,
-    navTab1,
-    navTab2,
-    navTab3
-  ];
-
-  static const LinearGradient warmGradient =
-      LinearGradient(colors: [Color(0xFFFF5E62), Color(0xFFFF9966)]);
-  static const LinearGradient coolGradient =
-      LinearGradient(colors: [Color(0xFF4FACFE), Color(0xFF00F2FE)]);
-  static const LinearGradient natureGradient =
-      LinearGradient(colors: [Color(0xFF43E97B), Color(0xFF38F9D7)]);
-  static const LinearGradient magicGradient =
-      LinearGradient(colors: [Color(0xFFA18CD1), Color(0xFFFBC2EB)]);
-  static const LinearGradient oceanGradient =
-      LinearGradient(colors: [Color(0xFF30CFD0), Color(0xFF330867)]);
-  static const LinearGradient goldGradient =
-      LinearGradient(colors: [Color(0xFFF6D365), Color(0xFFFDA085)]);
-}
+import 'pages/turf_wars/turf_wars_screen.dart';
 
 // =========================================================
 // 2. 主页面骨架
@@ -110,55 +42,67 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   int _currentIndex = 0;
   double _currentPosition = 0.0;
   int _lastHapticIndex = 0;
+  bool _isDragging = false;
 
-  late AnimationController _orbController;
+  late AnimationController _tabController;
   bool _isUniverseMode = false;
-
-  /// 用于通知 MedicalRecordScreen 刷新数据的通知器
-  final ValueNotifier<int> _medicalScreenRefreshNotifier =
-      ValueNotifier<int>(0);
-
-  /// 标记是否需要刷新健康记录页面（首次进入或数据变更后需要刷新）
-  bool _needsMedicalScreenRefresh = true;
 
   @override
   void initState() {
     super.initState();
-
+    
     SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
       statusBarIconBrightness: Brightness.dark,
     ));
 
-    _orbController = AnimationController(
+    _tabController = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 12),
-    )..repeat(reverse: true);
+      lowerBound: double.negativeInfinity,
+      upperBound: double.infinity,
+      value: 0.0,
+    );
+    _tabController.addListener(() {
+      setState(() {
+        _currentPosition = _tabController.value;
+      });
+    });
   }
 
   @override
   void dispose() {
-    _orbController.dispose();
-    _medicalScreenRefreshNotifier.dispose();
+    _tabController.dispose();
     super.dispose();
   }
 
+  void _animateToPage(int page, {double velocity = 0.0}) {
+    // [优化] 调整弹簧参数，使其更软、更弹、更像水
+    final SpringDescription spring = SpringDescription(
+      mass: 0.6,       // 稍微减轻质量，响应更快
+      stiffness: 140.0, // 大幅降低刚度，产生柔软感 (原 250)
+      damping: 12.0,    // 降低阻尼，允许更多回弹/摆动 (原 15)
+    );
+    
+    final simulation = SpringSimulation(
+      spring,
+      _currentPosition,
+      page.toDouble(),
+      velocity,
+    );
+    
+    _tabController.animateWith(simulation);
+  }
+
   void _onTabTapped(int index) {
+    if (_currentIndex == index) return;
+
+    _animateToPage(index);
+
     setState(() {
       _currentIndex = index;
-      _currentPosition = index.toDouble();
       _lastHapticIndex = index;
     });
     HapticFeedback.mediumImpact();
-
-    // 当切换到 MedicalRecordScreen (index 2) 时，检查是否需要刷新
-    if (index == 2) {
-      // 检查全局数据变更标记或首次进入标记
-      if (_needsMedicalScreenRefresh || DataChangeNotifier.checkAndReset()) {
-        _medicalScreenRefreshNotifier.value++;
-        _needsMedicalScreenRefresh = false;
-      }
-    }
   }
 
   void _toggleViewMode() {
@@ -191,74 +135,16 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final List<Widget> pages = [
       homePageContent,
       const CommunityScreen(),
-      MedicalRecordScreen(refreshNotifier: _medicalScreenRefreshNotifier),
+      const MedicalRecordScreen(),
       const ProfileScreen(),
     ];
 
     return Scaffold(
       extendBody: true,
       resizeToAvoidBottomInset: false,
-      backgroundColor: AppColors.background,
+      backgroundColor: Colors.transparent,
       body: Stack(
         children: [
-          // 背景层
-          Stack(
-            children: [
-              Container(color: AppColors.background),
-              AnimatedBuilder(
-                animation: _orbController,
-                builder: (context, child) {
-                  return Positioned(
-                    top: -100 + (_orbController.value * 40),
-                    left: -50 + (_orbController.value * 20),
-                    child: Container(
-                      width: 500,
-                      height: 500,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: AppColors.orb1.withOpacity(0.5),
-                      ),
-                    ).blurred(sigmaX: 90, sigmaY: 90),
-                  );
-                },
-              ),
-              AnimatedBuilder(
-                animation: _orbController,
-                builder: (context, child) {
-                  return Positioned(
-                    top: 300 + (math.sin(_orbController.value * math.pi) * 60),
-                    right: -100,
-                    child: Container(
-                      width: 350,
-                      height: 350,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: AppColors.orb3.withOpacity(0.4),
-                      ),
-                    ).blurred(sigmaX: 80, sigmaY: 80),
-                  );
-                },
-              ),
-              AnimatedBuilder(
-                animation: _orbController,
-                builder: (context, child) {
-                  return Positioned(
-                    bottom: -150,
-                    left: -80 + (_orbController.value * 150),
-                    child: Container(
-                      width: 600,
-                      height: 400,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: AppColors.orb2.withOpacity(0.5),
-                      ),
-                    ).blurred(sigmaX: 100, sigmaY: 100),
-                  );
-                },
-              ),
-            ],
-          ),
-
           // 内容层
           IndexedStack(
             index: _currentIndex,
@@ -269,27 +155,24 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           if (_currentIndex == 0)
             Positioned(
               top: MediaQuery.of(context).padding.top + 10,
-              right: 20,
+              right: 20, 
               child: GestureDetector(
                 onTap: _toggleViewMode,
                 child: ClipOval(
                   child: BackdropFilter(
                     filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                     child: Container(
-                      width: 42,
-                      height: 42,
+                      width: 42, height: 42,
                       decoration: BoxDecoration(
                         color: Colors.white.withOpacity(0.5),
                         shape: BoxShape.circle,
-                        border: Border.all(
-                            color: Colors.white.withOpacity(0.8), width: 1),
+                        border: Border.all(color: Colors.white.withOpacity(0.8), width: 1),
                       ),
                       child: Icon(
-                          _isUniverseMode
-                              ? Icons.grid_view_rounded
-                              : Icons.hub_rounded,
-                          color: AppColors.textDark,
-                          size: 22),
+                        _isUniverseMode ? Icons.grid_view_rounded : Icons.hub_rounded, 
+                        color: AppColors.textDark, 
+                        size: 22 
+                      ),
                     ),
                   ),
                 ),
@@ -298,10 +181,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
           // 底部导航
           Positioned(
-            left: 24,
-            right: 24,
-            bottom: 24,
-            height: 68,
+            left: 24, right: 24, 
+            bottom: 24, 
+            height: 68, 
             child: _buildFloatingGlassNavBar(),
           ),
         ],
@@ -316,43 +198,96 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   Widget _buildFloatingGlassNavBar() {
     final double totalWidth = MediaQuery.of(context).size.width - 48;
     final double itemWidth = totalWidth / 4;
-    const double indicatorWidth = 56.0;
-    const double indicatorHeight = 40.0;
-    const double navHeight = 68.0;
+    const double indicatorWidth = 56.0; 
+    const double indicatorHeight = 40.0; 
+    const double navHeight = 68.0; 
 
-    final LinearGradient currentGradient =
-        AppColors.navGradients[_currentIndex];
+    final LinearGradient currentGradient = AppColors.navGradients[_currentIndex];
 
     return GestureDetector(
-      onHorizontalDragUpdate: (details) {
-        final double screenWidth = MediaQuery.of(context).size.width;
-        final double dragItemWidth = (screenWidth - 48) / 4;
+      behavior: HitTestBehavior.opaque, // 确保整个区域都响应点击和拖拽
+      onTapUp: (details) {
+        final double width = MediaQuery.of(context).size.width - 48;
+        final double itemWidth = width / 4;
+        // 计算点击位置对应的 index
+        final int index = (details.localPosition.dx / itemWidth).floor().clamp(0, 3);
+        _onTabTapped(index);
+      },
+      onHorizontalDragStart: (details) {
+        _tabController.stop();
         setState(() {
-          _currentPosition += details.delta.dx / dragItemWidth;
-          _currentPosition = _currentPosition.clamp(0.0, 3.0);
+          _isDragging = true;
         });
+      },
+      onHorizontalDragUpdate: (details) {
+        final double width = MediaQuery.of(context).size.width - 48;
+        final double itemWidth = width / 4;
+        
+        // [修改] 改为绝对位置跟随，实现"指哪打哪"的丝滑跟手感
+        // details.localPosition.dx 是相对于 Container 左上角的 x 坐标
+        // 我们希望指示器中心跟随手指，指示器中心在 index * itemWidth + itemWidth / 2
+        // 所以 position = (x - itemWidth / 2) / itemWidth = x / itemWidth - 0.5
+        
+        double newPosition = (details.localPosition.dx / itemWidth) - 0.5;
+        
+        setState(() {
+          _currentPosition = newPosition.clamp(0.0, 3.0);
+          _tabController.value = _currentPosition;
+        });
+        
         int potentialIndex = _currentPosition.round();
         if (potentialIndex != _lastHapticIndex) {
-          HapticFeedback.selectionClick();
+          HapticFeedback.selectionClick(); 
           _lastHapticIndex = potentialIndex;
         }
       },
       onHorizontalDragEnd: (details) {
+        final double screenWidth = MediaQuery.of(context).size.width;
+        final double dragItemWidth = (screenWidth - 48) / 4;
+        
+        // Calculate velocity in "pages per second"
+        final double velocity = details.velocity.pixelsPerSecond.dx / dragItemWidth;
+
         int targetIndex = _currentPosition.round();
+        
+        // [优化] 增加速度阈值判断，让快速滑动更容易触发翻页
+        if (velocity.abs() > 0.3) { // 降低阈值 (原 0.5)
+          if (velocity > 0) {
+            targetIndex = _currentPosition.floor() + 1;
+          } else {
+            targetIndex = _currentPosition.ceil() - 1;
+          }
+        } else {
+          // 如果速度很慢，就看位置是否超过一半
+          // _currentPosition.round() 已经处理了这个逻辑
+        }
+        
+        targetIndex = targetIndex.clamp(0, 3);
+        
+        // [优化] 传递更强的初始速度给弹簧，制造"冲过头"再回弹的效果
+        _animateToPage(targetIndex, velocity: velocity * 1.2);
+
         setState(() {
+          _isDragging = false;
           _currentIndex = targetIndex;
-          _currentPosition = targetIndex.toDouble();
           _lastHapticIndex = targetIndex;
         });
-        HapticFeedback.lightImpact();
+        HapticFeedback.lightImpact(); 
+      },
+      onHorizontalDragCancel: () {
+        _animateToPage(_currentIndex);
+
+        setState(() {
+          _isDragging = false;
+        });
       },
       child: Container(
         height: navHeight,
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(34),
+          borderRadius: BorderRadius.circular(34), 
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.1),
+              color: Colors.black.withOpacity(0.1), 
               blurRadius: 20,
               offset: const Offset(0, 10),
               spreadRadius: -4,
@@ -368,7 +303,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         child: ClipRRect(
           borderRadius: BorderRadius.circular(34),
           child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
+            filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25), 
             child: Stack(
               alignment: Alignment.centerLeft,
               children: [
@@ -378,26 +313,23 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(34),
                     border: Border.all(
-                      color: Colors.white.withOpacity(0.5),
+                      color: Colors.white.withOpacity(0.5), 
                       width: 1.0,
                     ),
                     gradient: RadialGradient(
-                      radius: 2.0,
-                      center: Alignment.topCenter,
+                      radius: 2.0, 
+                      center: Alignment.topCenter, 
                       colors: [
-                        Colors.white.withOpacity(0.3),
-                        Colors.white.withOpacity(0.6),
-                        Colors.white.withOpacity(0.8),
+                        Colors.white.withOpacity(0.3), 
+                        Colors.white.withOpacity(0.6), 
+                        Colors.white.withOpacity(0.8), 
                       ],
                       stops: const [0.0, 0.7, 1.0],
                     ),
                   ),
                 ),
                 Positioned(
-                  top: 0,
-                  left: 20,
-                  right: 20,
-                  height: 1,
+                  top: 0, left: 20, right: 20, height: 1,
                   child: Container(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
@@ -410,49 +342,67 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     ),
                   ),
                 ),
-                AnimatedPositioned(
-                  duration: const Duration(milliseconds: 350),
-                  curve: Curves.easeOutBack,
-                  left: (_currentPosition * itemWidth) +
-                      (itemWidth / 2) -
-                      (indicatorWidth / 2),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 300),
-                    width: indicatorWidth,
-                    height: indicatorHeight,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(indicatorHeight / 2),
-                      gradient: currentGradient,
-                      boxShadow: [
-                        BoxShadow(
-                          color: currentGradient.colors.first.withOpacity(0.4),
-                          blurRadius: 12,
-                          spreadRadius: -2,
-                          offset: const Offset(0, 2),
+                Positioned(
+                  left: (_currentPosition * itemWidth) + (itemWidth / 2) - (indicatorWidth / 2),
+                  child: Builder(
+                    builder: (context) {
+                      // [优化] 动态形变算法：增强液态拉伸感
+                      double velocity = 0.0;
+                      if (_tabController.isAnimating) {
+                         velocity = _tabController.velocity; // 保留符号以判断方向
+                      }
+                      
+                      double absVelocity = velocity.abs();
+                      
+                      // 拉伸因子：速度越快，拉伸越明显。使用非线性曲线让微小移动也有反馈。
+                      // 限制最大拉伸为 60%
+                      double stretchFactor = (absVelocity * 0.08).clamp(0.0, 0.6);
+                      
+                      double currentWidth = indicatorWidth * (1 + stretchFactor);
+                      // 挤压高度：保持一定的体积感，但不要完全扁平
+                      double currentHeight = indicatorHeight * (1 - stretchFactor * 0.35);
+
+                      // [新增] 动态倾斜：根据速度方向微调角度，模拟惯性
+                      // 速度为正（向右），向左倾斜（头部在前，尾部拖后）-> 实际上旋转是整体旋转
+                      // 简单的旋转可能看起来像车轮。液态通常是头部变大尾部变小（水滴型）。
+                      // 这里用简单的 Scale 模拟拉伸即可，旋转可能导致图标错位。
+                      
+                      return Container(
+                        width: currentWidth,
+                        height: currentHeight,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(currentHeight / 2), // 保持胶囊形状
+                          gradient: currentGradient,
+                          boxShadow: [
+                            BoxShadow(
+                              color: currentGradient.colors.first.withOpacity(0.4 + (stretchFactor * 0.2)), // 速度越快，光晕越强
+                              blurRadius: 12 + (stretchFactor * 10), // 运动时模糊拖尾增加
+                              spreadRadius: -2,
+                              offset: const Offset(0, 2),
+                            ),
+                            BoxShadow(
+                              color: Colors.white.withOpacity(0.3),
+                              blurRadius: 1,
+                              offset: const Offset(0, 1),
+                              spreadRadius: 0,
+                              blurStyle: BlurStyle.inner
+                            ),
+                          ],
                         ),
-                        BoxShadow(
-                            color: Colors.white.withOpacity(0.3),
-                            blurRadius: 1,
-                            offset: const Offset(0, 1),
-                            spreadRadius: 0,
-                            blurStyle: BlurStyle.inner),
-                      ],
-                    ),
+                      );
+                    }
                   ),
                 ),
                 SizedBox(
                   width: totalWidth,
                   height: navHeight,
                   child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    mainAxisAlignment: MainAxisAlignment.start, // [修改] 确保严格对齐
                     children: [
                       _buildNavItem(0, Icons.home_rounded, Icons.home_outlined),
-                      _buildNavItem(
-                          1, Icons.explore_rounded, Icons.explore_outlined),
-                      _buildNavItem(2, Icons.assignment_rounded,
-                          Icons.assignment_outlined),
-                      _buildNavItem(3, Icons.person_rounded,
-                          Icons.person_outline_rounded),
+                      _buildNavItem(1, Icons.explore_rounded, Icons.explore_outlined),
+                      _buildNavItem(2, Icons.assignment_rounded, Icons.assignment_outlined),
+                      _buildNavItem(3, Icons.person_rounded, Icons.person_outline_rounded),
                     ],
                   ),
                 ),
@@ -464,37 +414,32 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildNavItem(
-      int index, IconData selectedIcon, IconData unselectedIcon) {
+  Widget _buildNavItem(int index, IconData selectedIcon, IconData unselectedIcon) {
     final double distance = (_currentPosition - index).abs();
     final double t = (1.0 - distance).clamp(0.0, 1.0);
-    double scale = 1.0 + (0.1 * t);
+    double scale = 1.0 + (0.1 * t); 
 
     Color iconColor;
     if (t > 0.6) {
-      iconColor = Colors.white;
+      iconColor = Colors.white; 
     } else {
       iconColor = Color.lerp(AppColors.textGrey, AppColors.textDark, t)!;
     }
 
-    return GestureDetector(
-      onTap: () => _onTabTapped(index),
-      behavior: HitTestBehavior.translucent,
-      child: SizedBox(
-        width: (MediaQuery.of(context).size.width - 48) / 4,
-        height: 68,
-        child: Transform.scale(
-          scale: scale,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                t > 0.6 ? selectedIcon : unselectedIcon,
-                color: iconColor,
-                size: 24,
-              ),
-            ],
-          ),
+    return SizedBox(
+      width: (MediaQuery.of(context).size.width - 48) / 4, // [修复] 宽度必须是 / 4，与指示器逻辑一致
+      height: 68, 
+      child: Transform.scale(
+        scale: scale,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              t > 0.6 ? selectedIcon : unselectedIcon,
+              color: iconColor,
+              size: 24, 
+            ),
+          ],
         ),
       ),
     );
@@ -512,19 +457,15 @@ class _HomeDashboardContent extends StatefulWidget {
   State<_HomeDashboardContent> createState() => _HomeDashboardContentState();
 }
 
-class _HomeDashboardContentState extends State<_HomeDashboardContent> {
-  final TextEditingController _searchController = TextEditingController();
-  final FocusNode _searchFocusNode = FocusNode();
-  List<SearchResult> _searchResults = [];
-  bool _showSearchResults = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _searchController.addListener(() {
-      setState(() {}); // 更新状态以显示/隐藏清除按钮
-    });
-  }
+    return ListView(
+      // [关键点1] 强制开启滚动物理效果，即使内容少也能滑动
+      physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+      
+      // [关键点2] 增加底部 Padding (130)，确保内容不被悬浮导航栏遮挡，且预留滑动空间
+      padding: EdgeInsets.fromLTRB(20, topPadding + 60, 20, 130),
+      children: [
+        // 1. AI 智能问诊 (修复版：文字完整显示)
+        _buildHeroAiCard(context),
 
   @override
   void dispose() {
@@ -561,21 +502,28 @@ class _HomeDashboardContentState extends State<_HomeDashboardContent> {
     SearchResult('设置', 'settings', Icons.settings, () => const SettingsPage()),
   ];
 
-  /// 执行搜索
-  void _performSearch(String query) {
-    if (query.isEmpty) {
-      setState(() {
-        _searchResults = [];
-        _showSearchResults = false;
-      });
-      return;
-    }
+        const SizedBox(height: 16), 
 
-    final lowerQuery = query.toLowerCase();
-    final results = _allSearchItems.where((item) {
-      return item.name.toLowerCase().contains(lowerQuery) ||
-          item.keyword.toLowerCase().contains(lowerQuery);
-    }).toList();
+        // 2. 功能网格
+        LayoutBuilder(
+          builder: (context, constraints) {
+            double width = (constraints.maxWidth - 12) / 2;
+            return Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                _buildFeatureCard(width, '宠物消费', 'Expenses', Icons.account_balance_wallet_rounded, const LinearGradient(colors: [Color(0xFF6A85B6), Color(0xFFBAC8E0)]), const UnifiedExpenseHomePage()),
+                _buildFeatureCard(width, '智能提醒', 'Reminder', Icons.notifications_active_rounded, const LinearGradient(colors: [Color(0xFFA18CD1), Color(0xFFFBC2EB)]), const IntelligentReminderPage()),
+                _buildFeatureCard(width, '电子档案', 'Vaccine', Icons.badge_rounded, AppColors.coolGradient, const PetPassportPage()),
+                _buildFeatureCard(width, '第一人称日记', 'Diary', Icons.menu_book_rounded, AppColors.natureGradient, const PetDiaryComposePage()),
+                _buildFeatureCard(width, '活力健身', 'Fitness', Icons.directions_run_rounded, AppColors.oceanGradient, const PartnerFitGymPage()),
+                _buildFeatureCard(width, '营养食谱', 'Food', Icons.restaurant_menu_rounded, AppColors.goldGradient, const PetRecipeListPage()),
+                _buildFeatureCard(width, '训宠响片', 'Training', Icons.touch_app_rounded, AppColors.magicGradient, const DogClickerScreen()),
+                _buildFeatureCard(width, '寻宠救援', '希望您永远使用不到此功能', Icons.phonelink_ring_rounded, const LinearGradient(colors: [Color(0xFFFF416C), Color(0xFFFF4B2B)]), const LostPetRescuePage(), subtitleMaxLines: 2),
+              ],
+            );
+          },
+        ),
 
     setState(() {
       _searchResults = results;
@@ -802,8 +750,7 @@ class _HomeDashboardContentState extends State<_HomeDashboardContent> {
     return GestureDetector(
       onTap: () {
         HapticFeedback.mediumImpact();
-        Navigator.of(context).push(
-            CupertinoPageRoute(builder: (_) => const ChatPageWithDatabase()));
+        Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const ChatPageWithDatabase()));
       },
       child: Container(
         height: 176, // 高度给足
@@ -811,10 +758,7 @@ class _HomeDashboardContentState extends State<_HomeDashboardContent> {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(28),
           boxShadow: [
-            BoxShadow(
-                color: AppColors.warmGradient.colors.first.withOpacity(0.12),
-                blurRadius: 20,
-                offset: const Offset(0, 10)),
+            BoxShadow(color: AppColors.warmGradient.colors.first.withOpacity(0.12), blurRadius: 20, offset: const Offset(0, 10)),
           ],
         ),
         child: ClipRRect(
@@ -823,13 +767,11 @@ class _HomeDashboardContentState extends State<_HomeDashboardContent> {
             filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
             child: Container(
               decoration: BoxDecoration(
-                color: const Color(0xFFFFF5F0).withOpacity(0.6),
+                color: const Color(0xFFFFF5F0).withOpacity(0.6), 
                 borderRadius: BorderRadius.circular(28),
-                border:
-                    Border.all(color: Colors.white.withOpacity(0.6), width: 1),
+                border: Border.all(color: Colors.white.withOpacity(0.6), width: 1),
                 gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
+                  begin: Alignment.topLeft, end: Alignment.bottomRight,
                   colors: [
                     Colors.white.withOpacity(0.7),
                     Colors.white.withOpacity(0.3),
@@ -839,18 +781,16 @@ class _HomeDashboardContentState extends State<_HomeDashboardContent> {
               child: Stack(
                 children: [
                   Positioned(
-                    right: -30,
-                    top: -30,
+                    right: -30, top: -30,
                     child: Container(
-                      width: 140,
-                      height: 140,
+                      width: 140, height: 140,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         color: Colors.white.withOpacity(0.3),
                       ),
                     ).blurred(sigmaX: 30, sigmaY: 30),
                   ),
-
+                  
                   Padding(
                     padding: const EdgeInsets.all(20),
                     child: Column(
@@ -859,58 +799,49 @@ class _HomeDashboardContentState extends State<_HomeDashboardContent> {
                       children: [
                         // 顶部 AI VET 标签
                         Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 4),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                           decoration: BoxDecoration(
-                            color: AppColors.warmGradient.colors.first
-                                .withOpacity(0.1),
+                            color: AppColors.warmGradient.colors.first.withOpacity(0.1),
                             borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                                color: AppColors.warmGradient.colors.first
-                                    .withOpacity(0.1)),
+                            border: Border.all(color: AppColors.warmGradient.colors.first.withOpacity(0.1)),
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(Icons.auto_awesome,
-                                  size: 12,
-                                  color: AppColors.warmGradient.colors.first),
+                              Icon(Icons.auto_awesome, size: 12, color: AppColors.warmGradient.colors.first),
                               const SizedBox(width: 4),
-                              Text("Peture AI",
-                                  style: TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.bold,
-                                      color:
-                                          AppColors.warmGradient.colors.first,
-                                      letterSpacing: 0.5)),
+                              Text("Peture AI", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.warmGradient.colors.first, letterSpacing: 0.5)),
                             ],
                           ),
                         ),
-
+                        
                         // 使用 SizedBox 代替 Spacer，防止文字被挤到最下面
-                        const SizedBox(height: 20),
-
+                        const SizedBox(height: 24), 
+                        
                         // 大标题
-                        const Text("AI 智能问诊",
-                            style: TextStyle(
-                                fontSize: 24,
-                                fontWeight: FontWeight.w800,
-                                color: AppColors.textDark,
-                                letterSpacing: -0.8)),
-
-                        const SizedBox(height: 6),
-
+                        const Text("AI 智能问诊", 
+                          style: TextStyle(
+                            fontSize: 24, 
+                            fontWeight: FontWeight.w800, 
+                            color: AppColors.textDark, 
+                            letterSpacing: -0.8 
+                          )
+                        ),
+                        
+                        const SizedBox(height: 8),
+                        
                         // 副标题
                         Container(
                           padding: const EdgeInsets.only(right: 60),
                           child: const Text(
                             "24小时在线，快速分析宠物症状\n提供专业医疗建议。",
                             style: TextStyle(
-                                fontSize: 13,
-                                color: Color(0xFF636366),
-                                height: 1.4,
-                                fontWeight: FontWeight.w400),
-                            maxLines: 2,
+                              fontSize: 13, 
+                              color: Color(0xFF636366), 
+                              height: 1.5, 
+                              fontWeight: FontWeight.w400
+                            ), 
+                            maxLines: 2, 
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
@@ -920,30 +851,18 @@ class _HomeDashboardContentState extends State<_HomeDashboardContent> {
 
                   // 右下角悬浮按钮
                   Positioned(
-                    right: 20,
-                    bottom: 20,
+                    right: 20, bottom: 20,
                     child: Container(
-                      width: 48,
-                      height: 48,
+                      width: 48, height: 48,
                       decoration: BoxDecoration(
                         gradient: AppColors.warmGradient,
                         shape: BoxShape.circle,
                         boxShadow: [
-                          BoxShadow(
-                              color: AppColors.warmGradient.colors.first
-                                  .withOpacity(0.4),
-                              blurRadius: 12,
-                              offset: const Offset(0, 6)),
-                          BoxShadow(
-                              color: Colors.white.withOpacity(0.5),
-                              blurRadius: 2,
-                              offset: const Offset(0, 2),
-                              spreadRadius: 0,
-                              blurStyle: BlurStyle.inner),
+                          BoxShadow(color: AppColors.warmGradient.colors.first.withOpacity(0.4), blurRadius: 12, offset: const Offset(0, 6)),
+                          BoxShadow(color: Colors.white.withOpacity(0.5), blurRadius: 2, offset: const Offset(0, 2), spreadRadius: 0, blurStyle: BlurStyle.inner),
                         ],
                       ),
-                      child: const Icon(Icons.medical_services_rounded,
-                          color: Colors.white, size: 24),
+                      child: const Icon(Icons.medical_services_rounded, color: Colors.white, size: 24),
                     ),
                   )
                 ],
@@ -956,97 +875,91 @@ class _HomeDashboardContentState extends State<_HomeDashboardContent> {
   }
 
   // --- 小卡片 ---
-  Widget _buildFeatureCard(double width, String title, String subtitle,
-      IconData icon, LinearGradient gradient, Widget page,
-      {int subtitleMaxLines = 1}) {
-    return Builder(builder: (context) {
-      return GestureDetector(
-        onTap: () {
-          HapticFeedback.lightImpact();
-          Navigator.of(context).push(CupertinoPageRoute(builder: (_) => page));
-        },
-        child: Container(
-          width: width,
-          height: width * 0.82,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(24),
-            boxShadow: [
-              BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 15,
-                  offset: const Offset(0, 8)),
-            ],
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(24),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-              child: Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.65),
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(
-                      color: Colors.white.withOpacity(0.6), width: 1),
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      Colors.white.withOpacity(0.8),
-                      Colors.white.withOpacity(0.4),
+  Widget _buildFeatureCard(double width, String title, String subtitle, IconData icon, LinearGradient gradient, Widget page, {int subtitleMaxLines = 1}) {
+    return Builder(
+      builder: (context) {
+        return GestureDetector(
+          onTap: () {
+            HapticFeedback.lightImpact();
+            Navigator.of(context).push(CupertinoPageRoute(builder: (_) => page));
+          },
+          child: Container(
+            width: width,
+            height: width * 0.82,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: [
+                BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 15, offset: const Offset(0, 8)),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(24),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+                child: Container(
+                  padding: const EdgeInsets.all(16), 
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.65),
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: Colors.white.withOpacity(0.6), width: 1),
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft, end: Alignment.bottomRight,
+                      colors: [
+                        Colors.white.withOpacity(0.8),
+                        Colors.white.withOpacity(0.4),
+                      ],
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Container(
+                        width: 38, height: 38,
+                        decoration: BoxDecoration(
+                          color: gradient.colors.first.withOpacity(0.15),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(icon, color: gradient.colors.first, size: 20),
+                      ),
+                      Flexible(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(title, 
+                              style: const TextStyle(
+                                fontSize: 16, 
+                                fontWeight: FontWeight.w700, 
+                                color: AppColors.textDark,
+                                letterSpacing: -0.4 
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 3),
+                            Text(subtitle, 
+                              style: TextStyle(
+                                fontSize: 11, 
+                                color: AppColors.textGrey, 
+                                fontWeight: FontWeight.w500,
+                                letterSpacing: 0.3 
+                              ),
+                              maxLines: subtitleMaxLines, 
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
                     ],
                   ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Container(
-                      width: 38,
-                      height: 38,
-                      decoration: BoxDecoration(
-                        color: gradient.colors.first.withOpacity(0.15),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(icon, color: gradient.colors.first, size: 20),
-                    ),
-                    Flexible(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            title,
-                            style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.textDark,
-                                letterSpacing: -0.4),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 3),
-                          Text(
-                            subtitle,
-                            style: TextStyle(
-                                fontSize: 11,
-                                color: AppColors.textGrey,
-                                fontWeight: FontWeight.w500,
-                                letterSpacing: 0.3),
-                            maxLines: subtitleMaxLines,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
                 ),
               ),
             ),
           ),
-        ),
-      );
-    });
+        );
+      }
+    );
   }
 }
 
@@ -1071,60 +984,18 @@ class _HomeUniverseContent extends StatelessWidget {
         children: [
           Center(
             child: HolographicSphereMenu(
-              radius: screenWidth * 0.38,
+              radius: screenWidth * 0.38, 
               items: [
-                SphereItemData(
-                    title: 'AI 问诊',
-                    icon: Icons.medical_services_rounded,
-                    gradient: AppColors.warmGradient,
-                    page: const ChatPageWithDatabase()),
-                SphereItemData(
-                    title: '电子档案',
-                    icon: Icons.badge_rounded,
-                    gradient: AppColors.coolGradient,
-                    page: const PetPassportPage()),
-                SphereItemData(
-                    title: '成长日记',
-                    icon: Icons.menu_book_rounded,
-                    gradient: AppColors.natureGradient,
-                    page: const PetDiaryComposePage()),
-                SphereItemData(
-                    title: '活力健身',
-                    icon: Icons.directions_run_rounded,
-                    gradient: AppColors.oceanGradient,
-                    page: const PartnerFitGymPage()),
-                SphereItemData(
-                    title: '营养食谱',
-                    icon: Icons.restaurant_menu_rounded,
-                    gradient: AppColors.goldGradient,
-                    page: const PetRecipeListPage()),
-                SphereItemData(
-                    title: '训宠响片',
-                    icon: Icons.touch_app_rounded,
-                    gradient: AppColors.magicGradient,
-                    page: const DogClickerScreen()),
-                SphereItemData(
-                    title: '寻宠救援',
-                    icon: Icons.phonelink_ring_rounded,
-                    gradient: const LinearGradient(
-                        colors: [Color(0xFFFF416C), Color(0xFFFF4B2B)]),
-                    page: const LostPetRescuePage()),
-                SphereItemData(
-                    title: '社区话题',
-                    icon: Icons.explore_rounded,
-                    gradient: AppColors.warmGradient,
-                    page: const CommunityScreen()),
-                SphereItemData(
-                    title: '商城',
-                    icon: Icons.shopping_bag_rounded,
-                    gradient: AppColors.coolGradient,
-                    page: const PetShopPage()),
-                SphereItemData(
-                    title: '设置',
-                    icon: Icons.settings_rounded,
-                    gradient: const LinearGradient(
-                        colors: [Color(0xFF606c88), Color(0xFF3f4c6b)]),
-                    page: const ProfileScreen()),
+                SphereItemData(title: 'AI 问诊', icon: Icons.medical_services_rounded, gradient: AppColors.warmGradient, page: const ChatPageWithDatabase()),
+                SphereItemData(title: '电子档案', icon: Icons.badge_rounded, gradient: AppColors.coolGradient, page: const PetPassportPage()),
+                SphereItemData(title: '成长日记', icon: Icons.menu_book_rounded, gradient: AppColors.natureGradient, page: const PetDiaryComposePage()),
+                SphereItemData(title: '活力健身', icon: Icons.directions_run_rounded, gradient: AppColors.oceanGradient, page: const PartnerFitGymPage()),
+                SphereItemData(title: '营养食谱', icon: Icons.restaurant_menu_rounded, gradient: AppColors.goldGradient, page: const PetRecipeListPage()),
+                SphereItemData(title: '训宠响片', icon: Icons.touch_app_rounded, gradient: AppColors.magicGradient, page: const DogClickerScreen()),
+                SphereItemData(title: '寻宠救援', icon: Icons.phonelink_ring_rounded, gradient: const LinearGradient(colors: [Color(0xFFFF416C), Color(0xFFFF4B2B)]), page: const LostPetRescuePage()),
+                SphereItemData(title: '社区话题', icon: Icons.explore_rounded, gradient: AppColors.warmGradient, page: const CommunityScreen()),
+                SphereItemData(title: '商城', icon: Icons.shopping_bag_rounded, gradient: AppColors.coolGradient, page: const ProfileScreen()),
+                SphereItemData(title: '设置', icon: Icons.settings_rounded, gradient: const LinearGradient(colors: [Color(0xFF606c88), Color(0xFF3f4c6b)]), page: const ProfileScreen()),
               ],
             ),
           ),
@@ -1152,8 +1023,7 @@ class HolographicSphereMenu extends StatefulWidget {
   State<HolographicSphereMenu> createState() => _HolographicSphereMenuState();
 }
 
-class _HolographicSphereMenuState extends State<HolographicSphereMenu>
-    with TickerProviderStateMixin {
+class _HolographicSphereMenuState extends State<HolographicSphereMenu> with TickerProviderStateMixin {
   double _angleX = 0.0;
   double _angleY = 0.0;
 
@@ -1194,7 +1064,7 @@ class _HolographicSphereMenuState extends State<HolographicSphereMenu>
       _angleX += _velocityY;
 
       if (_velocityX.abs() < 0.0001 && _velocityY.abs() < 0.0001) {
-        _angleY -= _autoRotateSpeed;
+         _angleY -= _autoRotateSpeed;
       }
     });
   }
@@ -1245,7 +1115,7 @@ class _HolographicSphereMenuState extends State<HolographicSphereMenu>
                   alignment: Alignment.center,
                   children: [
                     Container(
-                      width: widget.radius * 1.0,
+                      width: widget.radius * 1.0, 
                       height: widget.radius * 1.0,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
@@ -1259,6 +1129,7 @@ class _HolographicSphereMenuState extends State<HolographicSphereMenu>
                         ),
                       ),
                     ).blurred(sigmaX: 50, sigmaY: 50),
+
                     ..._build3DItems(),
                   ],
                 ),
@@ -1304,11 +1175,11 @@ class _HolographicSphereMenuState extends State<HolographicSphereMenu>
 
     return projected.map((item) {
       final double zNorm = (item.z + 1) / 2;
-      final double scale = 0.4 + (0.6 * zNorm * zNorm);
+      final double scale = 0.4 + (0.6 * zNorm * zNorm); 
       final double opacity = 0.2 + (0.8 * zNorm);
       final bool isFront = item.z > 0.88;
 
-      const double iconSize = 72.0;
+      const double iconSize = 72.0; 
       const double halfIconSize = iconSize / 2;
 
       return Positioned(
@@ -1321,50 +1192,37 @@ class _HolographicSphereMenuState extends State<HolographicSphereMenu>
             child: GestureDetector(
               onTap: () {
                 HapticFeedback.mediumImpact();
-                Navigator.of(context)
-                    .push(CupertinoPageRoute(builder: (_) => item.data.page));
+                Navigator.of(context).push(CupertinoPageRoute(builder: (_) => item.data.page));
               },
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Container(
-                    width: iconSize,
-                    height: iconSize,
+                    width: iconSize, height: iconSize,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       gradient: item.data.gradient,
                       boxShadow: [
                         if (isFront)
-                          BoxShadow(
-                              color: item.data.gradient.colors.first
-                                  .withOpacity(0.5),
-                              blurRadius: 20,
-                              spreadRadius: 1),
-                        BoxShadow(
-                            color: Colors.black.withOpacity(0.15),
-                            blurRadius: 8,
-                            offset: const Offset(0, 4)),
+                          BoxShadow(color: item.data.gradient.colors.first.withOpacity(0.5), blurRadius: 20, spreadRadius: 1),
+                        BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 8, offset: const Offset(0, 4)),
                       ],
                     ),
-                    child: Icon(item.data.icon, color: Colors.white, size: 30),
+                    child: Icon(item.data.icon, color: Colors.white, size: 30), 
                   ),
                   const SizedBox(height: 6),
                   AnimatedOpacity(
                     duration: const Duration(milliseconds: 200),
                     opacity: isFront ? 1.0 : 0.0,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 3),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
                         color: Colors.white.withOpacity(0.8),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Text(
                         item.data.title,
-                        style: const TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.textDark),
+                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.textDark),
                       ),
                     ),
                   ),
@@ -1384,11 +1242,7 @@ class SphereItemData {
   final LinearGradient gradient;
   final Widget page;
 
-  SphereItemData(
-      {required this.title,
-      required this.icon,
-      required this.gradient,
-      required this.page});
+  SphereItemData({required this.title, required this.icon, required this.gradient, required this.page});
 }
 
 class _ProjectedItem {
@@ -1396,6 +1250,5 @@ class _ProjectedItem {
   final double y;
   final double z;
   final SphereItemData data;
-  _ProjectedItem(
-      {required this.x, required this.y, required this.z, required this.data});
+  _ProjectedItem({required this.x, required this.y, required this.z, required this.data});
 }
