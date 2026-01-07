@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -390,6 +391,7 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> {
   List<HealthEvent> _healthLog = [];
   int _selectedTabIndex = 0;
   bool _isSelectorExpanded = false; // 新增：控制宠物选择器展开状态
+  final Map<String, String?> _petPassportAvatars = {}; // 存储每个宠物的电子档案头像
 
   @override
   void initState() {
@@ -456,6 +458,9 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> {
       }
     });
     
+    // 加载所有宠物的电子档案头像
+    await _loadPetPassportAvatars();
+    
     // 加载选中宠物的数据
     if (_selectedPet != null) {
       await _loadDataForSelectedPet();
@@ -463,6 +468,81 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> {
       // 如果没有宠物，则加载默认数据
       await _loadDefaultData();
     }
+  }
+
+  /// 加载所有宠物的电子档案头像
+  Future<void> _loadPetPassportAvatars() async {
+    for (var pet in _allPets) {
+      if (pet.id == null) continue;
+      try {
+        final passportData = await _supabaseService.getPassportByPetId(pet.id!);
+        if (passportData != null) {
+          _petPassportAvatars[pet.id!] = passportData['photoPath'] as String?;
+        } else {
+          _petPassportAvatars[pet.id!] = null;
+        }
+      } catch (e) {
+        debugPrint('加载宠物 ${pet.name} 的电子档案头像失败: $e');
+        _petPassportAvatars[pet.id!] = null;
+      }
+    }
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  /// 构建宠物头像（优先使用电子档案头像）
+  Widget _buildPetAvatar(Pet pet, {double radius = 24}) {
+    // 优先使用电子档案头像（passport.photoPath）
+    if (pet.id != null) {
+      final passportPhotoPath = _petPassportAvatars[pet.id!];
+      if (passportPhotoPath != null && passportPhotoPath.isNotEmpty) {
+        final file = File(passportPhotoPath);
+        if (file.existsSync()) {
+          return CircleAvatar(
+            radius: radius,
+            backgroundColor: Colors.white,
+            backgroundImage: FileImage(file),
+            onBackgroundImageError: (exception, stackTrace) {
+              // 如果加载失败，使用默认头像
+            },
+            child: _buildDefaultAvatarIcon(radius),
+          );
+        }
+      }
+    }
+    
+    // 其次使用宠物档案头像（pet.avatar，仅在电子档案没设置时使用）
+    if (pet.avatar != null && pet.avatar!.isNotEmpty) {
+      final file = File(pet.avatar!);
+      if (file.existsSync()) {
+        return CircleAvatar(
+          radius: radius,
+          backgroundColor: Colors.white,
+          backgroundImage: FileImage(file),
+          onBackgroundImageError: (exception, stackTrace) {
+            // 如果加载失败，使用默认头像
+          },
+          child: _buildDefaultAvatarIcon(radius),
+        );
+      }
+    }
+
+    // 没有头像时显示默认图标
+    return CircleAvatar(
+      radius: radius,
+      backgroundColor: Colors.white,
+      child: _buildDefaultAvatarIcon(radius),
+    );
+  }
+
+  /// 构建默认头像图标
+  Widget _buildDefaultAvatarIcon(double radius) {
+    return Icon(
+      Icons.pets,
+      size: radius * 0.8,
+      color: AppTheme.primary.withOpacity(0.6),
+    );
   }
 
   Future<void> _loadDataForSelectedPet() async {
@@ -858,13 +938,7 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> {
                     width: 2,
                   ),
                 ),
-                child: CircleAvatar(
-                  radius: 24,
-                  backgroundColor: Colors.white,
-                  backgroundImage: const NetworkImage(
-                    'https://loremflickr.com/150/150/cutedog',
-                  ),
-                ),
+                child: _buildPetAvatar(pet, radius: 24),
               ),
               const SizedBox(width: 16),
               Expanded(
@@ -1006,13 +1080,17 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> {
                               width: 2,
                             ),
                           ),
-                          child: const CircleAvatar(
-                            radius: 35,
-                            backgroundColor: Colors.white,
-                            backgroundImage: NetworkImage(
-                              'https://loremflickr.com/150/150/cutedog',
-                            ),
-                          ),
+                          child: _selectedPet != null
+                              ? _buildPetAvatar(_selectedPet!, radius: 35)
+                              : const CircleAvatar(
+                                  radius: 35,
+                                  backgroundColor: Colors.white,
+                                  child: Icon(
+                                    Icons.pets,
+                                    size: 28,
+                                    color: Colors.grey,
+                                  ),
+                                ),
                         ),
                         const SizedBox(width: 20),
                         Expanded(

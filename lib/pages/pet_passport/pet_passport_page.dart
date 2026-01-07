@@ -5,6 +5,10 @@ import 'dart:io';
 import '../../models/pet.dart';
 import '../../models/pet_passport.dart';
 import '../../services/supabase_service.dart';
+import '../../account_settings_page.dart';
+import '../../widgets/weight_trend_card.dart';
+import '../../utils/user_avatar_helper.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'edit_pet_passport_page.dart';
 
 /// 宠物身份证（护照风格）页面
@@ -23,6 +27,10 @@ class _PetPassportPageState extends State<PetPassportPage>
   int _selectedPetIndex = 0;
   late AnimationController _flipController;
   bool _isFlipped = false;
+  
+  // 用户头像路径
+  String? _userAvatarPath;
+  String? _userName;
 
   @override
   void initState() {
@@ -32,6 +40,27 @@ class _PetPassportPageState extends State<PetPassportPage>
       duration: const Duration(milliseconds: 600),
     );
     _loadPets();
+    _loadUserInfo();
+  }
+  
+  /// 加载用户信息（头像和昵称）
+  Future<void> _loadUserInfo() async {
+    try {
+      final avatarPath = await UserAvatarHelper.getCurrentUserAvatarPath();
+      final supabaseService = SupabaseService();
+      final profile = await supabaseService.getUserProfile();
+      final nickname = profile?['nickname'] as String?;
+      final user = Supabase.instance.client.auth.currentUser;
+      
+      if (mounted) {
+        setState(() {
+          _userAvatarPath = avatarPath;
+          _userName = nickname ?? user?.userMetadata?['name'] ?? '铲屎官';
+        });
+      }
+    } catch (e) {
+      debugPrint('加载用户信息失败: $e');
+    }
   }
 
   @override
@@ -140,6 +169,20 @@ class _PetPassportPageState extends State<PetPassportPage>
         ),
         centerTitle: true,
         actions: [
+          // 用户个人信息设置入口
+          IconButton(
+            icon: const Icon(Icons.person_outline, color: Color(0xFF5A8EFA)),
+            onPressed: () async {
+              await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const AccountSettingsPage(),
+                ),
+              );
+              // 从设置页面返回后，刷新用户信息
+              _loadUserInfo();
+            },
+          ),
           if (_pets.isNotEmpty && _pets[_selectedPetIndex].id != null)
             IconButton(
               icon: const Icon(Icons.edit, color: Color(0xFF5A8EFA)),
@@ -191,33 +234,43 @@ class _PetPassportPageState extends State<PetPassportPage>
         // 护照卡片
         Expanded(
           child: Center(
-            child: GestureDetector(
-              onTap: _flipCard,
-              child: AnimatedBuilder(
-                animation: _flipController,
-                builder: (context, child) {
-                  final angle = _flipController.value * math.pi;
-                  final transform = Matrix4.identity()
-                    ..setEntry(3, 2, 0.001)
-                    ..rotateY(angle);
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              child: GestureDetector(
+                onTap: _flipCard,
+                child: AnimatedBuilder(
+                  animation: _flipController,
+                  builder: (context, child) {
+                    final angle = _flipController.value * math.pi;
+                    final transform = Matrix4.identity()
+                      ..setEntry(3, 2, 0.001)
+                      ..rotateY(angle);
 
-                  return Transform(
-                    transform: transform,
-                    alignment: Alignment.center,
-                    child: angle < math.pi / 2
-                        ? _buildPassportFront()
-                        : Transform(
-                            transform: Matrix4.identity()..rotateY(math.pi),
-                            alignment: Alignment.center,
-                            child: _buildPassportBack(),
-                          ),
-                  );
-                },
+                    return Transform(
+                      transform: transform,
+                      alignment: Alignment.center,
+                      child: angle < math.pi / 2
+                          ? _buildPassportFront()
+                          : Transform(
+                              transform: Matrix4.identity()..rotateY(math.pi),
+                              alignment: Alignment.center,
+                              child: _buildPassportBack(),
+                            ),
+                    );
+                  },
+                ),
               ),
             ),
           ),
         ),
 
+        // 体重趋势卡片
+        if (_pets.isNotEmpty && _pets[_selectedPetIndex].id != null)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+            child: WeightTrendCard(petId: _pets[_selectedPetIndex].id!),
+          ),
+        
         // 提示文字
         Padding(
           padding: const EdgeInsets.all(16.0),
@@ -296,7 +349,7 @@ class _PetPassportPageState extends State<PetPassportPage>
     Pet pet,
     bool isSelected,
   ) {
-    // 如果有照片路径，显示照片
+    // 优先使用 passport.photoPath（电子档案头像，以电子档案为准）
     if (passport?.photoPath != null && passport!.photoPath!.isNotEmpty) {
       final file = File(passport.photoPath!);
       if (file.existsSync()) {
@@ -307,11 +360,25 @@ class _PetPassportPageState extends State<PetPassportPage>
             width: 60,
             height: 60,
             errorBuilder: (context, error, stackTrace) {
-              return Icon(
-                Icons.pets,
-                color: isSelected ? const Color(0xFF5A8EFA) : Colors.grey[400],
-                size: 30,
-              );
+              return _buildDefaultPetSelectorIcon(isSelected);
+            },
+          ),
+        );
+      }
+    }
+    
+    // 其次使用 pet.avatar（宠物档案头像，仅在电子档案没设置时使用）
+    if (pet.avatar != null && pet.avatar!.isNotEmpty) {
+      final file = File(pet.avatar!);
+      if (file.existsSync()) {
+        return ClipOval(
+          child: Image.file(
+            file,
+            fit: BoxFit.cover,
+            width: 60,
+            height: 60,
+            errorBuilder: (context, error, stackTrace) {
+              return _buildDefaultPetSelectorIcon(isSelected);
             },
           ),
         );
@@ -319,8 +386,13 @@ class _PetPassportPageState extends State<PetPassportPage>
     }
 
     // 没有照片时显示默认图标
+    return _buildDefaultPetSelectorIcon(isSelected);
+  }
+  
+  /// 构建默认宠物选择器图标
+  Widget _buildDefaultPetSelectorIcon(bool isSelected) {
     return Icon(
-      pet.type == '猫' ? Icons.pets : Icons.pets,
+      Icons.pets,
       color: isSelected ? const Color(0xFF5A8EFA) : Colors.grey[400],
       size: 30,
     );
@@ -329,10 +401,15 @@ class _PetPassportPageState extends State<PetPassportPage>
   Widget _buildPassportFront() {
     final pet = _pets[_selectedPetIndex];
     final passport = _passports[pet.id];
+    
+    // 获取屏幕宽度，确保卡片不会超出屏幕
+    final screenWidth = MediaQuery.of(context).size.width;
+    final cardWidth = (screenWidth - 48).clamp(300.0, 360.0); // 最小300，最大360，左右各留24边距
+    final cardHeight = cardWidth * 1.5; // 保持宽高比 2:3
 
     return Container(
-      width: 360,
-      height: 540,
+      width: cardWidth,
+      height: cardHeight,
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           colors: [Color(0xFF667eea), Color(0xFF764ba2)],
@@ -360,6 +437,7 @@ class _PetPassportPageState extends State<PetPassportPage>
             padding: const EdgeInsets.all(24.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
                 // 标题
                 Row(
@@ -485,35 +563,64 @@ class _PetPassportPageState extends State<PetPassportPage>
                             fontSize: 12,
                             height: 1.4,
                           ),
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ],
                     ),
                   ),
                 ],
 
-                const Spacer(),
+                const SizedBox(height: 16),
 
                 // 底部信息
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    Row(
                       children: [
-                        Text(
-                          '主人',
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.7),
-                            fontSize: 10,
-                          ),
+                        // 用户头像
+                        CircleAvatar(
+                          radius: 16,
+                          backgroundColor: Colors.white,
+                          backgroundImage: _userAvatarPath != null &&
+                                  File(_userAvatarPath!).existsSync()
+                              ? FileImage(File(_userAvatarPath!))
+                              : null,
+                          child: _userAvatarPath == null ||
+                                  !File(_userAvatarPath!).existsSync()
+                              ? Text(
+                                  _userName?.isNotEmpty == true
+                                      ? _userName![0].toUpperCase()
+                                      : '?',
+                                  style: const TextStyle(
+                                    color: Color(0xFF667eea),
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                )
+                              : null,
                         ),
-                        Text(
-                          passport?.ownerName ?? '铲屎官',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                          ),
+                        const SizedBox(width: 8),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '主人',
+                              style: TextStyle(
+                                color: Colors.white.withOpacity(0.7),
+                                fontSize: 10,
+                              ),
+                            ),
+                            Text(
+                              passport?.ownerName ?? _userName ?? '铲屎官',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
@@ -552,10 +659,15 @@ class _PetPassportPageState extends State<PetPassportPage>
   Widget _buildPassportBack() {
     final pet = _pets[_selectedPetIndex];
     final passport = _passports[pet.id];
+    
+    // 获取屏幕宽度，确保卡片不会超出屏幕
+    final screenWidth = MediaQuery.of(context).size.width;
+    final cardWidth = (screenWidth - 48).clamp(300.0, 360.0); // 最小300，最大360，左右各留24边距
+    final cardHeight = cardWidth * 1.5; // 保持宽高比 2:3
 
     return Container(
-      width: 360,
-      height: 540,
+      width: cardWidth,
+      height: cardHeight,
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           colors: [Color(0xFF764ba2), Color(0xFF667eea)],
@@ -583,6 +695,7 @@ class _PetPassportPageState extends State<PetPassportPage>
             padding: const EdgeInsets.all(24.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
                 // 兴趣标签
                 _buildSectionTitle('兴趣标签'),
@@ -700,9 +813,25 @@ class _PetPassportPageState extends State<PetPassportPage>
 
   /// 构建宠物照片显示
   Widget _buildPetPhoto(PetPassport? passport) {
-    // 如果有照片路径，显示照片
+    final pet = _pets[_selectedPetIndex];
+    
+    // 优先使用 passport.photoPath（电子档案头像，以电子档案为准）
     if (passport?.photoPath != null && passport!.photoPath!.isNotEmpty) {
       final file = File(passport.photoPath!);
+      if (file.existsSync()) {
+        return Image.file(
+          file,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) {
+            return _buildDefaultPetIcon();
+          },
+        );
+      }
+    }
+    
+    // 其次使用 pet.avatar（宠物档案头像，仅在电子档案没设置时使用）
+    if (pet.avatar != null && pet.avatar!.isNotEmpty) {
+      final file = File(pet.avatar!);
       if (file.existsSync()) {
         return Image.file(
           file,

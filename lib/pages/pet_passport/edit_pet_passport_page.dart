@@ -38,7 +38,14 @@ class _EditPetPassportPageState extends State<EditPetPassportPage> {
     _selectedMbti = widget.passport?.mbtiType;
     _adoptionDate = widget.passport?.adoptionDate;
     _selectedTags = List.from(widget.passport?.interestTags ?? []);
+    
+    // 优先使用电子档案头像，如果没有则使用宠物档案头像（仅在电子档案没设置前保存）
     _photoPath = widget.passport?.photoPath;
+    if (_photoPath == null || _photoPath!.isEmpty) {
+      // 电子档案没有头像时，使用宠物档案的头像作为初始值
+      _photoPath = widget.pet.avatar;
+    }
+    
     // 如果有照片路径，加载照片
     if (_photoPath != null && _photoPath!.isNotEmpty) {
       _photoFile = File(_photoPath!);
@@ -833,6 +840,18 @@ class _EditPetPassportPageState extends State<EditPetPassportPage> {
             );
           }
           return;
+        }
+
+        // 同步头像到宠物表：以电子档案中的头像为准
+        if (_photoPath != null && _photoPath!.isNotEmpty && widget.pet.id != null) {
+          try {
+            final petData = widget.pet.toMap();
+            petData['avatar'] = _photoPath; // 使用电子档案的头像路径
+            await supabaseService.updatePet(petData);
+          } catch (e) {
+            debugPrint('同步头像到宠物表失败: $e');
+            // 不影响护照保存，只记录错误
+          }
         }
 
         if (mounted) {

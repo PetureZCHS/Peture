@@ -2,9 +2,16 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:math' as math;
+import '../services/supabase_service.dart';
+import 'package:intl/intl.dart';
 
 class WeightTrendCard extends StatefulWidget {
-  const WeightTrendCard({super.key});
+  final String? petId; // 可选，如果为 null 则显示所有宠物的数据
+  
+  const WeightTrendCard({
+    super.key,
+    this.petId,
+  });
 
   @override
   State<WeightTrendCard> createState() => _WeightTrendCardState();
@@ -15,11 +22,174 @@ class _WeightTrendCardState extends State<WeightTrendCard> {
   int _selectedTimeRangeIndex = 3; // 默认选中 "6个月"
   final List<String> _timeRanges = ['日', '周', '月', '6个月', '年'];
   
-  // 模拟数据
-  final List<double> _sixMonthData = [7.3, 7.5, 7.4, 7.8, 8.2, 8.0];
-  final List<String> _sixMonthLabels = ['7月', '8月', '9月', '10月', '11月', '12月'];
+  final SupabaseService _supabaseService = SupabaseService();
+  bool _isLoading = true;
+  List<Map<String, dynamic>> _weightRecords = [];
+  List<double> _chartData = [];
+  List<String> _chartLabels = [];
+  double _averageWeight = 0.0;
+  String _dateRange = '';
+  String _trendText = '';
   
   int? _touchedIndex;
+  
+  @override
+  void initState() {
+    super.initState();
+    _loadWeightData();
+  }
+  
+  Future<void> _loadWeightData() async {
+    setState(() => _isLoading = true);
+    try {
+      List<Map<String, dynamic>> records;
+      if (widget.petId != null) {
+        // 获取特定宠物的体重记录
+        records = await _supabaseService.getWeightRecordsForPet(widget.petId!);
+      } else {
+        // 获取所有宠物的体重记录
+        records = await _supabaseService.getAllWeightRecords();
+      }
+      setState(() {
+        _weightRecords = records;
+      });
+      _processData();
+    } catch (e) {
+      debugPrint('加载体重数据失败: $e');
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+  
+  void _processData() {
+    if (_weightRecords.isEmpty) {
+      setState(() {
+        _chartData = [];
+        _chartLabels = [];
+        _averageWeight = 0.0;
+        _dateRange = '暂无数据';
+        _trendText = '暂无体重记录';
+      });
+      return;
+    }
+    
+    final now = DateTime.now();
+    DateTime startDate;
+    
+    switch (_selectedTimeRangeIndex) {
+      case 0: // 日
+        startDate = now.subtract(const Duration(days: 7));
+        break;
+      case 1: // 周
+        startDate = now.subtract(const Duration(days: 30));
+        break;
+      case 2: // 月
+        startDate = now.subtract(const Duration(days: 90));
+        break;
+      case 3: // 6个月
+        startDate = now.subtract(const Duration(days: 180));
+        break;
+      case 4: // 年
+        startDate = now.subtract(const Duration(days: 365));
+        break;
+      default:
+        startDate = now.subtract(const Duration(days: 180));
+    }
+    
+    // 筛选数据
+    final filteredRecords = _weightRecords.where((record) {
+      final dateStr = record['date'] as String?;
+      if (dateStr == null) return false;
+      final date = DateTime.parse(dateStr);
+      return date.isAfter(startDate) || date.isAtSameMomentAs(startDate);
+    }).toList();
+    
+    if (filteredRecords.isEmpty) {
+      setState(() {
+        _chartData = [];
+        _chartLabels = [];
+        _averageWeight = 0.0;
+        _dateRange = '暂无数据';
+        _trendText = '该时间段内暂无体重记录';
+      });
+      return;
+    }
+    
+    // 按日期排序
+    filteredRecords.sort((a, b) {
+      final dateA = DateTime.parse(a['date'] as String);
+      final dateB = DateTime.parse(b['date'] as String);
+      return dateA.compareTo(dateB);
+    });
+    
+    // 按月分组（6个月视图）
+    if (_selectedTimeRangeIndex == 3) {
+      final Map<String, List<double>> monthlyData = {};
+      for (var record in filteredRecords) {
+        final date = DateTime.parse(record['date'] as String);
+        final monthKey = '${date.year}-${date.month.toString().padLeft(2, '0')}';
+        final weight = (record['weight'] as num?)?.toDouble() ?? 0.0;
+        monthlyData.putIfAbsent(monthKey, () => []).add(weight);
+      }
+      
+      final sortedMonths = monthlyData.keys.toList()..sort();
+      _chartData = sortedMonths.map((month) {
+        final weights = monthlyData[month]!;
+        return weights.reduce((a, b) => a + b) / weights.length; // 月平均
+      }).toList();
+      
+      _chartLabels = sortedMonths.map((month) {
+        final parts = month.split('-');
+        final monthNum = int.parse(parts[1]);
+        return '${monthNum}月';
+      }).toList();
+    } else {
+      // 其他时间范围：直接使用所有数据点
+      _chartData = filteredRecords.map((record) {
+        return (record['weight'] as num?)?.toDouble() ?? 0.0;
+      }).toList();
+      
+      _chartLabels = filteredRecords.map((record) {
+        final date = DateTime.parse(record['date'] as String);
+        if (_selectedTimeRangeIndex == 0) {
+          return DateFormat('M/d', 'zh_CN').format(date);
+        } else if (_selectedTimeRangeIndex == 1) {
+          return DateFormat('M/d', 'zh_CN').format(date);
+        } else {
+          return DateFormat('M月', 'zh_CN').format(date);
+        }
+      }).toList();
+    }
+    
+    // 计算平均值
+    if (_chartData.isNotEmpty) {
+      _averageWeight = _chartData.reduce((a, b) => a + b) / _chartData.length;
+    }
+    
+    // 计算日期范围
+    if (filteredRecords.isNotEmpty) {
+      final firstDate = DateTime.parse(filteredRecords.first['date'] as String);
+      final lastDate = DateTime.parse(filteredRecords.last['date'] as String);
+      _dateRange = '${DateFormat('yyyy年M月d日', 'zh_CN').format(firstDate)}至${DateFormat('M月d日', 'zh_CN').format(lastDate)}';
+    }
+    
+    // 计算趋势
+    if (_chartData.length >= 2) {
+      final firstHalf = _chartData.take(_chartData.length ~/ 2).reduce((a, b) => a + b) / (_chartData.length ~/ 2);
+      final secondHalf = _chartData.skip(_chartData.length ~/ 2).reduce((a, b) => a + b) / (_chartData.length - _chartData.length ~/ 2);
+      if (secondHalf > firstHalf * 1.05) {
+        _trendText = '过去${_timeRanges[_selectedTimeRangeIndex]}的体重有所上升。';
+      } else if (secondHalf < firstHalf * 0.95) {
+        _trendText = '过去${_timeRanges[_selectedTimeRangeIndex]}的体重有所下降。';
+      } else {
+        _trendText = '过去${_timeRanges[_selectedTimeRangeIndex]}的体重保持稳定。';
+      }
+    } else {
+      _trendText = '数据不足，无法分析趋势。';
+    }
+    
+    setState(() {});
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -123,6 +293,7 @@ class _WeightTrendCardState extends State<WeightTrendCard> {
                               setState(() {
                                 _selectedTimeRangeIndex = index;
                               });
+                              _processData();
                               HapticFeedback.selectionClick();
                             },
                             child: Container(
@@ -164,51 +335,79 @@ class _WeightTrendCardState extends State<WeightTrendCard> {
                   const SizedBox(height: 24),
 
                   // 当前数值展示
-                  const Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '平均 7.8 kg',
-                        style: TextStyle(
-                          fontSize: 28,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF1D1D1F),
-                          letterSpacing: -0.5,
-                        ),
-                      ),
-                      SizedBox(height: 4),
-                      Text(
-                        '2025年7月8日至12月6日',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Color(0xFF8E8E93),
-                        ),
-                      ),
-                    ],
-                  ),
+                  _isLoading
+                      ? const Center(
+                          child: Padding(
+                            padding: EdgeInsets.all(20.0),
+                            child: CircularProgressIndicator(),
+                          ),
+                        )
+                      : _chartData.isEmpty
+                          ? Center(
+                              child: Padding(
+                                padding: const EdgeInsets.all(20.0),
+                                child: Text(
+                                  '暂无体重数据',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.grey[600],
+                                  ),
+                                ),
+                              ),
+                            )
+                          : Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '平均 ${_averageWeight.toStringAsFixed(1)} kg',
+                                  style: const TextStyle(
+                                    fontSize: 28,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFF1D1D1F),
+                                    letterSpacing: -0.5,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  _dateRange,
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    color: Color(0xFF8E8E93),
+                                  ),
+                                ),
+                              ],
+                            ),
 
                   const SizedBox(height: 24),
 
                   // 图表区域
-                  SizedBox(
-                    height: 200,
-                    child: BarChart(
-                      BarChartData(
-                        alignment: BarChartAlignment.spaceAround,
-                        maxY: _sixMonthData.reduce(math.max) * 1.2,
-                        minY: 0,
+                  _chartData.isEmpty
+                      ? const SizedBox.shrink()
+                      : SizedBox(
+                          height: 200,
+                          child: BarChart(
+                            BarChartData(
+                              alignment: BarChartAlignment.spaceAround,
+                              maxY: _chartData.isEmpty
+                                  ? 10
+                                  : _chartData.reduce(math.max) * 1.2,
+                              minY: 0,
                         barTouchData: BarTouchData(
                           touchTooltipData: BarTouchTooltipData(
                             getTooltipColor: (group) => Colors.black87,
                             getTooltipItem: (group, groupIndex, rod, rodIndex) {
-                              return BarTooltipItem(
-                                '${rod.toY} kg\n${_sixMonthLabels[group.x.toInt()]}',
-                                const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 12,
-                                ),
-                              );
+                              if (group.x.toInt() >= 0 &&
+                                  group.x.toInt() < _chartLabels.length) {
+                                return BarTooltipItem(
+                                  '${rod.toY.toStringAsFixed(1)} kg\n${_chartLabels[group.x.toInt()]}',
+                                  const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                  ),
+                                );
+                              }
+                              return BarTooltipItem('', const TextStyle());
                             },
                           ),
                           touchCallback:
@@ -232,11 +431,11 @@ class _WeightTrendCardState extends State<WeightTrendCard> {
                               showTitles: true,
                               getTitlesWidget: (double value, TitleMeta meta) {
                                 if (value.toInt() >= 0 &&
-                                    value.toInt() < _sixMonthLabels.length) {
+                                    value.toInt() < _chartLabels.length) {
                                   return Padding(
                                     padding: const EdgeInsets.only(top: 8.0),
                                     child: Text(
-                                      _sixMonthLabels[value.toInt()],
+                                      _chartLabels[value.toInt()],
                                       style: const TextStyle(
                                         color: Color(0xFF8E8E93),
                                         fontSize: 11,
@@ -286,34 +485,36 @@ class _WeightTrendCardState extends State<WeightTrendCard> {
                           },
                         ),
                         extraLinesData: ExtraLinesData(
-                          horizontalLines: [
-                            HorizontalLine(
-                              y: 7.7, // 模拟平均值
-                              color: const Color(0xFF8E8E93),
-                              strokeWidth: 2,
-                              dashArray: [5, 5],
-                              label: HorizontalLineLabel(
-                                show: true,
-                                alignment: Alignment.topRight,
-                                padding:
-                                    const EdgeInsets.only(right: 5, bottom: 5),
-                                style: const TextStyle(
-                                  color: Color(0xFF8E8E93),
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                                labelResolver: (line) => '平均',
-                              ),
-                            ),
-                          ],
+                          horizontalLines: _chartData.isEmpty
+                              ? []
+                              : [
+                                  HorizontalLine(
+                                    y: _averageWeight,
+                                    color: const Color(0xFF8E8E93),
+                                    strokeWidth: 2,
+                                    dashArray: const [5, 5],
+                                    label: HorizontalLineLabel(
+                                      show: true,
+                                      alignment: Alignment.topRight,
+                                      padding:
+                                          const EdgeInsets.only(right: 5, bottom: 5),
+                                      style: const TextStyle(
+                                        color: Color(0xFF8E8E93),
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                      labelResolver: (line) => '平均',
+                                    ),
+                                  ),
+                                ],
                         ),
                         borderData: FlBorderData(show: false),
-                        barGroups: List.generate(_sixMonthData.length, (index) {
+                        barGroups: List.generate(_chartData.length, (index) {
                           return BarChartGroupData(
                             x: index,
                             barRods: [
                               BarChartRodData(
-                                toY: _sixMonthData[index],
+                                toY: _chartData[index],
                                 color: _touchedIndex == index
                                     ? const Color(0xFFFF5E62)
                                     : const Color(0xFFFF5E62).withOpacity(0.3),
@@ -322,7 +523,9 @@ class _WeightTrendCardState extends State<WeightTrendCard> {
                                     top: Radius.circular(4)),
                                 backDrawRodData: BackgroundBarChartRodData(
                                   show: true,
-                                  toY: _sixMonthData.reduce(math.max) * 1.2,
+                                  toY: _chartData.isEmpty
+                                      ? 10
+                                      : _chartData.reduce(math.max) * 1.2,
                                   color: const Color(0xFFF2F2F7),
                                 ),
                               ),
@@ -364,7 +567,7 @@ class _WeightTrendCardState extends State<WeightTrendCard> {
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                '你过去6个月的体重有所上升。',
+                                _trendText,
                                 style: TextStyle(
                                   fontSize: 13,
                                   color:
@@ -379,7 +582,7 @@ class _WeightTrendCardState extends State<WeightTrendCard> {
                   ),
                 ],
               ),
-              secondChild: const SizedBox(width: double.infinity),
+              secondChild: const SizedBox.shrink(),
               crossFadeState: _isExpanded
                   ? CrossFadeState.showFirst
                   : CrossFadeState.showSecond,

@@ -1,5 +1,6 @@
 // lib/profile_screen_upgraded.dart
 
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'services/supabase_service.dart';
@@ -9,6 +10,7 @@ import 'pages/unified_expense/unified_expense_home_page.dart';
 import 'pages/reminder/intelligent_reminder_page.dart';
 import 'pages/pet_profile_form_page.dart';
 import 'account_settings_page.dart';
+import 'utils/user_avatar_helper.dart';
 import 'home_screen.dart' show DataChangeNotifier;
 
 // =========================================================
@@ -78,11 +80,13 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   final _supabaseService = SupabaseService();
   String? _userNickname;
+  String? _userAvatarPath;
 
   @override
   void initState() {
     super.initState();
     _loadUserNickname();
+    _loadUserAvatar();
   }
 
   /// 加载用户昵称
@@ -96,6 +100,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
       }
     } catch (e) {
       debugPrint('加载用户昵称失败: $e');
+    }
+  }
+
+  /// 加载用户头像
+  Future<void> _loadUserAvatar() async {
+    try {
+      final avatarPath = await UserAvatarHelper.getCurrentUserAvatarPath();
+      if (mounted) {
+        setState(() {
+          _userAvatarPath = avatarPath;
+        });
+      }
+    } catch (e) {
+      debugPrint('加载用户头像失败: $e');
     }
   }
 
@@ -154,9 +172,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 builder: (context) => const AccountSettingsPage(),
               ),
             );
-            // 返回后刷新昵称
+            // 返回后刷新昵称和头像
             if (result == true || mounted) {
               _loadUserNickname();
+              _loadUserAvatar();
             }
           },
           child: Row(
@@ -168,14 +187,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 child: CircleAvatar(
                   radius: 22,
                   backgroundColor: AppColors.primary,
-                  child: Text(
-                    avatarText,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                    ),
-                  ),
+                  backgroundImage: _userAvatarPath != null &&
+                          File(_userAvatarPath!).existsSync()
+                      ? FileImage(File(_userAvatarPath!))
+                      : null,
+                  child: _userAvatarPath == null ||
+                          !File(_userAvatarPath!).existsSync()
+                      ? Text(
+                          avatarText,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        )
+                      : null,
                 ),
               ),
               const SizedBox(width: 12),
@@ -732,6 +758,8 @@ class _PetProfileCardState extends State<PetProfileCard>
     with SingleTickerProviderStateMixin {
   late AnimationController _scaleController;
   late Animation<double> _scaleAnimation;
+  final SupabaseService _supabaseService = SupabaseService();
+  String? _passportPhotoPath; // 电子档案头像路径
 
   @override
   void initState() {
@@ -747,6 +775,22 @@ class _PetProfileCardState extends State<PetProfileCard>
     ).animate(
       CurvedAnimation(parent: _scaleController, curve: Curves.easeInOut),
     );
+    _loadPassportPhoto();
+  }
+
+  /// 加载电子档案头像
+  Future<void> _loadPassportPhoto() async {
+    if (widget.pet.id == null) return;
+    try {
+      final passportData = await _supabaseService.getPassportByPetId(widget.pet.id!);
+      if (mounted && passportData != null) {
+        setState(() {
+          _passportPhotoPath = passportData['photoPath'] as String?;
+        });
+      }
+    } catch (e) {
+      debugPrint('加载电子档案头像失败: $e');
+    }
   }
 
   @override
@@ -766,6 +810,62 @@ class _PetProfileCardState extends State<PetProfileCard>
 
   void _onTapCancel() {
     _scaleController.reverse();
+  }
+
+  /// 构建宠物头像（优先使用电子档案头像）
+  Widget _buildPetAvatar() {
+    // 优先使用电子档案头像（passport.photoPath）
+    if (_passportPhotoPath != null && _passportPhotoPath!.isNotEmpty) {
+      final file = File(_passportPhotoPath!);
+      if (file.existsSync()) {
+        return Image.file(
+          file,
+          width: 60,
+          height: 60,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) {
+            return _buildDefaultAvatar();
+          },
+        );
+      }
+    }
+    
+    // 其次使用宠物档案头像（pet.avatar，仅在电子档案没设置时使用）
+    if (widget.pet.avatar != null && widget.pet.avatar!.isNotEmpty) {
+      final file = File(widget.pet.avatar!);
+      if (file.existsSync()) {
+        return Image.file(
+          file,
+          width: 60,
+          height: 60,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) {
+            return _buildDefaultAvatar();
+          },
+        );
+      }
+    }
+
+    // 没有头像时显示默认图标
+    return _buildDefaultAvatar();
+  }
+
+  /// 构建默认头像
+  Widget _buildDefaultAvatar() {
+    return Container(
+      width: 60,
+      height: 60,
+      decoration: BoxDecoration(
+        color: AppColors.petTypeColors[widget.pet.type] ??
+            AppColors.petTypeColors['其他'],
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Icon(
+        Icons.pets,
+        color: AppColors.primary.withOpacity(0.6),
+        size: 28,
+      ),
+    );
   }
 
   @override
@@ -827,36 +927,7 @@ class _PetProfileCardState extends State<PetProfileCard>
                         ),
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(12),
-                          child: Image.network(
-                            'https://loremflickr.com/150/150/animal,${widget.pet.breed.toLowerCase()}',
-                            width: 60,
-                            height: 60,
-                            fit: BoxFit.cover,
-                            loadingBuilder: (context, child, progress) {
-                              return progress == null
-                                  ? child
-                                  : const Center(
-                                      child: CircularProgressIndicator(),
-                                    );
-                            },
-                            errorBuilder: (context, error, stackTrace) {
-                              return Container(
-                                width: 60,
-                                height: 60,
-                                decoration: BoxDecoration(
-                                  color: AppColors
-                                          .petTypeColors[widget.pet.type] ??
-                                      AppColors.petTypeColors['其他'],
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Icon(
-                                  Icons.pets,
-                                  color: AppColors.primary.withOpacity(0.6),
-                                  size: 28,
-                                ),
-                              );
-                            },
-                          ),
+                          child: _buildPetAvatar(),
                         ),
                       ),
                       const SizedBox(width: 16),
@@ -912,11 +983,28 @@ class PetProfileDetailsPage extends StatefulWidget {
 class _PetProfileDetailsPageState extends State<PetProfileDetailsPage> {
   late Pet _currentPet;
   final _supabaseService = SupabaseService();
+  String? _passportPhotoPath; // 电子档案头像路径
 
   @override
   void initState() {
     super.initState();
     _currentPet = widget.pet;
+    _loadPassportPhoto();
+  }
+
+  /// 加载电子档案头像
+  Future<void> _loadPassportPhoto() async {
+    if (_currentPet.id == null) return;
+    try {
+      final passportData = await _supabaseService.getPassportByPetId(_currentPet.id!);
+      if (mounted && passportData != null) {
+        setState(() {
+          _passportPhotoPath = passportData['photoPath'] as String?;
+        });
+      }
+    } catch (e) {
+      debugPrint('加载电子档案头像失败: $e');
+    }
   }
 
   /// 删除宠物
@@ -997,6 +1085,58 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage> {
         );
       }
     }
+  }
+
+  /// 构建详情页头像（优先使用电子档案头像）
+  Widget _buildDetailPageAvatar() {
+    // 优先使用电子档案头像（passport.photoPath）
+    if (_passportPhotoPath != null && _passportPhotoPath!.isNotEmpty) {
+      final file = File(_passportPhotoPath!);
+      if (file.existsSync()) {
+        return Image.file(
+          file,
+          width: 120,
+          height: 120,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) {
+            return _buildDefaultDetailAvatar();
+          },
+        );
+      }
+    }
+    
+    // 其次使用宠物档案头像（pet.avatar，仅在电子档案没设置时使用）
+    if (_currentPet.avatar != null && _currentPet.avatar!.isNotEmpty) {
+      final file = File(_currentPet.avatar!);
+      if (file.existsSync()) {
+        return Image.file(
+          file,
+          width: 120,
+          height: 120,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) {
+            return _buildDefaultDetailAvatar();
+          },
+        );
+      }
+    }
+
+    // 没有头像时显示默认图标
+    return _buildDefaultDetailAvatar();
+  }
+
+  /// 构建默认详情页头像
+  Widget _buildDefaultDetailAvatar() {
+    return Container(
+      width: 120,
+      height: 120,
+      color: Colors.grey[200],
+      child: const Icon(
+        Icons.pets,
+        color: Colors.grey,
+        size: 50,
+      ),
+    );
   }
 
   Widget _buildInfoCard(String label, String value) {
@@ -1190,29 +1330,7 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage> {
               children: [
                 const SizedBox(height: 20),
                 ClipOval(
-                  child: Image.network(
-                    'https://loremflickr.com/240/240/animal,${_currentPet.breed.toLowerCase()}',
-                    width: 120,
-                    height: 120,
-                    fit: BoxFit.cover,
-                    loadingBuilder: (context, child, progress) {
-                      return progress == null
-                          ? child
-                          : const Center(child: CircularProgressIndicator());
-                    },
-                    errorBuilder: (context, error, stackTrace) {
-                      return Container(
-                        width: 120,
-                        height: 120,
-                        color: Colors.grey[200],
-                        child: const Icon(
-                          Icons.pets,
-                          color: Colors.grey,
-                          size: 50,
-                        ),
-                      );
-                    },
-                  ),
+                  child: _buildDetailPageAvatar(),
                 ),
                 const SizedBox(height: 16),
                 Text(_currentPet.name, style: AppStyles.sectionTitle),
