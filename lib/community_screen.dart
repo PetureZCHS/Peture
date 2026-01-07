@@ -1,18 +1,11 @@
-import 'dart:io';
-import 'dart:ui'; // Added for ImageFilter
 import 'package:flutter/material.dart';
-import 'package:flutter/cupertino.dart'; // Added for CupertinoPageRoute
-import 'package:flutter/services.dart'; // Added for HapticFeedback
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'post_detail_page.dart'; // 导入帖子详情页
-import 'pages/turf_wars/turf_wars_screen.dart'; // Added for TurfWarsScreen
-import 'utils/ui_helpers.dart'; // Added for WidgetBlur extension
 
 // 帖子数据模型
 class Post {
   final String id;
   final String imageUrl;
-  final File? imageFile; // 支持本地图片文件
   final String content;
   final String userAvatarUrl;
   final String username;
@@ -22,7 +15,6 @@ class Post {
   Post({
     required this.id,
     required this.imageUrl,
-    this.imageFile,
     required this.content,
     required this.userAvatarUrl,
     required this.username,
@@ -260,9 +252,9 @@ class _CommunityScreenState extends State<CommunityScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.transparent, // 修改背景色
+      backgroundColor: const Color(0xFFF0F4F8), // 修改背景色
       appBar: AppBar(
-        backgroundColor: Colors.transparent, // 修改AppBar背景色
+        backgroundColor: const Color(0xFFF0F4F8), // 修改AppBar背景色
         elevation: 0,
         // 小红书风格的顶部导航栏
         centerTitle: true,
@@ -325,163 +317,20 @@ class _CommunityScreenState extends State<CommunityScreen>
 
 
 
-  // 领地战争卡片
-  Widget _buildTurfWarsCard(BuildContext context) {
-    return GestureDetector(
-      onTap: () {
-        HapticFeedback.mediumImpact();
-        Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const TurfWarsScreen()));
-      },
-      child: RepaintBoundary(
-        child: Container(
-          height: 160,
-          width: double.infinity,
-          margin: const EdgeInsets.fromLTRB(8, 12, 8, 4), // Adjusted margin for community screen
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16), // Slightly smaller radius to match grid items
-            gradient: const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Color(0xFF1A1A2E), // Dark Blue/Black
-                Color(0xFF16213E),
-              ],
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF0F3460).withOpacity(0.3),
-                blurRadius: 10,
-                offset: const Offset(0, 5),
-              ),
-            ],
-          ),
-          child: Stack(
-            children: [
-              // Background effects (Neon ripples)
-              Positioned(
-                right: -20,
-                bottom: -20,
-                child: Container(
-                  width: 120,
-                  height: 120,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.cyanAccent.withOpacity(0.2),
-                  ),
-                ).blurred(sigmaX: 40, sigmaY: 40),
-              ),
-              Positioned(
-                left: -20,
-                top: -20,
-                child: Container(
-                  width: 100,
-                  height: 100,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.purpleAccent.withOpacity(0.15),
-                  ),
-                ).blurred(sigmaX: 30, sigmaY: 30),
-              ),
-              
-              Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: Colors.cyanAccent.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: Colors.cyanAccent.withOpacity(0.3)),
-                          ),
-                          child: const Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.map_outlined, size: 10, color: Colors.cyanAccent),
-                              SizedBox(width: 4),
-                              Text("NEW FEATURE", style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.cyanAccent, letterSpacing: 0.5)),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                    const Spacer(),
-                    const Text(
-                      "Turf Wars",
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w900,
-                        color: Colors.white,
-                        letterSpacing: -0.5,
-                        shadows: [
-                          Shadow(
-                            color: Colors.cyanAccent,
-                            blurRadius: 10,
-                          )
-                        ]
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      "领地战争 · 数字化狗的生物本能",
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.white.withOpacity(0.8),
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              
-              // Play Button Icon
-              Positioned(
-                right: 20,
-                bottom: 20,
-                child: Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.white.withOpacity(0.1),
-                    border: Border.all(color: Colors.white.withOpacity(0.2)),
-                  ),
-                  child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 24),
-                ),
-              )
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   // 推荐标签页 - 小红书风格双栏瀑布流
   Widget _buildRecommendTab() {
     return Container(
       color: const Color(0xFFF5F5F5), // 小红书的背景色
-      child: CustomScrollView(
-        slivers: [
-          SliverToBoxAdapter(
-            child: _buildTurfWarsCard(context),
-          ),
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(8, 0, 8, 100),
-            sliver: SliverMasonryGrid.count(
-              crossAxisCount: 2, // 双栏布局
-              mainAxisSpacing: 8, // 垂直间距
-              crossAxisSpacing: 8, // 水平间距
-              childCount: mockPosts.length,
-              itemBuilder: (context, index) {
-                final post = mockPosts[index];
-                return _buildWaterfallPostCard(post: post);
-              },
-            ),
-          ),
-        ],
+      child: MasonryGridView.count(
+        crossAxisCount: 2, // 双栏布局
+        mainAxisSpacing: 8, // 垂直间距
+        crossAxisSpacing: 8, // 水平间距
+        padding: const EdgeInsets.fromLTRB(8, 12, 8, 100),
+        itemCount: mockPosts.length,
+        itemBuilder: (context, index) {
+          final post = mockPosts[index];
+          return _buildWaterfallPostCard(post: post);
+        },
       ),
     );
   }
@@ -506,21 +355,14 @@ class _CommunityScreenState extends State<CommunityScreen>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 顶部：图片（主体）- 优先使用本地图片，否则使用网络图片
+            // 顶部：图片（主体）- 使用真实网络图片
             ClipRRect(
               borderRadius: const BorderRadius.only(
                 topLeft: Radius.circular(8),
                 topRight: Radius.circular(8),
               ),
-              child: post.imageFile != null
-                  ? Image.file(
-                      post.imageFile!,
-                      height: post.imageHeight,
-                      width: double.infinity,
-                      fit: BoxFit.cover,
-                    )
-                  : Image.network(
-                      post.imageUrl,
+              child: Image.network(
+                post.imageUrl,
                 height: post.imageHeight,
                 width: double.infinity,
                 fit: BoxFit.cover,
