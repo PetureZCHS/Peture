@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
+import 'package:my_pet/pages/image_generation/preparation_page.dart';
 // import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
 
 // --- 您的页面引用 (保持不变) ---
@@ -690,6 +691,13 @@ class _HomeDashboardContentState extends State<_HomeDashboardContent> {
                         Icons.campaign_rounded,
                         AppColors.navTab1,
                         const CommunityScreen()),
+                    _buildFeatureCard(
+                        width,
+                        'AI 图像实验室',
+                        'Image Lab',
+                        Icons.auto_fix_high_rounded,
+                        AppColors.natureGradient,
+                        const PreparationPage()),
                   ],
                 );
               },

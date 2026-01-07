@@ -15,10 +15,12 @@ class SupabaseConstants {
   // Edge Function 名称
   static const String difyChatFunction = 'chat';
   static const String diaryFunction = 'diary-v3';
+  static const String rechargeFunction = 'recharge-test';
 
   // 完整的 Edge Function URL
   static String get difyChatUrl => '$projectUrl/functions/v1/$difyChatFunction';
   static String get diaryUrl => '$projectUrl/functions/v1/$diaryFunction';
+  static String get rechargeUrl => '$projectUrl/functions/v1/$rechargeFunction';
 }
 
 /// 简单的加载指示器
