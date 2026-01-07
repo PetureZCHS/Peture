@@ -30,7 +30,7 @@ class _AddUnifiedExpensePageState extends State<AddUnifiedExpensePage> {
   String? _selectedCategory;
   DateTime _selectedDate = DateTime.now();
   DateTime? _estimatedEndDate;
-  int? _selectedPetId;
+  String? _selectedPetId; // 改为 String? 以支持 UUID
   String? _selectedPetName;
   List<Map<String, dynamic>> _pets = [];
   bool _isLoading = false;
@@ -76,7 +76,8 @@ class _AddUnifiedExpensePageState extends State<AddUnifiedExpensePage> {
 
   /// 加载宠物列表
   Future<void> _loadPets() async {
-    final pets = await MedicalRecordHelper.instance.getAllPets();
+    final supabaseService = SupabaseService();
+    final pets = await supabaseService.getAllPets();
     if (mounted) {
       setState(() {
         _pets = pets;
@@ -178,12 +179,32 @@ class _AddUnifiedExpensePageState extends State<AddUnifiedExpensePage> {
             widget.expense?.createdAt ?? DateTime.now().toIso8601String(),
       );
 
+      final supabaseService = SupabaseService();
+      bool success = false;
       if (widget.expense == null) {
         // 新增
-        await UnifiedExpenseHelper.instance.insertExpense(expense);
+        final result = await supabaseService.insertUnifiedExpense(expense.toMap());
+        if (result != null) {
+          success = true;
+        }
       } else {
         // 更新
-        await UnifiedExpenseHelper.instance.updateExpense(expense);
+        success = await supabaseService.updateUnifiedExpense(expense.toMap());
+      }
+
+      if (!success) {
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(
+            content: Text('保存失败，请检查网络连接'),
+            backgroundColor: Colors.red,
+          ));
+        }
+        return;
       }
 
       if (mounted) {
@@ -199,7 +220,10 @@ class _AddUnifiedExpensePageState extends State<AddUnifiedExpensePage> {
         });
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('保存失败: $e')));
+        ).showSnackBar(const SnackBar(
+          content: Text('保存失败，请检查网络连接'),
+          backgroundColor: Colors.red,
+        ));
       }
     }
   }
@@ -908,12 +932,13 @@ class _AddUnifiedExpensePageState extends State<AddUnifiedExpensePage> {
                   ),
                 ),
                 ..._pets.map((pet) {
-                  final isSelected = _selectedPetId == pet['id'];
+                  final petId = pet['id']?.toString();
+                  final isSelected = _selectedPetId == petId;
                   return GestureDetector(
                     onTap: () {
                       setState(() {
-                        _selectedPetId = pet['id'] as int;
-                        _selectedPetName = pet['name'] as String;
+                        _selectedPetId = petId;
+                        _selectedPetName = pet['name'] as String?;
                       });
                     },
                     child: Container(

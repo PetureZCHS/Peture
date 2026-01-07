@@ -13,6 +13,10 @@ import 'pages/pet_passport/pet_passport_page.dart';
 import 'pages/pet_recipe/pet_recipe_list_page.dart';
 import 'pages/partner_fit/partner_fit_gym_page.dart';
 import 'pages/dog_clicker/dog_clicker_screen.dart';
+import 'pages/shop/shop_page.dart';
+import 'pages/unified_expense/unified_expense_home_page.dart';
+import 'pages/reminder/intelligent_reminder_page.dart';
+import 'settings_page.dart';
 import 'pages/lost_pet/lost_pet_rescue_page.dart';
 import 'community_screen.dart';
 import 'medical_record_screen.dart';
@@ -446,12 +450,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 // 3. 模式 A: 实用仪表盘 (修复滚动 & 布局)
 // =========================================================
 
-class _HomeDashboardContent extends StatelessWidget {
+class _HomeDashboardContent extends StatefulWidget {
   const _HomeDashboardContent({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final double topPadding = MediaQuery.of(context).padding.top;
+  State<_HomeDashboardContent> createState() => _HomeDashboardContentState();
+}
 
     return ListView(
       // [关键点1] 强制开启滚动物理效果，即使内容少也能滑动
@@ -463,10 +467,40 @@ class _HomeDashboardContent extends StatelessWidget {
         // 1. AI 智能问诊 (修复版：文字完整显示)
         _buildHeroAiCard(context),
 
-        const SizedBox(height: 16),
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _searchFocusNode.dispose();
+    super.dispose();
+  }
 
-        // 1.5 体重趋势卡片
-        const WeightTrendCard(),
+  /// 搜索功能列表
+  static final List<SearchResult> _allSearchItems = [
+    SearchResult('AI智能问诊', 'chat', Icons.chat_bubble_outline,
+        () => const ChatPageWithDatabase()),
+    SearchResult(
+        '电子档案', 'passport', Icons.badge_rounded, () => const PetPassportPage()),
+    SearchResult('成长日记', 'diary', Icons.menu_book_rounded,
+        () => const PetDiaryComposePage()),
+    SearchResult('活力健身', 'fitness', Icons.directions_run_rounded,
+        () => const PartnerFitGymPage()),
+    SearchResult('营养食谱', 'recipe', Icons.restaurant_menu_rounded,
+        () => const PetRecipeListPage()),
+    SearchResult('训宠响片', 'clicker', Icons.touch_app_rounded,
+        () => const DogClickerScreen()),
+    SearchResult(
+        '宠物商城', 'shop', Icons.shopping_bag_rounded, () => const PetShopPage()),
+    SearchResult('医疗记录', 'medical', Icons.medical_services_outlined,
+        () => MedicalRecordScreen(refreshNotifier: ValueNotifier<int>(0))),
+    SearchResult('宠物消费', 'expense', Icons.account_balance_wallet,
+        () => const UnifiedExpenseHomePage()),
+    SearchResult('智能提醒', 'reminder', Icons.notifications_active,
+        () => const IntelligentReminderPage()),
+    SearchResult('宠物档案', 'profile', Icons.pets, () => const ProfileScreen()),
+    SearchResult('社区话题', 'community', Icons.forum_outlined,
+        () => const CommunityScreen()),
+    SearchResult('设置', 'settings', Icons.settings, () => const SettingsPage()),
+  ];
 
         const SizedBox(height: 16), 
 
@@ -491,20 +525,223 @@ class _HomeDashboardContent extends StatelessWidget {
           },
         ),
 
-        // 3. 底部占位演示 (表明可滑动)
-        const SizedBox(height: 30),
-        Center(
-          child: Text(
-            "更多功能敬请期待...",
-            style: TextStyle(
-              color: AppColors.textGrey.withOpacity(0.5),
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
+    setState(() {
+      _searchResults = results;
+      _showSearchResults = true;
+    });
+  }
+
+  /// 跳转到搜索结果页面
+  void _navigateToResult(SearchResult result) {
+    _searchController.clear();
+    _searchFocusNode.unfocus();
+    setState(() {
+      _showSearchResults = false;
+    });
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => result.pageBuilder()),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final double topPadding = MediaQuery.of(context).padding.top;
+
+    return Stack(
+      children: [
+        ListView(
+          // [关键点1] 强制开启滚动物理效果，即使内容少也能滑动
+          physics: const AlwaysScrollableScrollPhysics(
+              parent: BouncingScrollPhysics()),
+
+          // [关键点2] 增加底部 Padding (130)，确保内容不被悬浮导航栏遮挡，且预留滑动空间
+          padding: EdgeInsets.fromLTRB(20, topPadding + 60, 20, 130),
+          children: [
+            // 0. 搜索框
+            _buildSearchBar(),
+            const SizedBox(height: 16),
+
+            // 1. AI 智能问诊 (修复版：文字完整显示)
+            _buildHeroAiCard(context),
+
+            const SizedBox(height: 16),
+
+            // 1.5 体重趋势卡片
+            const WeightTrendCard(),
+
+            const SizedBox(height: 16),
+
+            // 2. 功能网格
+            LayoutBuilder(
+              builder: (context, constraints) {
+                double width = (constraints.maxWidth - 12) / 2;
+                return Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: [
+                    _buildFeatureCard(
+                        width,
+                        '电子档案',
+                        'Vaccine',
+                        Icons.badge_rounded,
+                        AppColors.coolGradient,
+                        const PetPassportPage()),
+                    _buildFeatureCard(
+                        width,
+                        '成长日记',
+                        'Diary',
+                        Icons.menu_book_rounded,
+                        AppColors.natureGradient,
+                        const PetDiaryComposePage()),
+                    _buildFeatureCard(
+                        width,
+                        '活力健身',
+                        'Fitness',
+                        Icons.directions_run_rounded,
+                        AppColors.oceanGradient,
+                        const PartnerFitGymPage()),
+                    _buildFeatureCard(
+                        width,
+                        '营养食谱',
+                        'Food',
+                        Icons.restaurant_menu_rounded,
+                        AppColors.goldGradient,
+                        const PetRecipeListPage()),
+                    _buildFeatureCard(
+                        width,
+                        '训宠响片',
+                        'Training',
+                        Icons.touch_app_rounded,
+                        AppColors.magicGradient,
+                        const DogClickerScreen()),
+                    _buildFeatureCard(
+                        width,
+                        '宠物商城',
+                        'Shop',
+                        Icons.shopping_bag_rounded,
+                        AppColors.coolGradient,
+                        const PetShopPage()),
+                    _buildFeatureCard(
+                        width,
+                        '寻宠救援',
+                        '希望您永远使用不到此功能',
+                        Icons.phonelink_ring_rounded,
+                        const LinearGradient(
+                            colors: [Color(0xFFFF416C), Color(0xFFFF4B2B)]),
+                        const LostPetRescuePage(),
+                        subtitleMaxLines: 2),
+                    _buildFeatureCard(
+                        width,
+                        '寻宠互助',
+                        'Emergency',
+                        Icons.campaign_rounded,
+                        AppColors.navTab1,
+                        const CommunityScreen()),
+                  ],
+                );
+              },
+            ),
+
+            // 3. 底部占位演示 (表明可滑动)
+            const SizedBox(height: 30),
+            Center(
+              child: Text(
+                "更多功能敬请期待...",
+                style: TextStyle(
+                  color: AppColors.textGrey.withOpacity(0.5),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+            const SizedBox(height: 20), // 额外留白
+          ],
+        ),
+        // 搜索结果列表（覆盖在内容上方）
+        if (_showSearchResults && _searchResults.isNotEmpty)
+          Positioned(
+            top: topPadding + 60 + 60, // 搜索框下方
+            left: 20,
+            right: 20,
+            child: Material(
+              elevation: 8,
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                constraints: const BoxConstraints(maxHeight: 400),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: _searchResults.length,
+                  itemBuilder: (context, index) {
+                    final result = _searchResults[index];
+                    return ListTile(
+                      leading:
+                          Icon(result.icon, color: const Color(0xFF5D5FEF)),
+                      title: Text(result.name),
+                      onTap: () => _navigateToResult(result),
+                    );
+                  },
+                ),
+              ),
             ),
           ),
-        ),
-        const SizedBox(height: 20), // 额外留白
       ],
+    );
+  }
+
+  /// 构建搜索框
+  Widget _buildSearchBar() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            offset: const Offset(0, 2),
+            blurRadius: 8.0,
+            color: Colors.black.withOpacity(0.08),
+          ),
+        ],
+      ),
+      child: TextField(
+        controller: _searchController,
+        focusNode: _searchFocusNode,
+        onChanged: _performSearch,
+        decoration: InputDecoration(
+          hintText: '搜索功能...',
+          prefixIcon: const Icon(Icons.search, color: Color(0xFF8E8E93)),
+          suffixIcon: _searchController.text.isNotEmpty
+              ? IconButton(
+                  icon: const Icon(Icons.clear, color: Color(0xFF8E8E93)),
+                  onPressed: () {
+                    setState(() {
+                      _searchController.clear();
+                      _performSearch('');
+                    });
+                  },
+                )
+              : null,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide.none,
+          ),
+          filled: true,
+          fillColor: Colors.white,
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        ),
+      ),
     );
   }
 
@@ -557,6 +794,7 @@ class _HomeDashboardContent extends StatelessWidget {
                   Padding(
                     padding: const EdgeInsets.all(20),
                     child: Column(
+                      mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         // 顶部 AI VET 标签

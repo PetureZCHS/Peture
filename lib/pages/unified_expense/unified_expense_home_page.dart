@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../models/unified_expense.dart';
-import '../../database/unified_expense_helper.dart';
+import '../../services/supabase_service.dart';
 import 'add_unified_expense_page.dart';
 
 /// 统一的宠物消费主页（带标签页）
@@ -15,6 +15,7 @@ class UnifiedExpenseHomePage extends StatefulWidget {
 class _UnifiedExpenseHomePageState extends State<UnifiedExpenseHomePage>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  final SupabaseService _supabaseService = SupabaseService();
 
   List<UnifiedExpense> _recurringExpenses = [];
   List<UnifiedExpense> _allExpenses = [];
@@ -43,19 +44,32 @@ class _UnifiedExpenseHomePageState extends State<UnifiedExpenseHomePage>
     });
 
     try {
-      final recurring = await UnifiedExpenseHelper.instance
-          .getRecurringExpenses();
-      final all = await UnifiedExpenseHelper.instance.getAllExpenses();
-      final dailyCost = await UnifiedExpenseHelper.instance.getTotalDailyCost();
-
+      // 优先从 Supabase 加载
+      final allData = await _supabaseService.getAllUnifiedExpenses();
+      final all = allData.map((e) => UnifiedExpense.fromMap(e)).toList();
+      
+      // 筛选周期性支出
+      final recurring = all.where((e) => e.isRecurring).toList();
+      
+      // 前端计算统计
       final now = DateTime.now();
-      final monthlyTotal = await UnifiedExpenseHelper.instance.getMonthlyTotal(
-        now.year,
-        now.month,
-      );
-      final yearlyTotal = await UnifiedExpenseHelper.instance.getYearlyTotal(
-        now.year,
-      );
+      double dailyCost = 0.0;
+      double monthlyTotal = 0.0;
+      double yearlyTotal = 0.0;
+      
+      for (final expense in all) {
+        if (expense.isRecurring) {
+          dailyCost += expense.dailyCost;
+        }
+        
+        final expenseDate = DateTime.parse(expense.date);
+        if (expenseDate.year == now.year && expenseDate.month == now.month) {
+          monthlyTotal += expense.amount;
+        }
+        if (expenseDate.year == now.year) {
+          yearlyTotal += expense.amount;
+        }
+      }
 
       if (mounted) {
         setState(() {
@@ -101,7 +115,7 @@ class _UnifiedExpenseHomePageState extends State<UnifiedExpenseHomePage>
     );
 
     if (confirmed == true && expense.id != null) {
-      await UnifiedExpenseHelper.instance.deleteExpense(expense.id!);
+      await _supabaseService.deleteUnifiedExpense(expense.id!);
       _loadData();
       if (mounted) {
         ScaffoldMessenger.of(
@@ -132,7 +146,7 @@ class _UnifiedExpenseHomePageState extends State<UnifiedExpenseHomePage>
         estimatedEndDate: DateFormat('yyyy-MM-dd').format(picked),
       );
 
-      await UnifiedExpenseHelper.instance.updateExpense(updatedExpense);
+      await _supabaseService.updateUnifiedExpense(updatedExpense.toMap());
       _loadData();
 
       if (mounted) {
@@ -177,7 +191,7 @@ class _UnifiedExpenseHomePageState extends State<UnifiedExpenseHomePage>
         clearEstimatedEndDate: true, // 标记需要清除此字段
       );
 
-      await UnifiedExpenseHelper.instance.updateExpense(updatedExpense);
+      await _supabaseService.updateUnifiedExpense(updatedExpense.toMap());
       _loadData();
 
       if (mounted) {

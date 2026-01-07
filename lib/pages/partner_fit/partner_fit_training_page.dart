@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
 import '../../models/fitness_course.dart';
-import '../../database/fitness_helper.dart';
+import '../../services/supabase_service.dart';
 import 'partner_fit_completion_page.dart';
 
 /// 训练进行中页面
@@ -81,7 +81,7 @@ class _PartnerFitTrainingPageState extends State<PartnerFitTrainingPage> {
     });
   }
 
-  void _completeWorkout() {
+  Future<void> _completeWorkout() async {
     countdownTimer?.cancel();
 
     // 保存训练记录
@@ -94,16 +94,32 @@ class _PartnerFitTrainingPageState extends State<PartnerFitTrainingPage> {
       petCaloriesBurned: widget.course.petCaloriesEstimate,
     );
 
-    FitnessHelper.instance.addRecord(record);
+    final supabaseService = SupabaseService();
+    final result = await supabaseService.insertFitnessRecord(record.toMap());
+    
+    if (result == null) {
+      // 保存失败，显示错误提示
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('保存失败，请检查网络连接'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return;
+    }
 
     // 导航到完成页面
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (_) =>
-            PartnerFitCompletionPage(course: widget.course, record: record),
-      ),
-    );
+    if (mounted) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) =>
+              PartnerFitCompletionPage(course: widget.course, record: record),
+        ),
+      );
+    }
   }
 
   String _formatTime(int seconds) {
