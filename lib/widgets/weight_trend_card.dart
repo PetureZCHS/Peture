@@ -22,6 +22,7 @@ class _WeightTrendCardState extends State<WeightTrendCard> {
   
   String _currentPetId = '';
   String _currentPetName = '';
+  List<Map<String, dynamic>> _allPets = [];
   List<Map<String, dynamic>> _allWeightRecords = [];
   
   // Chart Data
@@ -44,7 +45,8 @@ class _WeightTrendCardState extends State<WeightTrendCard> {
       // 1. Get Pets
       final pets = await _supabaseService.getAllPets();
       if (pets.isNotEmpty) {
-        // Default to first pet for now
+        // Store all pets and default to first pet
+        _allPets = pets;
         _currentPetId = pets.first['id'] as String;
         _currentPetName = pets.first['name'] as String;
         
@@ -184,6 +186,84 @@ class _WeightTrendCardState extends State<WeightTrendCard> {
   String _formatDateRange(DateTime start, DateTime end) {
     final fmt = DateFormat('yyyy年MM月dd日');
     return '${fmt.format(start)}至${fmt.format(end)}';
+  }
+
+  Future<void> _showPetSelector() async {
+    await showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) => Container(
+        padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              '选择宠物',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: AppColors.textDark,
+              ),
+            ),
+            const SizedBox(height: 20),
+            ListView.builder(
+              shrinkWrap: true,
+              itemCount: _allPets.length,
+              itemBuilder: (context, index) {
+                final pet = _allPets[index];
+                final petId = pet['id'] as String;
+                final petName = pet['name'] as String;
+                final isSelected = petId == _currentPetId;
+                
+                return GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _currentPetId = petId;
+                      _currentPetName = petName;
+                    });
+                    _refreshWeightRecords();
+                    Navigator.pop(context);
+                    HapticFeedback.selectionClick();
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                    margin: const EdgeInsets.only(bottom: 8),
+                    decoration: BoxDecoration(
+                      color: isSelected ? const Color(0xFFF2F2F7) : Colors.transparent,
+                      borderRadius: BorderRadius.circular(12),
+                      border: isSelected 
+                          ? Border.all(color: const Color(0xFFBF5AF2), width: 2)
+                          : null,
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          petName,
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                            color: AppColors.textDark,
+                          ),
+                        ),
+                        if (isSelected)
+                          const Icon(
+                            Icons.check_circle,
+                            color: Color(0xFFBF5AF2),
+                          ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _showAddWeightDialog() async {
@@ -350,7 +430,36 @@ class _WeightTrendCardState extends State<WeightTrendCard> {
                                 color: AppColors.textDark,
                               ),
                             ),
-                            if (_currentPetName.isNotEmpty)
+                            if (_allPets.length > 1)
+                              GestureDetector(
+                                onTap: _showPetSelector,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFF2F2F7),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        _currentPetName,
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          color: Color(0xFF8E8E93),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      const Icon(
+                                        Icons.expand_more,
+                                        size: 16,
+                                        color: Color(0xFFBF5AF2),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              )
+                            else if (_currentPetName.isNotEmpty)
                               Text(
                                 _currentPetName,
                                 style: const TextStyle(
@@ -403,118 +512,121 @@ class _WeightTrendCardState extends State<WeightTrendCard> {
 
               // 可折叠内容区域
               AnimatedCrossFade(
-                firstChild: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const SizedBox(height: 24),
+                firstChild: Container(
+                  constraints: const BoxConstraints(maxHeight: 400),
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(height: 24),
 
-                    // Time Range Selector
-                    Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF2F2F7),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Row(
-                        children: List.generate(_timeRanges.length, (index) {
-                          final isSelected = index == _selectedTimeRangeIndex;
-                          return Expanded(
-                            child: GestureDetector(
-                              onTap: () {
-                                setState(() {
-                                  _selectedTimeRangeIndex = index;
-                                  _processData();
-                                });
-                                HapticFeedback.selectionClick();
-                              },
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(vertical: 8),
-                                decoration: BoxDecoration(
-                                  color: isSelected ? Colors.white : Colors.transparent,
-                                  borderRadius: BorderRadius.circular(16),
-                                  boxShadow: isSelected ? [
-                                    BoxShadow(
-                                      color: Colors.black.withOpacity(0.05),
-                                      blurRadius: 4,
-                                      offset: const Offset(0, 2),
-                                    )
-                                  ] : [],
-                                ),
-                                alignment: Alignment.center,
-                                child: Text(
-                                  _timeRanges[index],
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                                    color: isSelected ? AppColors.textDark : const Color(0xFF8E8E93),
+                        // Time Range Selector
+                        Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF2F2F7),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Row(
+                            children: List.generate(_timeRanges.length, (index) {
+                              final isSelected = index == _selectedTimeRangeIndex;
+                              return Expanded(
+                                child: GestureDetector(
+                                  onTap: () {
+                                    setState(() {
+                                      _selectedTimeRangeIndex = index;
+                                      _processData();
+                                    });
+                                    HapticFeedback.selectionClick();
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(vertical: 8),
+                                    decoration: BoxDecoration(
+                                      color: isSelected ? Colors.white : Colors.transparent,
+                                      borderRadius: BorderRadius.circular(16),
+                                      boxShadow: isSelected ? [
+                                        BoxShadow(
+                                          color: Colors.black.withOpacity(0.05),
+                                          blurRadius: 4,
+                                          offset: const Offset(0, 2),
+                                        )
+                                      ] : [],
+                                    ),
+                                    alignment: Alignment.center,
+                                    child: Text(
+                                      _timeRanges[index],
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                                        color: isSelected ? AppColors.textDark : const Color(0xFF8E8E93),
+                                      ),
+                                    ),
                                   ),
                                 ),
+                              );
+                              }),
+                            ),
+                          ),
+
+                        const SizedBox(height: 24),
+
+                        // Summary
+                        const Text('平均', style: TextStyle(color: Color(0xFF8E8E93), fontSize: 14)),
+                        const SizedBox(height: 4),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.baseline,
+                          textBaseline: TextBaseline.alphabetic,
+                          children: [
+                            Text(
+                              _averageWeight.toStringAsFixed(1),
+                              style: const TextStyle(
+                                color: AppColors.textDark,
+                                fontSize: 36,
+                                fontWeight: FontWeight.w600,
+                                fontFamily: 'SF Pro Display',
                               ),
                             ),
-                          );
-                        }),
-                      ),
-                    ),
-
-                    const SizedBox(height: 24),
-
-                    // Summary
-                    const Text('平均', style: TextStyle(color: Color(0xFF8E8E93), fontSize: 14)),
-                    const SizedBox(height: 4),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.baseline,
-                      textBaseline: TextBaseline.alphabetic,
-                      children: [
+                            const SizedBox(width: 4),
+                            const Text(
+                              '公斤',
+                              style: TextStyle(color: Color(0xFF8E8E93), fontSize: 16),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
                         Text(
-                          _averageWeight.toStringAsFixed(1),
-                          style: const TextStyle(
-                            color: AppColors.textDark,
-                            fontSize: 36,
-                            fontWeight: FontWeight.w600,
-                            fontFamily: 'SF Pro Display',
-                          ),
+                          _dateRangeText.length >= 5 
+                              ? _dateRangeText.split('至')[0].substring(0, 5) 
+                              : '', // Just show Year like "2025年"
+                          style: const TextStyle(color: Color(0xFF8E8E93), fontSize: 13),
                         ),
-                        const SizedBox(width: 4),
-                        const Text(
-                          '公斤',
-                          style: TextStyle(color: Color(0xFF8E8E93), fontSize: 16),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      _dateRangeText.length >= 5 
-                          ? _dateRangeText.split('至')[0].substring(0, 5) 
-                          : '', // Just show Year like "2025年"
-                      style: const TextStyle(color: Color(0xFF8E8E93), fontSize: 13),
-                    ),
 
-                    const SizedBox(height: 32),
+                        const SizedBox(height: 32),
 
-                    // Chart
-                    SizedBox(
-                      height: 300,
-                      child: LineChart(
-                        LineChartData(
-                          gridData: FlGridData(
-                            show: true,
-                            drawHorizontalLine: false,
-                            drawVerticalLine: true,
-                            getDrawingVerticalLine: (value) {
-                              return FlLine(
-                                color: const Color(0xFFE5E5EA),
-                                strokeWidth: 1,
-                                dashArray: [4, 4],
-                              );
-                            },
-                          ),
-                          titlesData: FlTitlesData(
-                            show: true,
-                            rightTitles: AxisTitles(
-                              sideTitles: SideTitles(
-                                showTitles: true,
-                                reservedSize: 40,
-                                getTitlesWidget: (value, meta) {
+                        // Chart
+                        SizedBox(
+                          height: 220,
+                          child: LineChart(
+                            LineChartData(
+                              gridData: FlGridData(
+                                show: true,
+                                drawHorizontalLine: false,
+                                drawVerticalLine: true,
+                                getDrawingVerticalLine: (value) {
+                                  return FlLine(
+                                    color: const Color(0xFFE5E5EA),
+                                    strokeWidth: 1,
+                                    dashArray: [4, 4],
+                                  );
+                                },
+                              ),
+                              titlesData: FlTitlesData(
+                                show: true,
+                                rightTitles: AxisTitles(
+                                  sideTitles: SideTitles(
+                                    showTitles: true,
+                                    reservedSize: 40,
+                                    getTitlesWidget: (value, meta) {
                                   if (value == _minY || value == _maxY) return const SizedBox();
                                   return Text(
                                     value.toInt().toString(),
@@ -628,7 +740,9 @@ class _WeightTrendCardState extends State<WeightTrendCard> {
                     ),
 
                     const SizedBox(height: 20),
-                  ],
+                      ],
+                    ),
+                  ),
                 ),
                 secondChild: const SizedBox(width: double.infinity),
                 crossFadeState: _isExpanded

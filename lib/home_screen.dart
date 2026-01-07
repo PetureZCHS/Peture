@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'dart:math' as math;
+import 'package:flutter/physics.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
@@ -16,8 +17,11 @@ import 'pages/lost_pet/lost_pet_rescue_page.dart';
 import 'community_screen.dart';
 import 'medical_record_screen.dart';
 import 'profile_screen.dart';
+import 'pages/unified_expense/unified_expense_home_page.dart';
+import 'pages/reminder/intelligent_reminder_page.dart';
 import 'widgets/weight_trend_card.dart';
 import 'utils/ui_helpers.dart';
+import 'pages/turf_wars/turf_wars_screen.dart';
 
 // =========================================================
 // 2. 主页面骨架
@@ -34,8 +38,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   int _currentIndex = 0;
   double _currentPosition = 0.0;
   int _lastHapticIndex = 0;
+  bool _isDragging = false;
 
-  late AnimationController _orbController;
+  late AnimationController _tabController;
   bool _isUniverseMode = false;
 
   @override
@@ -47,22 +52,50 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       statusBarIconBrightness: Brightness.dark,
     ));
 
-    _orbController = AnimationController(
+    _tabController = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 10), 
-    )..repeat();
+      lowerBound: double.negativeInfinity,
+      upperBound: double.infinity,
+      value: 0.0,
+    );
+    _tabController.addListener(() {
+      setState(() {
+        _currentPosition = _tabController.value;
+      });
+    });
   }
 
   @override
   void dispose() {
-    _orbController.dispose();
+    _tabController.dispose();
     super.dispose();
   }
 
+  void _animateToPage(int page, {double velocity = 0.0}) {
+    // [优化] 调整弹簧参数，使其更软、更弹、更像水
+    final SpringDescription spring = SpringDescription(
+      mass: 0.6,       // 稍微减轻质量，响应更快
+      stiffness: 140.0, // 大幅降低刚度，产生柔软感 (原 250)
+      damping: 12.0,    // 降低阻尼，允许更多回弹/摆动 (原 15)
+    );
+    
+    final simulation = SpringSimulation(
+      spring,
+      _currentPosition,
+      page.toDouble(),
+      velocity,
+    );
+    
+    _tabController.animateWith(simulation);
+  }
+
   void _onTabTapped(int index) {
+    if (_currentIndex == index) return;
+
+    _animateToPage(index);
+
     setState(() {
       _currentIndex = index;
-      _currentPosition = index.toDouble();
       _lastHapticIndex = index;
     });
     HapticFeedback.mediumImpact();
@@ -105,67 +138,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     return Scaffold(
       extendBody: true,
       resizeToAvoidBottomInset: false,
-      backgroundColor: AppColors.background,
+      backgroundColor: Colors.transparent,
       body: Stack(
         children: [
-          // 背景层
-          Stack(
-            children: [
-              Container(color: AppColors.background),
-              // 动态光晕 1 - 左上 (蓝色系)
-              AnimatedBuilder(
-                animation: _orbController,
-                builder: (context, child) {
-                  return Positioned(
-                    top: -100 + (math.sin(_orbController.value * 2 * math.pi) * 100),
-                    left: -50 + (math.cos(_orbController.value * 2 * math.pi) * 80),
-                    child: Container(
-                      width: 600, height: 600,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: AppColors.orb1.withOpacity(0.6),
-                      ),
-                    ).blurred(sigmaX: 100, sigmaY: 100),
-                  );
-                },
-              ),
-              // 动态光晕 2 - 右中 (橙色系)
-              AnimatedBuilder(
-                animation: _orbController,
-                builder: (context, child) {
-                  return Positioned(
-                    top: 200 + (math.cos(_orbController.value * 2 * math.pi) * 120),
-                    right: -150 + (math.sin(_orbController.value * 2 * math.pi) * 100),
-                    child: Container(
-                      width: 500, height: 500,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: AppColors.orb3.withOpacity(0.5),
-                      ),
-                    ).blurred(sigmaX: 90, sigmaY: 90),
-                  );
-                },
-              ),
-              // 动态光晕 3 - 左下 (紫色系)
-              AnimatedBuilder(
-                animation: _orbController,
-                builder: (context, child) {
-                  return Positioned(
-                    bottom: -150 + (math.sin(_orbController.value * 2 * math.pi) * 100),
-                    left: -100 + (math.cos(_orbController.value * 2 * math.pi) * 80),
-                    child: Container(
-                      width: 700, height: 600,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: AppColors.orb2.withOpacity(0.6),
-                      ),
-                    ).blurred(sigmaX: 110, sigmaY: 110),
-                  );
-                },
-              ),
-            ],
-          ),
-
           // 内容层
           IndexedStack(
             index: _currentIndex,
@@ -226,13 +201,36 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     final LinearGradient currentGradient = AppColors.navGradients[_currentIndex];
 
     return GestureDetector(
-      onHorizontalDragUpdate: (details) {
-        final double screenWidth = MediaQuery.of(context).size.width;
-        final double dragItemWidth = (screenWidth - 48) / 4;
+      behavior: HitTestBehavior.opaque, // 确保整个区域都响应点击和拖拽
+      onTapUp: (details) {
+        final double width = MediaQuery.of(context).size.width - 48;
+        final double itemWidth = width / 4;
+        // 计算点击位置对应的 index
+        final int index = (details.localPosition.dx / itemWidth).floor().clamp(0, 3);
+        _onTabTapped(index);
+      },
+      onHorizontalDragStart: (details) {
+        _tabController.stop();
         setState(() {
-          _currentPosition += details.delta.dx / dragItemWidth;
-          _currentPosition = _currentPosition.clamp(0.0, 3.0);
+          _isDragging = true;
         });
+      },
+      onHorizontalDragUpdate: (details) {
+        final double width = MediaQuery.of(context).size.width - 48;
+        final double itemWidth = width / 4;
+        
+        // [修改] 改为绝对位置跟随，实现"指哪打哪"的丝滑跟手感
+        // details.localPosition.dx 是相对于 Container 左上角的 x 坐标
+        // 我们希望指示器中心跟随手指，指示器中心在 index * itemWidth + itemWidth / 2
+        // 所以 position = (x - itemWidth / 2) / itemWidth = x / itemWidth - 0.5
+        
+        double newPosition = (details.localPosition.dx / itemWidth) - 0.5;
+        
+        setState(() {
+          _currentPosition = newPosition.clamp(0.0, 3.0);
+          _tabController.value = _currentPosition;
+        });
+        
         int potentialIndex = _currentPosition.round();
         if (potentialIndex != _lastHapticIndex) {
           HapticFeedback.selectionClick(); 
@@ -240,13 +238,44 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         }
       },
       onHorizontalDragEnd: (details) {
+        final double screenWidth = MediaQuery.of(context).size.width;
+        final double dragItemWidth = (screenWidth - 48) / 4;
+        
+        // Calculate velocity in "pages per second"
+        final double velocity = details.velocity.pixelsPerSecond.dx / dragItemWidth;
+
         int targetIndex = _currentPosition.round();
+        
+        // [优化] 增加速度阈值判断，让快速滑动更容易触发翻页
+        if (velocity.abs() > 0.3) { // 降低阈值 (原 0.5)
+          if (velocity > 0) {
+            targetIndex = _currentPosition.floor() + 1;
+          } else {
+            targetIndex = _currentPosition.ceil() - 1;
+          }
+        } else {
+          // 如果速度很慢，就看位置是否超过一半
+          // _currentPosition.round() 已经处理了这个逻辑
+        }
+        
+        targetIndex = targetIndex.clamp(0, 3);
+        
+        // [优化] 传递更强的初始速度给弹簧，制造"冲过头"再回弹的效果
+        _animateToPage(targetIndex, velocity: velocity * 1.2);
+
         setState(() {
+          _isDragging = false;
           _currentIndex = targetIndex;
-          _currentPosition = targetIndex.toDouble();
           _lastHapticIndex = targetIndex;
         });
         HapticFeedback.lightImpact(); 
+      },
+      onHorizontalDragCancel: () {
+        _animateToPage(_currentIndex);
+
+        setState(() {
+          _isDragging = false;
+        });
       },
       child: Container(
         height: navHeight,
@@ -309,40 +338,62 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     ),
                   ),
                 ),
-                AnimatedPositioned(
-                  duration: const Duration(milliseconds: 350),
-                  curve: Curves.easeOutBack,
+                Positioned(
                   left: (_currentPosition * itemWidth) + (itemWidth / 2) - (indicatorWidth / 2),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 300),
-                    width: indicatorWidth,
-                    height: indicatorHeight,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(indicatorHeight / 2),
-                      gradient: currentGradient,
-                      boxShadow: [
-                        BoxShadow(
-                          color: currentGradient.colors.first.withOpacity(0.4),
-                          blurRadius: 12,
-                          spreadRadius: -2,
-                          offset: const Offset(0, 2),
+                  child: Builder(
+                    builder: (context) {
+                      // [优化] 动态形变算法：增强液态拉伸感
+                      double velocity = 0.0;
+                      if (_tabController.isAnimating) {
+                         velocity = _tabController.velocity; // 保留符号以判断方向
+                      }
+                      
+                      double absVelocity = velocity.abs();
+                      
+                      // 拉伸因子：速度越快，拉伸越明显。使用非线性曲线让微小移动也有反馈。
+                      // 限制最大拉伸为 60%
+                      double stretchFactor = (absVelocity * 0.08).clamp(0.0, 0.6);
+                      
+                      double currentWidth = indicatorWidth * (1 + stretchFactor);
+                      // 挤压高度：保持一定的体积感，但不要完全扁平
+                      double currentHeight = indicatorHeight * (1 - stretchFactor * 0.35);
+
+                      // [新增] 动态倾斜：根据速度方向微调角度，模拟惯性
+                      // 速度为正（向右），向左倾斜（头部在前，尾部拖后）-> 实际上旋转是整体旋转
+                      // 简单的旋转可能看起来像车轮。液态通常是头部变大尾部变小（水滴型）。
+                      // 这里用简单的 Scale 模拟拉伸即可，旋转可能导致图标错位。
+                      
+                      return Container(
+                        width: currentWidth,
+                        height: currentHeight,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(currentHeight / 2), // 保持胶囊形状
+                          gradient: currentGradient,
+                          boxShadow: [
+                            BoxShadow(
+                              color: currentGradient.colors.first.withOpacity(0.4 + (stretchFactor * 0.2)), // 速度越快，光晕越强
+                              blurRadius: 12 + (stretchFactor * 10), // 运动时模糊拖尾增加
+                              spreadRadius: -2,
+                              offset: const Offset(0, 2),
+                            ),
+                            BoxShadow(
+                              color: Colors.white.withOpacity(0.3),
+                              blurRadius: 1,
+                              offset: const Offset(0, 1),
+                              spreadRadius: 0,
+                              blurStyle: BlurStyle.inner
+                            ),
+                          ],
                         ),
-                        BoxShadow(
-                          color: Colors.white.withOpacity(0.3),
-                          blurRadius: 1,
-                          offset: const Offset(0, 1),
-                          spreadRadius: 0,
-                          blurStyle: BlurStyle.inner
-                        ),
-                      ],
-                    ),
+                      );
+                    }
                   ),
                 ),
                 SizedBox(
                   width: totalWidth,
                   height: navHeight,
                   child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    mainAxisAlignment: MainAxisAlignment.start, // [修改] 确保严格对齐
                     children: [
                       _buildNavItem(0, Icons.home_rounded, Icons.home_outlined),
                       _buildNavItem(1, Icons.explore_rounded, Icons.explore_outlined),
@@ -371,24 +422,20 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       iconColor = Color.lerp(AppColors.textGrey, AppColors.textDark, t)!;
     }
 
-    return GestureDetector(
-      onTap: () => _onTabTapped(index),
-      behavior: HitTestBehavior.translucent,
-      child: SizedBox(
-        width: (MediaQuery.of(context).size.width - 48) / 5,
-        height: 68, 
-        child: Transform.scale(
-          scale: scale,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                t > 0.6 ? selectedIcon : unselectedIcon,
-                color: iconColor,
-                size: 24, 
-              ),
-            ],
-          ),
+    return SizedBox(
+      width: (MediaQuery.of(context).size.width - 48) / 4, // [修复] 宽度必须是 / 4，与指示器逻辑一致
+      height: 68, 
+      child: Transform.scale(
+        scale: scale,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              t > 0.6 ? selectedIcon : unselectedIcon,
+              color: iconColor,
+              size: 24, 
+            ),
+          ],
         ),
       ),
     );
@@ -431,6 +478,8 @@ class _HomeDashboardContent extends StatelessWidget {
               spacing: 12,
               runSpacing: 12,
               children: [
+                _buildFeatureCard(width, '宠物消费', 'Expenses', Icons.account_balance_wallet_rounded, const LinearGradient(colors: [Color(0xFF6A85B6), Color(0xFFBAC8E0)]), const UnifiedExpenseHomePage()),
+                _buildFeatureCard(width, '智能提醒', 'Reminder', Icons.notifications_active_rounded, const LinearGradient(colors: [Color(0xFFA18CD1), Color(0xFFFBC2EB)]), const IntelligentReminderPage()),
                 _buildFeatureCard(width, '电子档案', 'Vaccine', Icons.badge_rounded, AppColors.coolGradient, const PetPassportPage()),
                 _buildFeatureCard(width, '第一人称日记', 'Diary', Icons.menu_book_rounded, AppColors.natureGradient, const PetDiaryComposePage()),
                 _buildFeatureCard(width, '活力健身', 'Fitness', Icons.directions_run_rounded, AppColors.oceanGradient, const PartnerFitGymPage()),

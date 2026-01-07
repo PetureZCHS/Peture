@@ -11,11 +11,6 @@ class DiagnosticReportCard extends StatelessWidget {
     final diagnosis = data['diagnosis'] as String? ?? '未知诊断';
     final urgencyLevel = data['urgency_level'] as int? ?? 1;
     final urgencyColorStr = data['urgency_color'] as String? ?? 'green';
-    final possibleCauses = (data['possible_causes'] as List<dynamic>?)
-            ?.map((e) => e.toString())
-            .toList() ??
-        [];
-    final adviceSummary = data['advice_summary'] as String? ?? '';
 
     Color color;
     switch (urgencyColorStr.toLowerCase()) {

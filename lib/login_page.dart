@@ -4,6 +4,7 @@ import 'dart:ui';
 
 // 导入主应用文件
 import 'main.dart';
+import 'home_screen.dart'; // 导入主页
 // 导入邮箱登录页面
 import 'email_login_page.dart';
 // 导入手机号验证码登录页面
@@ -452,7 +453,7 @@ class _LoginBodyContentState extends State<_LoginBodyContent> {
       return;
     }
     Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (context) => const MyApp()),
+      MaterialPageRoute(builder: (context) => const HomeScreen()),
     );
   }
 

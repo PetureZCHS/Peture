@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'main.dart'; // 导入主应用文件，登录成功后将跳转到这里
+import 'home_screen.dart'; // 导入主页
 import 'email_register_page.dart'; // 导入注册页面
 
 class EmailLoginPage extends StatefulWidget {
@@ -55,7 +55,7 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
           Navigator.of(context).pushReplacement(
             PageRouteBuilder(
               pageBuilder: (context, animation, secondaryAnimation) =>
-                  const MyApp(),
+                  const HomeScreen(),
               transitionsBuilder:
                   (context, animation, secondaryAnimation, child) {
                     return FadeTransition(opacity: animation, child: child);
