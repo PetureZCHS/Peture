@@ -55,7 +55,10 @@ class FadePageRoute extends PageRouteBuilder {
 }
 
 class PreparationPage extends StatefulWidget {
-  const PreparationPage({super.key});
+  final File? initialSelectedImage;
+  final int initialStyleIndex;
+
+  const PreparationPage({super.key, this.initialSelectedImage, this.initialStyleIndex = 0});
 
   @override
   State<PreparationPage> createState() => _PreparationPageState();
@@ -74,10 +77,17 @@ class _PreparationPageState extends State<PreparationPage>
   File? _selectedImage;
   int _selectedStyleIndex = 0;
 
+  // 控制风格列表的滚动，以便恢复时滚动到已选项
+  late final ScrollController _styleScrollController;
+
   // 上传状态管理
   UploadStatus _uploadStatus = UploadStatus.idle;
   double _uploadProgress = 0.0;
   String _uploadError = '';
+
+
+  // 是否正在向后端发起 AI 生图任务（用于按钮内提示）
+  bool _isStartingTask = false;
 
   // Orb动画控制器
   late AnimationController _orbController;
@@ -99,11 +109,26 @@ class _PreparationPageState extends State<PreparationPage>
       vsync: this,
       duration: const Duration(seconds: 12),
     )..repeat(reverse: true);
+
+    // 初始化风格滚动控制器
+    _styleScrollController = ScrollController();
+
+    // 如果有来自上一次的选择（由 LoadingPage 在失败时传回），则恢复图片和风格索引
+    if (widget.initialSelectedImage != null) {
+      _selectedImage = widget.initialSelectedImage;
+    }
+    _selectedStyleIndex = widget.initialStyleIndex;
+
+    // 在首帧后滚动到选中的风格，确保可见
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scrollToSelectedStyle(animated: false);
+    });
   }
 
   @override
   void dispose() {
     _orbController.dispose();
+    _styleScrollController.dispose();
     super.dispose();
   }
 
@@ -138,10 +163,10 @@ class _PreparationPageState extends State<PreparationPage>
     if (user == null) {
       print('❌ 用户未认证，无法上传文件');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('请先登录后再尝试上传图片'), backgroundColor: Colors.red),
-        );
+        setState(() {
+          _uploadStatus = UploadStatus.failed;
+          _uploadError = '请先登录后再尝试上传图片';
+        });
       }
       return null;
     }
@@ -174,7 +199,7 @@ class _PreparationPageState extends State<PreparationPage>
 
       // 4. 🚀 上传到 Supabase Storage
       // 注意：当前Supabase Flutter SDK版本可能不支持onProgress参数
-      // 这里使用模拟进度来提供用户反馈
+      // 这里使用模拟进度来提供用户反馈（上限到 0.95），并在 finally 中确保计时器被取消
       final uploadFuture = supabase.storage.from('ai-wallpapers').upload(
             filePath,
             fileToUpload,
@@ -184,37 +209,42 @@ class _PreparationPageState extends State<PreparationPage>
             ),
           );
 
-      // 使用定时器模拟进度更新
+      // 使用定时器模拟进度更新（上限 0.95）
       final progressTimer = Timer.periodic(const Duration(milliseconds: 200), (timer) {
+        if (!mounted) return;
         setState(() {
-          // 模拟进度从0.1到0.9，避免用户等待过久
-          _uploadProgress = (_uploadProgress + 0.05).clamp(0.1, 0.9);
+          // 模拟进度逐步提升，但不超过 0.95
+          _uploadProgress = (_uploadProgress + 0.05).clamp(0.1, 0.95);
         });
       });
 
-      // 等待上传完成
-      await uploadFuture;
+      try {
+        // 等待上传完成
+        await uploadFuture;
 
-      // 取消进度定时器
-      progressTimer.cancel();
-      // 设置最终进度为1.0
-      setState(() {
-        _uploadProgress = 1.0;
-      });
+        // 上传成功：跳到 1.0 并设置状态
+        if (mounted) {
+          setState(() {
+            _uploadProgress = 1.0;
+            _uploadStatus = UploadStatus.success;
+          });
+        }
 
-      // 更新上传成功状态
-      setState(() {
-        _uploadStatus = UploadStatus.success;
-      });
-
-      print('✅ 图片上传成功: $filePath');
-      return fileName;
+        print('✅ 图片上传成功: $filePath');
+        return fileName;
+      } finally {
+        // 无论成功或失败都取消定时器，防止泄露或假进度继续运行
+        if (progressTimer.isActive) {
+          progressTimer.cancel();
+        }
+      }
     } on StorageException catch (e) {
       // Supabase 存储特定错误
       print('❌ StorageException: ${e.message}, Status: ${e.statusCode}');
       final errorMessage = e.statusCode == '403' ? '权限不足，无法上传图片' : '存储服务错误: ${e.message}';
       setState(() {
         _uploadStatus = UploadStatus.failed;
+        _uploadProgress = 0.0;
         _uploadError = errorMessage;
       });
       _showErrorSnackBar(errorMessage);
@@ -225,6 +255,7 @@ class _PreparationPageState extends State<PreparationPage>
       final errorMessage = '图片上传失败: 请检查网络';
       setState(() {
         _uploadStatus = UploadStatus.failed;
+        _uploadProgress = 0.0;
         _uploadError = errorMessage;
       });
       _showErrorSnackBar(errorMessage);
@@ -265,12 +296,13 @@ class _PreparationPageState extends State<PreparationPage>
     }
   }
 
-  /// 辅助方法：显示错误提示
+  /// 将错误消息挂载到页面状态，以便在页面内显示（不使用 SnackBar）
   void _showErrorSnackBar(String message) {
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message), backgroundColor: Colors.red),
-      );
+      setState(() {
+        _uploadStatus = UploadStatus.failed;
+        _uploadError = message;
+      });
     }
   }
 
@@ -530,43 +562,39 @@ class _PreparationPageState extends State<PreparationPage>
                       final isSelected = _selectedStyleIndex == index;
                       return _buildTechStyleCard(index, isSelected);
                     },
+                    controller: _styleScrollController,
                   ),
                 ),
 
                 const Spacer(),
 
-                // 4. 上传进度指示器
-                if (_uploadStatus == UploadStatus.uploading)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 10.0),
-                    child: Column(
+                // 上传进度提示已移除（按钮内展示上传状态），以减少视觉冗余。
+
+                // 内联错误提示（替代 SnackBar）
+                if (_uploadError.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        // 进度条
-                        LinearProgressIndicator(
-                          value: _uploadProgress,
-                          minHeight: 6.0,
-                          backgroundColor: Colors.white.withOpacity(0.6),
-                          valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF5D5FEF)),
-                          borderRadius: BorderRadius.circular(3.0),
+                        Expanded(
+                          child: Text(
+                            _uploadError,
+                            style: TextStyle(color: Colors.red, fontSize: 14),
+                          ),
                         ),
-                        const SizedBox(height: 8),
-                        // 进度百分比和加载指示器
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const CircularProgressIndicator(
-                              strokeWidth: 2.0,
-                              color: Color(0xFF5D5FEF),
-                            ),
-                            const SizedBox(width: 12),
-                            Text(
-                              '上传中... ${(_uploadProgress * 100).toStringAsFixed(1)}%',
-                              style: const TextStyle(
-                                fontSize: 14,
-                                color: Color(0xFF8E8E93),
-                              ),
-                            ),
-                          ],
+                        TextButton(
+                          onPressed: () {
+                            if (_selectedImage != null) {
+                              setState(() {
+                                _uploadStatus = UploadStatus.uploading;
+                                _uploadError = '';
+                                _isStartingTask = false;
+                              });
+                              _uploadImageToSupabaseStorage(_selectedImage!);
+                            }
+                          },
+                          child: const Text('重试'),
                         ),
                       ],
                     ),
@@ -615,7 +643,7 @@ class _PreparationPageState extends State<PreparationPage>
                         height: 50,
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(25),
-                          gradient: (_selectedImage != null)
+                          gradient: (_selectedImage != null && !_isStartingTask && _uploadStatus != UploadStatus.uploading)
                               ? const LinearGradient(
                                   colors: [
                                     Color(0xFF5D5FEF),
@@ -652,7 +680,7 @@ class _PreparationPageState extends State<PreparationPage>
                         child: Material(
                           color: Colors.transparent,
                           child: InkWell(
-                            onTap: (_selectedImage != null && _uploadStatus != UploadStatus.uploading)
+                            onTap: (_selectedImage != null && _uploadStatus != UploadStatus.uploading && !_isStartingTask)
                                 ? () async {
                                     // 上传图片到Supabase Storage
                                     final uploadedFileName =
@@ -661,18 +689,10 @@ class _PreparationPageState extends State<PreparationPage>
 
                                     // 如果上传成功，则导航到LoadingPage
                                     if (uploadedFileName != null && mounted) {
-                                      // 显示上传成功反馈
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        const SnackBar(
-                                          content: Text('图片上传成功，正在生成AI图像...'),
-                                          backgroundColor: Colors.green,
-                                        ),
-                                      );
+                                      // 上传成功，准备发起生成任务
 
-                                      // 调用 img-gen-start Edge Function
+                                      // 立即跳转到 LoadingPage（Uploading 已完成），由 LoadingPage 发起 img-gen-start 并轮询状态
                                       if (uploadedFileName.isNotEmpty) {
-                                        final supabase = Supabase.instance.client;
-                                        
                                         // 根据_selectedStyleIndex确定style值
                                         final styleMap = {
                                           0: 'run',
@@ -683,8 +703,16 @@ class _PreparationPageState extends State<PreparationPage>
                                           5: 'autumn',
                                         };
                                         final style = styleMap[_selectedStyleIndex] ?? 'run';
-                                        
+
+                                        // 在按钮内显示“正在发起”状态，避免使用持久 SnackBar
+                                        setState(() {
+                                          _isStartingTask = true;
+                                        });
+
+                                        // 调用 img-gen-start，等待返回 taskId，然后再导航到 LoadingPage
                                         try {
+                                          final supabase = Supabase.instance.client;
+
                                           final res = await supabase.functions.invoke(
                                             'img-gen-start',
                                             body: {
@@ -693,23 +721,21 @@ class _PreparationPageState extends State<PreparationPage>
                                             },
                                           );
                                           final data = res.data;
-                                          
-                                          // 处理Edge Function返回的结果
+
                                           if (data is Map<String, dynamic>) {
-                                            final taskId = data['task_id'];
-                                            final signedUrl = data['signed_url'];
-                                            print('Task ID: $taskId');
-                                            print('Signed URL: $signedUrl');
-                                            
-                                            // 如果获取到task_id，则导航到LoadingPage
+                                            final taskId = data['task_id'] as String?;
+
+                                            // 输出 task_id 到终端，方便调试
                                             if (taskId != null && taskId.isNotEmpty) {
+                                              print('task_id: $taskId');
                                               Navigator.push(
                                                 context,
                                                 FadePageRoute(
                                                   page: LoadingPage(
                                                     originalImage: _selectedImage!,
-                                                    uploadedFileName: uploadedFileName, // 传递上传的文件名
+                                                    uploadedFileName: uploadedFileName,
                                                     taskId: taskId, // 传递任务ID
+                                                    style: style,
                                                   ),
                                                 ),
                                               );
@@ -721,55 +747,29 @@ class _PreparationPageState extends State<PreparationPage>
                                             throw Exception('服务器返回格式错误');
                                           }
                                         } catch (e) {
-                                          print('调用img-gen-start失败: $e');
+                                          // 启动任务失败：记录错误并恢复按钮状态（不使用 SnackBar）
                                           if (mounted) {
-                                            ScaffoldMessenger.of(context).showSnackBar(
-                                              SnackBar(
-                                                content: Text('AI图像生成请求失败: ${e.toString()}'),
-                                                backgroundColor: Colors.red,
-                                              ),
-                                            );
+                                            setState(() {
+                                              _isStartingTask = false;
+                                              _uploadStatus = UploadStatus.failed;
+                                              _uploadError = 'AI生图任务启动失败: ${e.toString()}';
+                                            });
                                           }
-                                          // 重置上传状态
-                                          setState(() {
-                                            _uploadStatus = UploadStatus.idle;
-                                          });
                                           return;
                                         }
-                                      }
                                       
-                                      // 如果上传失败，显示错误提示
-                                      if (mounted) {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          const SnackBar(
-                                            content: Text('图片上传失败，请重试'),
-                                            backgroundColor: Colors.red,
-                                          ),
-                                        );
-                                      }
-                                      // 重置上传状态
-                                      setState(() {
-                                        _uploadStatus = UploadStatus.idle;
-                                      });
+                                        } else {
+                                          // 如果上传失败，显示错误提示（不使用 SnackBar）
+                                          if (mounted) {
+                                            setState(() {
+                                              _uploadStatus = UploadStatus.failed;
+                                              _uploadError = '图片上传失败，请重试';
+                                            });
+                                          }
+                                          return;
+                                        }
                                     } else if (mounted && _uploadStatus == UploadStatus.failed) {
-                                      // 上传失败提示
-                                      ScaffoldMessenger.of(context)
-                                          .showSnackBar(
-                                        SnackBar(
-                                          content: Text(_uploadError.isNotEmpty ? _uploadError : '图片上传失败，请检查网络连接'),
-                                          backgroundColor: Colors.red,
-                                          action: SnackBarAction(
-                                            label: '重试',
-                                            textColor: Colors.white,
-                                            onPressed: () {
-                                              // 重试上传
-                                              if (_selectedImage != null) {
-                                                _uploadImageToSupabaseStorage(_selectedImage!);
-                                              }
-                                            },
-                                          ),
-                                        ),
-                                      );
+                                      // 上传失败：页面内显示错误并提供重试（通过下方的错误提示区）
                                     }
                                   }
                                 : null,
@@ -805,21 +805,51 @@ class _PreparationPageState extends State<PreparationPage>
                                         ),
                                       ],
                                     )
-                                  : Text(
-                                      "开始生成",
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.white,
-                                        fontSize: 16,
-                                        shadows: [
-                                          Shadow(
-                                            color: Colors.black26,
-                                            offset: Offset(0, 1),
-                                            blurRadius: 2,
+                                  : _isStartingTask
+                                      ? Row(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: const [
+                                            SizedBox(
+                                              height: 16,
+                                              width: 16,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                                color: Colors.white,
+                                              ),
+                                            ),
+                                            SizedBox(width: 8),
+                                            Text(
+                                              "正在发起 AI 生图任务...",
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                color: Colors.white,
+                                                fontSize: 16,
+                                                shadows: [
+                                                  Shadow(
+                                                    color: Colors.black26,
+                                                    offset: Offset(0, 1),
+                                                    blurRadius: 2,
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ],
+                                        )
+                                      : Text(
+                                          "开始生成",
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.white,
+                                            fontSize: 16,
+                                            shadows: [
+                                              Shadow(
+                                                color: Colors.black26,
+                                                offset: Offset(0, 1),
+                                                blurRadius: 2,
+                                              ),
+                                            ],
                                           ),
-                                        ],
-                                      ),
-                                    ),
+                                        ),
                             ),
                           ),
                         ),
@@ -837,7 +867,7 @@ class _PreparationPageState extends State<PreparationPage>
 
   Widget _buildTechStyleCard(int index, bool isSelected) {
     return GestureDetector(
-      onTap: () => setState(() => _selectedStyleIndex = index),
+      onTap: () => setState(() => _onStyleSelected(index)),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         width: 100,
@@ -925,6 +955,28 @@ class _PreparationPageState extends State<PreparationPage>
         ),
       ),
     );
+  }
+
+  void _onStyleSelected(int index) {
+    setState(() {
+      _selectedStyleIndex = index;
+    });
+    _scrollToSelectedStyle();
+  }
+
+  void _scrollToSelectedStyle({bool animated = true}) {
+    if (!_styleScrollController.hasClients) return;
+
+    // 每个卡片宽度 100 + 间距 12
+    const double itemExtent = 112.0;
+    final target = (_selectedStyleIndex * itemExtent) - (MediaQuery.of(context).size.width / 2) + (itemExtent / 2);
+    final clamped = target.clamp(0.0, _styleScrollController.position.maxScrollExtent);
+
+    if (animated) {
+      _styleScrollController.animateTo(clamped, duration: const Duration(milliseconds: 400), curve: Curves.easeOut);
+    } else {
+      _styleScrollController.jumpTo(clamped);
+    }
   }
 }
 

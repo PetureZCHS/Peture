@@ -1,11 +1,13 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'dart:io';
+import 'dart:typed_data';
 import 'dart:async';
 import 'dart:ui';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../utils/ui_helpers.dart';
 import 'result_page.dart';
+import 'preparation_page.dart';
 
 // 添加颜色常量定义，与chat_page.dart保持一致
 class AppColors {
@@ -46,12 +48,48 @@ class FadePageRoute extends PageRouteBuilder {
         );
 }
 
+// 新增：从左侧滑入并带淡入效果的 PageRoute，用于返回时更自然的动画
+class SlideFromLeftPageRoute extends PageRouteBuilder {
+  final Widget page;
+
+  SlideFromLeftPageRoute({required this.page})
+      : super(
+          pageBuilder: (
+            BuildContext context,
+            Animation<double> animation,
+            Animation<double> secondaryAnimation,
+          ) =>
+              page,
+          transitionsBuilder: (
+            BuildContext context,
+            Animation<double> animation,
+            Animation<double> secondaryAnimation,
+            Widget child,
+          ) {
+            final offsetAnimation = Tween<Offset>(
+              begin: const Offset(-1.0, 0.0),
+              end: Offset.zero,
+            ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOut));
+
+            final fadeAnimation = Tween<double>(begin: 0.0, end: 1.0)
+                .animate(CurvedAnimation(parent: animation, curve: Curves.easeIn));
+
+            return SlideTransition(
+              position: offsetAnimation,
+              child: FadeTransition(opacity: fadeAnimation, child: child),
+            );
+          },
+        );
+}
+
 class LoadingPage extends StatefulWidget {
   final File originalImage;
   final String? uploadedFileName; // 添加上传的文件名参数
-  final String taskId; // 添加任务ID参数
-  
-  const LoadingPage({required this.originalImage, this.uploadedFileName, required this.taskId});
+  final String taskId; // 必需的任务ID参数（不能为空）
+  final String style; // 风格参数（必需）
+  final int expectedDurationSeconds; // 预期完成时间（秒），决定进度动画速度
+
+  const LoadingPage({required this.originalImage, this.uploadedFileName, required this.taskId, required this.style, this.expectedDurationSeconds = 180});
 
   @override
   _LoadingPageState createState() => _LoadingPageState();
@@ -62,81 +100,59 @@ class _LoadingPageState extends State<LoadingPage>
   late AnimationController _progressController;
   late AnimationController _orbController;
   Timer? _pollingTimer;
-  Timer? _timeoutTimer;
   bool _isTaskFinished = false;
-  String? _generatedImageUrl; // 存储生成的图片URL
+  String? _generatedImageUrl; // 存储生成的图片URL（备用）
+  File? _generatedImageFile; // 存储下载到本地的生成图片文件
 
   @override
   void initState() {
     super.initState();
-    // 定义动画控制器，总时长设为40秒（基准参考）
+    // 定义动画控制器，总时长基于预期完成时长（默认 50s，可通过 constructor 覆盖，用于更平滑长任务的进度表现）
     _progressController =
-        AnimationController(vsync: this, duration: Duration(seconds: 40));
+        AnimationController(vsync: this, duration: Duration(seconds: widget.expectedDurationSeconds));
         
     _orbController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 12),
     )..repeat(reverse: true);
 
+    // taskId 必需；Preparation 页面应先调用 img-gen-start 并传入 taskId。
+
     _startLoadingProcess();
   }
 
   void _startLoadingProcess() async {
-    // 设置整体超时时间（60秒）
-    _timeoutTimer = Timer(Duration(seconds: 60), () {
-      if (!_isTaskFinished) {
-        _handleLoadingTimeout();
-      }
-    });
+    // 不设置整体超时时间，等待后端完成（上游任务可能无固定时长）
+
+    // taskId 在此处应当是必需的（由 PreparationPage 提供）——如果为空则直接报错提示并返回
+    if (widget.taskId.isEmpty) {
+      print('LoadingPage: taskId 为空，无法轮询任务状态');
+      _handleLoadingError('内部错误：缺少任务 ID');
+      return;
+    }
 
     try {
-      // 阶段1: 快速启动，25秒内走到 65%
-      // 我们使用 animateTo 模拟这个过程
-      await _progressController.animateTo(0.65,
-          duration: Duration(seconds: 1), curve: Curves.linear);
-
-      // 阶段2: 25秒时刻，开始轮询后端
+        // 立即开始轮询后端（每5s一次）并把进度平滑推进到 95%（时长根据 expectedDurationSeconds）
       _startPollingBackend();
 
-      // 同时让进度条继续极慢地挪动，营造“正在努力计算”的感觉 (65% -> 85% 用时 30秒)
       if (!_isTaskFinished) {
-        _progressController.animateTo(0.85,
-            duration: Duration(seconds: 3), curve: Curves.decelerate);
+        await _progressController.animateTo(0.95,
+            duration: Duration(seconds: widget.expectedDurationSeconds), curve: Curves.decelerate);
       }
     } catch (e) {
       print('加载过程异常: $e');
-      _timeoutTimer?.cancel();
       _progressController.stop();
       _handleLoadingError('加载过程发生异常，请重试');
     }
   }
 
-  void _handleLoadingTimeout() {
-    _isTaskFinished = true;
-    _pollingTimer?.cancel();
-    _timeoutTimer?.cancel();
-    _progressController.stop();
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('生成时间过长，请稍后重试'),
-          backgroundColor: Colors.red,
-          action: SnackBarAction(
-            label: '返回',
-            textColor: Colors.white,
-            onPressed: () {
-              Navigator.pop(context);
-            },
-          ),
-        ),
-      );
-    }
-  }
+
+
+
 
   void _handleLoadingError(String message) {
     _isTaskFinished = true;
     _pollingTimer?.cancel();
-    _timeoutTimer?.cancel();
     _progressController.stop();
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -156,130 +172,187 @@ class _LoadingPageState extends State<LoadingPage>
   }
 
   void _startPollingBackend() {
-    // 每2秒查一次状态
-    _pollingTimer = Timer.periodic(Duration(seconds: 2), (timer) async {
+    // 我们在35s处调用本方法：先立即发起一次检查，然后每5s再次检查一次。
+    // 移除次数上限：持续轮询直到任务完成（或由错误处理提前终止）。
+
+    Future<void> checkOnce() async {
+
+      // 如果任务已经标记完成，则立即返回，避免额外的轮询或竞态
+      if (_isTaskFinished) return;
+
+      final taskIdToUse = widget.taskId;
+
+      // 参数验证：确保文件名存在
+      if (widget.uploadedFileName == null || widget.uploadedFileName!.isEmpty) {
+        _pollingTimer?.cancel();
+        _handleLoadingError('缺少必要的参数，请重新生成');
+        return;
+      }
+
       try {
-        // 参数验证：确保task_id和file_name都存在
-        if (widget.taskId.isEmpty || widget.uploadedFileName == null || widget.uploadedFileName!.isEmpty) {
-          timer.cancel();
-          _handleLoadingError('缺少必要的参数，请重新生成');
+        final supabase = Supabase.instance.client;
+        final token = supabase.auth.currentSession?.accessToken;
+        if (token == null) {
+          _pollingTimer?.cancel();
+          _handleLoadingError('未登录或会话已过期');
           return;
         }
-        
-        // 调用真实的API查询状态
-        final supabase = Supabase.instance.client;
+
         final res = await supabase.functions.invoke(
-          'img-gen-check',
+          'img-gen-check-v2',
           body: {
-            'task_id': widget.taskId,
+            'task_id': taskIdToUse,
             'file_name': widget.uploadedFileName,
           },
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Content-Type': 'application/json',
+          },
         );
-        
+
         final data = res.data;
         if (data is Map<String, dynamic>) {
-          final status = data['status'] as String?;
-          final resultUrl = data['result_url'] as String?;
-          final error = data['error'] as String?;
-          
+          final status = ((data['status'] as String?) ?? '').toUpperCase();
+          final path = data['path'] as String?;
+
+
           print('Task status: $status');
-          print('Result URL: $resultUrl');
-          
-          // 根据任务状态处理
-          // 支持多种成功状态：'completed'（当前后端返回）和 'SUCCEED'（可能的后端直接返回值）
-          if (status == 'completed' || status == 'SUCCEED') {
-            timer.cancel();
+
+          if (status == 'PENDING' || status == 'RUNNING') {
+            // 还在运行，等待下一次轮询
+            return;
+          }
+
+          // 成功类状态：立刻停止轮询并进入完成流程（兼容不同后端状态字符串）
+          if (status == 'SUCCEED' || status == 'SUCCEEDED' || status == 'COMPLETED' || status == 'SUCCESS' || status == 'DONE') {
+            _pollingTimer?.cancel();
             _isTaskFinished = true;
-            // 直接在前端构建存储路径，不需要依赖后端返回的result_url
-            final supabase = Supabase.instance.client;
+
+            // 优先尝试下载存储中的文件到本地临时目录
+            if (path != null && path.isNotEmpty) {
+              try {
+                final bytes = await supabase.storage.from('ai-wallpapers').download(path) as Uint8List?;
+
+                if (bytes != null && bytes.isNotEmpty) {
+                  final tmpFile = File('${Directory.systemTemp.path}/ai_gen_${DateTime.now().millisecondsSinceEpoch}.png');
+                  await tmpFile.writeAsBytes(bytes);
+                  _generatedImageFile = tmpFile;
+                  _onTaskComplete();
+                  return;
+                } else {
+                  // 下载返回为空，则回退到 public url 方式
+                  print('下载返回为空，尝试使用publicUrl回退');
+                }
+              } catch (e) {
+                print('下载存储文件失败: $e，尝试回退到 publicUrl');
+              }
+            }
+
+            // 回退方案：使用 public url
+            String? publicUrl;
             final user = supabase.auth.currentUser;
-            if (user != null && widget.uploadedFileName != null) {
+            if (path != null && path.isNotEmpty) {
+              publicUrl = supabase.storage.from('ai-wallpapers').getPublicUrl(path);
+            } else if (user != null && widget.uploadedFileName != null) {
               final storagePath = '${user.id}/generated/${widget.uploadedFileName}';
-              final publicUrl = supabase.storage
-                  .from('ai-wallpapers')
-                  .getPublicUrl(storagePath);
+              publicUrl = supabase.storage.from('ai-wallpapers').getPublicUrl(storagePath);
+            }
+
+            if (publicUrl != null && publicUrl.isNotEmpty) {
               _generatedImageUrl = publicUrl;
-              // 立即执行任务完成逻辑，确保进度条更新和页面跳转
               _onTaskComplete();
             } else {
-              // 处理用户或文件名缺失的情况
-              timer.cancel();
-              _handleLoadingError('无法构建图片路径，请重试');
+              _handleLoadingError('无法获取或下载生成图片，请重试');
             }
-          } else if (status == 'failed') {
-            timer.cancel();
+            return;
+          }
+
+          if (status == 'FAILED' || status == 'FAILURE' || status == 'ERROR') {
+            _pollingTimer?.cancel();
             _isTaskFinished = true;
-            // 任务失败，显示错误提示
+            // 后端失败时返回到 PreparationPage 并给出友好提示
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text(error != null ? 'AI图像生成失败: $error' : 'AI图像生成失败，请重试'),
-                  backgroundColor: Colors.red,
-                  action: SnackBarAction(
-                    label: '返回',
-                    textColor: Colors.white,
-                    onPressed: () {
-                      Navigator.pop(context);
-                    },
-                  ),
+                  content: const Text('后端繁忙，请稍后重试！'),
+                  backgroundColor: Colors.orange,
                 ),
               );
-            }
-          } else if (status == 'error') {
-            timer.cancel();
-            _isTaskFinished = true;
-            // 任务发生错误
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(error != null ? '生成过程发生错误: $error' : '生成过程发生错误，请重试'),
-                  backgroundColor: Colors.red,
-                  action: SnackBarAction(
-                    label: '返回',
-                    textColor: Colors.white,
-                    onPressed: () {
-                      Navigator.pop(context);
-                    },
+              // 短延迟后返回 PreparationPage，让用户先看到提示
+              Future.delayed(const Duration(milliseconds: 800), () {
+                // 将 style 字符串映射回风格索引，便于恢复选中状态
+                final Map<String, int> styleToIndex = {
+                  'run': 0,
+                  'explorer': 1,
+                  'bazaar': 2,
+                  'cowboy': 3,
+                  'grid': 4,
+                  'autumn': 5,
+                };
+                final int initStyleIndex = styleToIndex[widget.style] ?? 0;
+
+                Navigator.pushReplacement(
+                  context,
+                  SlideFromLeftPageRoute(
+                    page: PreparationPage(
+                      initialSelectedImage: widget.originalImage,
+                      initialStyleIndex: initStyleIndex,
+                    ),
                   ),
-                ),
-              );
+                );
+              });
             }
+            return;
           }
         } else {
-          // 数据格式错误
           print('无效的响应数据格式: $data');
-          if (timer.tick > 10) {
-            timer.cancel();
-            _handleLoadingError('服务器响应格式错误，请重试');
-          }
+          // 忽略格式错误，等待下一次轮询
         }
       } catch (e) {
         print('调用img-gen-check失败: $e');
-        // 如果出现错误，可以选择继续轮询或者停止
-        // 这里选择继续轮询，最多轮询10次
-        if (timer.tick > 10) {
-          timer.cancel();
-          _handleLoadingError('查询生成状态失败，请检查网络连接');
-        }
+        // 忽略临时网络错误，等待下一次轮询
       }
+    }
+
+    // 先立即检查一次
+    checkOnce();
+
+    // 然后每5秒检查一次
+    _pollingTimer = Timer.periodic(Duration(seconds: 5), (timer) {
+      if (_isTaskFinished) {
+        timer.cancel();
+        return;
+      }
+      checkOnce();
     });
   }
 
   void _onTaskComplete() async {
-    _timeoutTimer?.cancel();
+    // 如果 Widget 已被移除（disposed），就不继续执行，防止对已释放的 controller 调用方法
+    if (!mounted) return;
+
     // 阶段3: 收到完成信号，快速冲刺到 100% (500毫秒)
-    await _progressController.animateTo(1.0,
-        duration: Duration(milliseconds: 500), curve: Curves.easeOut);
+    try {
+      await _progressController.animateTo(1.0,
+          duration: Duration(milliseconds: 500), curve: Curves.easeOut);
+    } catch (e) {
+      // 如果在动画期间 controller 被 dispose，会抛出断言；捕获并继续（避免崩溃）
+      print('进度动画失败（可能已被释放）: $e');
+    }
+
+    // 再次检查 mounted，确保安全导航
+    if (!mounted) return;
 
     // 跳转结果页
-    if (mounted && _generatedImageUrl != null) {
+    if (_generatedImageFile != null || _generatedImageUrl != null) {
       Navigator.pushReplacement(
           context,
           FadePageRoute(
               page: ResultPage(
-                originalImage: widget.originalImage,
-                resultImageUrl: _generatedImageUrl!, // 传递生成的图片URL
-              )));
+            originalImage: widget.originalImage,
+            resultImageFile: _generatedImageFile,
+            resultImageUrl: _generatedImageUrl,
+          )));
     }
   }
 
@@ -301,7 +374,6 @@ class _LoadingPageState extends State<LoadingPage>
     _progressController.dispose();
     _orbController.dispose();
     _pollingTimer?.cancel();
-    _timeoutTimer?.cancel();
     super.dispose();
   }
 

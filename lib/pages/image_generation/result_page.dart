@@ -56,9 +56,10 @@ class FadePageRoute extends PageRouteBuilder {
 
 class ResultPage extends StatefulWidget {
   final File originalImage;
-  final String resultImageUrl; // 添加生成结果URL参数
+  final String? resultImageUrl; // 生成结果 URL（可选回退）
+  final File? resultImageFile; // 本地下载的生成文件（优先）
 
-  const ResultPage({required this.originalImage, required this.resultImageUrl});
+  const ResultPage({required this.originalImage, this.resultImageFile, this.resultImageUrl});
 
   @override
   State<ResultPage> createState() => _ResultPageState();
@@ -243,10 +244,10 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
                       Navigator.of(context).push(
                         TransparentImageRoute(
                           builder: (_) => FullscreenImagePage(
-                            imageFile: File(''), // 不使用文件路径
+                            imageFile: widget.resultImageFile ?? File(''),
                             heroTag: 'ai_result_hero',
-                            isNetworkImage: true,
-                            networkImage: NetworkImage(widget.resultImageUrl),
+                            isNetworkImage: widget.resultImageFile == null,
+                            networkImage: widget.resultImageFile == null && widget.resultImageUrl != null ? NetworkImage(widget.resultImageUrl!) : null,
                           ),
                         ),
                       );
@@ -264,53 +265,66 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
                       child: Stack(
                         alignment: Alignment.bottomCenter,
                         children: [
-                          // 显示生成的结果图
-                          Image.network(
-                            widget.resultImageUrl,
-                            fit: BoxFit.contain,
-                            width: double.infinity,
-                            height: double.infinity,
-                            loadingBuilder: (context, child, loadingProgress) {
-                              if (loadingProgress == null) return child;
-                              return Center(
-                                child: CircularProgressIndicator(
-                                  value: loadingProgress.expectedTotalBytes != null
-                                      ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
-                                      : null,
-                                  color: AppColors.primary,
+                          // 显示生成的结果图（优先使用本地下载文件）
+                          widget.resultImageFile != null
+                              ? Hero(
+                                  tag: 'ai_result_hero',
+                                  child: Image.file(
+                                    widget.resultImageFile!,
+                                    fit: BoxFit.contain,
+                                    width: double.infinity,
+                                    height: double.infinity,
+                                  ),
+                                )
+                              : Hero(
+                                  tag: 'ai_result_hero',
+                                  child: Image.network(
+                                    widget.resultImageUrl ?? '',
+                                    fit: BoxFit.contain,
+                                    width: double.infinity,
+                                    height: double.infinity,
+                                    loadingBuilder: (context, child, loadingProgress) {
+                                      if (loadingProgress == null) return child;
+                                      return Center(
+                                        child: CircularProgressIndicator(
+                                          value: loadingProgress.expectedTotalBytes != null
+                                              ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                                              : null,
+                                          color: AppColors.primary,
+                                        ),
+                                      );
+                                    },
+                                    errorBuilder: (context, error, stackTrace) {
+                                      return Center(
+                                        child: Column(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                            Icon(Icons.error_outline, size: 50, color: Colors.red),
+                                            const SizedBox(height: 16),
+                                            Text(
+                                              '图片加载失败',
+                                              style: TextStyle(fontSize: 16, color: AppColors.textDark),
+                                            ),
+                                            const SizedBox(height: 8),
+                                            Text(
+                                              '请检查网络连接后重试',
+                                              style: TextStyle(fontSize: 14, color: AppColors.textGrey),
+                                            ),
+                                            const SizedBox(height: 16),
+                                            ElevatedButton(
+                                              onPressed: () {
+                                                setState(() {
+                                                  // Trigger rebuild to retry image loading
+                                                });
+                                              },
+                                              child: const Text('重试'),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    },
+                                  ),
                                 ),
-                              );
-                            },
-                            errorBuilder: (context, error, stackTrace) {
-                              return Center(
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(Icons.error_outline, size: 50, color: Colors.red),
-                                    const SizedBox(height: 16),
-                                    Text(
-                                      '图片加载失败',
-                                      style: TextStyle(fontSize: 16, color: AppColors.textDark),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      '请检查网络连接后重试',
-                                      style: TextStyle(fontSize: 14, color: AppColors.textGrey),
-                                    ),
-                                    const SizedBox(height: 16),
-                                    ElevatedButton(
-                                      onPressed: () {
-                                        setState(() {
-                                          // Trigger rebuild to retry image loading
-                                        });
-                                      },
-                                      child: const Text('重试'),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            },
-                          ),
                           // 浮动操作栏 (点赞/收藏) 使用毛玻璃效果
                           Container(
                             margin: const EdgeInsets.only(bottom: 20),
@@ -447,24 +461,42 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
                           color: Colors.transparent,
                           child: InkWell(
                             onTap: () async {
-                              // 调用 image_gallery_saver 保存网络图片
                               try {
-                                final response = await http.get(Uri.parse(widget.resultImageUrl));
-                                if (response.statusCode == 200) {
-                                  final bytes = response.bodyBytes;
-                                  final result = await ImageGallerySaver.saveImage(bytes);
-                                  if (context.mounted) {
-                                    if (result["isSuccess"] == true) {
+                                late Uint8List bytes;
+
+                                if (widget.resultImageFile != null) {
+                                  bytes = await widget.resultImageFile!.readAsBytes();
+                                } else if (widget.resultImageUrl != null && widget.resultImageUrl!.isNotEmpty) {
+                                  final response = await http.get(Uri.parse(widget.resultImageUrl!));
+                                  if (response.statusCode == 200) {
+                                    bytes = response.bodyBytes;
+                                  } else {
+                                    if (context.mounted) {
                                       ScaffoldMessenger.of(context)
-                                          .showSnackBar(const SnackBar(content: Text("已保存到相册！")));
-                                    } else {
-                                      ScaffoldMessenger.of(context)
-                                          .showSnackBar(const SnackBar(content: Text("保存失败")));
+                                          .showSnackBar(const SnackBar(content: Text("下载图片失败")));
                                     }
+                                    return;
                                   }
-                                } else if (context.mounted) {
-                                  ScaffoldMessenger.of(context)
-                                      .showSnackBar(const SnackBar(content: Text("下载图片失败")));
+                                } else {
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context)
+                                        .showSnackBar(const SnackBar(content: Text("未找到图片以保存")));
+                                  }
+                                  return;
+                                }
+
+                                final result = await ImageGallerySaver.saveImage(bytes,
+                                    quality: 100,
+                                    name: 'peture_${DateTime.now().millisecondsSinceEpoch}');
+                                if (context.mounted) {
+                                  final bool saved = result is Map && (result["isSuccess"] == true || (result["filePath"] != null && result["filePath"] != ""));
+                                  if (saved) {
+                                    ScaffoldMessenger.of(context)
+                                        .showSnackBar(const SnackBar(content: Text("已保存到相册！")));
+                                  } else {
+                                    ScaffoldMessenger.of(context)
+                                        .showSnackBar(const SnackBar(content: Text("保存失败")));
+                                  }
                                 }
                               } catch (e) {
                                 if (context.mounted) {
@@ -517,6 +549,7 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
   }
 
   // 获取 AssetImage 的字节数据
+  // ignore: unused_element
   Future<Uint8List?> _getAssetImageData(AssetImage image) async {
     final completer = Completer<ImageInfo>();
     image.resolve(const ImageConfiguration()).addListener(ImageStreamListener((info, _) {
