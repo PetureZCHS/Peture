@@ -4,7 +4,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
 
 // 导入主应用文件，登录成功后将跳转到这里
-import 'main.dart';
 import 'home_screen.dart'; // 导入主页
 // 导入 LeanCloud 服务
 import 'config/leancloud_service.dart';

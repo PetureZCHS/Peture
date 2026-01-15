@@ -3,7 +3,6 @@ import 'dart:math' as math;
 import 'dart:ui';
 
 // 导入主应用文件
-import 'main.dart';
 import 'home_screen.dart'; // 导入主页
 // 导入邮箱登录页面
 import 'email_login_page.dart';

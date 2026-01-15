@@ -443,7 +443,7 @@ class _RecommendationCardState extends State<RecommendationCard>
                                       ],
                                     ),
                                   );
-                                }).toList(),
+                                }),
                               ],
                             ),
                           )

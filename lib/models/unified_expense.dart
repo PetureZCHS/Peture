@@ -1,3 +1,5 @@
+import 'package:flutter/material.dart';
+
 /// 统一的宠物消费数据模型
 class UnifiedExpense {
   final int? id;
@@ -186,133 +188,105 @@ class UnifiedExpenseCategory {
   });
 
   /// 一次性支出分类（单次花费）
-  static const List<UnifiedExpenseCategory> oneOffCategories = [
+  static final List<UnifiedExpenseCategory> oneOffCategories = [
     UnifiedExpenseCategory(
-      name: '医疗问诊',
-      icon: 0xe3c9,
+      name: '医疗/兽医',
+      icon: Icons.local_hospital.codePoint,
       color: 0xFF4FC3F7,
       expenseType: ExpenseTypeEnum.oneOff,
-    ), // Icons.local_hospital
+    ),
     UnifiedExpenseCategory(
-      name: '清洁美容',
-      icon: 0xe325,
+      name: '美容/洗护',
+      icon: Icons.bathtub.codePoint,
+      color: 0xFFF06292,
+      expenseType: ExpenseTypeEnum.oneOff,
+    ),
+    UnifiedExpenseCategory(
+      name: '寄养/服务',
+      icon: Icons.store.codePoint,
       color: 0xFFBA68C8,
       expenseType: ExpenseTypeEnum.oneOff,
-    ), // Icons.bathtub
+    ),
     UnifiedExpenseCategory(
-      name: '零食罐头',
-      icon: 0xe3a3,
+      name: '宠物食品',
+      icon: Icons.restaurant.codePoint,
       color: 0xFFFF8A65,
       expenseType: ExpenseTypeEnum.oneOff,
-    ), // Icons.restaurant
+    ),
     UnifiedExpenseCategory(
-      name: '玩具服饰',
-      icon: 0xe540,
+      name: '玩具/娱乐',
+      icon: Icons.toys.codePoint,
       color: 0xFFFFD54F,
       expenseType: ExpenseTypeEnum.oneOff,
-    ), // Icons.toys
+    ),
     UnifiedExpenseCategory(
-      name: '外出交通',
-      icon: 0xe530,
-      color: 0xFF81C784,
-      expenseType: ExpenseTypeEnum.oneOff,
-    ), // Icons.directions_car
-    UnifiedExpenseCategory(
-      name: '课程训练',
-      icon: 0xe80c,
-      color: 0xFF4DB6AC,
-      expenseType: ExpenseTypeEnum.oneOff,
-    ), // Icons.school
-    UnifiedExpenseCategory(
-      name: '宠物寄养',
-      icon: 0xe318,
-      color: 0xFFFF8A80,
-      expenseType: ExpenseTypeEnum.oneOff,
-    ), // Icons.home
-    UnifiedExpenseCategory(
-      name: '应急备用',
-      icon: 0xe002,
+      name: '用品/配件',
+      icon: Icons.shopping_bag.codePoint,
       color: 0xFFE57373,
       expenseType: ExpenseTypeEnum.oneOff,
-    ), // Icons.warning
+    ),
     UnifiedExpenseCategory(
       name: '其他',
-      icon: 0xe5d3,
+      icon: Icons.more_horiz.codePoint,
       color: 0xFF90A4AE,
       expenseType: ExpenseTypeEnum.oneOff,
-    ), // Icons.more_horiz
+    ),
   ];
 
   /// 周期性成本分类（囤货消费）
-  static const List<UnifiedExpenseCategory> recurringCategories = [
+  static final List<UnifiedExpenseCategory> recurringCategories = [
     UnifiedExpenseCategory(
-      name: '主粮日用',
-      icon: 0xe3a3,
+      name: '宠物食品',
+      icon: Icons.restaurant.codePoint,
       color: 0xFFFF8A65,
       expenseType: ExpenseTypeEnum.recurring,
-    ), // Icons.restaurant
+    ),
     UnifiedExpenseCategory(
       name: '健康保健',
-      icon: 0xe3c9,
+      icon: Icons.medication.codePoint,
       color: 0xFF4FC3F7,
       expenseType: ExpenseTypeEnum.recurring,
-    ), // Icons.local_hospital
+    ),
     UnifiedExpenseCategory(
-      name: '清洁护理',
-      icon: 0xe325,
-      color: 0xFFBA68C8,
-      expenseType: ExpenseTypeEnum.recurring,
-    ), // Icons.bathtub
-    UnifiedExpenseCategory(
-      name: '居住睡眠',
-      icon: 0xe318,
-      color: 0xFFFFD54F,
-      expenseType: ExpenseTypeEnum.recurring,
-    ), // Icons.home
-    UnifiedExpenseCategory(
-      name: '饮食器具',
-      icon: 0xe1f9,
-      color: 0xFF4DD0E1,
-      expenseType: ExpenseTypeEnum.recurring,
-    ), // Icons.local_drink
-    UnifiedExpenseCategory(
-      name: '出行装备',
-      icon: 0xe530,
-      color: 0xFF81C784,
-      expenseType: ExpenseTypeEnum.recurring,
-    ), // Icons.directions_car
-    UnifiedExpenseCategory(
-      name: '玩具娱乐',
-      icon: 0xe540,
+      name: '清洁用品',
+      icon: Icons.cleaning_services.codePoint,
       color: 0xFF9575CD,
       expenseType: ExpenseTypeEnum.recurring,
-    ), // Icons.toys
+    ),
     UnifiedExpenseCategory(
-      name: '保险证件',
-      icon: 0xe32a,
-      color: 0xFFA5D6A7,
+      name: '其他消耗品',
+      icon: Icons.inventory_2.codePoint,
+      color: 0xFFA1887F,
       expenseType: ExpenseTypeEnum.recurring,
-    ), // Icons.card_membership
+    ),
     UnifiedExpenseCategory(
-      name: '其他用品',
-      icon: 0xe5d3,
-      color: 0xFF90A4AE,
+      name: '耐用品/设备',
+      icon: Icons.chair.codePoint,
+      color: 0xFFFFD54F,
       expenseType: ExpenseTypeEnum.recurring,
-    ), // Icons.more_horiz
+    ),
   ];
 
   /// 获取所有分类
   static List<UnifiedExpenseCategory> get allCategories => [
-    ...oneOffCategories,
-    ...recurringCategories,
-  ];
+        ...oneOffCategories,
+        ...recurringCategories,
+      ];
 
   /// 根据分类名称获取分类信息
   static UnifiedExpenseCategory? getCategoryByName(String name) {
     try {
       return allCategories.firstWhere((cat) => cat.name == name);
     } catch (e) {
-      return null;
+      // 模糊匹配旧分类
+      if (name.contains('医疗') || name.contains('诊治')) return oneOffCategories[0];
+      if (name.contains('美容') || name.contains('洗护') || name.contains('清洁')) return oneOffCategories[1];
+      if (name.contains('寄养') || name.contains('服务')) return oneOffCategories[2];
+      if (name.contains('食') || name.contains('粮') || name.contains('零食')) return oneOffCategories[3];
+      if (name.contains('玩具') || name.contains('娱乐') || name.contains('服饰')) return oneOffCategories[4];
+      if (name.contains('用品') || name.contains('装备') || name.contains('交通')) return oneOffCategories[5];
+      
+      return oneOffCategories.last;
     }
   }
 }

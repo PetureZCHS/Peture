@@ -25,7 +25,7 @@ void main() async {
   }
 
   await testBlocking();
-  print('\n' + '=' * 60 + '\n');
+  print('\n${'=' * 60}\n');
   await testStreaming();
 }
 

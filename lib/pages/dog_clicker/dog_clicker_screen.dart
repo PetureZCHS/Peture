@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'dart:ui';
 import 'dart:math' as math;
 import 'package:audioplayers/audioplayers.dart';
@@ -20,6 +21,7 @@ class _DogClickerScreenState extends State<DogClickerScreen> with TickerProvider
   int _clickCount = 0;
   int _failCount = 0; // 失败记录次数
   bool _isPressed = false;
+  bool _isCoolingDown = false; // 点击防抖标志
   int _selectedFilterIndex = 0; // 选中的筛选标签索引
   List<String> _filterOptions = ['喂食', '握手', '坐下']; // 筛选选项（改为可变列表，默认不包含"全部"）
 
@@ -36,8 +38,8 @@ class _DogClickerScreenState extends State<DogClickerScreen> with TickerProvider
   static const String _projectSoundsKey = 'dog_clicker_project_sounds';
 
   // 各训练项目的统计数据
-  Map<String, int> _successCounts = {};
-  Map<String, int> _failureCounts = {};
+  final Map<String, int> _successCounts = {};
+  final Map<String, int> _failureCounts = {};
   int _totalSuccessCount = 0;
   int _totalFailureCount = 0;
   bool _isLoading = true;
@@ -104,9 +106,9 @@ class _DogClickerScreenState extends State<DogClickerScreen> with TickerProvider
         // 加载各项目的成功和失败次数
         for (var option in _filterOptions) {
           _successCounts[option] =
-              prefs.getInt('${_keyPrefix}${option}_success') ?? 0;
+              prefs.getInt('$_keyPrefix${option}_success') ?? 0;
           _failureCounts[option] =
-              prefs.getInt('${_keyPrefix}${option}_failure') ?? 0;
+              prefs.getInt('$_keyPrefix${option}_failure') ?? 0;
         }
 
         // 更新当前项目的计数
@@ -139,7 +141,7 @@ class _DogClickerScreenState extends State<DogClickerScreen> with TickerProvider
       // 更新具体项目的计数
       _successCounts[currentOption] = (_successCounts[currentOption] ?? 0) + 1;
       await prefs.setInt(
-        '${_keyPrefix}${currentOption}_success',
+        '$_keyPrefix${currentOption}_success',
         _successCounts[currentOption]!,
       );
     } catch (e) {
@@ -160,7 +162,7 @@ class _DogClickerScreenState extends State<DogClickerScreen> with TickerProvider
       // 更新具体项目的计数
       _failureCounts[currentOption] = (_failureCounts[currentOption] ?? 0) + 1;
       await prefs.setInt(
-        '${_keyPrefix}${currentOption}_failure',
+        '$_keyPrefix${currentOption}_failure',
         _failureCounts[currentOption]!,
       );
     } catch (e) {
@@ -203,8 +205,8 @@ class _DogClickerScreenState extends State<DogClickerScreen> with TickerProvider
       await prefs.setInt('${_keyPrefix}total_failure', _totalFailureCount);
 
       // 删除该项目的记录
-      await prefs.remove('${_keyPrefix}${projectName}_success');
-      await prefs.remove('${_keyPrefix}${projectName}_failure');
+      await prefs.remove('$_keyPrefix${projectName}_success');
+      await prefs.remove('$_keyPrefix${projectName}_failure');
 
       // 更新状态
       setState(() {
@@ -222,7 +224,7 @@ class _DogClickerScreenState extends State<DogClickerScreen> with TickerProvider
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
             ),
-            duration: const Duration(seconds: 2),
+            duration: const Duration(seconds: 4),
           ),
         );
       }
@@ -480,7 +482,19 @@ class _DogClickerScreenState extends State<DogClickerScreen> with TickerProvider
 
   /// 播放点击音效
   Future<void> _playClickSound() async {
+    // 冷却检查，防止连点
+    if (_isCoolingDown) return;
+
     try {
+      // 开启冷却
+      setState(() => _isCoolingDown = true);
+      // 250ms 后解除冷却 - 这是防误触的黄金时间窗口
+      Future.delayed(const Duration(milliseconds: 250), () {
+        if (mounted) {
+          setState(() => _isCoolingDown = false);
+        }
+      });
+
       final currentOption = _filterOptions[_selectedFilterIndex];
       final soundPath = _projectSounds[currentOption];
 
@@ -493,6 +507,10 @@ class _DogClickerScreenState extends State<DogClickerScreen> with TickerProvider
       await _audioPlayer.stop();
       // 播放对应项目的音频资源
       await _audioPlayer.play(AssetSource(soundPath));
+      
+      // 添加触感反馈 - 模拟真实机械响片的手感
+      await HapticFeedback.heavyImpact();
+
       // 增加点击计数并保存
       setState(() {
         _clickCount++;
@@ -500,7 +518,8 @@ class _DogClickerScreenState extends State<DogClickerScreen> with TickerProvider
       await _saveSuccessCount();
     } catch (e) {
       debugPrint('播放音效失败: $e');
-      // 如果播放失败，仍然增加计数
+      // 如果播放失败，仍然增加计数并反馈
+      await HapticFeedback.mediumImpact();
       setState(() {
         _clickCount++;
       });
@@ -763,22 +782,23 @@ class _DogClickerScreenState extends State<DogClickerScreen> with TickerProvider
 
                             // 成功按钮 - 更大尺寸
                             AnimatedScale(
-                              scale: _isPressed ? 0.92 : 1.0,
-                              duration: const Duration(milliseconds: 150),
-                              curve: Curves.easeOut,
+                              scale: _isPressed ? 0.88 : 1.0, // 增加按压深度
+                              duration: const Duration(milliseconds: 100), // 加快按压响应
+                              curve: Curves.easeInOutQuad, // 更柔和的弹性曲线
                               child: Material(
                                 color: Colors.transparent,
                                 child: InkWell(
-                                  onTap: () {
+                                  // 冷却期间禁用点击，防止误触，且不显示水波纹
+                                  onTap: _isCoolingDown ? null : () {
                                     _playClickSound(); // 发出响片声音
                                   },
-                                  onTapDown: (_) {
+                                  onTapDown: _isCoolingDown ? null : (_) {
                                     setState(() => _isPressed = true);
                                   },
-                                  onTapUp: (_) {
+                                  onTapUp: _isCoolingDown ? null : (_) {
                                     setState(() => _isPressed = false);
                                   },
-                                  onTapCancel: () {
+                                  onTapCancel: _isCoolingDown ? null : () {
                                     setState(() => _isPressed = false);
                                   },
                                   borderRadius: BorderRadius.circular(190),
@@ -832,6 +852,8 @@ class _DogClickerScreenState extends State<DogClickerScreen> with TickerProvider
                             onTap: () async {
                               // 只记录失败，不发出声音
                               setState(() => _failCount++);
+                              // 失败时给予轻微震动反馈
+                              await HapticFeedback.lightImpact(); 
                               await _saveFailureCount();
                               if (mounted) {
                                 _showFailureTip(context);
@@ -1666,7 +1688,7 @@ class _DogClickerScreenState extends State<DogClickerScreen> with TickerProvider
         backgroundColor: Colors.orange[700],
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        duration: const Duration(seconds: 1),
+        duration: const Duration(seconds: 4),
       ),
     );
   }
@@ -2030,7 +2052,7 @@ class _DogClickerScreenState extends State<DogClickerScreen> with TickerProvider
           stepNumber: '02',
           title: '开始训练',
           description: '标记正确行为并奖励',
-          steps: ['宠物做对 → 立即点击', '3秒内给予奖励', '每次训练5-10分钟', '标记失败后不给奖励'],
+          steps: ['每次训练5-10分钟', '宠物做对 → 立即点击按钮', '3秒内给予奖励', '标记失败后不给奖励'],
           color: const Color(0xFF8B9DC3),
         ),
       ],
@@ -2165,7 +2187,7 @@ class _DogClickerScreenState extends State<DogClickerScreen> with TickerProvider
                   ),
                 ),
               )
-              .toList(),
+              ,
         ],
       ),
     );
@@ -2179,6 +2201,62 @@ class _DogClickerScreenState extends State<DogClickerScreen> with TickerProvider
       {'icon': Icons.celebration_rounded, 'text': '结束在成功的时刻'},
       {'icon': Icons.calendar_today_rounded, 'text': '每天坚持，勿过度'},
     ];
+
+    Widget buildRuleItem(Map<String, Object> rule) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              const Color(0xFFFFF3E0).withOpacity(0.5),
+              const Color(0xFFFFE0B2).withOpacity(0.4),
+            ],
+          ),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: const Color(0xFFFFCC80).withOpacity(0.25),
+            width: 1.5,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFFFFB74D).withOpacity(0.05),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.8),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                rule['icon'] as IconData,
+                color: const Color(0xFF8D6E63),
+                size: 18,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                rule['text'] as String,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF6D5D5D),
+                  height: 1.4,
+                  letterSpacing: 0.1,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2231,68 +2309,31 @@ class _DogClickerScreenState extends State<DogClickerScreen> with TickerProvider
         ),
         const SizedBox(height: 16),
 
-        // 法则网格
-        Wrap(
-          spacing: 10,
-          runSpacing: 10,
-          children: rules
-              .map(
-                (rule) => Container(
-                  width: (MediaQuery.of(context).size.width - 108) / 2,
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        const Color(0xFFFFF3E0).withOpacity(0.5),
-                        const Color(0xFFFFE0B2).withOpacity(0.4),
-                      ],
-                    ),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                      color: const Color(0xFFFFCC80).withOpacity(0.25),
-                      width: 1.5,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFFFFB74D).withOpacity(0.05),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.8),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Icon(
-                          rule['icon'] as IconData,
-                          color: const Color(0xFF8D6E63),
-                          size: 18,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          rule['text'] as String,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF6D5D5D),
-                            height: 1.4,
-                            letterSpacing: 0.1,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              )
-              .toList(),
+        // 法则网格 - 使用 Column + Row + Expanded 布局，确保卡片等高对齐
+        Column(
+          children: [
+            IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(child: buildRuleItem(rules[0])),
+                  const SizedBox(width: 10),
+                  Expanded(child: buildRuleItem(rules[1])),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+            IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(child: buildRuleItem(rules[2])),
+                  const SizedBox(width: 10),
+                  Expanded(child: buildRuleItem(rules[3])),
+                ],
+              ),
+            ),
+          ],
         ),
       ],
     );
@@ -2312,12 +2353,21 @@ class _DogClickerScreenState extends State<DogClickerScreen> with TickerProvider
       children: [
         Icon(icon, color: color, size: 22),
         const SizedBox(height: 4),
-        Text(
-          '$value$suffix',
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            color: color,
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 300),
+          transitionBuilder:
+              (Widget child, Animation<double> animation) => FadeTransition(
+                opacity: animation,
+                child: ScaleTransition(scale: animation, child: child),
+              ),
+          child: Text(
+            '$value$suffix',
+            key: ValueKey<String>('$value$suffix'),
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
           ),
         ),
         const SizedBox(height: 1),

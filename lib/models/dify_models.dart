@@ -1,5 +1,6 @@
 /// Dify Chat 相关数据模型
 /// Dify Chat related data models
+library;
 
 /// Dify 响应模型
 /// Dify response model

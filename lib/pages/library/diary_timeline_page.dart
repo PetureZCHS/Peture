@@ -256,7 +256,7 @@ class _DiaryTimelinePageState extends State<DiaryTimelinePage> {
           ),
           
           // Middle: Line & Node
-          Container(
+          SizedBox(
             width: 40,
             child: Stack(
               alignment: Alignment.topCenter,

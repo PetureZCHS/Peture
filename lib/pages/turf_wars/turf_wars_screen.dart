@@ -1,5 +1,4 @@
 import 'dart:math' as math;
-import 'dart:ui' as ui;
 import 'dart:async'; // Added for Timer
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
@@ -663,8 +662,11 @@ class HexMapPainter extends CustomPainter {
       final angle = (60 * i - 30) * (math.pi / 180);
       final x = size * math.cos(angle);
       final y = size * math.sin(angle);
-      if (i == 0) path.moveTo(x, y);
-      else path.lineTo(x, y);
+      if (i == 0) {
+        path.moveTo(x, y);
+      } else {
+        path.lineTo(x, y);
+      }
     }
     path.close();
     return path;
@@ -868,7 +870,6 @@ class HexMapPainter extends CustomPainter {
           final poiData = _getRandomPOI(random);
           final iconColor = poiData['color'] as Color;
           final iconIcon = poiData['icon'] as IconData;
-          final name = poiData['name'] as String;
 
           // 布局：左边图标，右边文字
           final iconCenter = poiRect.center.translate(-25, 0);
