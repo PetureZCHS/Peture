@@ -6,8 +6,6 @@ import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'services/supabase_service.dart';
 import 'models/pet.dart';
 import 'settings_page.dart';
-import 'pages/unified_expense/unified_expense_home_page.dart';
-import 'pages/reminder/intelligent_reminder_page.dart';
 import 'pages/pet_profile_form_page.dart';
 import 'utils/ui_helpers.dart';
 
@@ -440,7 +438,7 @@ class _PetProfileSectionState extends State<PetProfileSection> {
                           if (now.day < birthDate.day && months > 0) {
                             months--;
                           }
-                          age = '${years}岁${months}个月';
+                          age = '$years岁$months个月';
                         }
                       }
 
@@ -930,7 +928,7 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage> {
                         years--;
                         months += 12;
                       }
-                      age = '${years}岁${months}个月';
+                      age = '$years岁$months个月';
                     } catch (e) {
                       debugPrint('Error calculating age: $e');
                     }

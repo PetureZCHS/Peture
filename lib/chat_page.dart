@@ -9,6 +9,8 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:share_plus/share_plus.dart';
 // ✅ 使用新的 Supabase Dify 服务
 import 'services/supabase_edge_service.dart';
+import 'services/supabase_service.dart'; // import supabase service
+import 'models/pet.dart'; // import pet model
 // ================== 所有必需的导入 ==================
 import 'models/conversation.dart';
 import 'database/database_helper.dart';
@@ -88,6 +90,8 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
 
   bool _isDoctorMode = false; // 默认为普通模式
   bool _isAgentMode = false; // ✅ 新增：Agent 模式状态
+  Pet? _selectedConsultationPet; // ✅ 新增：当前问诊的宠物
+  final SupabaseService _supabaseService = SupabaseService();
 
   // ✅ 使用新的 Supabase Edge Function 服务
   final SupabaseEdgeFunctionService _difyService =
@@ -239,6 +243,114 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
     _orbController.dispose();
     // ✅ Edge Function 服务不需要 dispose
     super.dispose();
+  }
+
+  Future<void> _showPetSelectionDialog() async {
+    // Show loading indicator in dialog if needed, but for now just fetch
+    final petsData = await _supabaseService.getAllPets();
+    final pets = petsData.map((data) => Pet.fromMap(data)).toList();
+
+    if (!mounted) return;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return Container(
+          padding: const EdgeInsets.symmetric(vertical: 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                "请选择要问诊的宠物",
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                "关联档案后，AI将根据历史病历提供更精准的建议",
+                style: TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+              const SizedBox(height: 16),
+              if (pets.isEmpty)
+                Column(
+                  children: [
+                     const Padding(
+                      padding: EdgeInsets.all(20),
+                      child: Text("暂无宠物档案，请先在个人中心添加"),
+                    ),
+                    TextButton(onPressed: ()=>Navigator.pop(context), child: const Text("确定"))
+                  ],
+                )
+              else
+                Flexible(
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: pets.length,
+                    itemBuilder: (context, index) {
+                      final pet = pets[index];
+                      return ListTile(
+                        leading: ClipOval(
+                          child: Container(
+                            width: 40,
+                            height: 40,
+                            color: Colors.blue.shade100,
+                            child: pet.avatar != null && pet.avatar!.isNotEmpty
+                                ? Image.network(
+                                    pet.avatar!,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (c, e, s) => Center(
+                                        child: Text(pet.name.isNotEmpty
+                                            ? pet.name[0]
+                                            : "?")),
+                                  )
+                                : Center(
+                                    child: Text(
+                                        pet.name.isNotEmpty ? pet.name[0] : "?")),
+                          ),
+                        ),
+                        title: Text(pet.name),
+                        subtitle: Text("${pet.breed} · ${pet.age}"),
+                        onTap: () {
+                          setState(() {
+                            _selectedConsultationPet = pet;
+                            _isDoctorMode = true; // 自动切换到医生模式
+                            _isAgentMode = false;
+                          });
+                          Navigator.pop(context);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('已关联【${pet.name}】，进入深度问诊模式'),
+                              backgroundColor: Colors.green,
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  ),
+                ),
+              const SizedBox(height: 10),
+              TextButton(
+                onPressed: () {
+                   setState(() {
+                        _selectedConsultationPet = null;
+                        _isDoctorMode = true; // 即使不关联宠物，也开启医生模式
+                        _isAgentMode = false;
+                    });
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('已进入通用问诊模式')),
+                    );
+                },
+                child: const Text("不关联档案，直接问诊"),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _saveConversation(String question, String answer) async {
@@ -407,7 +519,7 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
     });
   }
 
-  void _sendMessage({String? text}) {
+  Future<void> _sendMessage({String? text}) async {
     if (_isLoading) return;
     final messageText = (text ?? _textController.text).trim();
     if (messageText.isEmpty) return;
@@ -436,14 +548,68 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
 
     // ✅ 使用 Supabase Dify 服务
     String queryToSend = messageText;
+
+    // 🐾 注入宠物档案与病历信息 (如果有选中的宠物)
+    if (_selectedConsultationPet != null) {
+      StringBuffer petInfoBuffer = StringBuffer();
+      petInfoBuffer.writeln("\n\n【用户已关联宠物档案】");
+      petInfoBuffer.writeln("姓名：${_selectedConsultationPet!.name}");
+      petInfoBuffer.writeln("品种：${_selectedConsultationPet!.breed}");
+      petInfoBuffer.writeln("年龄：${_selectedConsultationPet!.age}");
+      petInfoBuffer.writeln("性别：${_selectedConsultationPet!.gender}");
+      petInfoBuffer.writeln("绝育状态：${_selectedConsultationPet!.neuterStatus ?? '未知'}");
+      if (_selectedConsultationPet!.weight != null) {
+        petInfoBuffer.writeln("体重：${_selectedConsultationPet!.weight} kg");
+      }
+
+      // 获取病历记录
+      try {
+        if (_selectedConsultationPet!.id != null) {
+          final recordsData = await _supabaseService
+              .getMedicalRecordsForPet(_selectedConsultationPet!.id!);
+          
+          if (recordsData.isNotEmpty) {
+             petInfoBuffer.writeln("\n【该宠物的历史病历】");
+             // 取最近 5 条
+             final recentRecords = recordsData.take(5);
+             for (var record in recentRecords) {
+                petInfoBuffer.writeln("- ${record['date']}: ${record['description']}");
+             }
+          }
+        }
+      } catch (e) {
+        debugPrint("❌ 获取病历失败: $e");
+      }
+      
+      // 将宠物信息拼接到 Prompt 中 (作为上下文)
+      // 注意：如果是第一条消息，我们会下面统一组合 System Prompt
+      // 如果不是第一条，我们直接附带在 User Message 后
+      if (_conversationId != null) {
+         queryToSend += petInfoBuffer.toString();
+         debugPrint("📎 已向现有对话注入宠物信息");
+      } else {
+         // 如果是新对话，我们将 petInfoBuffer 暂存，拼接到 SystemPrompt 后面
+         // 下面的 _isDoctorMode 判断逻辑会处理
+      }
+      
+      // Hack: 无论是否新对话，都追加到 messageText 后面给 AI 看，或者是追加到 System Prompt?
+      // Dify通常接收 query。
+      // 为了确保 AI 既然看到 System Prompt 也能看到这个 Context，我们把它放在 query 里。
+      // 但是如果在 System Prompt 里放会更稳定。
+      
+      // 策略：直接追加到 User Query 后面。
+      queryToSend += petInfoBuffer.toString();
+    }
+
     if (_conversationId == null) {
       if (_isAgentMode) {
         // Agent 模式：注入购物决策 Prompt
-        queryToSend = "$_agentSystemPrompt\n\n用户问题：$messageText";
+        // 注意：如果在 Agent 模式下选了宠物，也会带上宠物信息
+        queryToSend = "$_agentSystemPrompt\n\n用户问题：$queryToSend"; // queryToSend 已经包含了宠物信息
         debugPrint("🧠 已注入系统提示词 (Agent Mode)");
       } else if (_isDoctorMode) {
         // 医生模式：注入问诊 Prompt
-        queryToSend = "$_systemPrompt\n\n用户问题：$messageText";
+        queryToSend = "$_systemPrompt\n\n用户问题：$queryToSend";
         debugPrint("💉 已注入系统提示词 (Doctor Mode)");
       }
     }
@@ -1223,15 +1389,27 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
               children: [
                 _buildActionChip(
                   icon: Icons.medical_services_outlined,
-                  label: "深度问诊",
+                  label: _selectedConsultationPet == null
+                      ? "深度问诊"
+                      : "问诊: ${_selectedConsultationPet!.name}",
                   isActive: _isDoctorMode,
                   onTap: () {
-                    setState(() {
-                      _isDoctorMode = !_isDoctorMode;
-                      // 如果开启深度问诊，关闭 Agent 模式，避免冲突
-                      if (_isDoctorMode) _isAgentMode = false;
-                    });
                     HapticFeedback.selectionClick();
+                    if (_isDoctorMode) {
+                      // 关闭模式
+                      setState(() {
+                        _isDoctorMode = false;
+                        _selectedConsultationPet = null;
+                      });
+                    } else {
+                      // 开启模式 -> 弹出选宠对话框
+                      _showPetSelectionDialog();
+                      // 注意：对话框选择后会设置 _isDoctorMode = true
+                      // 如果用户关闭对话框但想用普通医生模式？
+                      // 我们可以在对话框里提供 "不关联宠物" 选项，对话框代码里已经有了 "取消关联 / 不使用档案"
+                      // 但是那个按钮目前逻辑是 clear pet 并 pop。
+                      // 我们应该修改 dialog 里的逻辑，让 "不关联" 也能进入 doctor mode
+                    }
                   },
                 ),
                 const SizedBox(width: 8),
@@ -2477,7 +2655,7 @@ class _KimiBallState extends State<_KimiBall> with TickerProviderStateMixin {
 // Agent 模式欢迎页 (带入场动画)
 // =======================================================================
 class _AgentWelcomeView extends StatefulWidget {
-  const _AgentWelcomeView({Key? key}) : super(key: key);
+  const _AgentWelcomeView({super.key});
 
   @override
   State<_AgentWelcomeView> createState() => _AgentWelcomeViewState();

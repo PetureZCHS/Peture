@@ -1,5 +1,4 @@
 import 'dart:ui';
-import 'dart:math' as math;
 import 'package:flutter/physics.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -356,7 +355,6 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> with TickerPr
   // --- Tab Animation State ---
   late AnimationController _tabController;
   double _currentPosition = 0.0;
-  bool _isDragging = false;
   int _lastHapticIndex = 0;
 
   @override
@@ -1097,9 +1095,6 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> with TickerPr
               },
               onHorizontalDragStart: (details) {
                 _tabController.stop();
-                setState(() {
-                  _isDragging = true;
-                });
               },
               onHorizontalDragUpdate: (details) {
                 double newPosition = (details.localPosition.dx / itemWidth) - 0.5;
@@ -1129,7 +1124,6 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> with TickerPr
                 _animateToPage(targetIndex, velocity: velocity * 1.2);
 
                 setState(() {
-                  _isDragging = false;
                   _selectedTabIndex = targetIndex;
                   _lastHapticIndex = targetIndex;
                 });

@@ -1,3 +1,5 @@
+import 'package:flutter/material.dart';
+
 /// 宠物账单数据模型
 class Expense {
   final int? id;
@@ -91,39 +93,42 @@ class ExpenseCategory {
   });
 
   /// 默认分类列表
-  static const List<ExpenseCategory> defaultCategories = [
+  static final List<ExpenseCategory> defaultCategories = [
     ExpenseCategory(
-      name: '食品',
-      icon: 0xe3a3,
+      name: '宠物食品',
+      icon: Icons.restaurant.codePoint,
       color: 0xFFFF8A65,
-    ), // Icons.restaurant
+    ),
     ExpenseCategory(
-      name: '医疗',
-      icon: 0xe3c9,
+      name: '医疗/兽医',
+      icon: Icons.local_hospital.codePoint,
       color: 0xFF4FC3F7,
-    ), // Icons.local_hospital
-    ExpenseCategory(name: '玩具', icon: 0xe540, color: 0xFFFFD54F), // Icons.toys
+    ),
     ExpenseCategory(
-      name: '洗护',
-      icon: 0xe325,
+      name: '美容/洗护',
+      icon: Icons.bathtub.codePoint,
       color: 0xFF81C784,
-    ), // Icons.bathtub
+    ),
     ExpenseCategory(
-      name: '用品',
-      icon: 0xe8f6,
+      name: '玩具/娱乐',
+      icon: Icons.toys.codePoint,
+      color: 0xFFFFD54F,
+    ),
+    ExpenseCategory(
+      name: '用品/配件',
+      icon: Icons.shopping_bag.codePoint,
       color: 0xFFBA68C8,
-    ), // Icons.shopping_bag
+    ),
     ExpenseCategory(
-      name: '培训',
-      icon: 0xe80c,
-      color: 0xFF4DB6AC,
-    ), // Icons.school
-    ExpenseCategory(name: '寄养', icon: 0xe318, color: 0xFFFF8A80), // Icons.home
+      name: '寄养/服务',
+      icon: Icons.store.codePoint,
+      color: 0xFFFF8A80,
+    ),
     ExpenseCategory(
       name: '其他',
-      icon: 0xe5d3,
+      icon: Icons.more_horiz.codePoint,
       color: 0xFF90A4AE,
-    ), // Icons.more_horiz
+    ),
   ];
 
   /// 根据分类名称获取分类信息
@@ -131,7 +136,14 @@ class ExpenseCategory {
     try {
       return defaultCategories.firstWhere((cat) => cat.name == name);
     } catch (e) {
-      return null;
+      // 尝试匹配旧分类名到新分类
+      if (name == '食品') return defaultCategories[0]; // 宠物食品
+      if (name == '医疗') return defaultCategories[1]; // 医疗/兽医
+      if (name == '洗护') return defaultCategories[2]; // 美容/洗护
+      if (name == '玩具') return defaultCategories[3]; // 玩具/娱乐
+      if (name == '用品') return defaultCategories[4]; // 用品/配件
+      if (name == '寄养') return defaultCategories[5]; // 寄养/服务
+      return defaultCategories.last; // 其他
     }
   }
 }

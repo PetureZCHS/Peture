@@ -19,9 +19,9 @@ import 'medical_record_screen.dart';
 import 'profile_screen.dart';
 import 'pages/unified_expense/unified_expense_home_page.dart';
 import 'pages/reminder/intelligent_reminder_page.dart';
+import 'pages/growth_log/growth_log_page.dart';
 import 'widgets/weight_trend_card.dart';
 import 'utils/ui_helpers.dart';
-import 'pages/turf_wars/turf_wars_screen.dart';
 
 // =========================================================
 // 2. 主页面骨架
@@ -38,7 +38,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   int _currentIndex = 0;
   double _currentPosition = 0.0;
   int _lastHapticIndex = 0;
-  bool _isDragging = false;
 
   late AnimationController _tabController;
   bool _isUniverseMode = false;
@@ -211,9 +210,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       },
       onHorizontalDragStart: (details) {
         _tabController.stop();
-        setState(() {
-          _isDragging = true;
-        });
       },
       onHorizontalDragUpdate: (details) {
         final double width = MediaQuery.of(context).size.width - 48;
@@ -264,18 +260,13 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         _animateToPage(targetIndex, velocity: velocity * 1.2);
 
         setState(() {
-          _isDragging = false;
           _currentIndex = targetIndex;
           _lastHapticIndex = targetIndex;
         });
-        HapticFeedback.lightImpact(); 
+        HapticFeedback.lightImpact();
       },
       onHorizontalDragCancel: () {
         _animateToPage(_currentIndex);
-
-        setState(() {
-          _isDragging = false;
-        });
       },
       child: Container(
         height: navHeight,
@@ -464,6 +455,11 @@ class _HomeDashboardContent extends StatelessWidget {
         _buildHeroAiCard(context),
 
         const SizedBox(height: 16),
+        
+        // 1.2 成长日志中枢
+        _buildGrowthLogCard(context),
+
+        const SizedBox(height: 16),
 
         // 1.5 体重趋势卡片
         const WeightTrendCard(),
@@ -628,6 +624,106 @@ class _HomeDashboardContent extends StatelessWidget {
                     ),
                   )
                 ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // 成长日志卡片
+  Widget _buildGrowthLogCard(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.mediumImpact();
+        Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const GrowthLogPage()));
+      },
+      child: Container(
+        height: 100, 
+        width: double.infinity,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(24),
+           boxShadow: [
+            BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 15, offset: const Offset(0, 8)),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(24),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+            child: Container(
+              decoration: BoxDecoration(
+                // 仿照 WeightTrendCard 的风格，但用清新的绿色调
+                color: Colors.white.withOpacity(0.65),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(color: Colors.white.withOpacity(0.6), width: 1),
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft, end: Alignment.bottomRight,
+                  colors: [
+                    Colors.white.withOpacity(0.8),
+                    const Color(0xFFE0F2F1).withOpacity(0.4), // Light Teal
+                  ],
+                ),
+              ),
+              child: Stack(
+                  children: [
+                    Positioned(
+                      right: -10, bottom: -20,
+                      child: Opacity(
+                        opacity: 0.05,
+                        child: Icon(Icons.timeline_rounded, size: 140, color: Colors.teal),
+                      )
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 0), // centered cleanly
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFE0F2F1), // Light Teal bg
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white, width: 2),
+                              boxShadow: [
+                                BoxShadow(color: Colors.teal.withOpacity(0.1), blurRadius: 8, offset: const Offset(0, 4)),
+                              ],
+                            ),
+                            child: const Icon(Icons.history_edu_rounded, color: Colors.teal, size: 26),
+                          ),
+                          const SizedBox(width: 16),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: const [
+                              Text(
+                                "成长日志",
+                                style: TextStyle(
+                                  fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textDark
+                                ),
+                              ),
+                              SizedBox(height: 4),
+                              Text(
+                                "记录每一个重要时刻",
+                                style: TextStyle(
+                                  fontSize: 13, color: AppColors.secondaryText
+                                ),
+                              ),
+                            ],
+                          ),
+                          const Spacer(),
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.5),
+                              shape: BoxShape.circle
+                            ),
+                            child: const Icon(Icons.arrow_forward_rounded, size: 18, color: Colors.teal),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ]
               ),
             ),
           ),

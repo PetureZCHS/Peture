@@ -11,7 +11,7 @@ class CartPage extends StatefulWidget {
 }
 
 class _CartPageState extends State<CartPage> {
-  List<Map<String, dynamic>> _cartItems = [];
+  final List<Map<String, dynamic>> _cartItems = [];
 
   @override
   void initState() {
@@ -104,7 +104,7 @@ class _CartPageState extends State<CartPage> {
                     children: [
                       ..._cartItems
                           .map((item) => _buildCartItem(item))
-                          .toList(),
+                          ,
                       
                       // 优惠券入口
                       _buildCouponSection(),
