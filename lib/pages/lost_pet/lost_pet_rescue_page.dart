@@ -9,8 +9,11 @@ import 'package:gal/gal.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
+import 'package:intl/intl.dart';
 import '../../utils/ui_helpers.dart';
 import '../../community_screen.dart';
+import '../../services/supabase_service.dart';
+import '../../models/pet.dart';
 import 'lost_pet_generator.dart';
 
 class LostPetRescuePage extends StatefulWidget {
@@ -24,6 +27,18 @@ class _LostPetRescuePageState extends State<LostPetRescuePage> with SingleTicker
   final _formKey = GlobalKey<FormState>();
   final GlobalKey _posterKey = GlobalKey();
   late TabController _tabController;
+  
+  // Services
+  final _supabaseService = SupabaseService();
+  
+  // Pet selection
+  List<Pet> _pets = [];
+  Pet? _selectedPet;
+  bool _isLoadingPets = false;
+  
+  // Date time picker
+  DateTime? _lostDateTime;
+  bool _includeTime = true;
   
   // Controllers
   final _nameController = TextEditingController();
@@ -42,6 +57,116 @@ class _LostPetRescuePageState extends State<LostPetRescuePage> with SingleTicker
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _loadPets();
+  }
+  
+  Future<void> _loadPets() async {
+    if (!mounted) return;
+    setState(() => _isLoadingPets = true);
+    try {
+      final petsData = await _supabaseService.getAllPets();
+      if (mounted) {
+        setState(() {
+          _pets = petsData.map((data) => Pet.fromMap(data)).toList();
+          _isLoadingPets = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('加载宠物列表失败: $e');
+      if (mounted) {
+        setState(() => _isLoadingPets = false);
+      }
+    }
+  }
+  
+  void _onPetSelected(Pet? pet) {
+    setState(() {
+      _selectedPet = pet;
+      if (pet != null) {
+        _nameController.text = pet.name;
+        _speciesController.text = pet.type;
+        // 自动填充外貌特征：品种、性别、年龄等
+        final descriptionParts = <String>[];
+        if (pet.breed.isNotEmpty) descriptionParts.add(pet.breed);
+        if (pet.gender.isNotEmpty) descriptionParts.add(pet.gender);
+        if (pet.age.isNotEmpty) descriptionParts.add('${pet.age}岁');
+        if (pet.neuterStatus != null) descriptionParts.add(pet.neuterStatus!);
+        _descriptionController.text = descriptionParts.join('，');
+        
+        // 如果有头像，可以自动选择
+        if (pet.avatar != null && File(pet.avatar!).existsSync()) {
+          _selectedImage = File(pet.avatar!);
+        }
+      }
+    });
+  }
+  
+  Future<void> _selectLostDateTime() async {
+    // 先选择日期
+    final pickedDate = await showDatePicker(
+      context: context,
+      initialDate: _lostDateTime ?? DateTime.now(),
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+      locale: const Locale('zh', 'CN'),
+    );
+    
+    if (pickedDate == null) return;
+    
+    // 如果包含时间，再选择时间
+    if (_includeTime) {
+      final pickedTime = await showTimePicker(
+        context: context,
+        initialTime: _lostDateTime != null 
+            ? TimeOfDay.fromDateTime(_lostDateTime!)
+            : TimeOfDay.now(),
+      );
+      
+      if (pickedTime != null) {
+        setState(() {
+          _lostDateTime = DateTime(
+            pickedDate.year,
+            pickedDate.month,
+            pickedDate.day,
+            pickedTime.hour,
+            pickedTime.minute,
+          );
+          _updateTimeController();
+        });
+      } else {
+        // 用户取消了时间选择，只使用日期
+        setState(() {
+          _lostDateTime = DateTime(
+            pickedDate.year,
+            pickedDate.month,
+            pickedDate.day,
+          );
+          _updateTimeController();
+        });
+      }
+    } else {
+      setState(() {
+        _lostDateTime = DateTime(
+          pickedDate.year,
+          pickedDate.month,
+          pickedDate.day,
+        );
+        _updateTimeController();
+      });
+    }
+  }
+  
+  void _updateTimeController() {
+    if (_lostDateTime == null) {
+      _timeController.clear();
+      return;
+    }
+    
+    if (_includeTime) {
+      _timeController.text = DateFormat('yyyy年MM月dd日 HH:mm', 'zh_CN').format(_lostDateTime!);
+    } else {
+      _timeController.text = DateFormat('yyyy年MM月dd日', 'zh_CN').format(_lostDateTime!);
+    }
   }
 
   @override
@@ -333,11 +458,11 @@ class _LostPetRescuePageState extends State<LostPetRescuePage> with SingleTicker
                     const Text('基本信息', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: AppColors.textDark)),
                     const SizedBox(height: 20),
                     
-                    _buildSpeciesSelector(),
+                    _buildPetSelector(),
                     const SizedBox(height: 20),
 
-                    _buildModernTextField(label: '宠物名字', controller: _nameController, icon: Icons.pets_rounded, hint: '例如：咪咪'),
-                    _buildModernTextField(label: '走失时间', controller: _timeController, icon: Icons.access_time_rounded, hint: '例如：今天下午2点'),
+                    _buildModernTextField(label: '宠物名字', controller: _nameController, icon: Icons.pets_rounded, hint: '例如：咪咪', readOnly: _selectedPet != null),
+                    _buildDateTimePicker(),
                     _buildModernTextField(label: '走失地点', controller: _locationController, icon: Icons.location_on_rounded, hint: '例如：xx小区xx号楼'),
                     _buildModernTextField(label: '外貌特征', controller: _descriptionController, icon: Icons.face_rounded, hint: '例如：橘猫，左耳有缺口...', maxLines: 3),
                     _buildModernTextField(label: '联系方式', controller: _contactController, icon: Icons.phone_rounded, hint: '电话号码', keyboardType: TextInputType.phone),
@@ -389,38 +514,189 @@ class _LostPetRescuePageState extends State<LostPetRescuePage> with SingleTicker
     );
   }
 
-  Widget _buildSpeciesSelector() {
-    return Row(
+  Widget _buildPetSelector() {
+    if (_isLoadingPets) {
+      return const SizedBox(
+        height: 60,
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+    
+    if (_pets.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        margin: const EdgeInsets.only(bottom: 20),
+        decoration: BoxDecoration(
+          color: Colors.orange[50],
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.orange[200]!),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.info_outline, color: Colors.orange[700], size: 20),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                '请先在宠物档案中添加宠物',
+                style: TextStyle(color: Colors.orange[700], fontSize: 14),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(child: _buildSpeciesOption('猫', Icons.cruelty_free_rounded)), // Using cruelty_free as cat-like icon
-        const SizedBox(width: 16),
-        Expanded(child: _buildSpeciesOption('狗', Icons.pets_rounded)),
+        Text('选择宠物', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.grey[700])),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<Pet>(
+          value: _selectedPet,
+          decoration: InputDecoration(
+            hintText: '请选择走失的宠物',
+            hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
+            prefixIcon: Icon(Icons.pets_rounded, color: Colors.grey[400], size: 20),
+            filled: true,
+            fillColor: Colors.grey[50],
+            contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFFFF512F), width: 1.5)),
+            errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: Colors.red.shade200, width: 1)),
+          ),
+          items: _pets.map((pet) {
+            return DropdownMenuItem<Pet>(
+              value: pet,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (pet.avatar != null && File(pet.avatar!).existsSync())
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(20),
+                      child: Image.file(
+                        File(pet.avatar!),
+                        width: 32,
+                        height: 32,
+                        fit: BoxFit.cover,
+                      ),
+                    )
+                  else
+                    Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: Colors.grey[300],
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(Icons.pets, size: 20, color: Colors.grey[600]),
+                    ),
+                  const SizedBox(width: 12),
+                  Flexible(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          pet.name,
+                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        Text(
+                          '${pet.type} · ${pet.breed}',
+                          style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
+          onChanged: _onPetSelected,
+          validator: (value) => value == null ? '请选择宠物' : null,
+        ),
       ],
     );
   }
-
-  Widget _buildSpeciesOption(String label, IconData icon) {
-    final bool isSelected = _speciesController.text == label;
-    return GestureDetector(
-      onTap: () => setState(() => _speciesController.text = label),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFFFF512F) : Colors.grey[100],
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: isSelected ? Colors.transparent : Colors.transparent),
-          boxShadow: isSelected ? [
-            BoxShadow(color: const Color(0xFFFF512F).withOpacity(0.3), blurRadius: 10, offset: const Offset(0, 4))
-          ] : [],
-        ),
-        child: Column(
-          children: [
-            Icon(icon, color: isSelected ? Colors.white : Colors.grey[400], size: 28),
-            const SizedBox(height: 8),
-            Text(label, style: TextStyle(color: isSelected ? Colors.white : Colors.grey[600], fontWeight: FontWeight.bold)),
-          ],
-        ),
+  
+  Widget _buildDateTimePicker() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 20.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 标签和开关分行显示，避免挤在一起
+          Row(
+            children: [
+              Expanded(
+                child: Text('走失时间', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.grey[700])),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          // 日期时间选择器
+          InkWell(
+            onTap: _selectLostDateTime,
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+              decoration: BoxDecoration(
+                color: Colors.grey[50],
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.transparent),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.access_time_rounded, color: Colors.grey[400], size: 20),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      _lostDateTime == null 
+                          ? '请选择走失日期${_includeTime ? '和时间' : ''}'
+                          : _timeController.text,
+                      style: TextStyle(
+                        fontSize: 15,
+                        color: _lostDateTime == null ? Colors.grey[400] : AppColors.textDark,
+                      ),
+                    ),
+                  ),
+                  Icon(Icons.calendar_today, color: Colors.grey[400], size: 18),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          // 包含时间开关（类似Notion）
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('包含时间', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+              const SizedBox(width: 8),
+              Transform.scale(
+                scale: 0.85,
+                child: Switch(
+                  value: _includeTime,
+                  onChanged: (value) {
+                    setState(() {
+                      _includeTime = value;
+                      if (!value && _lostDateTime != null) {
+                        // 如果关闭时间，移除时间部分
+                        _lostDateTime = DateTime(
+                          _lostDateTime!.year,
+                          _lostDateTime!.month,
+                          _lostDateTime!.day,
+                        );
+                      }
+                      _updateTimeController();
+                    });
+                  },
+                  activeColor: const Color(0xFFFF512F),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -433,6 +709,7 @@ class _LostPetRescuePageState extends State<LostPetRescuePage> with SingleTicker
     bool isRequired = true,
     int maxLines = 1,
     TextInputType? keyboardType,
+    bool readOnly = false,
   }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 20.0),
@@ -445,13 +722,14 @@ class _LostPetRescuePageState extends State<LostPetRescuePage> with SingleTicker
             controller: controller,
             maxLines: maxLines,
             keyboardType: keyboardType,
-            style: const TextStyle(fontSize: 15, color: AppColors.textDark),
+            readOnly: readOnly,
+            style: TextStyle(fontSize: 15, color: readOnly ? Colors.grey[600] : AppColors.textDark),
             decoration: InputDecoration(
               hintText: hint,
               hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
               prefixIcon: Icon(icon, color: Colors.grey[400], size: 20),
               filled: true,
-              fillColor: Colors.grey[50],
+              fillColor: readOnly ? Colors.grey[100] : Colors.grey[50],
               contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
               enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
