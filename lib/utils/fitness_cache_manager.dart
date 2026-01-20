@@ -14,12 +14,12 @@ class FitnessCacheManager {
   // 保存课程到缓存（自动限制大小）
   Future<void> saveCourses(List<FitnessCourse> courses) async {
     final prefs = await SharedPreferences.getInstance();
-    
+
     // 限制缓存大小
     final limitedCourses = courses.length > _maxCacheSize
         ? courses.take(_maxCacheSize).toList()
         : courses;
-    
+
     try {
       final coursesJson = limitedCourses.map((c) => c.toJson()).toList();
       await prefs.setString(_coursesKey, jsonEncode(coursesJson));
@@ -59,6 +59,14 @@ class FitnessCacheManager {
     return DateTime.now().difference(cacheTime) < _cacheDuration;
   }
 
+  // 获取最后缓存时间
+  Future<DateTime?> getLastCacheTime() async {
+    final prefs = await SharedPreferences.getInstance();
+    final timestamp = prefs.getInt(_timestampKey);
+    if (timestamp == null) return null;
+    return DateTime.fromMillisecondsSinceEpoch(timestamp);
+  }
+
   // 清空缓存
   Future<void> clearCache() async {
     final prefs = await SharedPreferences.getInstance();
@@ -66,5 +74,3 @@ class FitnessCacheManager {
     await prefs.remove(_timestampKey);
   }
 }
-
-
