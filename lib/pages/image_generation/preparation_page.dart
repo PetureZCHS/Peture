@@ -55,6 +55,7 @@ class FadePageRoute extends PageRouteBuilder {
 }
 
 class PreparationPage extends StatefulWidget {
+  static const String routeName = '/preparation';
   final File? initialSelectedImage;
   final int initialStyleIndex;
 
@@ -73,7 +74,7 @@ enum UploadStatus {
 }
 
 class _PreparationPageState extends State<PreparationPage>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin /*, AutomaticKeepAliveClientMixin*/ {
   File? _selectedImage;
   int _selectedStyleIndex = 0;
 
@@ -88,6 +89,9 @@ class _PreparationPageState extends State<PreparationPage>
 
   // 是否正在向后端发起 AI 生图任务（用于按钮内提示）
   bool _isStartingTask = false;
+
+  // 标记是否成功启动了任务并导航到LoadingPage（用于区分返回场景）
+  bool _hasNavigatedToLoadingPage = false;
 
   // Orb动画控制器
   late AnimationController _orbController;
@@ -123,7 +127,23 @@ class _PreparationPageState extends State<PreparationPage>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _scrollToSelectedStyle(animated: false);
     });
+    
+    // 重置按钮状态，确保不在"正在发起 AI 生图任务..."状态
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_isStartingTask) {
+        setState(() {
+          _isStartingTask = false;
+        });
+      }
+    });
+    
+    // 重置导航标记，确保初始状态正确
+    _hasNavigatedToLoadingPage = false;
   }
+  
+
+
+
 
   @override
   void dispose() {
@@ -199,7 +219,10 @@ class _PreparationPageState extends State<PreparationPage>
 
       // 4. 🚀 上传到 Supabase Storage
       // 注意：当前Supabase Flutter SDK版本可能不支持onProgress参数
-      // 这里使用模拟进度来提供用户反馈（上限到 0.95），并在 finally 中确保计时器被取消
+      // 这里使用模拟进度来提供用户反馈（上限到 0.95），并在 finally 中确保定时器被取消
+      // 记录是否使用了压缩生成的临时文件，以便上传完成后清理它（避免临时目录膨胀）
+      final bool _usedCompressedTempFile = fileToUpload.path != originalFile.path;
+
       final uploadFuture = supabase.storage.from('ai-wallpapers').upload(
             filePath,
             fileToUpload,
@@ -237,6 +260,18 @@ class _PreparationPageState extends State<PreparationPage>
         if (progressTimer.isActive) {
           progressTimer.cancel();
         }
+
+        // 如果我们使用了压缩生成的临时文件，尝试删除它以释放临时目录空间
+        if (_usedCompressedTempFile) {
+          try {
+            if (await fileToUpload.exists()) {
+              await fileToUpload.delete();
+              print('已删除临时压缩文件: ${fileToUpload.path}');
+            }
+          } catch (e) {
+            print('删除临时压缩文件失败: $e');
+          }
+        }
       }
     } on StorageException catch (e) {
       // Supabase 存储特定错误
@@ -249,10 +284,40 @@ class _PreparationPageState extends State<PreparationPage>
       });
       _showErrorSnackBar(errorMessage);
       return null;
-    } catch (e) {
-      // 通用错误
-      print('❌ 图片上传异常: $e');
-      final errorMessage = '图片上传失败: 请检查网络';
+    } on SocketException catch (e) {
+      print('❌ 网络错误 (SocketException): $e');
+      final errorMessage = '网络连接失败：请检查您的网络后重试';
+      setState(() {
+        _uploadStatus = UploadStatus.failed;
+        _uploadProgress = 0.0;
+        _uploadError = errorMessage;
+      });
+      _showErrorSnackBar(errorMessage);
+      return null;
+    } on TimeoutException catch (e) {
+      print('❌ 请求超时: $e');
+      final errorMessage = '请求超时：请稍后重试';
+      setState(() {
+        _uploadStatus = UploadStatus.failed;
+        _uploadProgress = 0.0;
+        _uploadError = errorMessage;
+      });
+      _showErrorSnackBar(errorMessage);
+      return null;
+    } on HttpException catch (e) {
+      print('❌ HTTP 错误: $e');
+      final errorMessage = '网络错误：${e.message}';
+      setState(() {
+        _uploadStatus = UploadStatus.failed;
+        _uploadProgress = 0.0;
+        _uploadError = errorMessage;
+      });
+      _showErrorSnackBar(errorMessage);
+      return null;
+    } catch (e, st) {
+      // 通用错误 - 捕获堆栈以便调试
+      print('❌ 图片上传异常: $e\n$st');
+      final errorMessage = '上传失败：发生未知错误（${e.runtimeType}）';
       setState(() {
         _uploadStatus = UploadStatus.failed;
         _uploadProgress = 0.0;
@@ -308,6 +373,23 @@ class _PreparationPageState extends State<PreparationPage>
 
   @override
   Widget build(BuildContext context) {
+    // 检测页面是否是刚刚从其他页面返回（例如从LoadingPage返回）
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _hasNavigatedToLoadingPage) {
+        // 如果之前已成功导航到LoadingPage，但现在页面又可见了，
+        // 说明用户从LoadingPage返回，此时应重置导航标记
+        _hasNavigatedToLoadingPage = false;
+      }
+    });
+    
+    // 当从LoadingPage返回时，如果之前任务启动失败（即没有成功导航到LoadingPage但_isStartingTask仍为true），
+    // 需要重置按钮状态
+    // 注意：不要在每次构建时自动重置 `_isStartingTask`，
+    // 这会在图片上传完成后且在调用 img-gen-start 之前意外清除提示，
+    // 导致“正在发起 AI 生图任务...”从未正确显示。
+    // `_isStartingTask` 应由任务启动流程的成功/失败专门控制。
+    
+    
     return Scaffold(
       backgroundColor: AppColors.background,
       extendBodyBehindAppBar: true,
@@ -681,15 +763,20 @@ class _PreparationPageState extends State<PreparationPage>
                           color: Colors.transparent,
                           child: InkWell(
                             onTap: (_selectedImage != null && _uploadStatus != UploadStatus.uploading && !_isStartingTask)
-                                ? () async {
-                                    // 上传图片到Supabase Storage
-                                    final uploadedFileName =
-                                        await _uploadImageToSupabaseStorage(
-                                            _selectedImage!);
-
+                              ? () async {
+                                // 上传图片到Supabase Storage（先执行上传，成功后再进入任务启动阶段显示提示）
+                                final uploadedFileName =
+                                  await _uploadImageToSupabaseStorage(
+                                    _selectedImage!);
+                            
                                     // 如果上传成功，则导航到LoadingPage
                                     if (uploadedFileName != null && mounted) {
                                       // 上传成功，准备发起生成任务
+
+                                      // 在调用 img-gen-start 之前，设置按钮状态为“正在发起...”，并保持禁用
+                                      setState(() {
+                                        _isStartingTask = true;
+                                      });
 
                                       // 立即跳转到 LoadingPage（Uploading 已完成），由 LoadingPage 发起 img-gen-start 并轮询状态
                                       if (uploadedFileName.isNotEmpty) {
@@ -703,11 +790,8 @@ class _PreparationPageState extends State<PreparationPage>
                                           5: 'autumn',
                                         };
                                         final style = styleMap[_selectedStyleIndex] ?? 'run';
-
-                                        // 在按钮内显示“正在发起”状态，避免使用持久 SnackBar
-                                        setState(() {
-                                          _isStartingTask = true;
-                                        });
+                            
+                                        // 注意：_isStartingTask 已经在上传前设置为 true
 
                                         // 调用 img-gen-start，等待返回 taskId，然后再导航到 LoadingPage
                                         try {
@@ -720,7 +804,12 @@ class _PreparationPageState extends State<PreparationPage>
                                               'style': style,
                                             },
                                           );
+
+                                          // supabase invoke 可能返回 error 字段，先检查
                                           final data = res.data;
+                                          if (data is Map<String, dynamic> && data.containsKey('error')) {
+                                            throw Exception('服务端错误: ${data['error'].toString()}');
+                                          }
 
                                           if (data is Map<String, dynamic>) {
                                             final taskId = data['task_id'] as String?;
@@ -728,7 +817,10 @@ class _PreparationPageState extends State<PreparationPage>
                                             // 输出 task_id 到终端，方便调试
                                             if (taskId != null && taskId.isNotEmpty) {
                                               print('task_id: $taskId');
-                                              Navigator.push(
+                                              // 标记已成功导航到LoadingPage
+                                              _hasNavigatedToLoadingPage = true;
+                                              // 成功导航到 LoadingPage，等待用户返回后立即重置按钮状态
+                                              await Navigator.push(
                                                 context,
                                                 FadePageRoute(
                                                   page: LoadingPage(
@@ -739,6 +831,17 @@ class _PreparationPageState extends State<PreparationPage>
                                                   ),
                                                 ),
                                               );
+
+                                              if (mounted) {
+                                                setState(() {
+                                                  // 返回时恢复按钮为可点击状态
+                                                  _isStartingTask = false;
+                                                  _hasNavigatedToLoadingPage = false;
+                                                  // 同步重置上传状态为 idle，允许再次选择或上传
+                                                  _uploadStatus = UploadStatus.idle;
+                                                  _uploadProgress = 0.0;
+                                                });
+                                              }
                                               return;
                                             } else {
                                               throw Exception('未能获取有效的任务ID');
@@ -746,15 +849,41 @@ class _PreparationPageState extends State<PreparationPage>
                                           } else {
                                             throw Exception('服务器返回格式错误');
                                           }
-                                        } catch (e) {
-                                          // 启动任务失败：记录错误并恢复按钮状态（不使用 SnackBar）
+                                        } on SocketException catch (e) {
+                                          final msg = '网络错误：无法连接到服务端，请检查网络';
+                                          print('❌ SocketException on img-gen-start: $e');
                                           if (mounted) {
                                             setState(() {
                                               _isStartingTask = false;
                                               _uploadStatus = UploadStatus.failed;
-                                              _uploadError = 'AI生图任务启动失败: ${e.toString()}';
+                                              _uploadError = msg;
                                             });
                                           }
+                                          _hasNavigatedToLoadingPage = false;
+                                          return;
+                                        } on TimeoutException catch (e) {
+                                          final msg = '请求超时：AI 生图服务响应缓慢，请稍后重试';
+                                          print('❌ TimeoutException on img-gen-start: $e');
+                                          if (mounted) {
+                                            setState(() {
+                                              _isStartingTask = false;
+                                              _uploadStatus = UploadStatus.failed;
+                                              _uploadError = msg;
+                                            });
+                                          }
+                                          _hasNavigatedToLoadingPage = false;
+                                          return;
+                                        } catch (e, st) {
+                                          final msg = 'AI生图任务启动失败：${e.toString()}';
+                                          print('❌ Exception on img-gen-start: $e\n$st');
+                                          if (mounted) {
+                                            setState(() {
+                                              _isStartingTask = false;
+                                              _uploadStatus = UploadStatus.failed;
+                                              _uploadError = msg;
+                                            });
+                                          }
+                                          _hasNavigatedToLoadingPage = false;
                                           return;
                                         }
                                       
@@ -764,8 +893,12 @@ class _PreparationPageState extends State<PreparationPage>
                                             setState(() {
                                               _uploadStatus = UploadStatus.failed;
                                               _uploadError = '图片上传失败，请重试';
+                                              // 上传失败时确保任务启动提示关闭
+                                              _isStartingTask = false;
                                             });
                                           }
+                                          // 重置导航标记，以便页面重建时能正确处理状态
+                                          _hasNavigatedToLoadingPage = false;
                                           return;
                                         }
                                     } else if (mounted && _uploadStatus == UploadStatus.failed) {

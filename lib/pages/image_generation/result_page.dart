@@ -73,6 +73,8 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
   bool _isFavorite = false;
   bool _isLiked = false;
   bool _isDisliked = false;
+  // 标记传入的 resultImageFile 是否为临时下载文件，需要在 dispose 时清理
+  bool _shouldDeleteTempFile = false;
 
   @override
   void initState() {
@@ -81,10 +83,38 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
       vsync: this,
       duration: const Duration(seconds: 12),
     )..repeat(reverse: true);
+
+    // 如果 resultImageFile 存在且看起来来自系统临时目录或命名为 LoadingPage 生成的文件，标记为需要清理
+    if (widget.resultImageFile != null) {
+      try {
+        final filePath = widget.resultImageFile!.path;
+        final filename = filePath.split(Platform.pathSeparator).last;
+        if (filePath.contains(Directory.systemTemp.path) || filename.startsWith('ai_gen_')) {
+          _shouldDeleteTempFile = true;
+        }
+      } catch (e) {
+        print('检查临时文件标记时出错: $e');
+      }
+    }
   }
 
   @override
   void dispose() {
+    // 如果需要删除临时生成的文件，异步尝试删除（dispose 不能 await，因此使用 then/catchError）
+    if (_shouldDeleteTempFile && widget.resultImageFile != null) {
+      widget.resultImageFile!.exists().then((exists) {
+        if (exists) {
+          widget.resultImageFile!.delete().then((_) {
+            print('已删除临时下载文件: ${widget.resultImageFile!.path}');
+          }).catchError((e) {
+            print('删除临时下载文件失败: $e');
+          });
+        }
+      }).catchError((e) {
+        print('检查临时下载文件存在性失败: $e');
+      });
+    }
+
     _orbController.dispose();
     super.dispose();
   }

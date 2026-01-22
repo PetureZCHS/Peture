@@ -14,7 +14,6 @@ interface RequestBody {
   file_name: string;
 }
 
-// 1) 放宽 task_status：上游可能扩展更多状态（如 PROCESSING）
 interface TaskResult {
   task_status: string;
   output_images?: string[];
@@ -96,10 +95,29 @@ Deno.serve(async (req: Request): Promise<Response> => {
       "X-ModelScope-Task-Type": "image_generation",
     };
 
-    const result = await fetch(`${UPSTREAM_BASE_URL}v1/tasks/${task_id}`, {
-      method: "GET",
-      headers: commonHeaders,
-    });
+    // 查询任务状态，添加 10 秒超时
+    let result;
+    try {
+      result = await fetch(`${UPSTREAM_BASE_URL}v1/tasks/${task_id}`, {
+        method: "GET",
+        headers: commonHeaders,
+        signal: AbortSignal.timeout(10000), // 10秒超时
+      });
+    } catch (err) {
+      if (err.name === "AbortError") {
+        return new Response(
+          JSON.stringify({
+            error: "Upstream API timeout",
+            detail: "Task status query took too long",
+          }),
+          {
+            status: 504,
+            headers: { "Content-Type": "application/json", ...corsHeaders() },
+          },
+        );
+      }
+      throw err;
+    }
 
     if (!result.ok) {
       const text = await result.text();
@@ -118,15 +136,14 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     const data = (await result.json()) as TaskResult;
 
-    // 2) 把“仍在进行中”的状态集中管理：加入 PROCESSING
     const IN_PROGRESS = new Set(["PENDING", "RUNNING", "PROCESSING"]);
 
     if (IN_PROGRESS.has(data.task_status)) {
       return new Response(
         JSON.stringify({
           task_id,
-          status: data.task_status, // 你对前端的统一语义：还没好
-          upstream_task_status: data.task_status, // 可选：给前端/日志更好定位
+          status: data.task_status,
+          upstream_task_status: data.task_status,
         }),
         {
           status: 200,
@@ -176,7 +193,28 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     const imageUrl = data.output_images[0];
 
-    const imgResp = await fetch(imageUrl);
+    // 下载图片，添加 30 秒超时
+    let imgResp;
+    try {
+      imgResp = await fetch(imageUrl, {
+        signal: AbortSignal.timeout(30000), // 30秒超时
+      });
+    } catch (err) {
+      if (err.name === "AbortError") {
+        return new Response(
+          JSON.stringify({
+            error: "Image download timeout",
+            detail: "Generated image took too long to download",
+          }),
+          {
+            status: 504,
+            headers: { "Content-Type": "application/json", ...corsHeaders() },
+          },
+        );
+      }
+      throw err;
+    }
+
     if (!imgResp.ok) {
       const text = await imgResp.text();
       return new Response(

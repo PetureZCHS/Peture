@@ -12,7 +12,6 @@ import 'services/supabase_edge_service.dart';
 // ================== 所有必需的导入 ==================
 import 'models/conversation.dart';
 import 'services/supabase_service.dart';
-import 'database/database_helper.dart';
 import 'utils/ui_helpers.dart';
 // ===============================================
 

@@ -7,7 +7,6 @@ import 'dart:ui';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../utils/ui_helpers.dart';
 import 'result_page.dart';
-import 'preparation_page.dart';
 
 // 添加颜色常量定义，与chat_page.dart保持一致
 class AppColors {
@@ -100,7 +99,9 @@ class _LoadingPageState extends State<LoadingPage>
   late AnimationController _progressController;
   late AnimationController _orbController;
   Timer? _pollingTimer;
+  Timer? _timeoutTimer; // 添加超时计时器
   bool _isTaskFinished = false;
+  bool _isTimeout = false; // 添加超时标志
   String? _generatedImageUrl; // 存储生成的图片URL（备用）
   File? _generatedImageFile; // 存储下载到本地的生成图片文件
 
@@ -119,6 +120,7 @@ class _LoadingPageState extends State<LoadingPage>
     // taskId 必需；Preparation 页面应先调用 img-gen-start 并传入 taskId。
 
     _startLoadingProcess();
+    _startTimeoutTimer(); // 启动超时计时器
   }
 
   void _startLoadingProcess() async {
@@ -146,9 +148,32 @@ class _LoadingPageState extends State<LoadingPage>
     }
   }
 
-
-
-
+  void _startTimeoutTimer() {
+    // 设置最大轮询时间为8分钟（480秒）
+    _timeoutTimer = Timer(Duration(seconds: 480), () {
+      if (!_isTaskFinished && !_isTimeout) {  // 添加双重检查以避免重复处理
+        _isTimeout = true;
+        _pollingTimer?.cancel();
+        _isTaskFinished = true;
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('生成超时，请重试'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+          
+          // 直接返回到之前的PreparationPage实例
+          Future.delayed(const Duration(milliseconds: 800), () {
+            if (mounted) {
+              Navigator.pop(context);
+            }
+          });
+        }
+      }
+    });
+  }
 
   void _handleLoadingError(String message) {
     _isTaskFinished = true;
@@ -172,8 +197,7 @@ class _LoadingPageState extends State<LoadingPage>
   }
 
   void _startPollingBackend() {
-    // 我们在35s处调用本方法：先立即发起一次检查，然后每5s再次检查一次。
-    // 移除次数上限：持续轮询直到任务完成（或由错误处理提前终止）。
+    // 每 5s 检查一次，持续轮询直到任务完成（或由错误处理提前终止）。
 
     Future<void> checkOnce() async {
 
@@ -278,28 +302,11 @@ class _LoadingPageState extends State<LoadingPage>
                   backgroundColor: Colors.orange,
                 ),
               );
-              // 短延迟后返回 PreparationPage，让用户先看到提示
+              // 直接返回到之前的PreparationPage实例
               Future.delayed(const Duration(milliseconds: 800), () {
-                // 将 style 字符串映射回风格索引，便于恢复选中状态
-                final Map<String, int> styleToIndex = {
-                  'run': 0,
-                  'explorer': 1,
-                  'bazaar': 2,
-                  'cowboy': 3,
-                  'grid': 4,
-                  'autumn': 5,
-                };
-                final int initStyleIndex = styleToIndex[widget.style] ?? 0;
-
-                Navigator.pushReplacement(
-                  context,
-                  SlideFromLeftPageRoute(
-                    page: PreparationPage(
-                      initialSelectedImage: widget.originalImage,
-                      initialStyleIndex: initStyleIndex,
-                    ),
-                  ),
-                );
+                if (mounted) {
+                  Navigator.pop(context);
+                }
               });
             }
             return;
@@ -374,6 +381,7 @@ class _LoadingPageState extends State<LoadingPage>
     _progressController.dispose();
     _orbController.dispose();
     _pollingTimer?.cancel();
+    _timeoutTimer?.cancel(); // 取消超时计时器
     super.dispose();
   }
 
