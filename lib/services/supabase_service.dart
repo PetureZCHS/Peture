@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/conversation.dart';
 import '../models/pet_diary.dart';
+import '../models/fitness_course.dart';
 
 /// Supabase 数据库服务类
 /// 用于替换 SQLite Helper，提供统一的数据访问接口
@@ -1622,7 +1623,6 @@ class SupabaseService {
 
     try {
       final data = Map<String, dynamic>.from(passport);
-      final passportId = data['id'] as String?;
       data.remove('id');
       data['user_id'] = userId;
 
@@ -2254,5 +2254,316 @@ class SupabaseService {
 
       return map;
     }).toList();
+  }
+
+  // ============================================================
+  // 健身课程相关方法
+  // ============================================================
+
+  /// 获取所有激活的健身课程
+  Future<List<FitnessCourse>> getFitnessCourses() async {
+    try {
+      final response = await _client
+          .from('fitness_courses')
+          .select()
+          .eq('is_active', true)
+          .order('sort_order', ascending: false)
+          .order('created_at', ascending: false);
+
+      return List<Map<String, dynamic>>.from(response)
+          .map((json) => FitnessCourse.fromSupabaseJson(json))
+          .toList();
+    } catch (e) {
+      // 区分不同类型的错误
+      if (e.toString().contains('network') ||
+          e.toString().contains('timeout')) {
+        print('获取健身课程失败: 网络错误 - $e');
+      } else if (e.toString().contains('permission') ||
+          e.toString().contains('policy')) {
+        print('获取健身课程失败: 权限错误 - $e');
+      } else {
+        print('获取健身课程失败: $e');
+      }
+      return [];
+    }
+  }
+
+  /// 根据宠物类型获取课程
+  Future<List<FitnessCourse>> getFitnessCoursesByPetType(String petType) async {
+    try {
+      // 验证petType值
+      if (!['dog', 'cat'].contains(petType)) {
+        print(
+            '获取宠物类型健身课程失败: Invalid petType: $petType. Must be either dog or cat');
+        return [];
+      }
+
+      final response = await _client
+          .from('fitness_courses')
+          .select()
+          .eq('pet_type', petType)
+          .eq('is_active', true)
+          .order('sort_order', ascending: false);
+
+      return List<Map<String, dynamic>>.from(response)
+          .map((json) => FitnessCourse.fromSupabaseJson(json))
+          .toList();
+    } catch (e) {
+      // 区分不同类型的错误
+      if (e.toString().contains('network') ||
+          e.toString().contains('timeout')) {
+        print('获取宠物类型健身课程失败: 网络错误 - $e');
+      } else if (e.toString().contains('permission') ||
+          e.toString().contains('policy')) {
+        print('获取宠物类型健身课程失败: 权限错误 - $e');
+      } else {
+        print('获取宠物类型健身课程失败: $e');
+      }
+      return [];
+    }
+  }
+
+  /// 获取自指定时间后的更新课程（增量更新）
+  /// 注意：此方法用于优化网络请求，只获取更新的课程
+  Future<List<FitnessCourse>> getFitnessCoursesUpdatedAfter(
+      DateTime since) async {
+    try {
+      final response = await _client
+          .from('fitness_courses')
+          .select()
+          .eq('is_active', true)
+          .gte('updated_at', since.toIso8601String())
+          .order('updated_at', ascending: false);
+
+      return List<Map<String, dynamic>>.from(response)
+          .map((json) => FitnessCourse.fromSupabaseJson(json))
+          .toList();
+    } catch (e) {
+      // 区分不同类型的错误
+      if (e.toString().contains('network') ||
+          e.toString().contains('timeout')) {
+        print('获取增量健身课程失败: 网络错误 - $e');
+      } else if (e.toString().contains('permission') ||
+          e.toString().contains('policy')) {
+        print('获取增量健身课程失败: 权限错误 - $e');
+      } else {
+        print('获取增量健身课程失败: $e');
+      }
+      // 增量更新失败时，返回空列表（上层会降级到全量更新）
+      return [];
+    }
+  }
+
+  /// 处理健身课程数据的字段映射和类型转换
+  void _processFitnessCourseData(Map<String, dynamic> data) {
+    // 字段名映射
+    final fieldMapping = {
+      'courseId': 'course_id',
+      'durationMinutes': 'duration_minutes',
+      'caloriesEstimate': 'calories_estimate',
+      'petCaloriesEstimate': 'pet_calories_estimate',
+      'iconEmoji': 'icon_emoji',
+      'petType': 'pet_type',
+      'isActive': 'is_active',
+      'sortOrder': 'sort_order',
+    };
+
+    for (var entry in fieldMapping.entries) {
+      if (data.containsKey(entry.key)) {
+        data[entry.value] = data[entry.key];
+        data.remove(entry.key);
+      }
+    }
+
+    // 处理actions字段（JSONB类型）
+    if (data.containsKey('actions')) {
+      final actions = data['actions'];
+      if (actions is List) {
+        // 如果actions是List<FitnessAction>，转换为List<Map>
+        data['actions'] = actions.map((action) {
+          if (action is FitnessAction) {
+            return action.toSupabaseJson();
+          }
+          // 如果已经是Map格式，直接使用
+          return action as Map<String, dynamic>;
+        }).toList();
+      }
+    }
+
+    // 处理tags字段（TEXT[]类型）
+    if (data.containsKey('tags')) {
+      // 确保tags是List<String>
+      if (data['tags'] is List) {
+        data['tags'] = List<String>.from(data['tags']);
+      }
+    }
+  }
+
+  /// 插入健身课程（管理后台使用）
+  Future<String?> insertFitnessCourse(Map<String, dynamic> course) async {
+    try {
+      final data = Map<String, dynamic>.from(course);
+      data.remove('id'); // 让数据库生成UUID
+
+      // 使用辅助方法处理字段映射和复杂类型转换
+      _processFitnessCourseData(data);
+
+      // 数据验证
+      // 验证必需字段
+      if (data['course_id'] == null || (data['course_id'] as String).isEmpty) {
+        print('插入健身课程失败: course_id is required');
+        return null;
+      }
+
+      // 验证intensity值
+      if (data.containsKey('intensity')) {
+        final intensity = data['intensity'] as String?;
+        if (intensity != null &&
+            !['low', 'medium', 'high'].contains(intensity)) {
+          print('插入健身课程失败: intensity must be low, medium, or high');
+          return null;
+        }
+      }
+
+      // 验证petType值
+      if (data.containsKey('pet_type')) {
+        final petType = data['pet_type'] as String?;
+        if (petType != null && !['dog', 'cat'].contains(petType)) {
+          print('插入健身课程失败: pet_type must be dog or cat');
+          return null;
+        }
+      }
+
+      final response =
+          await _client.from('fitness_courses').insert(data).select().single();
+
+      return response['id'] as String?;
+    } catch (e) {
+      // 区分不同类型的错误
+      if (e.toString().contains('network') ||
+          e.toString().contains('timeout')) {
+        print('插入健身课程失败: 网络错误 - $e');
+      } else if (e.toString().contains('permission') ||
+          e.toString().contains('policy')) {
+        print('插入健身课程失败: 权限错误 - $e');
+      } else if (e.toString().contains('duplicate') ||
+          e.toString().contains('unique')) {
+        print('插入健身课程失败: 数据重复错误 - $e');
+      } else if (e.toString().contains('validation') ||
+          e.toString().contains('constraint')) {
+        print('插入健身课程失败: 数据验证错误 - $e');
+      } else {
+        print('插入健身课程失败: $e');
+      }
+      return null;
+    }
+  }
+
+  /// 更新健身课程
+  Future<bool> updateFitnessCourse(Map<String, dynamic> course) async {
+    try {
+      final courseId = course['id'];
+      if (courseId == null) {
+        print('更新健身课程失败: course id is required');
+        return false;
+      }
+
+      final data = Map<String, dynamic>.from(course);
+      data.remove('id');
+
+      // 使用辅助方法处理字段映射和复杂类型转换
+      _processFitnessCourseData(data);
+
+      // 数据验证
+      // 验证intensity值（如果提供）
+      if (data.containsKey('intensity')) {
+        final intensity = data['intensity'] as String?;
+        if (intensity != null &&
+            !['low', 'medium', 'high'].contains(intensity)) {
+          print('更新健身课程失败: intensity must be low, medium, or high');
+          return false;
+        }
+      }
+
+      // 验证petType值（如果提供）
+      if (data.containsKey('pet_type')) {
+        final petType = data['pet_type'] as String?;
+        if (petType != null && !['dog', 'cat'].contains(petType)) {
+          print('更新健身课程失败: pet_type must be dog or cat');
+          return false;
+        }
+      }
+
+      await _client.from('fitness_courses').update(data).eq('id', courseId);
+
+      return true;
+    } catch (e) {
+      // 区分不同类型的错误
+      if (e.toString().contains('network') ||
+          e.toString().contains('timeout')) {
+        print('更新健身课程失败: 网络错误 - $e');
+      } else if (e.toString().contains('permission') ||
+          e.toString().contains('policy')) {
+        print('更新健身课程失败: 权限错误 - $e');
+      } else if (e.toString().contains('validation') ||
+          e.toString().contains('constraint')) {
+        print('更新健身课程失败: 数据验证错误 - $e');
+      } else {
+        print('更新健身课程失败: $e');
+      }
+      return false;
+    }
+  }
+
+  /// 根据course_id获取单个课程
+  Future<FitnessCourse?> getFitnessCourseById(String courseId) async {
+    try {
+      final response = await _client
+          .from('fitness_courses')
+          .select()
+          .eq('course_id', courseId)
+          .eq('is_active', true)
+          .maybeSingle();
+
+      if (response == null) return null;
+
+      return FitnessCourse.fromSupabaseJson(response);
+    } catch (e) {
+      // 区分不同类型的错误
+      if (e.toString().contains('network') ||
+          e.toString().contains('timeout')) {
+        print('获取健身课程失败: 网络错误 - $e');
+      } else if (e.toString().contains('permission') ||
+          e.toString().contains('policy')) {
+        print('获取健身课程失败: 权限错误 - $e');
+      } else {
+        print('获取健身课程失败: $e');
+      }
+      return null;
+    }
+  }
+
+  /// 删除健身课程（软删除，设置is_active=false）
+  /// 注意：使用数据库的id字段（UUID），不是course_id
+  Future<bool> deleteFitnessCourse(String courseId) async {
+    try {
+      await _client
+          .from('fitness_courses')
+          .update({'is_active': false}).eq('id', courseId);
+
+      return true;
+    } catch (e) {
+      // 区分不同类型的错误
+      if (e.toString().contains('network') ||
+          e.toString().contains('timeout')) {
+        print('删除健身课程失败: 网络错误 - $e');
+      } else if (e.toString().contains('permission') ||
+          e.toString().contains('policy')) {
+        print('删除健身课程失败: 权限错误 - $e');
+      } else {
+        print('删除健身课程失败: $e');
+      }
+      return false;
+    }
   }
 }
