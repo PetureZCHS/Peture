@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter/physics.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 // import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
@@ -20,9 +21,10 @@ import 'pages/lost_pet/lost_pet_rescue_page.dart';
 import 'community_screen.dart';
 import 'medical_record_screen.dart';
 import 'profile_screen.dart';
+import 'pages/growth_log/growth_log_page.dart'; 
 import 'widgets/weight_trend_card.dart';
 import 'utils/ui_helpers.dart';
-
+ 
 /// 搜索结果数据模型
 class SearchResult {
   final String name;
@@ -53,47 +55,9 @@ class DataChangeNotifier {
 }
 
 // =========================================================
-// 1. 配色与样式
+// 1. 配色与样式(删除)
 // =========================================================
 
-class AppColors {
-  static const Color background = Color(0xFFF2F2F7);
-  static const Color textDark = Color(0xFF1D1D1F);
-  static const Color textGrey = Color(0xFF8E8E93);
-
-  static const Color orb1 = Color(0xFFC4E0E5);
-  static const Color orb2 = Color(0xFFE2D1F9);
-  static const Color orb3 = Color(0xFFFFDFC4);
-
-  static const LinearGradient navTab0 =
-      LinearGradient(colors: [Color(0xFF2E3192), Color(0xFF1BFFFF)]);
-  static const LinearGradient navTab1 =
-      LinearGradient(colors: [Color(0xFFFF512F), Color(0xFFDD2476)]);
-  static const LinearGradient navTab2 =
-      LinearGradient(colors: [Color(0xFF00b09b), Color(0xFF96c93d)]);
-  static const LinearGradient navTab3 =
-      LinearGradient(colors: [Color(0xFF667eea), Color(0xFF764ba2)]);
-
-  static const List<LinearGradient> navGradients = [
-    navTab0,
-    navTab1,
-    navTab2,
-    navTab3
-  ];
-
-  static const LinearGradient warmGradient =
-      LinearGradient(colors: [Color(0xFFFF5E62), Color(0xFFFF9966)]);
-  static const LinearGradient coolGradient =
-      LinearGradient(colors: [Color(0xFF4FACFE), Color(0xFF00F2FE)]);
-  static const LinearGradient natureGradient =
-      LinearGradient(colors: [Color(0xFF43E97B), Color(0xFF38F9D7)]);
-  static const LinearGradient magicGradient =
-      LinearGradient(colors: [Color(0xFFA18CD1), Color(0xFFFBC2EB)]);
-  static const LinearGradient oceanGradient =
-      LinearGradient(colors: [Color(0xFF30CFD0), Color(0xFF330867)]);
-  static const LinearGradient goldGradient =
-      LinearGradient(colors: [Color(0xFFF6D365), Color(0xFFFDA085)]);
-}
 
 // =========================================================
 // 2. 主页面骨架
@@ -111,7 +75,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   double _currentPosition = 0.0;
   int _lastHapticIndex = 0;
 
-  late AnimationController _orbController;
+  late AnimationController _tabController;
   bool _isUniverseMode = false;
 
   /// 用于通知 MedicalRecordScreen 刷新数据的通知器
@@ -130,23 +94,51 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       statusBarIconBrightness: Brightness.dark,
     ));
 
-    _orbController = AnimationController(
+    _tabController = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 12),
-    )..repeat(reverse: true);
+      lowerBound: double.negativeInfinity,
+      upperBound: double.infinity,
+      value: 0.0,
+    );
+    _tabController.addListener(() {
+      setState(() {
+        _currentPosition = _tabController.value;
+      });
+    });
   }
 
   @override
   void dispose() {
-    _orbController.dispose();
-    _medicalScreenRefreshNotifier.dispose();
+    _tabController.dispose();
+    _medicalScreenRefreshNotifier.dispose(); 
     super.dispose();
   }
 
+  void _animateToPage(int page, {double velocity = 0.0}) {
+    // [优化] 调整弹簧参数，使其更软、更弹、更像水
+    final SpringDescription spring = SpringDescription(
+      mass: 0.6,       // 稍微减轻质量，响应更快
+      stiffness: 140.0, // 大幅降低刚度，产生柔软感 (原 250)
+      damping: 12.0,    // 降低阻尼，允许更多回弹/摆动 (原 15)
+    );
+    
+    final simulation = SpringSimulation(
+      spring,
+      _currentPosition,
+      page.toDouble(),
+      velocity,
+    );
+    
+    _tabController.animateWith(simulation);
+  }
+
   void _onTabTapped(int index) {
+    if (_currentIndex == index) return;
+
+    _animateToPage(index);
+
     setState(() {
       _currentIndex = index;
-      _currentPosition = index.toDouble();
       _lastHapticIndex = index;
     });
     HapticFeedback.mediumImpact();
@@ -201,64 +193,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       backgroundColor: AppColors.background,
       body: Stack(
         children: [
-          // 背景层
-          Stack(
-            children: [
-              Container(color: AppColors.background),
-              AnimatedBuilder(
-                animation: _orbController,
-                builder: (context, child) {
-                  return Positioned(
-                    top: -100 + (_orbController.value * 40),
-                    left: -50 + (_orbController.value * 20),
-                    child: Container(
-                      width: 500,
-                      height: 500,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: AppColors.orb1.withOpacity(0.5),
-                      ),
-                    ).blurred(sigmaX: 90, sigmaY: 90),
-                  );
-                },
-              ),
-              AnimatedBuilder(
-                animation: _orbController,
-                builder: (context, child) {
-                  return Positioned(
-                    top: 300 + (math.sin(_orbController.value * math.pi) * 60),
-                    right: -100,
-                    child: Container(
-                      width: 350,
-                      height: 350,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: AppColors.orb3.withOpacity(0.4),
-                      ),
-                    ).blurred(sigmaX: 80, sigmaY: 80),
-                  );
-                },
-              ),
-              AnimatedBuilder(
-                animation: _orbController,
-                builder: (context, child) {
-                  return Positioned(
-                    bottom: -150,
-                    left: -80 + (_orbController.value * 150),
-                    child: Container(
-                      width: 600,
-                      height: 400,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: AppColors.orb2.withOpacity(0.5),
-                      ),
-                    ).blurred(sigmaX: 100, sigmaY: 100),
-                  );
-                },
-              ),
-            ],
-          ),
-
           // 内容层
           IndexedStack(
             index: _currentIndex,
@@ -324,12 +258,25 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         AppColors.navGradients[_currentIndex];
 
     return GestureDetector(
+      behavior: HitTestBehavior.opaque, // 确保整个区域都响应点击和拖拽 
+      onTapUp: (details) {
+        final double width = MediaQuery.of(context).size.width - 48;
+        final double itemWidth = width / 4;
+        // 计算点击位置对应的 index
+        final int index = (details.localPosition.dx / itemWidth).floor().clamp(0, 3);
+        _onTabTapped(index);
+      },
+      onHorizontalDragStart: (details) {
+        _tabController.stop();
+      },
       onHorizontalDragUpdate: (details) {
-        final double screenWidth = MediaQuery.of(context).size.width;
-        final double dragItemWidth = (screenWidth - 48) / 4;
+        final double width = MediaQuery.of(context).size.width - 48;
+        final double itemWidth = width / 4;
+        double newPosition = (details.localPosition.dx / itemWidth) - 0.5; 
+
         setState(() {
-          _currentPosition += details.delta.dx / dragItemWidth;
-          _currentPosition = _currentPosition.clamp(0.0, 3.0);
+          _currentPosition = newPosition.clamp(0.0, 3.0);
+          _tabController.value = _currentPosition;
         });
         int potentialIndex = _currentPosition.round();
         if (potentialIndex != _lastHapticIndex) {
@@ -338,13 +285,40 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         }
       },
       onHorizontalDragEnd: (details) {
+        final double screenWidth = MediaQuery.of(context).size.width;
+        final double dragItemWidth = (screenWidth - 48) / 4;
+        
+        // Calculate velocity in "pages per second"
+        final double velocity = details.velocity.pixelsPerSecond.dx / dragItemWidth;
+
         int targetIndex = _currentPosition.round();
+        
+        // [优化] 增加速度阈值判断，让快速滑动更容易触发翻页
+        if (velocity.abs() > 0.3) { // 降低阈值 (原 0.5)
+          if (velocity > 0) {
+            targetIndex = _currentPosition.floor() + 1;
+          } else {
+            targetIndex = _currentPosition.ceil() - 1;
+          }
+        } else {
+          // 如果速度很慢，就看位置是否超过一半
+          // _currentPosition.round() 已经处理了这个逻辑
+        }
+        
+        targetIndex = targetIndex.clamp(0, 3);
+        
+        // [优化] 传递更强的初始速度给弹簧，制造"冲过头"再回弹的效果
+        _animateToPage(targetIndex, velocity: velocity * 1.2);
+
         setState(() {
           _currentIndex = targetIndex;
           _currentPosition = targetIndex.toDouble();
           _lastHapticIndex = targetIndex;
         });
         HapticFeedback.lightImpact();
+      },
+      onHorizontalDragCancel: () {
+        _animateToPage(_currentIndex); 
       },
       child: Container(
         height: navHeight,
@@ -410,34 +384,55 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     ),
                   ),
                 ),
-                AnimatedPositioned(
-                  duration: const Duration(milliseconds: 350),
-                  curve: Curves.easeOutBack,
-                  left: (_currentPosition * itemWidth) +
-                      (itemWidth / 2) -
-                      (indicatorWidth / 2),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 300),
-                    width: indicatorWidth,
-                    height: indicatorHeight,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(indicatorHeight / 2),
-                      gradient: currentGradient,
-                      boxShadow: [
-                        BoxShadow(
-                          color: currentGradient.colors.first.withOpacity(0.4),
-                          blurRadius: 12,
-                          spreadRadius: -2,
-                          offset: const Offset(0, 2),
+                Positioned(
+                  left: (_currentPosition * itemWidth) + (itemWidth / 2) - (indicatorWidth / 2),
+                  child: Builder(
+                    builder: (context) {
+                      // [优化] 动态形变算法：增强液态拉伸感
+                      double velocity = 0.0;
+                      if (_tabController.isAnimating) {
+                         velocity = _tabController.velocity; // 保留符号以判断方向
+                      }
+                      
+                      double absVelocity = velocity.abs();
+                      
+                      // 拉伸因子：速度越快，拉伸越明显。使用非线性曲线让微小移动也有反馈。
+                      // 限制最大拉伸为 60%
+                      double stretchFactor = (absVelocity * 0.08).clamp(0.0, 0.6);
+                      
+                      double currentWidth = indicatorWidth * (1 + stretchFactor);
+                      // 挤压高度：保持一定的体积感，但不要完全扁平
+                      double currentHeight = indicatorHeight * (1 - stretchFactor * 0.35);
+
+                      // [新增] 动态倾斜：根据速度方向微调角度，模拟惯性
+                      // 速度为正（向右），向左倾斜（头部在前，尾部拖后）-> 实际上旋转是整体旋转
+                      // 简单的旋转可能看起来像车轮。液态通常是头部变大尾部变小（水滴型）。
+                      // 这里用简单的 Scale 模拟拉伸即可，旋转可能导致图标错位。
+                      
+                      return Container(
+                        width: currentWidth,
+                        height: currentHeight,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(currentHeight / 2), // 保持胶囊形状
+                          gradient: currentGradient,
+                          boxShadow: [
+                            BoxShadow(
+                              color: currentGradient.colors.first.withOpacity(0.4 + (stretchFactor * 0.2)), // 速度越快，光晕越强
+                              blurRadius: 12 + (stretchFactor * 10), // 运动时模糊拖尾增加
+                              spreadRadius: -2,
+                              offset: const Offset(0, 2),
+                            ),
+                            BoxShadow(
+                              color: Colors.white.withOpacity(0.3),
+                              blurRadius: 1,
+                              offset: const Offset(0, 1),
+                              spreadRadius: 0,
+                              blurStyle: BlurStyle.inner
+                            ),
+                          ],
                         ),
-                        BoxShadow(
-                            color: Colors.white.withOpacity(0.3),
-                            blurRadius: 1,
-                            offset: const Offset(0, 1),
-                            spreadRadius: 0,
-                            blurStyle: BlurStyle.inner),
-                      ],
-                    ),
+                      );
+                    }
                   ),
                 ),
                 SizedBox(
@@ -447,12 +442,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
                       _buildNavItem(0, Icons.home_rounded, Icons.home_outlined),
-                      _buildNavItem(
-                          1, Icons.explore_rounded, Icons.explore_outlined),
-                      _buildNavItem(2, Icons.assignment_rounded,
-                          Icons.assignment_outlined),
-                      _buildNavItem(3, Icons.person_rounded,
-                          Icons.person_outline_rounded),
+                      _buildNavItem(1, Icons.explore_rounded, Icons.explore_outlined),
+                      _buildNavItem(2, Icons.assignment_rounded, Icons.assignment_outlined),
+                      _buildNavItem(3, Icons.person_rounded, Icons.person_outline_rounded),
                     ],
                   ),
                 ),
@@ -464,8 +456,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildNavItem(
-      int index, IconData selectedIcon, IconData unselectedIcon) {
+  Widget _buildNavItem(int index, IconData selectedIcon, IconData unselectedIcon) {
     final double distance = (_currentPosition - index).abs();
     final double t = (1.0 - distance).clamp(0.0, 1.0);
     double scale = 1.0 + (0.1 * t);
@@ -477,24 +468,20 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       iconColor = Color.lerp(AppColors.textGrey, AppColors.textDark, t)!;
     }
 
-    return GestureDetector(
-      onTap: () => _onTabTapped(index),
-      behavior: HitTestBehavior.translucent,
-      child: SizedBox(
-        width: (MediaQuery.of(context).size.width - 48) / 4,
-        height: 68,
-        child: Transform.scale(
-          scale: scale,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                t > 0.6 ? selectedIcon : unselectedIcon,
-                color: iconColor,
-                size: 24,
-              ),
-            ],
-          ),
+    return SizedBox(
+      width: (MediaQuery.of(context).size.width - 48) / 4, // [修复] 宽度必须是 / 4，与指示器逻辑一致
+      height: 68, 
+      child: Transform.scale(
+        scale: scale,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              t > 0.6 ? selectedIcon : unselectedIcon,
+              color: iconColor,
+              size: 24, 
+            ),
+          ],
         ),
       ),
     );
@@ -601,102 +588,57 @@ class _HomeDashboardContentState extends State<_HomeDashboardContent> {
     final double topPadding = MediaQuery.of(context).padding.top;
 
     return Stack(
-      children: [
+      children: [ 
         ListView(
-          // [关键点1] 强制开启滚动物理效果，即使内容少也能滑动
-          physics: const AlwaysScrollableScrollPhysics(
-              parent: BouncingScrollPhysics()),
+      // [关键点1] 强制开启滚动物理效果，即使内容少也能滑动
+      physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+      
+      // [关键点2] 增加底部 Padding (130)，确保内容不被悬浮导航栏遮挡，且预留滑动空间
+      padding: EdgeInsets.fromLTRB(20, topPadding + 60, 20, 130),
+      children: [
+        // 0. 搜索框
+        _buildSearchBar(),
 
-          // [关键点2] 增加底部 Padding (130)，确保内容不被悬浮导航栏遮挡，且预留滑动空间
-          padding: EdgeInsets.fromLTRB(20, topPadding + 60, 20, 130),
-          children: [
-            // 0. 搜索框
-            _buildSearchBar(),
-            const SizedBox(height: 16),
+        const SizedBox(height: 16),
 
-            // 1. AI 智能问诊 (修复版：文字完整显示)
-            _buildHeroAiCard(context),
+        // 1. AI 智能问诊 (修复版：文字完整显示)
+        _buildHeroAiCard(context),
 
-            const SizedBox(height: 16),
+        const SizedBox(height: 16),
+        
+        // 1.2 成长日志中枢
+        _buildGrowthLogCard(context),
 
-            // 1.5 体重趋势卡片
-            const WeightTrendCard(),
+        const SizedBox(height: 16),
 
-            const SizedBox(height: 16),
+        // 1.5 体重趋势卡片
+        const WeightTrendCard(),
 
-            // 2. 功能网格
-            LayoutBuilder(
-              builder: (context, constraints) {
-                double width = (constraints.maxWidth - 12) / 2;
-                return Wrap(
-                  spacing: 12,
-                  runSpacing: 12,
-                  children: [
-                    _buildFeatureCard(
-                        width,
-                        '电子档案',
-                        'Vaccine',
-                        Icons.badge_rounded,
-                        AppColors.coolGradient,
-                        const PetPassportPage()),
-                    _buildFeatureCard(
-                        width,
-                        '成长日记',
-                        'Diary',
-                        Icons.menu_book_rounded,
-                        AppColors.natureGradient,
-                        const PetDiaryComposePage()),
-                    _buildFeatureCard(
-                        width,
-                        '活力健身',
-                        'Fitness',
-                        Icons.directions_run_rounded,
-                        AppColors.oceanGradient,
-                        const PartnerFitGymPage()),
-                    _buildFeatureCard(
-                        width,
-                        '营养食谱',
-                        'Food',
-                        Icons.restaurant_menu_rounded,
-                        AppColors.goldGradient,
-                        const PetRecipeListPage()),
-                    _buildFeatureCard(
-                        width,
-                        '训宠响片',
-                        'Training',
-                        Icons.touch_app_rounded,
-                        AppColors.magicGradient,
-                        const DogClickerScreen()),
-                    _buildFeatureCard(
-                        width,
-                        '宠物商城',
-                        'Shop',
-                        Icons.shopping_bag_rounded,
-                        AppColors.coolGradient,
-                        const PetShopPage()),
-                    _buildFeatureCard(
-                        width,
-                        '寻宠救援',
-                        '希望您永远使用不到此功能',
-                        Icons.phonelink_ring_rounded,
-                        const LinearGradient(
-                            colors: [Color(0xFFFF416C), Color(0xFFFF4B2B)]),
-                        const LostPetRescuePage(),
-                        subtitleMaxLines: 2),
-                    _buildFeatureCard(
-                        width,
-                        '寻宠互助',
-                        'Emergency',
-                        Icons.campaign_rounded,
-                        AppColors.navTab1,
-                        const CommunityScreen()),
-                  ],
+        const SizedBox(height: 16), 
+
+        // 2. 功能网格
+        LayoutBuilder(
+          builder: (context, constraints) { 
+            double width = (constraints.maxWidth - 12) / 2;
+            return Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                _buildFeatureCard(width, '宠物消费', 'Expenses', Icons.account_balance_wallet_rounded, const LinearGradient(colors: [Color(0xFF6A85B6), Color(0xFFBAC8E0)]), const UnifiedExpenseHomePage()),
+                _buildFeatureCard(width, '智能提醒', 'Reminder', Icons.notifications_active_rounded, const LinearGradient(colors: [Color(0xFFA18CD1), Color(0xFFFBC2EB)]), const IntelligentReminderPage()),
+                _buildFeatureCard(width, '电子档案', 'Vaccine', Icons.badge_rounded, AppColors.coolGradient, const PetPassportPage()),
+                _buildFeatureCard(width, '第一人称日记', 'Diary', Icons.menu_book_rounded, AppColors.natureGradient, const PetDiaryComposePage()),
+                _buildFeatureCard(width, '活力健身', 'Fitness', Icons.directions_run_rounded, AppColors.oceanGradient, const PartnerFitGymPage()),
+                _buildFeatureCard(width, '营养食谱', 'Food', Icons.restaurant_menu_rounded, AppColors.goldGradient, const PetRecipeListPage()),
+                _buildFeatureCard(width, '训宠响片', 'Training', Icons.touch_app_rounded, AppColors.magicGradient, const DogClickerScreen()),
+                _buildFeatureCard(width, '寻宠救援', '希望您永远使用不到此功能', Icons.phonelink_ring_rounded, const LinearGradient(colors: [Color(0xFFFF416C), Color(0xFFFF4B2B)]), const LostPetRescuePage(), subtitleMaxLines: 2),
+              ],
                 );
               },
             ),
 
             // 3. 底部占位演示 (表明可滑动)
-            const SizedBox(height: 30),
+            const SizedBox(height: 30), 
             Center(
               child: Text(
                 "更多功能敬请期待...",
@@ -711,43 +653,43 @@ class _HomeDashboardContentState extends State<_HomeDashboardContent> {
           ],
         ),
         // 搜索结果列表（覆盖在内容上方）
-        if (_showSearchResults && _searchResults.isNotEmpty)
-          Positioned(
-            top: topPadding + 60 + 60, // 搜索框下方
-            left: 20,
-            right: 20,
-            child: Material(
-              elevation: 8,
-              borderRadius: BorderRadius.circular(12),
-              child: Container(
-                constraints: const BoxConstraints(maxHeight: 400),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: _searchResults.length,
-                  itemBuilder: (context, index) {
-                    final result = _searchResults[index];
-                    return ListTile(
-                      leading:
-                          Icon(result.icon, color: const Color(0xFF5D5FEF)),
-                      title: Text(result.name),
-                      onTap: () => _navigateToResult(result),
-                    );
-                  },
-                ),
+      if (_showSearchResults && _searchResults.isNotEmpty)
+        Positioned(
+          top: topPadding + 60 + 60, // 搜索框下方
+          left: 20,
+          right: 20,
+          child: Material(
+            elevation: 8,
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              constraints: const BoxConstraints(maxHeight: 400),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: _searchResults.length,
+                itemBuilder: (context, index) {
+                  final result = _searchResults[index];
+                  return ListTile(
+                    leading:
+                        Icon(result.icon, color: const Color(0xFF5D5FEF)),
+                    title: Text(result.name),
+                    onTap: () => _navigateToResult(result),
+                  );
+                },
               ),
             ),
           ),
+        ),
       ],
     );
   }
@@ -888,8 +830,8 @@ class _HomeDashboardContentState extends State<_HomeDashboardContent> {
                         ),
 
                         // 使用 SizedBox 代替 Spacer，防止文字被挤到最下面
-                        const SizedBox(height: 20),
-
+                        const SizedBox(height: 22), 
+                         
                         // 大标题
                         const Text("AI 智能问诊",
                             style: TextStyle(
@@ -947,6 +889,106 @@ class _HomeDashboardContentState extends State<_HomeDashboardContent> {
                     ),
                   )
                 ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // 成长日志卡片
+  Widget _buildGrowthLogCard(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.mediumImpact();
+        Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const GrowthLogPage()));
+      },
+      child: Container(
+        height: 100, 
+        width: double.infinity,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(24),
+           boxShadow: [
+            BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 15, offset: const Offset(0, 8)),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(24),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+            child: Container(
+              decoration: BoxDecoration(
+                // 仿照 WeightTrendCard 的风格，但用清新的绿色调
+                color: Colors.white.withOpacity(0.65),
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(color: Colors.white.withOpacity(0.6), width: 1),
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft, end: Alignment.bottomRight,
+                  colors: [
+                    Colors.white.withOpacity(0.8),
+                    const Color(0xFFE0F2F1).withOpacity(0.4), // Light Teal
+                  ],
+                ),
+              ),
+              child: Stack(
+                  children: [
+                    Positioned(
+                      right: -10, bottom: -20,
+                      child: Opacity(
+                        opacity: 0.05,
+                        child: Icon(Icons.timeline_rounded, size: 140, color: Colors.teal),
+                      )
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 0), // centered cleanly
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFE0F2F1), // Light Teal bg
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white, width: 2),
+                              boxShadow: [
+                                BoxShadow(color: Colors.teal.withOpacity(0.1), blurRadius: 8, offset: const Offset(0, 4)),
+                              ],
+                            ),
+                            child: const Icon(Icons.history_edu_rounded, color: Colors.teal, size: 26),
+                          ),
+                          const SizedBox(width: 16),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: const [
+                              Text(
+                                "成长日志",
+                                style: TextStyle(
+                                  fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textDark
+                                ),
+                              ),
+                              SizedBox(height: 4),
+                              Text(
+                                "记录每一个重要时刻",
+                                style: TextStyle(
+                                  fontSize: 13, color: AppColors.secondaryText
+                                ),
+                              ),
+                            ],
+                          ),
+                          const Spacer(),
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.5),
+                              shape: BoxShape.circle
+                            ),
+                            child: const Icon(Icons.arrow_forward_rounded, size: 18, color: Colors.teal),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ]
               ),
             ),
           ),

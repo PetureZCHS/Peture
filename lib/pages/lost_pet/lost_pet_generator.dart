@@ -81,13 +81,13 @@ $rewardText！麻烦大家帮忙转发扩散，好人一生平安！🙏
 它胆子${isCat ? '小' : '大'}，可能${isCat ? '躲在角落' : '在到处乱跑'}。
 如果有好心人看到，请一定一定联系我！
 📞电话：${info.contactInfo}
-💰${rewardText}
+💰$rewardText
 
 #寻${isCat ? '猫' : '狗'} #寻宠 #${info.lostLocation}寻宠 #宠物走失 #扩散 #救救孩子
 ''';
 
     // 4. Short Message
-    final shortMessageText = '【寻宠】${info.lostLocation}走失一只${info.description}的${isCat ? '猫' : '狗'}，名${info.name}。如有线索请联系${info.contactInfo}，${rewardText}。';
+    final shortMessageText = '【寻宠】${info.lostLocation}走失一只${info.description}的${isCat ? '猫' : '狗'}，名${info.name}。如有线索请联系${info.contactInfo}，$rewardText。';
 
     // 5. Poster Content
     final posterHeadline = '寻${isCat ? '猫' : '狗'}启事 / $rewardText';
