@@ -361,7 +361,7 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
         answer.startsWith("出现错误")) {
       return;
     }
-
+ 
     // 生成对话标题（使用问题的前30个字符，或完整问题如果更短）
     final title =
         question.length > 30 ? '${question.substring(0, 30)}...' : question;
@@ -437,7 +437,7 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
   Future<void> _loadConversation(Conversation conversation) async {
     if (conversation.id == null) {
       debugPrint("❌ 无法加载对话：conversation.id 为 null");
-      return;
+      return; 
     }
 
     debugPrint("📖 开始加载历史对话...");
@@ -1611,7 +1611,7 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
       ),
     );
   }
-
+ 
   Widget _buildActionChip({
     required IconData icon,
     required String label,
@@ -1900,7 +1900,7 @@ class _AppDrawerState extends State<AppDrawer> {
   @override
   Widget build(BuildContext context) {
     return Drawer(
-      backgroundColor: Colors.transparent,
+      backgroundColor: Colors.transparent, 
       elevation: 0,
       child: ClipRRect(
         borderRadius: const BorderRadius.only(

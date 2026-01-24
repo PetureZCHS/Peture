@@ -21,10 +21,10 @@ import 'pages/lost_pet/lost_pet_rescue_page.dart';
 import 'community_screen.dart';
 import 'medical_record_screen.dart';
 import 'profile_screen.dart';
-import 'pages/growth_log/growth_log_page.dart';
+import 'pages/growth_log/growth_log_page.dart'; 
 import 'widgets/weight_trend_card.dart';
 import 'utils/ui_helpers.dart';
-
+ 
 /// 搜索结果数据模型
 class SearchResult {
   final String name;
@@ -110,7 +110,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   @override
   void dispose() {
     _tabController.dispose();
-    _medicalScreenRefreshNotifier.dispose();
+    _medicalScreenRefreshNotifier.dispose(); 
     super.dispose();
   }
 
@@ -258,7 +258,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         AppColors.navGradients[_currentIndex];
 
     return GestureDetector(
-      behavior: HitTestBehavior.opaque, // 确保整个区域都响应点击和拖拽
+      behavior: HitTestBehavior.opaque, // 确保整个区域都响应点击和拖拽 
       onTapUp: (details) {
         final double width = MediaQuery.of(context).size.width - 48;
         final double itemWidth = width / 4;
@@ -272,7 +272,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       onHorizontalDragUpdate: (details) {
         final double width = MediaQuery.of(context).size.width - 48;
         final double itemWidth = width / 4;
-        double newPosition = (details.localPosition.dx / itemWidth) - 0.5;
+        double newPosition = (details.localPosition.dx / itemWidth) - 0.5; 
 
         setState(() {
           _currentPosition = newPosition.clamp(0.0, 3.0);
@@ -318,7 +318,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         HapticFeedback.lightImpact();
       },
       onHorizontalDragCancel: () {
-        _animateToPage(_currentIndex);
+        _animateToPage(_currentIndex); 
       },
       child: Container(
         height: navHeight,
@@ -588,7 +588,7 @@ class _HomeDashboardContentState extends State<_HomeDashboardContent> {
     final double topPadding = MediaQuery.of(context).padding.top;
 
     return Stack(
-      children: [
+      children: [ 
         ListView(
       // [关键点1] 强制开启滚动物理效果，即使内容少也能滑动
       physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
@@ -618,7 +618,7 @@ class _HomeDashboardContentState extends State<_HomeDashboardContent> {
 
         // 2. 功能网格
         LayoutBuilder(
-          builder: (context, constraints) {
+          builder: (context, constraints) { 
             double width = (constraints.maxWidth - 12) / 2;
             return Wrap(
               spacing: 12,
@@ -638,7 +638,7 @@ class _HomeDashboardContentState extends State<_HomeDashboardContent> {
             ),
 
             // 3. 底部占位演示 (表明可滑动)
-            const SizedBox(height: 30),
+            const SizedBox(height: 30), 
             Center(
               child: Text(
                 "更多功能敬请期待...",
@@ -831,7 +831,7 @@ class _HomeDashboardContentState extends State<_HomeDashboardContent> {
 
                         // 使用 SizedBox 代替 Spacer，防止文字被挤到最下面
                         const SizedBox(height: 22), 
-                        
+                         
                         // 大标题
                         const Text("AI 智能问诊",
                             style: TextStyle(
