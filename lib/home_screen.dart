@@ -574,7 +574,7 @@ class _HomeDashboardContent extends StatelessWidget {
                         ),
                         
                         // 使用 SizedBox 代替 Spacer，防止文字被挤到最下面
-                        const SizedBox(height: 24), 
+                        const SizedBox(height: 22), 
                         
                         // 大标题
                         const Text("AI 智能问诊", 
