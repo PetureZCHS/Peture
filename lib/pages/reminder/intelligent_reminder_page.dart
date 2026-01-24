@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../../database/reminder_helper.dart';
+import '../../services/supabase_service.dart';
 import 'add_vaccine_reminder_page.dart';
 import 'add_deworming_reminder_page.dart';
 import 'add_medication_reminder_page.dart';
@@ -92,6 +92,7 @@ class VaccineReminderTab extends StatefulWidget {
 class _VaccineReminderTabState extends State<VaccineReminderTab> {
   List<Map<String, dynamic>> _reminders = [];
   bool _isLoading = true;
+  final SupabaseService _supabaseService = SupabaseService();
 
   @override
   void initState() {
@@ -105,7 +106,7 @@ class _VaccineReminderTabState extends State<VaccineReminderTab> {
     });
 
     try {
-      final data = await ReminderHelper.instance.getAllVaccineReminders();
+      final data = await _supabaseService.getAllVaccineReminders();
       if (mounted) {
         setState(() {
           _reminders = data;
@@ -121,8 +122,8 @@ class _VaccineReminderTabState extends State<VaccineReminderTab> {
     }
   }
 
-  Future<void> _deleteReminder(int id) async {
-    await ReminderHelper.instance.deleteVaccineReminder(id);
+  Future<void> _deleteReminder(String id) async {
+    await _supabaseService.deleteVaccineReminder(id);
     _loadReminders();
   }
 
@@ -226,7 +227,7 @@ class _VaccineReminderTabState extends State<VaccineReminderTab> {
           ),
         );
         if (confirmed == true) {
-          await _deleteReminder(reminder['id'] as int);
+          await _deleteReminder(reminder['id'] as String);
         }
         return false;
       },
@@ -388,6 +389,7 @@ class DewormingReminderTab extends StatefulWidget {
 class _DewormingReminderTabState extends State<DewormingReminderTab> {
   List<Map<String, dynamic>> _reminders = [];
   bool _isLoading = true;
+  final SupabaseService _supabaseService = SupabaseService();
 
   @override
   void initState() {
@@ -401,7 +403,7 @@ class _DewormingReminderTabState extends State<DewormingReminderTab> {
     });
 
     try {
-      final data = await ReminderHelper.instance.getAllDewormingReminders();
+      final data = await _supabaseService.getAllDewormingReminders();
       if (mounted) {
         setState(() {
           _reminders = data;
@@ -417,18 +419,17 @@ class _DewormingReminderTabState extends State<DewormingReminderTab> {
     }
   }
 
-  Future<void> _deleteReminder(int id) async {
-    await ReminderHelper.instance.deleteDewormingReminder(id);
+  Future<void> _deleteReminder(String id) async {
+    await _supabaseService.deleteDewormingReminder(id);
     _loadReminders();
   }
 
   Future<void> _completeDeworming(int id) async {
-    await ReminderHelper.instance.completeDewormingReminder(id);
+    // 云端版本暂未实现自动生成下一次驱虫提醒，这里先提示并刷新列表
     if (mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('已完成，下次提醒已自动更新')));
-      _loadReminders();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('已标记完成（云端版本暂不自动续期）')),
+      );
     }
   }
 
@@ -530,7 +531,7 @@ class _DewormingReminderTabState extends State<DewormingReminderTab> {
           ),
         );
         if (confirmed == true) {
-          await _deleteReminder(reminder['id'] as int);
+          await _deleteReminder(reminder['id'] as String);
         }
         return false;
       },
@@ -693,6 +694,7 @@ class MedicationReminderTab extends StatefulWidget {
 class _MedicationReminderTabState extends State<MedicationReminderTab> {
   List<Map<String, dynamic>> _reminders = [];
   bool _isLoading = true;
+  final SupabaseService _supabaseService = SupabaseService();
 
   @override
   void initState() {
@@ -706,7 +708,7 @@ class _MedicationReminderTabState extends State<MedicationReminderTab> {
     });
 
     try {
-      final data = await ReminderHelper.instance.getAllMedicationReminders();
+      final data = await _supabaseService.getAllMedicationReminders();
       if (mounted) {
         setState(() {
           _reminders = data;
@@ -722,8 +724,8 @@ class _MedicationReminderTabState extends State<MedicationReminderTab> {
     }
   }
 
-  Future<void> _deleteReminder(int id) async {
-    await ReminderHelper.instance.deleteMedicationReminder(id);
+  Future<void> _deleteReminder(String id) async {
+    await _supabaseService.deleteMedicationReminder(id);
     _loadReminders();
   }
 
@@ -826,7 +828,7 @@ class _MedicationReminderTabState extends State<MedicationReminderTab> {
           ),
         );
         if (confirmed == true) {
-          await _deleteReminder(reminder['id'] as int);
+          await _deleteReminder(reminder['id'] as String);
         }
         return false;
       },
@@ -978,64 +980,7 @@ class _MedicationReminderTabState extends State<MedicationReminderTab> {
                   ],
                 ),
                 // 今日进度显示
-                if (isActive) ...[
-                  const SizedBox(height: 8),
-                  FutureBuilder<List<Map<String, dynamic>>>(
-                    future: ReminderHelper.instance.getCheckmarksByDate(
-                      reminder['id'] as int,
-                      DateTime.now().toIso8601String().split('T')[0],
-                    ),
-                    builder: (context, snapshot) {
-                      if (snapshot.hasData && snapshot.data!.isNotEmpty) {
-                        final checkmarks = snapshot.data!;
-                        final completed = checkmarks
-                            .where((c) => c['is_completed'] == 1)
-                            .length;
-                        final total = checkmarks.length;
-                        final percentage = (completed / total * 100).toInt();
-
-                        return Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: completed == total
-                                ? const Color(0xFF4CAF50).withOpacity(0.1)
-                                : const Color(0xFF2196F3).withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                completed == total
-                                    ? Icons.check_circle
-                                    : Icons.schedule,
-                                size: 14,
-                                color: completed == total
-                                    ? const Color(0xFF4CAF50)
-                                    : const Color(0xFF2196F3),
-                              ),
-                              const SizedBox(width: 6),
-                              Text(
-                                '今日：$completed/$total 次 ($percentage%)',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: completed == total
-                                      ? const Color(0xFF4CAF50)
-                                      : const Color(0xFF2196F3),
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      }
-                      return const SizedBox.shrink();
-                    },
-                  ),
-                ],
+                // 云端版本暂未实现每日打卡统计，先不展示进度
                 if (reminder['notes'] != null &&
                     (reminder['notes'] as String).isNotEmpty) ...[
                   const SizedBox(height: 12),

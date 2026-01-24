@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../../models/unified_expense.dart';
 import '../../database/unified_expense_helper.dart';
-import '../../database/medical_record_helper.dart';
+import '../../services/supabase_service.dart';
 
 class AddUnifiedExpensePage extends StatefulWidget {
   final UnifiedExpense? expense;
@@ -15,16 +15,16 @@ class AddUnifiedExpensePage extends StatefulWidget {
 }
 
 class _AddUnifiedExpensePageState extends State<AddUnifiedExpensePage> {
-  // State
+  // State - Using Feature UI approach
   ExpenseTypeEnum _selectedExpenseType = ExpenseTypeEnum.oneOff;
   String _amountStr = '0.00';
-  bool _isTyping = false; // To handle initial clear on first tap
+  bool _isTyping = false;
   
   UnifiedExpenseCategory? _selectedCategory;
   DateTime _selectedDate = DateTime.now();
   
-  // Pet Selection
-  int? _selectedPetId;
+  // Pet Selection - String for Supabase UUID support
+  String? _selectedPetId;
   String? _selectedPetName;
   List<Map<String, dynamic>> _pets = [];
   
@@ -34,7 +34,7 @@ class _AddUnifiedExpensePageState extends State<AddUnifiedExpensePage> {
   // Recurring Extra Fields
   final TextEditingController _itemNameController = TextEditingController();
   DateTime? _estimatedEndDate;
-  ItemTypeEnum? _selectedItemType; // Default consumable for recurring
+  ItemTypeEnum? _selectedItemType;
 
   bool _isLoading = false;
 
@@ -48,19 +48,17 @@ class _AddUnifiedExpensePageState extends State<AddUnifiedExpensePage> {
   void _initData() {
     if (widget.expense != null) {
       _amountStr = widget.expense!.amount.toStringAsFixed(2);
-      // Remove trailing .00 if needed for better display editing but usually keep formatted
-       if (_amountStr.endsWith('.00')) {
+      if (_amountStr.endsWith('.00')) {
          _amountStr = widget.expense!.amount.toStringAsFixed(0);
        } else {
           _amountStr = widget.expense!.amount.toString();
        }
-       _isTyping = true; // Don't clear on click
+       _isTyping = true;
 
       _selectedExpenseType = widget.expense!.expenseType == 'one-off'
           ? ExpenseTypeEnum.oneOff
           : ExpenseTypeEnum.recurring;
       
-      // Find category object
       final categories = _selectedExpenseType == ExpenseTypeEnum.oneOff 
           ? UnifiedExpenseCategory.oneOffCategories 
           : UnifiedExpenseCategory.recurringCategories;
@@ -68,7 +66,6 @@ class _AddUnifiedExpensePageState extends State<AddUnifiedExpensePage> {
       try {
         _selectedCategory = categories.firstWhere((c) => c.name == widget.expense!.category);
       } catch (_) {
-        // Fallback or use by name if custom
         _selectedCategory = UnifiedExpenseCategory(
           name: widget.expense!.category, 
           icon: Icons.category.codePoint, 
@@ -92,7 +89,6 @@ class _AddUnifiedExpensePageState extends State<AddUnifiedExpensePage> {
             : ItemTypeEnum.durable;
       }
     } else {
-      // Defaults
       _selectedCategory = UnifiedExpenseCategory.oneOffCategories.first;
     }
   }
@@ -105,7 +101,9 @@ class _AddUnifiedExpensePageState extends State<AddUnifiedExpensePage> {
   }
 
   Future<void> _loadPets() async {
-    final pets = await MedicalRecordHelper.instance.getAllPets();
+    // Load from Supabase for UUID support
+    final supabaseService = SupabaseService();
+    final pets = await supabaseService.getAllPets();
     if (mounted) {
       setState(() {
         _pets = pets;
@@ -129,7 +127,6 @@ class _AddUnifiedExpensePageState extends State<AddUnifiedExpensePage> {
       } else if (value == 'OK') {
         _saveExpense();
       } else {
-        // Number or Dot
         if (!_isTyping) {
           if (value == '.') {
             _amountStr = '0.';
@@ -149,16 +146,17 @@ class _AddUnifiedExpensePageState extends State<AddUnifiedExpensePage> {
       }
     });
   }
-
+ 
   Future<void> _selectDate() async {
     final DateTime? picked = await showDatePicker(
       context: context,
       initialDate: _selectedDate,
       firstDate: DateTime(2020),
-      lastDate: DateTime.now().add(const Duration(days: 365)), // Allow future for Recurring?
+      lastDate: DateTime.now().add(const Duration(days: 365)), 
       locale: const Locale('zh', 'CN'),
     );
-    if (picked != null) {
+
+    if (picked != null && picked != _selectedDate) {
       setState(() {
         _selectedDate = picked;
       });
@@ -174,11 +172,8 @@ class _AddUnifiedExpensePageState extends State<AddUnifiedExpensePage> {
       return;
     }
 
-    // Recurring Checks
     if (_selectedExpenseType == ExpenseTypeEnum.recurring) {
       if (_itemNameController.text.trim().isEmpty) {
-        // If empty, auto-use category name or note, but better ask user
-        // For simplicity, auto-use category name if note is also empty
         _itemNameController.text = _selectedCategory!.name;
       }
       if (_selectedItemType == null) {
@@ -198,17 +193,42 @@ class _AddUnifiedExpensePageState extends State<AddUnifiedExpensePage> {
         petId: _selectedPetId,
         petName: _selectedPetName,
         note: _noteController.text.isEmpty ? null : _noteController.text,
-        itemName: _selectedExpenseType == ExpenseTypeEnum.recurring ? (_itemNameController.text.isEmpty ? _selectedCategory!.name : _itemNameController.text) : null,
-        estimatedEndDate: _estimatedEndDate != null ? DateFormat('yyyy-MM-dd').format(_estimatedEndDate!) : null,
-        itemType: _selectedExpenseType == ExpenseTypeEnum.recurring ? _selectedItemType?.value : null,
+        itemName: _selectedExpenseType == ExpenseTypeEnum.recurring 
+            ? (_itemNameController.text.isEmpty ? _selectedCategory!.name : _itemNameController.text) 
+            : null,
+        estimatedEndDate: _selectedExpenseType == ExpenseTypeEnum.recurring && _estimatedEndDate != null
+            ? DateFormat('yyyy-MM-dd').format(_estimatedEndDate!)
+            : null,
+        itemType: _selectedExpenseType == ExpenseTypeEnum.recurring 
+            ? _selectedItemType?.value 
+            : null,
         createdAt: widget.expense?.createdAt ?? DateTime.now().toIso8601String(),
-        photoPath: null, 
+        photoPath: null,
       );
 
+      // Dual storage: Local database + Supabase sync
+      final supabaseService = SupabaseService();
+      bool success = false;
+      
       if (widget.expense == null) {
+        // 新增 - Save to both local and cloud
         await UnifiedExpenseHelper.instance.insertExpense(expense);
+        final result = await supabaseService.insertUnifiedExpense(expense.toMap());
+        if (result != null) success = true;
       } else {
+        // 更新 - Update both local and cloud
         await UnifiedExpenseHelper.instance.updateExpense(expense);
+        success = await supabaseService.updateUnifiedExpense(expense.toMap());
+      }
+
+      if (!success) {
+        if (mounted) {
+           setState(() { _isLoading = false; });
+           ScaffoldMessenger.of(context).showSnackBar(
+             const SnackBar(content: Text('云端保存失败，请检查网络连接'), backgroundColor: Colors.orange)
+           );
+        }
+        return;
       }
 
       if (mounted) {
@@ -217,14 +237,15 @@ class _AddUnifiedExpensePageState extends State<AddUnifiedExpensePage> {
     } catch (e) {
       if (mounted) {
         setState(() { _isLoading = false; });
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('保存失败: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('保存失败: $e'), backgroundColor: Colors.red)
+        );
       }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // Current visible categories
     final categories = _selectedExpenseType == ExpenseTypeEnum.oneOff 
          ? UnifiedExpenseCategory.oneOffCategories 
          : UnifiedExpenseCategory.recurringCategories;
@@ -234,13 +255,9 @@ class _AddUnifiedExpensePageState extends State<AddUnifiedExpensePage> {
       body: SafeArea(
         child: Column(
           children: [
-            // 1. Custom Top Bar + Type Switcher
             _buildTopBar(),
-
-            // 2. Account Selector & Amount Display
             _buildAccountAndAmount(),
             
-            // 3. Category Grid (Expanded)
             Expanded(
               child: Container(
                 margin: const EdgeInsets.only(top: 10),
@@ -300,7 +317,6 @@ class _AddUnifiedExpensePageState extends State<AddUnifiedExpensePage> {
       onTap: () {
         setState(() {
           _selectedExpenseType = type;
-          // Reset category if not found in new type
           final newCats = type == ExpenseTypeEnum.oneOff 
               ? UnifiedExpenseCategory.oneOffCategories 
               : UnifiedExpenseCategory.recurringCategories;
@@ -334,7 +350,6 @@ class _AddUnifiedExpensePageState extends State<AddUnifiedExpensePage> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          // Account Selector
           GestureDetector(
              onTap: _showPetSelector,
              child: Container(
@@ -353,14 +368,13 @@ class _AddUnifiedExpensePageState extends State<AddUnifiedExpensePage> {
              ),
           ),
           
-          // Amount
           Text(
             '¥$_amountStr',
             style: const TextStyle(
               fontSize: 32,
               fontWeight: FontWeight.bold,
               color: Color(0xFFFF3B30),
-              fontFamily: 'Roboto', // Or system
+              fontFamily: 'Roboto',
             ),
           ),
         ],
@@ -386,11 +400,11 @@ class _AddUnifiedExpensePageState extends State<AddUnifiedExpensePage> {
                  child: Text('暂无宠物，请先去添加宠物档案'),
                ),
             ..._pets.map((pet) => ListTile(
-              leading: const CircleAvatar(child: Icon(Icons.pets)), // Should use photo
+              leading: const CircleAvatar(child: Icon(Icons.pets)),
               title: Text(pet['name']),
               onTap: () {
                 setState(() {
-                  _selectedPetId = pet['id'];
+                  _selectedPetId = pet['id']?.toString();
                   _selectedPetName = pet['name'];
                 });
                 Navigator.pop(context);
@@ -402,7 +416,7 @@ class _AddUnifiedExpensePageState extends State<AddUnifiedExpensePage> {
               onTap: () {
                 setState(() {
                   _selectedPetId = null;
-                  _selectedPetName = null; // null means generic
+                  _selectedPetName = null;
                 });
                  Navigator.pop(context);
               },
@@ -467,7 +481,6 @@ class _AddUnifiedExpensePageState extends State<AddUnifiedExpensePage> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Options Row
           Container(
             height: 44,
             width: double.infinity,
@@ -486,10 +499,9 @@ class _AddUnifiedExpensePageState extends State<AddUnifiedExpensePage> {
                 const SizedBox(width: 8),
                 _buildSmallChip(
                   icon: Icons.book_rounded, 
-                  text: '默认账本', // Placeholder
+                  text: '默认账本',
                   onTap: () {}
                 ),
-                // Only show item name input for recurring
                 if (_selectedExpenseType == ExpenseTypeEnum.recurring) ...[
                    const SizedBox(width: 8),
                    GestureDetector(
@@ -505,7 +517,7 @@ class _AddUnifiedExpensePageState extends State<AddUnifiedExpensePage> {
                      },
                      child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration( color: const Color(0xFFF2F2F7), borderRadius: BorderRadius.circular(14)),
+                      decoration: BoxDecoration(color: const Color(0xFFF2F2F7), borderRadius: BorderRadius.circular(14)),
                       child: Text(_itemNameController.text.isEmpty ? '输入物品名' : _itemNameController.text, style: const TextStyle(fontSize: 13, color: Color(0xFF1C1C1E))),
                      ),
                    )
@@ -514,7 +526,6 @@ class _AddUnifiedExpensePageState extends State<AddUnifiedExpensePage> {
             ),
           ),
           
-          // Remarks
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
              alignment: Alignment.centerLeft,
@@ -532,7 +543,6 @@ class _AddUnifiedExpensePageState extends State<AddUnifiedExpensePage> {
           
           const Divider(height: 1, color: Color(0xFFF2F2F7)),
           
-          // Keypad
           _buildKeypad(),
         ],
       ),
@@ -567,7 +577,6 @@ class _AddUnifiedExpensePageState extends State<AddUnifiedExpensePage> {
       padding: const EdgeInsets.only(bottom: 20),
       child: Row(
         children: [
-          // Numbers Area (3/4 width)
           Expanded(
             flex: 3,
             child: Column(
@@ -579,12 +588,11 @@ class _AddUnifiedExpensePageState extends State<AddUnifiedExpensePage> {
               ],
             ),
           ),
-          // Action Area (1/4 width)
           Expanded(
             flex: 1,
             child: Column(
               children: [
-                Expanded(child: _kBtn('DATE', icon: Icons.calendar_month)), // Or other functional key
+                Expanded(child: _kBtn('DATE', icon: Icons.calendar_month)),
                 Expanded(
                   flex: 3,
                   child: GestureDetector(
@@ -621,7 +629,6 @@ class _AddUnifiedExpensePageState extends State<AddUnifiedExpensePage> {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(8),
-            // boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 2)]
           ),
           child: Center(
              child: icon != null 

@@ -6,7 +6,8 @@ import 'package:intl/intl.dart';
 // 添加数据库助手导入
 import 'services/supabase_service.dart';
 import 'models/pet.dart';
-import 'utils/ui_helpers.dart'; // Import AppColors
+import 'home_screen.dart'; // 导入 DataChangeNotifier
+import 'utils/ui_helpers.dart';
 
 // =========================================================
 // 1. 设计系统 (升级版)
@@ -27,7 +28,7 @@ class AppTheme {
   static const Color accentYellowDark = Color(0xFFB45309);
 
   static const LinearGradient primaryGradient = LinearGradient(
-    colors: [AppColors.primaryGradientStart, AppColors.primaryGradientEnd],
+    colors: [primary, primaryVariant],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
@@ -35,14 +36,14 @@ class AppTheme {
   // --- Text Styles & Spacing ---
   static const TextStyle heading1 = TextStyle(
     fontSize: 28,
-    fontWeight: FontWeight.w800,
+    fontWeight: FontWeight.w700,
     color: textPrimary,
     letterSpacing: -0.5,
     height: 1.2,
   );
   static const TextStyle heading2 = TextStyle(
     fontSize: 22,
-    fontWeight: FontWeight.w700,
+    fontWeight: FontWeight.w600,
     color: textPrimary,
     letterSpacing: -0.3,
     height: 1.3,
@@ -89,10 +90,10 @@ class AppTheme {
     height: 1.2,
   );
 
-  static const double borderRadius = 24.0;
+  static const double borderRadius = 20.0;
   static const double horizontalPadding = 20.0;
   static const double cardPadding = 24.0;
-  static const double sectionSpacing = 24.0;
+  static const double sectionSpacing = 32.0;
 }
 
 // =========================================================
@@ -160,7 +161,7 @@ class PetProfile {
 }
 
 class MedicalRecord extends HealthEvent {
-  final int? id;
+  final String? id; // 改为 String? 以支持 UUID
   final String description;
   MedicalRecord({this.id, required String date, required this.description})
       : super(date);
@@ -170,10 +171,16 @@ class MedicalRecord extends HealthEvent {
   }
 
   factory MedicalRecord.fromMap(Map<String, dynamic> map) {
+    // 处理 id：支持 int、String 和 null，统一转换为 String
+    String? id;
+    if (map['id'] != null) {
+      id = map['id'].toString();
+    }
+    
     return MedicalRecord(
-      id: map['id'] as int?,
-      date: map['date'] as String,
-      description: map['description'] as String,
+      id: id,
+      date: map['date']?.toString() ?? '',
+      description: map['description']?.toString() ?? '',
     );
   }
 
@@ -184,7 +191,7 @@ class MedicalRecord extends HealthEvent {
 }
 
 class DailyReminder {
-  final int? id;
+  final String? id; // 改为 String? 以支持 UUID
   final String time;
   final String task;
   DailyReminder({this.id, required this.time, required this.task});
@@ -194,10 +201,16 @@ class DailyReminder {
   }
 
   factory DailyReminder.fromMap(Map<String, dynamic> map) {
+    // 处理 id：支持 int、String 和 null，统一转换为 String
+    String? id;
+    if (map['id'] != null) {
+      id = map['id'].toString();
+    }
+    
     return DailyReminder(
-      id: map['id'] as int?,
-      time: map['time'] as String,
-      task: map['task'] as String,
+      id: id,
+      time: map['time']?.toString() ?? '',
+      task: map['task']?.toString() ?? '',
     );
   }
 
@@ -208,7 +221,7 @@ class DailyReminder {
 }
 
 class WeightRecord extends HealthEvent {
-  final int? id;
+  final String? id; // 改为 String? 以支持 UUID
   final double weight;
   final String? notes;
   WeightRecord({
@@ -223,11 +236,27 @@ class WeightRecord extends HealthEvent {
   }
 
   factory WeightRecord.fromMap(Map<String, dynamic> map) {
+    // 处理 id：支持 int、String 和 null，统一转换为 String
+    String? id;
+    if (map['id'] != null) {
+      id = map['id'].toString();
+    }
+    
+    // 处理 weight：支持 int 和 double
+    double weightValue;
+    if (map['weight'] is double) {
+      weightValue = map['weight'] as double;
+    } else if (map['weight'] is int) {
+      weightValue = (map['weight'] as int).toDouble();
+    } else {
+      weightValue = double.tryParse(map['weight']?.toString() ?? '0') ?? 0.0;
+    }
+    
     return WeightRecord(
-      id: map['id'] as int?,
-      date: map['date'] as String,
-      weight: map['weight'] as double,
-      notes: map['notes'] as String?,
+      id: id,
+      date: map['date']?.toString() ?? '',
+      weight: weightValue,
+      notes: map['notes']?.toString(),
     );
   }
 
@@ -246,7 +275,7 @@ class WeightRecord extends HealthEvent {
 }
 
 class VaccineRecord extends HealthEvent {
-  final int? id;
+  final String? id; // 改为 String? 以支持 UUID
   final String type;
   final String name;
   final String nextDueDate;
@@ -269,12 +298,25 @@ class VaccineRecord extends HealthEvent {
   }
 
   factory VaccineRecord.fromMap(Map<String, dynamic> map) {
+    // 处理 id：支持 int、String 和 null，统一转换为 String
+    String? id;
+    if (map['id'] != null) {
+      id = map['id'].toString();
+    }
+    
+    // 处理字段名：支持 camelCase 和 snake_case
+    final date = map['date']?.toString() ?? '';
+    final type = map['type']?.toString() ?? '';
+    final name = map['name']?.toString() ?? '';
+    final nextDueDate = map['nextDueDate']?.toString() ?? 
+                       map['next_due_date']?.toString() ?? '';
+    
     return VaccineRecord(
-      id: map['id'] as int?,
-      date: map['date'] as String,
-      type: map['type'] as String,
-      name: map['name'] as String,
-      nextDueDate: map['nextDueDate'] as String,
+      id: id,
+      date: date,
+      type: type,
+      name: name,
+      nextDueDate: nextDueDate,
     );
   }
 
@@ -340,7 +382,7 @@ class MedicalRecordScreen extends StatefulWidget {
   State<MedicalRecordScreen> createState() => _MedicalRecordScreenState();
 }
 
-class _MedicalRecordScreenState extends State<MedicalRecordScreen> with TickerProviderStateMixin {
+class _MedicalRecordScreenState extends State<MedicalRecordScreen> with SingleTickerProviderStateMixin {
   // --- State variables ---
   List<Pet> _allPets = [];
   Pet? _selectedPet;
@@ -375,6 +417,17 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> with TickerPr
     _loadAllData();
     // 监听刷新通知
     widget.refreshNotifier?.addListener(_onRefreshRequested);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // 每次页面可见时刷新数据，确保宠物列表是最新的
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _loadAllData();
+      }
+    });
   }
 
   @override
@@ -416,7 +469,7 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> with TickerPr
     }
   }
 
-  // --- Data Management (修改为使用 Supabase) ---
+  // --- Data Management (使用 Supabase) ---
   final _supabaseService = SupabaseService();
 
   Future<void> _loadAllData() async {
@@ -424,14 +477,33 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> with TickerPr
     final pets = await _supabaseService.getAllPets();
     if (!mounted) return; // 异步操作后检查是否仍然挂载
 
-    _allPets = pets.map((p) => Pet.fromMap(p)).toList();
+    print('医疗记录页面：加载到 ${pets.length} 个宠物');
+    for (var pet in pets) {
+      print('  - ${pet['name']} (id: ${pet['id']})');
+    }
 
-    // 设置默认选中的宠物
-    if (_allPets.isNotEmpty) {
-      setState(() {
-        _selectedPet = _allPets.first;
-      });
-      // 加载选中宠物的数据
+    setState(() {
+      _allPets = pets.map((p) => Pet.fromMap(p)).toList();
+      
+      print('医疗记录页面：_allPets 长度 = ${_allPets.length}');
+      
+      // 设置默认选中的宠物
+      if (_allPets.isNotEmpty) {
+        // 如果当前没有选中的宠物，或者当前选中的宠物不在列表中，则选择第一个
+        if (_selectedPet == null || 
+            !_allPets.any((pet) => pet.id?.toString() == _selectedPet?.id?.toString())) {
+          _selectedPet = _allPets.first;
+          print('医疗记录页面：选择第一个宠物 ${_selectedPet?.name}');
+        } else {
+          print('医疗记录页面：保持当前选中的宠物 ${_selectedPet?.name}');
+        }
+      } else {
+        _selectedPet = null;
+      }
+    });
+    
+    // 加载选中宠物的数据
+    if (_selectedPet != null) {
       await _loadDataForSelectedPet();
     } else {
       // 如果没有宠物，则加载默认数据
@@ -444,29 +516,48 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> with TickerPr
 
     final petId = _selectedPet!.id!;
 
-    // 加载病历记录
-    final records =
-        await _supabaseService.getMedicalRecordsForPet(petId.toString());
-    _records = records.map((r) => MedicalRecord.fromMap(r)).toList();
+    try {
+      // 加载病历记录
+      final records =
+          await _supabaseService.getMedicalRecordsForPet(petId.toString());
+      _records = records.map((r) {
+        try {
+          return MedicalRecord.fromMap(r);
+        } catch (e) {
+          print('解析病历记录失败: $e, 数据: $r');
+          rethrow;
+        }
+      }).toList();
 
-    // 加载提醒事项
-    final reminders =
-        await _supabaseService.getDailyRemindersForPet(petId.toString());
-    _reminders = reminders.map((r) => DailyReminder.fromMap(r)).toList();
+      // 加载提醒事项
+      final reminders =
+          await _supabaseService.getDailyRemindersForPet(petId.toString());
+      _reminders = reminders.map((r) => DailyReminder.fromMap(r)).toList();
 
-    // 加载体重记录
-    final weightRecords =
-        await _supabaseService.getWeightRecordsForPet(petId.toString());
-    _weightRecords = weightRecords.map((r) => WeightRecord.fromMap(r)).toList();
+      // 加载体重记录
+      final weightRecords =
+          await _supabaseService.getWeightRecordsForPet(petId.toString());
+      _weightRecords = weightRecords.map((r) => WeightRecord.fromMap(r)).toList();
 
-    // 加载疫苗记录
-    final vaccineRecords = await _supabaseService.getVaccineRecordsForPet(
-      petId.toString(),
-    );
-    _vaccineRecords =
-        vaccineRecords.map((r) => VaccineRecord.fromMap(r)).toList();
+      // 加载疫苗记录
+      final vaccineRecords = await _supabaseService.getVaccineRecordsForPet(
+        petId.toString(),
+      );
+      _vaccineRecords =
+          vaccineRecords.map((r) => VaccineRecord.fromMap(r)).toList();
 
-    _compileAndSortHealthLog();
+      _compileAndSortHealthLog();
+      
+      // 更新UI
+      if (mounted) {
+        setState(() {});
+      }
+    } catch (e) {
+      print('加载宠物数据失败: $e');
+      if (mounted) {
+        _showErrorSnackBar('加载数据失败，请检查网络连接');
+      }
+    }
   }
 
   Future<void> _loadDefaultData() async {
@@ -485,7 +576,9 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> with TickerPr
   void _compileAndSortHealthLog() {
     _healthLog = [..._records, ..._weightRecords, ..._vaccineRecords];
     _healthLog.sort((a, b) => b.date.compareTo(a.date));
-    setState(() {});
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   String _getLatestWeight() {
@@ -559,11 +652,65 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> with TickerPr
     if (newId != null) {
       recordMap['id'] = newId;
       final recordWithPetId = WeightRecord.fromMap(recordMap);
-      _weightRecords.add(recordWithPetId);
+      setState(() {
+        _weightRecords.add(recordWithPetId);
+      });
       _compileAndSortHealthLog();
+      
+      // 同步更新宠物档案中的体重
+      await _syncPetWeight();
+      
       if (mounted) _showSuccessSnackBar('体重记录成功!');
     } else {
       if (mounted) _showSuccessSnackBar('体重记录失败，请检查网络连接');
+    }
+  }
+
+  /// 同步更新宠物档案中的体重（使用最新的体重记录）
+  Future<void> _syncPetWeight() async {
+    if (_selectedPet == null || _selectedPet!.id == null) return;
+    
+    try {
+      double? latestWeight;
+      
+      // 获取最新的体重记录
+      if (_weightRecords.isNotEmpty) {
+        final sortedWeights = [..._weightRecords];
+        sortedWeights.sort((a, b) => b.date.compareTo(a.date));
+        latestWeight = sortedWeights.first.weight;
+      } else {
+        // 如果没有体重记录，设置为 null
+        latestWeight = null;
+      }
+      
+      // 更新宠物档案中的体重
+      final petMap = _selectedPet!.toMap();
+      petMap['weight'] = latestWeight;
+      
+      print('同步宠物体重: ${_selectedPet!.name} -> $latestWeight kg');
+      
+      final success = await _supabaseService.updatePet(petMap);
+      if (success) {
+        print('宠物体重同步成功');
+        // 更新本地宠物对象
+        if (mounted) {
+          setState(() {
+            _selectedPet = Pet.fromMap({...petMap, 'id': _selectedPet!.id});
+            // 同时更新 _allPets 列表中的对应宠物
+            final petIndex = _allPets.indexWhere((p) => p.id == _selectedPet!.id);
+            if (petIndex != -1) {
+              _allPets[petIndex] = _selectedPet!;
+            }
+          });
+        }
+        
+        // 通知全局数据变更
+        DataChangeNotifier.markPetDataChanged();
+      } else {
+        print('宠物体重同步失败');
+      }
+    } catch (e) {
+      print('同步宠物体重时出错: $e');
     }
   }
 
@@ -609,8 +756,14 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> with TickerPr
         record.id.toString(),
       );
       if (success) {
-        _weightRecords.remove(record);
+        setState(() {
+          _weightRecords.remove(record);
+        });
         _compileAndSortHealthLog();
+        
+        // 同步更新宠物档案中的体重（删除后使用最新的体重记录）
+        await _syncPetWeight();
+        
         if (mounted) _showSuccessSnackBar('体重记录已删除!');
       } else {
         if (mounted) _showSuccessSnackBar('体重记录删除失败，请检查网络连接');
@@ -653,9 +806,14 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> with TickerPr
 
   // --- 新的宠物选择器方法 ---
   void _toggleSelectorExpansion() {
-    if (_allPets.length <= 1) return;
+    print('医疗记录页面：点击切换选择器 - 当前状态: $_isSelectorExpanded, 宠物数: ${_allPets.length}');
+    if (_allPets.length <= 1) {
+      print('医疗记录页面：宠物数 <= 1，不展开');
+      return;
+    }
     setState(() {
       _isSelectorExpanded = !_isSelectorExpanded;
+      print('医疗记录页面：切换后状态: $_isSelectorExpanded');
     });
   }
 
@@ -670,11 +828,40 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> with TickerPr
 
   Widget _buildExpandedPetSelector() {
     // 过滤出除当前选中宠物外的其他宠物
-    final availablePets =
-        _allPets.where((pet) => pet.id != _selectedPet?.id).toList();
+    // 使用 toString() 确保正确比较，并处理 null 值
+    final selectedPetId = _selectedPet?.id?.toString();
+    print('医疗记录页面：展开选择器 - 当前选中宠物: ${_selectedPet?.name} (ID: $selectedPetId)');
+    print('医疗记录页面：展开选择器 - 总宠物数: ${_allPets.length}');
+    for (var pet in _allPets) {
+      print('  宠物列表: ${pet.name} (id: ${pet.id?.toString()})');
+    }
+    
+    final availablePets = _allPets.where((pet) {
+      final petId = pet.id?.toString();
+      final isMatch = petId != null && petId != selectedPetId;
+      print('  检查宠物 ${pet.name} (id: $petId): ${isMatch ? "显示" : "隐藏"} (选中ID: $selectedPetId)');
+      return isMatch;
+    }).toList();
+
+    print('医疗记录页面：展开选择器 - 可用宠物数: ${availablePets.length}');
+    for (var pet in availablePets) {
+      print('  可用宠物: ${pet.name}');
+    }
 
     if (availablePets.isEmpty) {
-      return const SizedBox.shrink();
+      print('医疗记录页面：没有可用宠物，隐藏选择器');
+      return Container(
+        margin: const EdgeInsets.only(top: 8),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppTheme.surface,
+          borderRadius: BorderRadius.circular(AppTheme.borderRadius),
+        ),
+        child: Text(
+          '没有其他宠物可切换',
+          style: AppTheme.bodyText.copyWith(color: AppTheme.textSecondary),
+        ),
+      );
     }
 
     return Container(
@@ -691,6 +878,7 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> with TickerPr
         ],
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children:
             availablePets.map((pet) => _buildPetSelectorItem(pet)).toList(),
       ),
@@ -1053,7 +1241,7 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> with TickerPr
         Text(
           title,
           style: AppTheme.captionText.copyWith(
-            color: AppTheme.textSecondary,
+            color: Colors.white.withOpacity(0.75),
             fontSize: 13,
           ),
         ),
@@ -1061,9 +1249,9 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> with TickerPr
         Text(
           value,
           style: AppTheme.bodyTextMedium.copyWith(
-            color: AppTheme.textPrimary,
-            fontSize: 18,
-            fontWeight: FontWeight.w700,
+            color: Colors.white,
+            fontSize: 15,
+            fontWeight: FontWeight.w600,
           ),
         ),
       ],
@@ -1072,7 +1260,7 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> with TickerPr
 
 
 
-  Widget _buildRecordsAndRemindersSection() {
+Widget _buildRecordsAndRemindersSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1285,9 +1473,7 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> with TickerPr
     );
   }
 
-
-
-  Widget _buildLiquidTabItem(int index, String title, double width) {
+Widget _buildLiquidTabItem(int index, String title, double width) {
     return SizedBox(
       width: width,
       child: Center(
@@ -1518,7 +1704,7 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> with TickerPr
                       padding: const EdgeInsets.only(right: 20),
                       decoration: BoxDecoration(
                         color: Colors.red,
-                        borderRadius: BorderRadius.circular(16),
+                        borderRadius: BorderRadius.circular(12),
                       ),
                       child: const Icon(
                         Icons.delete,
@@ -1539,7 +1725,12 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> with TickerPr
                     ),
                   ),
                   if (i < _reminders.length - 1)
-                    const SizedBox(height: 12),
+                    Divider(
+                      key: ValueKey('reminder_divider_$i'),
+                      height: 16,
+                      color: AppTheme.shadow.withOpacity(0.3),
+                      thickness: 0.5,
+                    ),
                 ],
               ],
             ),
@@ -2211,6 +2402,15 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> with TickerPr
                         _weightRecords[index] = updatedRecord;
                       });
                       _compileAndSortHealthLog();
+                      
+                      // 同步更新宠物档案中的体重
+                      await _syncPetWeight();
+                      
+                      // 强制刷新UI，确保顶部体重显示更新
+                      if (mounted) {
+                        setState(() {});
+                      }
+                      
                       if (mounted) _showSuccessSnackBar('体重记录更新成功!');
                     }
                   } catch (e) {
@@ -2522,6 +2722,18 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> with TickerPr
         false;
   }
 
+  void _showErrorSnackBar(String message) {
+    if (!mounted) return;
+    HapticFeedback.lightImpact();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
   void _showSuccessSnackBar(String message) {
     if (!mounted) return;
     HapticFeedback.lightImpact();
@@ -2593,19 +2805,13 @@ class HealthLogCard extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         child: Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: AppTheme.shadow.withOpacity(0.1),
-                blurRadius: 12,
-                offset: const Offset(0, 4),
-              ),
-            ],
+            color: AppTheme.surface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: themeColor.withOpacity(0.15), width: 1),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -2615,12 +2821,9 @@ class HealthLogCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // 统一的圆形图标区域
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: themeColor.withOpacity(0.1),
-                      shape: BoxShape.circle,
-                    ),
+                  CircleAvatar(
+                    radius: 20,
+                    backgroundColor: themeColor.withOpacity(0.1),
                     child: Icon(icon, color: themeColor, size: 20),
                   ),
                   const SizedBox(width: 16),
@@ -2632,22 +2835,13 @@ class HealthLogCard extends StatelessWidget {
                         // 标题行：类别标签 + 主数据
                         Row(
                           children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: themeColor.withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Text(
-                                categoryLabel,
-                                style: AppTheme.captionText.copyWith(
-                                  color: themeColor,
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 11,
-                                ),
+                            Text(
+                              categoryLabel,
+                              style: AppTheme.captionText.copyWith(
+                                color: AppTheme.textTertiary,
+                                fontWeight: FontWeight.w500,
+                                fontSize: 12,
+                                letterSpacing: 0.5,
                               ),
                             ),
                             const SizedBox(width: 8),
@@ -2659,30 +2853,18 @@ class HealthLogCard extends StatelessWidget {
                                   fontSize: 16,
                                   color: AppTheme.textPrimary,
                                 ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 6),
                         // 日期行
-                        Row(
-                          children: [
-                            Icon(
-                              Icons.access_time,
-                              size: 12,
-                              color: AppTheme.textSecondary.withOpacity(0.6),
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              date,
-                              style: AppTheme.captionText.copyWith(
-                                color: AppTheme.textSecondary,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
+                        Text(
+                          date,
+                          style: AppTheme.captionText.copyWith(
+                            color: AppTheme.textSecondary,
+                            fontSize: 13,
+                          ),
                         ),
                       ],
                     ),
@@ -2714,7 +2896,11 @@ class HealthLogCard extends StatelessWidget {
                   ),
                   decoration: BoxDecoration(
                     color: AppTheme.accentYellow.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: AppTheme.accentYellow.withOpacity(0.3),
+                      width: 1,
+                    ),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -2730,7 +2916,7 @@ class HealthLogCard extends StatelessWidget {
                           highlightText!,
                           style: AppTheme.captionText.copyWith(
                             color: AppTheme.accentYellowDark,
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.w500,
                             fontSize: 12,
                           ),
                         ),
@@ -2806,19 +2992,16 @@ class _ReminderListItem extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         child: Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: AppTheme.shadow.withOpacity(0.1),
-                blurRadius: 12,
-                offset: const Offset(0, 4),
-              ),
-            ],
+            color: AppTheme.surface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: AppTheme.primary.withOpacity(0.2),
+              width: 1,
+            ),
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -2827,7 +3010,7 @@ class _ReminderListItem extends StatelessWidget {
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
                   color: AppTheme.primary.withOpacity(0.1),
-                  shape: BoxShape.circle,
+                  borderRadius: BorderRadius.circular(10),
                 ),
                 child: const Icon(
                   Icons.alarm,
@@ -2853,7 +3036,7 @@ class _ReminderListItem extends StatelessWidget {
                       children: [
                         Icon(
                           Icons.access_time,
-                          size: 14,
+                          size: 16,
                           color: AppTheme.primary.withOpacity(0.7),
                         ),
                         const SizedBox(width: 6),
@@ -2870,8 +3053,7 @@ class _ReminderListItem extends StatelessWidget {
                             reminder.time,
                             style: AppTheme.captionText.copyWith(
                               color: AppTheme.primary,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
                             ),
                           ),
                         ),
@@ -2882,7 +3064,7 @@ class _ReminderListItem extends StatelessWidget {
               ),
               Icon(
                 Icons.arrow_forward_ios,
-                size: 14,
+                size: 16,
                 color: AppTheme.textTertiary.withOpacity(0.6),
               ),
             ],

@@ -15,7 +15,8 @@ class DogClickerScreen extends StatefulWidget {
   State<DogClickerScreen> createState() => _DogClickerScreenState();
 }
 
-class _DogClickerScreenState extends State<DogClickerScreen> with TickerProviderStateMixin {
+class _DogClickerScreenState extends State<DogClickerScreen>
+    with TickerProviderStateMixin {
   late AnimationController _orbController;
   late AudioPlayer _audioPlayer;
   int _clickCount = 0;
@@ -47,10 +48,9 @@ class _DogClickerScreenState extends State<DogClickerScreen> with TickerProvider
   @override
   void initState() {
     super.initState();
-    
     _orbController = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 12), 
+      duration: const Duration(seconds: 12),
     )..repeat(reverse: true);
 
     // 初始化音频播放器
@@ -507,7 +507,7 @@ class _DogClickerScreenState extends State<DogClickerScreen> with TickerProvider
       await _audioPlayer.stop();
       // 播放对应项目的音频资源
       await _audioPlayer.play(AssetSource(soundPath));
-      
+
       // 添加触感反馈 - 模拟真实机械响片的手感
       await HapticFeedback.heavyImpact();
 
@@ -543,7 +543,9 @@ class _DogClickerScreenState extends State<DogClickerScreen> with TickerProvider
         backgroundColor: Colors.transparent,
         elevation: 0,
         iconTheme: const IconThemeData(color: AppColors.textDark),
-        title: const Text('训宠响片', style: TextStyle(color: AppColors.textDark, fontWeight: FontWeight.bold)),
+        title: const Text('训宠响片',
+            style: TextStyle(
+                color: AppColors.textDark, fontWeight: FontWeight.bold)),
         centerTitle: true,
         actions: [
           IconButton(
@@ -563,7 +565,7 @@ class _DogClickerScreenState extends State<DogClickerScreen> with TickerProvider
           // 背景层
           Stack(
             children: [
-              Container(color: AppColors.background), 
+              Container(color: AppColors.background),
               AnimatedBuilder(
                 animation: _orbController,
                 builder: (context, child) {
@@ -571,7 +573,8 @@ class _DogClickerScreenState extends State<DogClickerScreen> with TickerProvider
                     top: -100 + (_orbController.value * 40),
                     left: -50 + (_orbController.value * 20),
                     child: Container(
-                      width: 500, height: 500,
+                      width: 500,
+                      height: 500,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         color: AppColors.orb1.withOpacity(0.5),
@@ -587,7 +590,8 @@ class _DogClickerScreenState extends State<DogClickerScreen> with TickerProvider
                     top: 300 + (math.sin(_orbController.value * math.pi) * 60),
                     right: -100,
                     child: Container(
-                      width: 350, height: 350,
+                      width: 350,
+                      height: 350,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         color: AppColors.orb3.withOpacity(0.4),
@@ -603,7 +607,8 @@ class _DogClickerScreenState extends State<DogClickerScreen> with TickerProvider
                     bottom: -150,
                     left: -80 + (_orbController.value * 150),
                     child: Container(
-                      width: 600, height: 400,
+                      width: 600,
+                      height: 400,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         color: AppColors.orb2.withOpacity(0.5),
@@ -640,7 +645,8 @@ class _DogClickerScreenState extends State<DogClickerScreen> with TickerProvider
                       filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                       child: Container(
                         height: 52,
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 5),
                         child: ListView.builder(
                           scrollDirection: Axis.horizontal,
                           itemCount: _filterOptions.length + 1, // +1 为添加按钮
@@ -648,14 +654,16 @@ class _DogClickerScreenState extends State<DogClickerScreen> with TickerProvider
                             // 添加按钮
                             if (index == _filterOptions.length) {
                               return Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 3),
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 3),
                                 child: InkWell(
                                   onTap: _showAddProjectDialog,
                                   borderRadius: BorderRadius.circular(12),
                                   child: Container(
                                     padding: const EdgeInsets.all(10),
                                     decoration: BoxDecoration(
-                                      color: const Color(0xFFF5F5F5).withOpacity(0.8),
+                                      color: const Color(0xFFF5F5F5)
+                                          .withOpacity(0.8),
                                       borderRadius: BorderRadius.circular(12),
                                       border: Border.all(
                                         color: const Color(0xFFE0E0E0),
@@ -674,7 +682,8 @@ class _DogClickerScreenState extends State<DogClickerScreen> with TickerProvider
 
                             final isSelected = _selectedFilterIndex == index;
                             return Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 3),
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 3),
                               child: InkWell(
                                 onTap: () {
                                   setState(() {
@@ -699,7 +708,10 @@ class _DogClickerScreenState extends State<DogClickerScreen> with TickerProvider
                                             end: Alignment.bottomRight,
                                           )
                                         : null,
-                                    color: isSelected ? null : const Color(0xFFF5F5F5).withOpacity(0.8),
+                                    color: isSelected
+                                        ? null
+                                        : const Color(0xFFF5F5F5)
+                                            .withOpacity(0.8),
                                     borderRadius: BorderRadius.circular(12),
                                     boxShadow: isSelected
                                         ? [
@@ -783,24 +795,33 @@ class _DogClickerScreenState extends State<DogClickerScreen> with TickerProvider
                             // 成功按钮 - 更大尺寸
                             AnimatedScale(
                               scale: _isPressed ? 0.88 : 1.0, // 增加按压深度
-                              duration: const Duration(milliseconds: 100), // 加快按压响应
+                              duration:
+                                  const Duration(milliseconds: 100), // 加快按压响应
                               curve: Curves.easeInOutQuad, // 更柔和的弹性曲线
                               child: Material(
                                 color: Colors.transparent,
                                 child: InkWell(
                                   // 冷却期间禁用点击，防止误触，且不显示水波纹
-                                  onTap: _isCoolingDown ? null : () {
-                                    _playClickSound(); // 发出响片声音
-                                  },
-                                  onTapDown: _isCoolingDown ? null : (_) {
-                                    setState(() => _isPressed = true);
-                                  },
-                                  onTapUp: _isCoolingDown ? null : (_) {
-                                    setState(() => _isPressed = false);
-                                  },
-                                  onTapCancel: _isCoolingDown ? null : () {
-                                    setState(() => _isPressed = false);
-                                  },
+                                  onTap: _isCoolingDown
+                                      ? null
+                                      : () {
+                                          _playClickSound(); // 发出响片声音
+                                        },
+                                  onTapDown: _isCoolingDown
+                                      ? null
+                                      : (_) {
+                                          setState(() => _isPressed = true);
+                                        },
+                                  onTapUp: _isCoolingDown
+                                      ? null
+                                      : (_) {
+                                          setState(() => _isPressed = false);
+                                        },
+                                  onTapCancel: _isCoolingDown
+                                      ? null
+                                      : () {
+                                          setState(() => _isPressed = false);
+                                        },
                                   borderRadius: BorderRadius.circular(190),
                                   splashColor: Colors.white.withOpacity(0.3),
                                   highlightColor: Colors.white.withOpacity(0.1),
@@ -819,7 +840,8 @@ class _DogClickerScreenState extends State<DogClickerScreen> with TickerProvider
                                       ),
                                       boxShadow: [
                                         BoxShadow(
-                                          color: const Color(0xFF5A8EFA).withOpacity(0.4),
+                                          color: const Color(0xFF5A8EFA)
+                                              .withOpacity(0.4),
                                           blurRadius: 30,
                                           offset: const Offset(0, 10),
                                         ),
@@ -853,7 +875,7 @@ class _DogClickerScreenState extends State<DogClickerScreen> with TickerProvider
                               // 只记录失败，不发出声音
                               setState(() => _failCount++);
                               // 失败时给予轻微震动反馈
-                              await HapticFeedback.lightImpact(); 
+                              await HapticFeedback.lightImpact();
                               await _saveFailureCount();
                               if (mounted) {
                                 _showFailureTip(context);
@@ -905,16 +927,17 @@ class _DogClickerScreenState extends State<DogClickerScreen> with TickerProvider
                             ),
                           ),
                         ),
-                        
+
                         const SizedBox(height: 40),
-                        
+
                         // 底部统计卡片
                         Container(
                           padding: const EdgeInsets.all(20),
                           decoration: BoxDecoration(
                             color: Colors.white.withOpacity(0.6),
                             borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: Colors.white.withOpacity(0.4)),
+                            border: Border.all(
+                                color: Colors.white.withOpacity(0.4)),
                             boxShadow: [
                               BoxShadow(
                                 color: Colors.black.withOpacity(0.04),
@@ -928,7 +951,8 @@ class _DogClickerScreenState extends State<DogClickerScreen> with TickerProvider
                             child: BackdropFilter(
                               filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                               child: Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceAround,
                                 children: [
                                   _buildStatItem(
                                     Icons.check_circle_outline,
@@ -956,7 +980,11 @@ class _DogClickerScreenState extends State<DogClickerScreen> with TickerProvider
                                     Icons.trending_up,
                                     '成功率',
                                     (_clickCount + _failCount) > 0
-                                        ? ((_clickCount / (_clickCount + _failCount)) * 100).toInt()
+                                        ? ((_clickCount /
+                                                    (_clickCount +
+                                                        _failCount)) *
+                                                100)
+                                            .toInt()
                                         : 0,
                                     Colors.blue,
                                     suffix: '%',
@@ -1163,9 +1191,8 @@ class _DogClickerScreenState extends State<DogClickerScreen> with TickerProvider
                       final successCount = _successCounts[option] ?? 0;
                       final failureCount = _failureCounts[option] ?? 0;
                       final total = successCount + failureCount;
-                      final successRate = total > 0
-                          ? (successCount / total * 100)
-                          : 0;
+                      final successRate =
+                          total > 0 ? (successCount / total * 100) : 0;
 
                       // 判断是否为当前选中的项目
                       final isCurrentProject = option == currentOption;
@@ -1383,11 +1410,10 @@ class _DogClickerScreenState extends State<DogClickerScreen> with TickerProvider
                                         vertical: 4,
                                       ),
                                       decoration: BoxDecoration(
-                                        color:
-                                            (successRate >= 70
-                                                    ? Colors.green
-                                                    : Colors.orange)
-                                                .withOpacity(0.1),
+                                        color: (successRate >= 70
+                                                ? Colors.green
+                                                : Colors.orange)
+                                            .withOpacity(0.1),
                                         borderRadius: BorderRadius.circular(8),
                                       ),
                                       child: Text(
@@ -2145,10 +2171,7 @@ class _DogClickerScreenState extends State<DogClickerScreen> with TickerProvider
           ),
           const SizedBox(height: 16),
           // 步骤列表
-          ...steps
-              .asMap()
-              .entries
-              .map(
+          ...steps.asMap().entries.map(
                 (entry) => Padding(
                   padding: EdgeInsets.only(
                     bottom: entry.key < steps.length - 1 ? 10 : 0,
@@ -2186,8 +2209,7 @@ class _DogClickerScreenState extends State<DogClickerScreen> with TickerProvider
                     ],
                   ),
                 ),
-              )
-              ,
+              ),
         ],
       ),
     );
@@ -2339,8 +2361,6 @@ class _DogClickerScreenState extends State<DogClickerScreen> with TickerProvider
     );
   }
 
-
-
   /// 构建统计项
   Widget _buildStatItem(
     IconData icon,
@@ -2355,11 +2375,11 @@ class _DogClickerScreenState extends State<DogClickerScreen> with TickerProvider
         const SizedBox(height: 4),
         AnimatedSwitcher(
           duration: const Duration(milliseconds: 300),
-          transitionBuilder:
-              (Widget child, Animation<double> animation) => FadeTransition(
-                opacity: animation,
-                child: ScaleTransition(scale: animation, child: child),
-              ),
+          transitionBuilder: (Widget child, Animation<double> animation) =>
+              FadeTransition(
+            opacity: animation,
+            child: ScaleTransition(scale: animation, child: child),
+          ),
           child: Text(
             '$value$suffix',
             key: ValueKey<String>('$value$suffix'),

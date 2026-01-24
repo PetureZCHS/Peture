@@ -3,7 +3,7 @@ import 'dart:math' as math;
 import 'dart:ui';
 
 // 导入主应用文件
-import 'home_screen.dart'; // 导入主页
+import 'main.dart';
 // 导入邮箱登录页面
 import 'email_login_page.dart';
 // 导入手机号验证码登录页面
@@ -29,7 +29,7 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
-    
+
     // 0. 星星闪烁
     _starController = AnimationController(
       vsync: this,
@@ -78,8 +78,6 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
     }
   }
 
-
-
   @override
   Widget build(BuildContext context) {
     final screenHeight = MediaQuery.of(context).size.height;
@@ -113,7 +111,10 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                       top: -150,
                       left: -150,
                       child: Opacity(
-                        opacity: 0.2 + 0.1 * math.sin(_breathingController.value * math.pi * 2),
+                        opacity: 0.2 +
+                            0.1 *
+                                math.sin(
+                                    _breathingController.value * math.pi * 2),
                         child: Container(
                           width: 600,
                           height: 600,
@@ -135,7 +136,10 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                       bottom: -100,
                       right: -100,
                       child: Opacity(
-                        opacity: 0.2 + 0.1 * math.cos(_breathingController.value * math.pi * 2),
+                        opacity: 0.2 +
+                            0.1 *
+                                math.cos(
+                                    _breathingController.value * math.pi * 2),
                         child: Container(
                           width: 500,
                           height: 500,
@@ -170,7 +174,9 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                 child: FadeTransition(
                   opacity: _starController.drive(
                     Tween(begin: opacity * 0.2, end: opacity).chain(
-                      CurveTween(curve: Interval(random.nextDouble() * 0.8, 1.0, curve: Curves.easeInOut)),
+                      CurveTween(
+                          curve: Interval(random.nextDouble() * 0.8, 1.0,
+                              curve: Curves.easeInOut)),
                     ),
                   ),
                   child: Container(
@@ -195,7 +201,8 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
             AnimatedPositioned(
               duration: const Duration(milliseconds: 600),
               curve: Curves.easeInOut,
-              top: _showLoginOptions ? screenHeight * 0.05 : screenHeight * 0.12,
+              top:
+                  _showLoginOptions ? screenHeight * 0.05 : screenHeight * 0.12,
               left: 0,
               right: 0,
               child: Column(
@@ -209,16 +216,15 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                     child: const Text(
                       'PETURE',
                       style: TextStyle(
-                        fontFamily: 'Arial', 
+                        fontFamily: 'Arial',
                         fontSize: 48,
                         fontWeight: FontWeight.w900,
-                        color: Colors.white, 
+                        color: Colors.white,
                         letterSpacing: 4.0,
                       ),
                     ),
                   ),
                   const SizedBox(height: 12),
-                  
                 ],
               ),
             ),
@@ -231,7 +237,8 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
               child: GestureDetector(
                 onTap: _onBlackHoleTap,
                 child: AnimatedBuilder(
-                  animation: Listenable.merge([_activateController, _breathingController]),
+                  animation: Listenable.merge(
+                      [_activateController, _breathingController]),
                   builder: (context, child) {
                     // 激活时的缩放 (先收缩再爆发)
                     double scale = 1.0;
@@ -244,12 +251,15 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                       }
                     } else {
                       // 待机呼吸
-                      scale = 1.0 + math.sin(_breathingController.value * math.pi * 2) * 0.02;
+                      scale = 1.0 +
+                          math.sin(_breathingController.value * math.pi * 2) *
+                              0.02;
                     }
-                    
+
                     return Transform.scale(
                       scale: scale,
-                      child: _BlackHoleWidget(rotationController: _rotationController),
+                      child: _BlackHoleWidget(
+                          rotationController: _rotationController),
                     );
                   },
                 ),
@@ -264,7 +274,8 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                 right: 0,
                 child: FadeTransition(
                   opacity: _breathingController.drive(
-                    Tween(begin: 0.4, end: 1.0).chain(CurveTween(curve: Curves.easeInOut)),
+                    Tween(begin: 0.4, end: 1.0)
+                        .chain(CurveTween(curve: Curves.easeInOut)),
                   ),
                   child: Column(
                     children: [
@@ -294,14 +305,16 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
               left: 0,
               right: 0,
               child: ClipRRect(
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(32)),
                 child: BackdropFilter(
                   filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15), // 增加模糊度
                   child: Container(
                     padding: const EdgeInsets.fromLTRB(32, 40, 32, 40),
                     decoration: BoxDecoration(
                       color: Colors.white.withOpacity(0.92), // 稍微不那么透，保证可读性
-                      borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+                      borderRadius:
+                          const BorderRadius.vertical(top: Radius.circular(32)),
                       boxShadow: [
                         BoxShadow(
                           color: const Color(0xFF5A8EFA).withOpacity(0.15),
@@ -412,7 +425,7 @@ class _BlackHoleWidget extends StatelessWidget {
               ],
             ),
           ),
-          
+
           // 4. 核心深渊
           Container(
             width: 200,
@@ -427,8 +440,6 @@ class _BlackHoleWidget extends StatelessWidget {
     );
   }
 }
-
-
 
 // 登录表单内容
 class _LoginBodyContent extends StatefulWidget {
@@ -452,7 +463,7 @@ class _LoginBodyContentState extends State<_LoginBodyContent> {
       return;
     }
     Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (context) => const HomeScreen()),
+      MaterialPageRoute(builder: (context) => const MyApp()),
     );
   }
 
@@ -472,9 +483,7 @@ class _LoginBodyContentState extends State<_LoginBodyContent> {
           style: TextStyle(fontSize: 14, color: Colors.grey),
         ),
         const SizedBox(height: 32),
-        
         _GradientLoginButton(onPressed: _login),
-        
         const SizedBox(height: 16),
         _SecondaryLoginButton(
           text: '邮箱登录',
@@ -490,21 +499,20 @@ class _LoginBodyContentState extends State<_LoginBodyContent> {
             MaterialPageRoute(builder: (context) => const PhoneLoginPage()),
           ),
         ),
-        
         const SizedBox(height: 24),
         _AgreementRow(
           value: _agreedToTerms,
           onChanged: (value) => setState(() => _agreedToTerms = value ?? false),
           onTap: () => _otherLogin('服务协议'),
         ),
-        
         const SizedBox(height: 24),
         Row(
           children: const [
             Expanded(child: Divider()),
             Padding(
               padding: EdgeInsets.symmetric(horizontal: 16),
-              child: Text('或使用其他方式登录', style: TextStyle(color: Colors.grey, fontSize: 12)),
+              child: Text('或使用其他方式登录',
+                  style: TextStyle(color: Colors.grey, fontSize: 12)),
             ),
             Expanded(child: Divider()),
           ],
@@ -598,14 +606,11 @@ class _SecondaryLoginButton extends StatelessWidget {
               Icon(icon, size: 20, color: const Color(0xFF5A8EFA)),
               const SizedBox(width: 8),
             ],
-            Text(
-              text, 
-              style: const TextStyle(
-                fontSize: 16, 
-                color: Color(0xFF424242),
-                fontWeight: FontWeight.w600
-              )
-            ),
+            Text(text,
+                style: const TextStyle(
+                    fontSize: 16,
+                    color: Color(0xFF424242),
+                    fontWeight: FontWeight.w600)),
           ],
         ),
       ),
@@ -637,10 +642,12 @@ class _AgreementRow extends StatelessWidget {
             onChanged: onChanged,
             visualDensity: VisualDensity.compact,
             activeColor: const Color(0xFF5A8EFA),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
           ),
         ),
-        const Text('我已阅读并同意', style: TextStyle(fontSize: 12, color: Colors.grey)),
+        const Text('我已阅读并同意',
+            style: TextStyle(fontSize: 12, color: Colors.grey)),
         GestureDetector(
           onTap: onTap,
           child: const Text(

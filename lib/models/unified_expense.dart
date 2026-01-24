@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 
 /// 统一的宠物消费数据模型
 class UnifiedExpense {
-  final int? id;
+  final String? id; // 改为 String? 以支持 Supabase UUID
   final double amount; // 金额
   final String category; // 分类（医疗、美容、零食、消耗品、耐用品等）
   final String expenseType; // 支出类型：'one-off'(一次性) 或 'recurring'(周期性)
   final String date; // 日期（格式：yyyy-MM-dd）
-  final int? petId; // 宠物ID（可选）
+  final String? petId; // 宠物ID（可选，改为 String? 以支持 UUID）
   final String? petName; // 宠物名称（用于显示）
   final String? note; // 备注
   final String? photoPath; // 照片路径（可选）
@@ -97,31 +97,39 @@ class UnifiedExpense {
 
   /// 从 Map 创建对象（从数据库读取）
   factory UnifiedExpense.fromMap(Map<String, dynamic> map) {
+    // 处理 petId：支持 int、String 和 null
+    String? petId;
+    if (map['petId'] != null) {
+      petId = map['petId'].toString();
+    } else if (map['pet_id'] != null) {
+      petId = map['pet_id'].toString();
+    }
+    
     return UnifiedExpense(
-      id: map['id'] as int?,
+      id: map['id']?.toString(), // 支持 int 和 String
       amount: (map['amount'] as num).toDouble(),
       category: map['category'] as String,
       expenseType: map['expenseType'] as String,
       date: map['date'] as String,
-      petId: map['petId'] as int?,
-      petName: map['petName'] as String?,
+      petId: petId,
+      petName: map['petName'] as String? ?? map['pet_name'] as String?,
       note: map['note'] as String?,
-      photoPath: map['photoPath'] as String?,
-      itemName: map['itemName'] as String?,
-      estimatedEndDate: map['estimatedEndDate'] as String?,
-      itemType: map['itemType'] as String?,
-      createdAt: map['createdAt'] as String,
+      photoPath: map['photoPath'] as String? ?? map['photo_path'] as String?,
+      itemName: map['itemName'] as String? ?? map['item_name'] as String?,
+      estimatedEndDate: map['estimatedEndDate'] as String? ?? map['estimated_end_date'] as String?,
+      itemType: map['itemType'] as String? ?? map['item_type'] as String?,
+      createdAt: map['createdAt'] as String? ?? map['created_at']?.toString() ?? DateTime.now().toIso8601String(),
     );
   }
 
   /// 复制对象（用于编辑）
   UnifiedExpense copyWith({
-    int? id,
+    String? id,
     double? amount,
     String? category,
     String? expenseType,
     String? date,
-    int? petId,
+    String? petId,
     String? petName,
     String? note,
     String? photoPath,

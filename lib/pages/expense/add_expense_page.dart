@@ -2,8 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../../models/expense.dart';
-import '../../database/expense_helper.dart';
-import '../../database/medical_record_helper.dart';
+import '../../services/supabase_service.dart';
 
 /// 添加/编辑账单页面
 class AddExpensePage extends StatefulWidget {
@@ -51,7 +50,8 @@ class _AddExpensePageState extends State<AddExpensePage> {
 
   /// 加载宠物列表
   Future<void> _loadPets() async {
-    final pets = await MedicalRecordHelper.instance.getAllPets();
+    final supabaseService = SupabaseService();
+    final pets = await supabaseService.getAllPets();
     if (mounted) {
       setState(() {
         _pets = pets;
@@ -120,12 +120,32 @@ class _AddExpensePageState extends State<AddExpensePage> {
             widget.expense?.createdAt ?? DateTime.now().toIso8601String(),
       );
 
+      final supabaseService = SupabaseService();
+      bool success = false;
       if (widget.expense == null) {
         // 新增
-        await ExpenseHelper.instance.insertExpense(expense);
+        final result = await supabaseService.insertExpense(expense.toMap());
+        if (result != null) {
+          success = true;
+        }
       } else {
         // 更新
-        await ExpenseHelper.instance.updateExpense(expense);
+        success = await supabaseService.updateExpense(expense.toMap());
+      }
+
+      if (!success) {
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(
+            content: Text('保存失败，请检查网络连接'),
+            backgroundColor: Colors.red,
+          ));
+        }
+        return;
       }
 
       if (mounted) {
@@ -141,7 +161,10 @@ class _AddExpensePageState extends State<AddExpensePage> {
         });
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('保存失败: $e')));
+        ).showSnackBar(const SnackBar(
+          content: Text('保存失败，请检查网络连接'),
+          backgroundColor: Colors.red,
+        ));
       }
     }
   }
@@ -192,9 +215,8 @@ class _AddExpensePageState extends State<AddExpensePage> {
                 );
 
                 if (confirmed == true && widget.expense!.id != null) {
-                  await ExpenseHelper.instance.deleteExpense(
-                    widget.expense!.id!,
-                  );
+                  final supabaseService = SupabaseService();
+                  await supabaseService.deleteExpense(widget.expense!.id!);
                   if (mounted) {
                     Navigator.pop(context, true);
                     ScaffoldMessenger.of(

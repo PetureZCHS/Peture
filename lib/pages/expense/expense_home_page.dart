@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../models/expense.dart';
-import '../../database/expense_helper.dart';
+import '../../services/supabase_service.dart';
 import 'add_expense_page.dart';
 import 'expense_statistics_page.dart';
 
@@ -14,6 +14,7 @@ class ExpenseHomePage extends StatefulWidget {
 }
 
 class _ExpenseHomePageState extends State<ExpenseHomePage> {
+  final SupabaseService _supabaseService = SupabaseService();
   List<Expense> _expenses = [];
   Map<String, List<Expense>> _groupedExpenses = {};
   double _monthlyTotal = 0.0;
@@ -36,14 +37,22 @@ class _ExpenseHomePageState extends State<ExpenseHomePage> {
     });
 
     try {
-      final expenses = await ExpenseHelper.instance.getAllExpenses();
+      // 优先从 Supabase 加载 (Develop 分支的逻辑)
+      final expensesData = await _supabaseService.getAllExpenses();
+      final expenses = expensesData.map((e) => Expense.fromMap(e)).toList();
+      
       final now = DateTime.now();
-      final monthlyTotal = await ExpenseHelper.instance.getMonthlyTotal(
-        now.year,
-        now.month,
-      );
+      double monthlyTotal = 0.0;
+      
+      // 手动计算月度总支出 (替代 ExpenseHelper 的本地计算)
+      for (final expense in expenses) {
+        final expenseDate = DateTime.parse(expense.date);
+        if (expenseDate.year == now.year && expenseDate.month == now.month) {
+          monthlyTotal += expense.amount;
+        }
+      }
 
-      // 按日期分组
+      // 按日期分组 (Feature 分支的 UI 需要)
       final Map<String, List<Expense>> grouped = {};
       for (var expense in expenses) {
         if (!grouped.containsKey(expense.date)) {
@@ -94,7 +103,8 @@ class _ExpenseHomePageState extends State<ExpenseHomePage> {
     );
 
     if (confirmed == true && expense.id != null) {
-      await ExpenseHelper.instance.deleteExpense(expense.id!);
+      // 使用 SupabaseService 删除 (Develop 分支的逻辑)
+      await _supabaseService.deleteExpense(expense.id!);
       _loadExpenses();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -106,6 +116,7 @@ class _ExpenseHomePageState extends State<ExpenseHomePage> {
 
   @override
   Widget build(BuildContext context) {
+    // 使用 Feature 分支的 UI 结构
     return Scaffold(
       backgroundColor: const Color(0xFFF7F8FA), // 浅灰色背景
       appBar: AppBar(
@@ -327,7 +338,7 @@ class _ExpenseHomePageState extends State<ExpenseHomePage> {
     );
   }
 
-  /// 构建顶部汇总卡片
+  /// 构建顶部汇总卡片 (Feature 分支样式)
   Widget _buildSummaryCard() {
     return Container(
       width: double.infinity,
@@ -508,7 +519,7 @@ class _ExpenseHomePageState extends State<ExpenseHomePage> {
     );
   }
 
-  /// 构建单个账单卡片
+  /// 构建单个账单卡片 (Feature 分支样式)
   Widget _buildExpenseCard(Expense expense) {
     final category = ExpenseCategory.getCategoryByName(expense.category);
     // 使用 Material Icons

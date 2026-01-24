@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../../database/medical_record_helper.dart';
-import '../../database/reminder_helper.dart';
+import '../../services/supabase_service.dart';
 
 /// 添加/编辑驱虫提醒
 class AddDewormingReminderPage extends StatefulWidget {
@@ -18,7 +17,7 @@ class _AddDewormingReminderPageState extends State<AddDewormingReminderPage> {
   final _formKey = GlobalKey<FormState>();
 
   // 表单字段
-  int? _selectedPetId;
+  String? _selectedPetId;
   String? _selectedPetName;
   String _dewormingType = 'external'; // internal/external
   final TextEditingController _brandController = TextEditingController();
@@ -28,6 +27,7 @@ class _AddDewormingReminderPageState extends State<AddDewormingReminderPage> {
 
   List<Map<String, dynamic>> _pets = [];
   bool _isLoading = false;
+  final SupabaseService _supabaseService = SupabaseService();
 
   @override
   void initState() {
@@ -37,7 +37,8 @@ class _AddDewormingReminderPageState extends State<AddDewormingReminderPage> {
   }
 
   Future<void> _loadPets() async {
-    final pets = await MedicalRecordHelper.instance.getAllPets();
+    final pets = await _supabaseService.getAllPets();
+    if (!mounted) return;
     setState(() {
       _pets = pets;
     });
@@ -46,8 +47,8 @@ class _AddDewormingReminderPageState extends State<AddDewormingReminderPage> {
   void _loadExistingData() {
     if (widget.existingReminder != null) {
       final data = widget.existingReminder!;
-      _selectedPetId = data['pet_id'] as int;
-      _selectedPetName = data['pet_name'] as String;
+      _selectedPetId = data['pet_id'] as String?;
+      _selectedPetName = data['pet_name'] as String?;
       _dewormingType = data['type'] as String;
       _brandController.text = data['brand'] as String? ?? '';
       _lastDewormingDate = DateTime.parse(data['last_date'] as String);
@@ -110,13 +111,27 @@ class _AddDewormingReminderPageState extends State<AddDewormingReminderPage> {
         'status': 'upcoming',
       };
 
+      bool success = false;
       if (widget.existingReminder != null) {
         // 更新
         data['id'] = widget.existingReminder!['id'];
-        await ReminderHelper.instance.updateDewormingReminder(data);
+        success = await _supabaseService.updateDewormingReminder(data);
       } else {
         // 创建
-        await ReminderHelper.instance.createDewormingReminder(data);
+        final result = await _supabaseService.insertDewormingReminder(data);
+        success = result != null;
+      }
+
+      if (!success) {
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(
+            content: Text('保存失败，请检查网络连接'),
+            backgroundColor: Colors.red,
+          ));
+        }
+        return;
       }
 
       if (mounted) {
@@ -126,7 +141,10 @@ class _AddDewormingReminderPageState extends State<AddDewormingReminderPage> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('保存失败: $e')));
+        ).showSnackBar(const SnackBar(
+          content: Text('保存失败，请检查网络连接'),
+          backgroundColor: Colors.red,
+        ));
       }
     } finally {
       setState(() {
@@ -246,23 +264,24 @@ class _AddDewormingReminderPageState extends State<AddDewormingReminderPage> {
   }
 
   Widget _buildPetSelector() {
-    return DropdownButtonFormField<int>(
+    return DropdownButtonFormField<String>(
       value: _selectedPetId,
       decoration: const InputDecoration(
         labelText: '选择宠物 *',
         border: OutlineInputBorder(),
       ),
-      items: _pets.map((pet) {
-        return DropdownMenuItem<int>(
-          value: pet['id'] as int,
-          child: Text(pet['name'] as String),
-        );
-      }).toList(),
+      items: _pets
+          .map((pet) => DropdownMenuItem<String>(
+                value: pet['id']?.toString(),
+                child: Text(pet['name'] as String),
+              ))
+          .toList(),
       onChanged: (value) {
         setState(() {
           _selectedPetId = value;
-          _selectedPetName =
-              _pets.firstWhere((pet) => pet['id'] == value)['name'] as String;
+          _selectedPetName = _pets
+              .firstWhere((pet) => pet['id']?.toString() == value)['name']
+              as String;
         });
       },
       validator: (value) => value == null ? '请选择宠物' : null,

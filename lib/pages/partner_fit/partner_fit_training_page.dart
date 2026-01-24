@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
 import '../../models/fitness_course.dart';
-import '../../database/fitness_helper.dart';
+import '../../services/supabase_service.dart';
 import 'partner_fit_completion_page.dart';
 
 /// 训练进行中页面
@@ -14,21 +14,58 @@ class PartnerFitTrainingPage extends StatefulWidget {
   State<PartnerFitTrainingPage> createState() => _PartnerFitTrainingPageState();
 }
 
-class _PartnerFitTrainingPageState extends State<PartnerFitTrainingPage> {
+class _PartnerFitTrainingPageState extends State<PartnerFitTrainingPage>
+    with TickerProviderStateMixin {
   int currentActionIndex = 0;
   int remainingSeconds = 0;
   Timer? countdownTimer;
   bool isPaused = false;
 
+  late AnimationController _animationController;
+  late Animation<double> _progressAnimation;
+  DateTime? _startTime;
+  Duration? _remainingDuration;
+  double? _pausedAnimationValue;
+
   @override
   void initState() {
     super.initState();
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 1), // 这个会在_startAction中更新
+    );
+
+    _progressAnimation = Tween<double>(
+      begin: 1.0,
+      end: 0.0,
+    ).animate(_animationController)
+      ..addListener(() {
+        setState(() {
+          // 动画更新时重新计算剩余时间
+          if (_remainingDuration != null && _startTime != null) {
+            final elapsed = DateTime.now().difference(_startTime!);
+            final totalDuration = _remainingDuration!;
+            if (elapsed < totalDuration) {
+              remainingSeconds = (totalDuration - elapsed).inSeconds;
+            } else {
+              remainingSeconds = 0;
+            }
+          }
+        });
+      })
+      ..addStatusListener((status) {
+        if (status == AnimationStatus.completed) {
+          _nextAction();
+        }
+      });
+
     _startAction();
   }
 
   @override
   void dispose() {
     countdownTimer?.cancel();
+    _animationController.dispose();
     super.dispose();
   }
 
@@ -40,21 +77,26 @@ class _PartnerFitTrainingPageState extends State<PartnerFitTrainingPage> {
     });
 
     countdownTimer?.cancel();
-    countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (!isPaused) {
-        setState(() {
-          if (remainingSeconds > 0) {
-            remainingSeconds--;
-          } else {
-            timer.cancel();
-            _nextAction();
-          }
-        });
-      }
-    });
+
+    // 设置动画控制器持续时间
+    _animationController.duration = Duration(seconds: action.durationSeconds);
+    _remainingDuration = Duration(seconds: action.durationSeconds);
+    _startTime = DateTime.now();
+    _pausedAnimationValue = null; // 重置暂停值
+
+    // 重新创建从1.0到0.0的动画
+    _progressAnimation = Tween<double>(
+      begin: 1.0,
+      end: 0.0,
+    ).animate(_animationController);
+
+    // 重置动画并开始
+    _animationController.reset();
+    _animationController.forward();
   }
 
   void _nextAction() {
+    _animationController.stop();
     if (currentActionIndex < widget.course.actions.length - 1) {
       setState(() {
         currentActionIndex++;
@@ -67,6 +109,7 @@ class _PartnerFitTrainingPageState extends State<PartnerFitTrainingPage> {
   }
 
   void _previousAction() {
+    _animationController.stop();
     if (currentActionIndex > 0) {
       setState(() {
         currentActionIndex--;
@@ -79,10 +122,36 @@ class _PartnerFitTrainingPageState extends State<PartnerFitTrainingPage> {
     setState(() {
       isPaused = !isPaused;
     });
+
+    if (isPaused) {
+      // 暂停时停止动画并保存剩余时间和当前动画值
+      _animationController.stop();
+      _pausedAnimationValue = _progressAnimation.value;
+      if (_startTime != null && _remainingDuration != null) {
+        final elapsed = DateTime.now().difference(_startTime!);
+        _remainingDuration = _remainingDuration! - elapsed;
+      }
+    } else {
+      // 继续时从暂停位置重新开始动画
+      if (_remainingDuration != null && _remainingDuration!.inSeconds > 0 && _pausedAnimationValue != null) {
+        _animationController.duration = _remainingDuration;
+        _startTime = DateTime.now();
+
+        // 从暂停时的位置开始动画
+        _progressAnimation = Tween<double>(
+          begin: _pausedAnimationValue,
+          end: 0.0,
+        ).animate(_animationController);
+
+        _animationController.reset();
+        _animationController.forward();
+      }
+    }
   }
 
-  void _completeWorkout() {
+  Future<void> _completeWorkout() async {
     countdownTimer?.cancel();
+    _animationController.stop();
 
     // 保存训练记录
     final record = FitnessRecord(
@@ -94,16 +163,32 @@ class _PartnerFitTrainingPageState extends State<PartnerFitTrainingPage> {
       petCaloriesBurned: widget.course.petCaloriesEstimate,
     );
 
-    FitnessHelper.instance.addRecord(record);
+    final supabaseService = SupabaseService();
+    final result = await supabaseService.insertFitnessRecord(record.toMap());
+    
+    if (result == null) {
+      // 保存失败，显示错误提示
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('保存失败，请检查网络连接'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return;
+    }
 
     // 导航到完成页面
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (_) =>
-            PartnerFitCompletionPage(course: widget.course, record: record),
-      ),
-    );
+    if (mounted) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) =>
+              PartnerFitCompletionPage(course: widget.course, record: record),
+        ),
+      );
+    }
   }
 
   String _formatTime(int seconds) {
@@ -182,7 +267,7 @@ class _PartnerFitTrainingPageState extends State<PartnerFitTrainingPage> {
                             width: 220,
                             height: 220,
                             child: CircularProgressIndicator(
-                              value: remainingSeconds / action.durationSeconds,
+                              value: _progressAnimation.value,
                               strokeWidth: 12,
                               backgroundColor: const Color(0xFFF0F2F5),
                               valueColor: const AlwaysStoppedAnimation<Color>(

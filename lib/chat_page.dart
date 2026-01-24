@@ -13,7 +13,6 @@ import 'services/supabase_service.dart'; // import supabase service
 import 'models/pet.dart'; // import pet model
 // ================== 所有必需的导入 ==================
 import 'models/conversation.dart';
-import 'database/database_helper.dart';
 import 'utils/ui_helpers.dart';
 import 'widgets/diagnostic_report_card.dart';
 import 'widgets/recommendation_card.dart'; // ✅ 新增：推荐卡片
@@ -30,7 +29,7 @@ class ChatMessage {
   final bool isUser;
   bool isLiked;
   bool isDisliked;
-  final RecommendationData? recommendationData; // ✅ 新增：推荐数据
+  final RecommendationData? recommendationData;
 
   ChatMessage({
     required this.text,
@@ -38,6 +37,7 @@ class ChatMessage {
     this.isLiked = false,
     this.isDisliked = false,
     this.recommendationData,
+    // this.isFavorited = false, // ✅ 已注释
   });
 }
 
@@ -73,7 +73,8 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
   bool _isComposing = false;
   final math.Random _random = math.Random();
   List<String> _currentSuggestions = [];
-  String? _conversationId;
+  String? _conversationId; // Dify 的 conversation_id
+  String? _supabaseConversationId; // Supabase 的 conversation ID
 
   // 打字机效果相关
   String _currentTypingText = '';
@@ -91,12 +92,11 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
   bool _isDoctorMode = false; // 默认为普通模式
   bool _isAgentMode = false; // ✅ 新增：Agent 模式状态
   Pet? _selectedConsultationPet; // ✅ 新增：当前问诊的宠物
-  final SupabaseService _supabaseService = SupabaseService();
 
   // ✅ 使用新的 Supabase Edge Function 服务
   final SupabaseEdgeFunctionService _difyService =
       SupabaseEdgeFunctionService();
-
+  final SupabaseService _supabaseService = SupabaseService();
   static const String _agentSystemPrompt = """
 # System Prompt for Peture AI (Agent Mode)
 
@@ -189,7 +189,6 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
   }
 }
 """;
-
   final List<String> _allSuggestions = [
     "猫咪呼吸似乎有点困难，嘴巴张开呼吸，像小狗一样喘气",
     "猫咪的耳朵有异味，耳道有褐色分泌物，频繁地抓耳挠腮",
@@ -277,11 +276,13 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
               if (pets.isEmpty)
                 Column(
                   children: [
-                     const Padding(
+                    const Padding(
                       padding: EdgeInsets.all(20),
                       child: Text("暂无宠物档案，请先在个人中心添加"),
                     ),
-                    TextButton(onPressed: ()=>Navigator.pop(context), child: const Text("确定"))
+                    TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text("确定"))
                   ],
                 )
               else
@@ -307,8 +308,9 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
                                             : "?")),
                                   )
                                 : Center(
-                                    child: Text(
-                                        pet.name.isNotEmpty ? pet.name[0] : "?")),
+                                    child: Text(pet.name.isNotEmpty
+                                        ? pet.name[0]
+                                        : "?")),
                           ),
                         ),
                         title: Text(pet.name),
@@ -334,15 +336,15 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
               const SizedBox(height: 10),
               TextButton(
                 onPressed: () {
-                   setState(() {
-                        _selectedConsultationPet = null;
-                        _isDoctorMode = true; // 即使不关联宠物，也开启医生模式
-                        _isAgentMode = false;
-                    });
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('已进入通用问诊模式')),
-                    );
+                  setState(() {
+                    _selectedConsultationPet = null;
+                    _isDoctorMode = true; // 即使不关联宠物，也开启医生模式
+                    _isAgentMode = false;
+                  });
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('已进入通用问诊模式')),
+                  );
                 },
                 child: const Text("不关联档案，直接问诊"),
               ),
@@ -359,16 +361,57 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
         answer.startsWith("出现错误")) {
       return;
     }
-    final conversation = Conversation(
-      question: question,
-      answer: answer,
-      timestamp: DateTime.now(),
+
+    // 生成对话标题（使用问题的前30个字符，或完整问题如果更短）
+    final title =
+        question.length > 30 ? '${question.substring(0, 30)}...' : question;
+
+    // 1. 先创建或获取 conversation（只保存标题）
+    String? conversationId = _supabaseConversationId;
+    if (conversationId == null) {
+      // 创建新的 conversation，同时保存 Dify 的 conversation_id
+      final conversation = Conversation(
+        title: title,
+        timestamp: DateTime.now(),
+        difyConversationId: _conversationId, // 保存 Dify 的 conversation_id
+      );
+      final id = await _supabaseService.insertConversation(conversation);
+      if (id == null) {
+        debugPrint("❌ 对话保存失败: 无法创建 conversation");
+        return;
+      }
+      conversationId = id;
+      // 保存 Supabase conversation ID 以便后续使用
+      _supabaseConversationId = id;
+    } else if (_conversationId != null) {
+      // 如果已有 Supabase conversation，但 Dify conversation_id 更新了，只更新 dify_conversation_id
+      // 注意：不更新 title，因为 title 在创建时已经确定，不应该变动
+      await _supabaseService.updateConversationDifyId(
+        conversationId: conversationId,
+        difyConversationId: _conversationId,
+      );
+    }
+
+    // 2. 保存用户消息到 chat_message 表
+    final userMessageId = await _supabaseService.insertChatMessage(
+      conversationId: conversationId,
+      text: question,
+      isUser: true,
     );
-    await DatabaseHelper.instance.insertConversation(conversation);
-    debugPrint("✅ 对话已保存: Q: $question");
-    debugPrint("✅ 答案长度: ${answer.length} 字符");
-    debugPrint(
-        "✅ 答案前100字: ${answer.substring(0, answer.length > 100 ? 100 : answer.length)}");
+
+    // 3. 保存 AI 回复到 chat_message 表
+    final aiMessageId = await _supabaseService.insertChatMessage(
+      conversationId: conversationId,
+      text: answer,
+      isUser: false,
+    );
+
+    if (userMessageId != null && aiMessageId != null) {
+      debugPrint(
+          "✅ 对话已保存到 Supabase: conversation_id=$conversationId, title=$title");
+    } else {
+      debugPrint("❌ 消息保存失败: conversation_id=$conversationId");
+    }
   }
 
   void _startNewChat() {
@@ -377,7 +420,8 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
       _textController.clear();
       _hasStartedChat = false;
       _isLoading = false;
-      _conversationId = null;
+      _conversationId = null; // 清空 Dify conversation_id
+      _supabaseConversationId = null; // 清空 Supabase conversation ID
       _typingTimer?.cancel();
       _pendingChunks.clear();
       _isTyping = false;
@@ -390,38 +434,54 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
   }
 
   // 添加这个新方法来加载历史对话
-  void _loadConversation(Conversation conversation) {
+  Future<void> _loadConversation(Conversation conversation) async {
+    if (conversation.id == null) {
+      debugPrint("❌ 无法加载对话：conversation.id 为 null");
+      return;
+    }
+
     debugPrint("📖 开始加载历史对话...");
-    debugPrint("📖 问题: ${conversation.question}");
-    debugPrint("📖 答案长度: ${conversation.answer.length} 字符");
+    debugPrint("📖 标题: ${conversation.title}");
+    debugPrint("📖 Conversation ID: ${conversation.id}");
 
-    setState(() {
-      _messages.clear();
-      _textController.clear();
-      _hasStartedChat = true;
-      _isLoading = false;
-      _conversationId = null;
-      _typingTimer?.cancel();
-      _pendingChunks.clear();
-      _isTyping = false;
-      _currentTypingText = '';
-      _fullResponseText = '';
-      _pendingSaveQuestion = null;
+    // 从 chat_message 表加载该 conversation 的所有消息
+    final messages =
+        await _supabaseService.getMessagesByConversationId(conversation.id!);
 
-      // 添加用户问题
-      _messages.add(ChatMessage(text: conversation.question, isUser: true));
-      // 添加AI回答（确保使用完整的answer内容）
-      _messages.add(ChatMessage(text: conversation.answer, isUser: false));
+    if (mounted) {
+      setState(() {
+        _messages.clear();
+        _textController.clear();
+        _hasStartedChat = true;
+        _isLoading = false;
+        // 从 conversation 中恢复 Dify 的 conversation_id（用于接上上文）
+        _conversationId = conversation.difyConversationId;
+        _supabaseConversationId =
+            conversation.id; // 设置当前 Supabase conversation ID
+        _typingTimer?.cancel();
+        _pendingChunks.clear();
+        _isTyping = false;
+        _currentTypingText = '';
+        _fullResponseText = '';
+        _pendingSaveQuestion = null;
 
-      debugPrint("📖 消息列表已更新，共 ${_messages.length} 条消息");
-      debugPrint("📖 AI消息内容长度: ${_messages.last.text.length} 字符");
-    });
+        // 按时间顺序添加消息
+        for (final msg in messages) {
+          _messages.add(ChatMessage(
+            text: msg['text'] as String,
+            isUser: msg['is_user'] == true || msg['is_user'] == 1,
+          ));
+        }
 
-    // 加载完成后滚动到底部
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _scrollToBottom();
-      debugPrint("📖 已滚动到底部");
-    });
+        debugPrint("📖 消息列表已更新，共 ${_messages.length} 条消息");
+      });
+
+      // 加载完成后滚动到底部
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scrollToBottom();
+        debugPrint("📖 已滚动到底部");
+      });
+    }
 
     debugPrint("✅ 历史对话加载完成");
   }
@@ -478,7 +538,7 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
     final characters = chunk.characters.toList();
     int index = 0;
     _typingTimer?.cancel();
-    _typingTimer = Timer.periodic(const Duration(milliseconds: 30), (timer) {
+    _typingTimer = Timer.periodic(const Duration(milliseconds: 15), (timer) {
       if (index < characters.length) {
         if (mounted) {
           setState(() {
@@ -523,7 +583,6 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
     if (_isLoading) return;
     final messageText = (text ?? _textController.text).trim();
     if (messageText.isEmpty) return;
-
     HapticFeedback.mediumImpact();
     _textController.clear();
     FocusScope.of(context).unfocus();
@@ -557,7 +616,8 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
       petInfoBuffer.writeln("品种：${_selectedConsultationPet!.breed}");
       petInfoBuffer.writeln("年龄：${_selectedConsultationPet!.age}");
       petInfoBuffer.writeln("性别：${_selectedConsultationPet!.gender}");
-      petInfoBuffer.writeln("绝育状态：${_selectedConsultationPet!.neuterStatus ?? '未知'}");
+      petInfoBuffer
+          .writeln("绝育状态：${_selectedConsultationPet!.neuterStatus ?? '未知'}");
       if (_selectedConsultationPet!.weight != null) {
         petInfoBuffer.writeln("体重：${_selectedConsultationPet!.weight} kg");
       }
@@ -567,36 +627,37 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
         if (_selectedConsultationPet!.id != null) {
           final recordsData = await _supabaseService
               .getMedicalRecordsForPet(_selectedConsultationPet!.id!);
-          
+
           if (recordsData.isNotEmpty) {
-             petInfoBuffer.writeln("\n【该宠物的历史病历】");
-             // 取最近 5 条
-             final recentRecords = recordsData.take(5);
-             for (var record in recentRecords) {
-                petInfoBuffer.writeln("- ${record['date']}: ${record['description']}");
-             }
+            petInfoBuffer.writeln("\n【该宠物的历史病历】");
+            // 取最近 5 条
+            final recentRecords = recordsData.take(5);
+            for (var record in recentRecords) {
+              petInfoBuffer
+                  .writeln("- ${record['date']}: ${record['description']}");
+            }
           }
         }
       } catch (e) {
         debugPrint("❌ 获取病历失败: $e");
       }
-      
+
       // 将宠物信息拼接到 Prompt 中 (作为上下文)
       // 注意：如果是第一条消息，我们会下面统一组合 System Prompt
       // 如果不是第一条，我们直接附带在 User Message 后
       if (_conversationId != null) {
-         queryToSend += petInfoBuffer.toString();
-         debugPrint("📎 已向现有对话注入宠物信息");
+        queryToSend += petInfoBuffer.toString();
+        debugPrint("📎 已向现有对话注入宠物信息");
       } else {
-         // 如果是新对话，我们将 petInfoBuffer 暂存，拼接到 SystemPrompt 后面
-         // 下面的 _isDoctorMode 判断逻辑会处理
+        // 如果是新对话，我们将 petInfoBuffer 暂存，拼接到 SystemPrompt 后面
+        // 下面的 _isDoctorMode 判断逻辑会处理
       }
-      
+
       // Hack: 无论是否新对话，都追加到 messageText 后面给 AI 看，或者是追加到 System Prompt?
       // Dify通常接收 query。
       // 为了确保 AI 既然看到 System Prompt 也能看到这个 Context，我们把它放在 query 里。
       // 但是如果在 System Prompt 里放会更稳定。
-      
+
       // 策略：直接追加到 User Query 后面。
       queryToSend += petInfoBuffer.toString();
     }
@@ -605,7 +666,8 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
       if (_isAgentMode) {
         // Agent 模式：注入购物决策 Prompt
         // 注意：如果在 Agent 模式下选了宠物，也会带上宠物信息
-        queryToSend = "$_agentSystemPrompt\n\n用户问题：$queryToSend"; // queryToSend 已经包含了宠物信息
+        queryToSend =
+            "$_agentSystemPrompt\n\n用户问题：$queryToSend"; // queryToSend 已经包含了宠物信息
         debugPrint("🧠 已注入系统提示词 (Agent Mode)");
       } else if (_isDoctorMode) {
         // 医生模式：注入问诊 Prompt
@@ -615,7 +677,7 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
     }
 
     final stream = _difyService.callDifyChat(
-      query: queryToSend,
+      query: messageText,
       user: _userId,
       conversationId: _conversationId,
     );
@@ -642,6 +704,21 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
               _conversationId = event.conversationId;
             });
             debugPrint("✅ Conversation ID 已更新: $_conversationId");
+
+            // 如果已有 Supabase conversation，更新 Dify conversation_id 到数据库
+            // 注意：只更新 dify_conversation_id，不更新 title
+            if (_supabaseConversationId != null) {
+              _supabaseService
+                  .updateConversationDifyId(
+                conversationId: _supabaseConversationId!,
+                difyConversationId: _conversationId,
+              )
+                  .then((success) {
+                if (success) {
+                  debugPrint("✅ Dify conversation_id 已保存到数据库");
+                }
+              });
+            }
           }
           // ✅ 不在这里保存，而是在打字机效果完成后保存
           // 如果没有打字机效果（_pendingChunks为空且不在打字中），立即保存
@@ -1237,7 +1314,7 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
               child: Center(
                 key: ValueKey(_hasStartedChat ? "chat_title" : "welcome_title"),
                 child: Text(
-                  _isDoctorMode ? "深度问诊" : "Peture AI",
+                  "Peture AI",
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
                         fontWeight: FontWeight.bold,
                         fontSize: 18,
@@ -1659,6 +1736,7 @@ class AppDrawer extends StatefulWidget {
 
 class _AppDrawerState extends State<AppDrawer> {
   late Future<List<Conversation>> _conversationsFuture;
+  final SupabaseService _supabaseService = SupabaseService();
 
   @override
   void initState() {
@@ -1668,16 +1746,15 @@ class _AppDrawerState extends State<AppDrawer> {
 
   void _loadConversations() {
     setState(() {
-      _conversationsFuture = DatabaseHelper.instance.getAllConversations().then(
-        (data) {
-          data.sort((a, b) {
-            if (a.isPinned && !b.isPinned) return -1;
-            if (!a.isPinned && b.isPinned) return 1;
-            return b.timestamp.compareTo(a.timestamp);
-          });
-          return data;
-        },
-      );
+      _conversationsFuture =
+          _supabaseService.getAllConversations().then((data) {
+        data.sort((a, b) {
+          if (a.isPinned && !b.isPinned) return -1;
+          if (!a.isPinned && b.isPinned) return 1;
+          return b.timestamp.compareTo(a.timestamp);
+        });
+        return data;
+      });
     });
   }
 
@@ -1694,11 +1771,21 @@ class _AppDrawerState extends State<AppDrawer> {
               ListTile(
                 leading: const Icon(Icons.share),
                 title: const Text('分享'),
-                onTap: () {
+                onTap: () async {
                   Navigator.pop(context);
-                  final String shareContent =
-                      "Q: ${conversation.question}\nA: ${conversation.answer}";
-                  Share.share(shareContent);
+                  // 从 chat_message 表加载消息用于分享
+                  if (conversation.id != null) {
+                    final messages = await _supabaseService
+                        .getMessagesByConversationId(conversation.id!);
+                    final shareContent = messages.map((msg) {
+                      final prefix =
+                          (msg['is_user'] == true || msg['is_user'] == 1)
+                              ? 'Q'
+                              : 'A';
+                      return "$prefix: ${msg['text']}";
+                    }).join('\n\n');
+                    Share.share(shareContent);
+                  }
                 },
               ),
               ListTile(
@@ -1736,7 +1823,7 @@ class _AppDrawerState extends State<AppDrawer> {
 
   void _togglePinConversation(Conversation conversation) async {
     final updated = conversation.copyWith(isPinned: !conversation.isPinned);
-    await DatabaseHelper.instance.updateConversation(updated);
+    await _supabaseService.updateConversation(updated);
     _loadConversations();
   }
 
@@ -1744,7 +1831,7 @@ class _AppDrawerState extends State<AppDrawer> {
     BuildContext context,
     Conversation conversation,
   ) async {
-    final controller = TextEditingController(text: conversation.question);
+    final controller = TextEditingController(text: conversation.title);
     showDialog(
       context: context,
       builder: (context) {
@@ -1764,9 +1851,9 @@ class _AppDrawerState extends State<AppDrawer> {
               onPressed: () async {
                 if (controller.text.isNotEmpty) {
                   final updated = conversation.copyWith(
-                    question: controller.text,
+                    title: controller.text,
                   );
-                  await DatabaseHelper.instance.updateConversation(updated);
+                  await _supabaseService.updateConversation(updated);
                   _loadConversations();
                 }
                 Navigator.pop(context);
@@ -1788,7 +1875,7 @@ class _AppDrawerState extends State<AppDrawer> {
       builder: (context) {
         return AlertDialog(
           title: const Text("确认删除？"),
-          content: Text("删除后无法恢复：\n\"${conversation.question}\""),
+          content: Text("删除后无法恢复：\n\"${conversation.title}\""),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
@@ -1797,9 +1884,7 @@ class _AppDrawerState extends State<AppDrawer> {
             TextButton(
               onPressed: () async {
                 if (conversation.id != null) {
-                  await DatabaseHelper.instance.deleteConversation(
-                    int.parse(conversation.id!),
-                  );
+                  await _supabaseService.deleteConversation(conversation.id!);
                   _loadConversations();
                 }
                 Navigator.pop(context);
@@ -1926,7 +2011,7 @@ class _AppDrawerState extends State<AppDrawer> {
                                     )
                                   : null,
                               title: Text(
-                                conversation.question,
+                                conversation.title,
                                 overflow: TextOverflow.ellipsis,
                                 maxLines: 1,
                               ),
@@ -1940,10 +2025,7 @@ class _AppDrawerState extends State<AppDrawer> {
                                     context, conversation),
                               ),
                               onTap: () {
-                                debugPrint(
-                                    "🔘 点击历史对话: ${conversation.question}");
-                                debugPrint(
-                                    "🔘 答案长度: ${conversation.answer.length} 字符");
+                                debugPrint("🔘 点击历史对话: ${conversation.title}");
                                 Navigator.pop(context);
                                 if (widget.onConversationSelected != null) {
                                   widget.onConversationSelected!(conversation);
@@ -2098,9 +2180,9 @@ class _MessageBubble extends StatelessWidget {
               behavior: SnackBarBehavior.floating,
             ),
           );
-          
+
           Future.delayed(const Duration(milliseconds: 800), () {
-             Navigator.push(
+            Navigator.push(
               context,
               MaterialPageRoute(
                 builder: (context) => CartPage(
@@ -2121,14 +2203,13 @@ class _MessageBubble extends StatelessWidget {
     // Check if message is JSON report or recommendation
     Widget messageContent;
     bool isCustomCard = false;
-    
+
     // 增强的检测逻辑：如果消息以 { 开头，或者包含 "type": "recommendation"，则视为协议消息
     // 这样可以避免在流式传输初期显示原始 JSON 文本
-    bool isProtocolMessage = !isUser && (
-      message.text.trimLeft().startsWith('{') || 
-      message.text.contains('"type": "recommendation"') ||
-      message.text.contains('"type": "report"')
-    );
+    bool isProtocolMessage = !isUser &&
+        (message.text.trimLeft().startsWith('{') ||
+            message.text.contains('"type": "recommendation"') ||
+            message.text.contains('"type": "report"'));
 
     if (isProtocolMessage) {
       try {
@@ -2138,7 +2219,7 @@ class _MessageBubble extends StatelessWidget {
         if (startIndex != -1 && endIndex != -1 && endIndex > startIndex) {
           final jsonString = message.text.substring(startIndex, endIndex + 1);
           final jsonMap = jsonDecode(jsonString);
-          
+
           if (jsonMap['type'] == 'report') {
             messageContent = DiagnosticReportCard(data: jsonMap['data']);
             isCustomCard = true;
@@ -2147,7 +2228,7 @@ class _MessageBubble extends StatelessWidget {
             final data = jsonMap['data'];
             final priceStr = data['price']?.toString() ?? "299.00";
             final price = double.tryParse(priceStr) ?? 299.00;
-            
+
             messageContent = RecommendationCard(
               data: RecommendationData(
                 reason: data['reason'] ?? "AI 智能推荐",
@@ -2265,16 +2346,16 @@ class _MessageBubble extends StatelessWidget {
                   if (steps.isNotEmpty) ...[
                     const SizedBox(height: 8),
                     ...steps.map((step) => Padding(
-                      padding: const EdgeInsets.only(bottom: 4.0),
-                      child: Text(
-                        step,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey.shade500,
-                          height: 1.4,
-                        ),
-                      ),
-                    )),
+                          padding: const EdgeInsets.only(bottom: 4.0),
+                          child: Text(
+                            step,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey.shade500,
+                              height: 1.4,
+                            ),
+                          ),
+                        )),
                   ],
                 ],
               ),

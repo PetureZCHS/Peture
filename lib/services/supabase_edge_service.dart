@@ -398,15 +398,6 @@ class PetDiaryEdgeService {
                 case 'workflow_finished':
                   // 工作流完成，获取最终文本
                   final data = json['data'] as Map<String, dynamic>?;
-                  
-                  // 检查是否失败
-                  if (data != null && data['status'] == 'failed') {
-                    final error = data['error'] as String? ?? '生成失败';
-                    print('   ❌ Workflow 失败: $error');
-                    yield DiaryErrorEvent(error);
-                    return;
-                  }
-
                   if (data != null && data.containsKey('outputs')) {
                     final outputs = data['outputs'] as Map<String, dynamic>?;
                     if (outputs != null && outputs.containsKey('text')) {

@@ -7,28 +7,28 @@
 // -----------------------------------------------------------------------------
 class Conversation {
   final String? id; // 从 int? 改为 String? 以支持 UUID
-  final String question; // 用户提问
-  final String answer; // AI回答
+  final String title; // 对话标题（总结）
   final DateTime timestamp; // 时间戳
   final bool isPinned; // 是否置顶
+  final String? difyConversationId; // Dify 的 conversation_id（用于接上上文）
 
   Conversation({
     this.id,
-    required this.question,
-    required this.answer,
+    required this.title,
     required this.timestamp,
     this.isPinned = false,
+    this.difyConversationId,
   });
 
   // 将对象转换为Map（用于存入数据库）
   Map<String, dynamic> toMap() {
     return {
       'id': id,
-      'question': question,
-      'answer': answer,
+      'title': title,
       // [已更正] 这里之前写错了，应该是 toIso8601String
       'timestamp': timestamp.toIso8601String(),
       'is_pinned': isPinned ? 1 : 0,
+      'dify_conversation_id': difyConversationId,
     };
   }
 
@@ -36,27 +36,28 @@ class Conversation {
   factory Conversation.fromMap(Map<String, dynamic> map) {
     return Conversation(
       id: map['id']?.toString(), // 确保转换为 String
-      question: map['question'],
-      answer: map['answer'],
-      timestamp: DateTime.parse(map['timestamp']),
-      isPinned: map['is_pinned'] == 1,
+      // 兼容旧数据：如果存在 question 字段，使用它作为 title；否则使用 title 字段
+      title: map['title'] ?? map['question'] ?? '未命名对话',
+      timestamp: DateTime.parse(map['timestamp'] ?? map['created_at']),
+      isPinned: map['is_pinned'] == 1 || map['is_pinned'] == true,
+      difyConversationId: map['dify_conversation_id'] as String?,
     );
   }
 
   // copyWith 方法
   Conversation copyWith({
     String? id, // 从 int? 改为 String?
-    String? question,
-    String? answer,
+    String? title,
     DateTime? timestamp,
     bool? isPinned,
+    String? difyConversationId,
   }) {
     return Conversation(
       id: id ?? this.id,
-      question: question ?? this.question,
-      answer: answer ?? this.answer,
+      title: title ?? this.title,
       timestamp: timestamp ?? this.timestamp,
       isPinned: isPinned ?? this.isPinned,
+      difyConversationId: difyConversationId ?? this.difyConversationId,
     );
   }
 }

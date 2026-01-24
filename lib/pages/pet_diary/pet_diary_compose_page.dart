@@ -16,7 +16,8 @@ class PetDiaryComposePage extends StatefulWidget {
   State<PetDiaryComposePage> createState() => _PetDiaryComposePageState();
 }
 
-class _PetDiaryComposePageState extends State<PetDiaryComposePage> with TickerProviderStateMixin {
+class _PetDiaryComposePageState extends State<PetDiaryComposePage>
+    with SingleTickerProviderStateMixin {
   final TextEditingController _inputController = TextEditingController();
   final PetDiaryEdgeService _diaryService = PetDiaryEdgeService();
   late AnimationController _orbController;
@@ -30,7 +31,6 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage> with TickerPr
   // 示例文本
   final String _exampleText =
       '今天，我带我的宠物狗狗十六去逍遥津的大草坪玩飞盘。小妮带着她的宠物狗狗朱朱一起。十六跑得比朱朱快。十六和朱朱都玩得很开心，我奖励它们吃苹果狗粮。';
-
   @override
   void initState() {
     super.initState();
@@ -42,8 +42,8 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage> with TickerPr
 
   @override
   void dispose() {
-    _inputController.dispose();
     _orbController.dispose();
+    _inputController.dispose();
     super.dispose();
   }
 
@@ -124,7 +124,8 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage> with TickerPr
                     top: -100 + (_orbController.value * 40),
                     left: -50 + (_orbController.value * 20),
                     child: Container(
-                      width: 500, height: 500,
+                      width: 500,
+                      height: 500,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         color: AppColors.orb1.withOpacity(0.5),
@@ -140,7 +141,8 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage> with TickerPr
                     top: 300 + (math.sin(_orbController.value * math.pi) * 60),
                     right: -100,
                     child: Container(
-                      width: 350, height: 350,
+                      width: 350,
+                      height: 350,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         color: AppColors.orb3.withOpacity(0.4),
@@ -156,7 +158,8 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage> with TickerPr
                     bottom: -150,
                     left: -80 + (_orbController.value * 150),
                     child: Container(
-                      width: 600, height: 400,
+                      width: 600,
+                      height: 400,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         color: AppColors.orb2.withOpacity(0.5),
@@ -254,7 +257,8 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage> with TickerPr
                                   children: _availableStyles.map((style) {
                                     final isSelected = _selectedStyle == style;
                                     return Padding(
-                                      padding: const EdgeInsets.only(right: 8.0),
+                                      padding:
+                                          const EdgeInsets.only(right: 8.0),
                                       child: ChoiceChip(
                                         label: Text(style),
                                         selected: isSelected,
@@ -262,7 +266,8 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage> with TickerPr
                                           if (selected) _onStyleSelected(style);
                                         },
                                         backgroundColor: Colors.grey.shade100,
-                                        selectedColor: const Color(0xFF4facfe).withOpacity(0.2),
+                                        selectedColor: const Color(0xFF4facfe)
+                                            .withOpacity(0.2),
                                         labelStyle: TextStyle(
                                           color: isSelected
                                               ? const Color(0xFF4facfe)
@@ -272,7 +277,8 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage> with TickerPr
                                               : FontWeight.normal,
                                         ),
                                         shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(20),
+                                          borderRadius:
+                                              BorderRadius.circular(20),
                                           side: BorderSide(
                                             color: isSelected
                                                 ? const Color(0xFF4facfe)
@@ -287,23 +293,25 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage> with TickerPr
                             ],
                           ),
                         ),
-                        
+
                         const SizedBox(height: 16),
                         // 示例文本按钮
                         Align(
                           alignment: Alignment.centerRight,
                           child: TextButton.icon(
                             onPressed: _onExampleTap,
-                            icon: Icon(Icons.auto_awesome, size: 16, color: Colors.grey.shade500),
+                            icon: Icon(Icons.auto_awesome,
+                                size: 16, color: Colors.grey.shade500),
                             label: Text(
                               "试一试示例",
-                              style: TextStyle(color: Colors.grey.shade500, fontSize: 14),
+                              style: TextStyle(
+                                  color: Colors.grey.shade500, fontSize: 14),
                             ),
                           ),
                         ),
-                        
+
                         const SizedBox(height: 30),
-                        
+
                         // 生成按钮
                         SizedBox(
                           width: double.infinity,
@@ -366,7 +374,8 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage> with TickerPr
                 ),
           ),
           IconButton(
-            icon: const Icon(Icons.local_library_rounded, size: 28), // Changed icon to library
+            icon: const Icon(Icons.local_library_rounded,
+                size: 28), // Changed icon to library
             onPressed: () {
               Navigator.push(
                 context,
@@ -567,5 +576,3 @@ class _KimiBallState extends State<_KimiBall> with TickerProviderStateMixin {
     );
   }
 }
-
-

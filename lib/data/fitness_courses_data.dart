@@ -2,7 +2,19 @@ import '../models/fitness_course.dart';
 
 /// 预设的健身课程数据
 class FitnessCoursesData {
-  static List<FitnessCourse> getAllCourses() {
+  // 核心课程ID列表 - 这些课程永远本地可用
+  // 注意：此列表必须与 FitnessCoursesManager 中的 coreCourseIds 保持一致
+  // 当前本地课程包括：
+  // - 核心课程：dog_high_chase, dog_medium_core, dog_medium_strength, 
+  //   dog_low_yoga, cat_medium_core, cat_low_yoga
+  // - 扩展课程（本地）：cat_medium_flexibility（此课程将作为扩展课程处理）
+  static const List<String> coreCourseIds = [
+    'dog_high_chase', 'dog_medium_core', 'dog_medium_strength',
+    'dog_low_yoga', 'cat_medium_core', 'cat_low_yoga'
+  ];
+
+  // 重命名原方法为 getLocalCourses
+  static List<FitnessCourse> getLocalCourses() {
     return [
       // ========== 狗狗课程 ==========
       // 高强度
@@ -10,7 +22,7 @@ class FitnessCoursesData {
         id: 'dog_high_chase',
         name: '你追我赶变速跑',
         description: 'HIIT高强度间歇训练，与狗狗一起燃脂！快速冲刺+拔河游戏的完美结合。',
-        durationMinutes: 10,
+        durationMinutes: 4,
         intensity: 'high',
         petType: 'dog',
         caloriesEstimate: 120,
@@ -82,7 +94,7 @@ class FitnessCoursesData {
         id: 'dog_medium_core',
         name: '核心轰炸平板撑',
         description: '锻炼核心力量的同时，让狗狗参与你的训练，增加趣味性和难度！',
-        durationMinutes: 10,
+        durationMinutes: 4,
         intensity: 'medium',
         petType: 'dog',
         caloriesEstimate: 80,
@@ -146,7 +158,7 @@ class FitnessCoursesData {
         id: 'dog_medium_strength',
         name: '深蹲宠物火箭',
         description: '下肢力量训练结合狗狗服从性训练，一举两得！',
-        durationMinutes: 10,
+        durationMinutes: 5,
         intensity: 'medium',
         petType: 'dog',
         caloriesEstimate: 90,
@@ -210,7 +222,7 @@ class FitnessCoursesData {
         id: 'dog_low_yoga',
         name: '人宠瑜伽放松',
         description: '与狗狗一起享受平静的瑜伽时光，身心放松，情感连接。',
-        durationMinutes: 10,
+        durationMinutes: 5,
         intensity: 'low',
         petType: 'dog',
         caloriesEstimate: 40,
@@ -275,7 +287,7 @@ class FitnessCoursesData {
         id: 'cat_medium_core',
         name: '核心轰炸猫诱惑',
         description: '用逗猫棒配合仰卧起坐，在锻炼核心的同时与猫咪玩耍！',
-        durationMinutes: 10,
+        durationMinutes: 4,
         intensity: 'medium',
         petType: 'cat',
         caloriesEstimate: 75,
@@ -331,7 +343,7 @@ class FitnessCoursesData {
         id: 'cat_low_yoga',
         name: '人宠瑜伽猫式',
         description: '猫咪天生就是瑜伽大师！一起做猫式拉伸，享受平静时光。',
-        durationMinutes: 10,
+        durationMinutes: 5,
         intensity: 'low',
         petType: 'cat',
         caloriesEstimate: 35,
@@ -387,7 +399,7 @@ class FitnessCoursesData {
         id: 'cat_medium_flexibility',
         name: '灵活猫咪拉伸',
         description: '向猫咪学习柔韧性！一系列拉伸动作帮你提升身体灵活度。',
-        durationMinutes: 10,
+        durationMinutes: 5,
         intensity: 'medium',
         petType: 'cat',
         caloriesEstimate: 50,
@@ -446,6 +458,25 @@ class FitnessCoursesData {
         ],
       ),
     ];
+  }
+
+  // 新增：获取核心课程
+  static List<FitnessCourse> getCoreCourses() {
+    return getLocalCourses()
+        .where((course) => coreCourseIds.contains(course.id))
+        .toList();
+  }
+
+  // 新增：获取扩展课程（非核心课程）
+  static List<FitnessCourse> getExtensionCourses() {
+    return getLocalCourses()
+        .where((course) => !coreCourseIds.contains(course.id))
+        .toList();
+  }
+
+  // 保留原方法名作为兼容性接口
+  static List<FitnessCourse> getAllCourses() {
+    return getLocalCourses();
   }
 
   /// 根据筛选条件获取课程

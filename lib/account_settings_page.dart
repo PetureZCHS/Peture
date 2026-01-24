@@ -8,6 +8,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'login_page.dart';
 import 'utils/user_avatar_helper.dart';
+import 'services/supabase_service.dart';
 
 class AccountSettingsPage extends StatefulWidget {
   const AccountSettingsPage({super.key});
@@ -18,6 +19,7 @@ class AccountSettingsPage extends StatefulWidget {
 
 class _AccountSettingsPageState extends State<AccountSettingsPage> {
   final _supabase = Supabase.instance.client;
+  final _supabaseService = SupabaseService();
   bool _isLoading = false;
 
   // 用户信息
@@ -43,10 +45,15 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
       if (user != null) {
         // 从本地存储加载头像路径
         final avatarPath = await UserAvatarHelper.getCurrentUserAvatarPath();
+        
+        // 从 Supabase users_profiles 表加载昵称
+        final profile = await _supabaseService.getUserProfile();
+        final nickname = profile?['nickname'] as String?;
 
         setState(() {
           _userEmail = user.email;
-          _userName = user.userMetadata?['name'] ?? '';
+          // 优先使用数据库中的昵称，如果没有则使用 Auth 的元数据
+          _userName = nickname ?? user.userMetadata?['name'] ?? '';
           _avatarPath = avatarPath;
         });
       }
@@ -301,9 +308,12 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
           controller: nameController,
           decoration: const InputDecoration(
             labelText: '昵称',
+            hintText: '请输入昵称',
             prefixIcon: Icon(Icons.person),
+            helperText: '昵称长度为1-20个字符',
           ),
           autofocus: true,
+          maxLength: 20,
         ),
         actions: [
           TextButton(
@@ -311,7 +321,19 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
             child: const Text('取消'),
           ),
           ElevatedButton(
-            onPressed: () => Navigator.pop(context, nameController.text),
+            onPressed: () {
+              final nickname = nameController.text.trim();
+              if (nickname.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('昵称不能为空'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+                return;
+              }
+              Navigator.pop(context, nickname);
+            },
             child: const Text('保存'),
           ),
         ],
@@ -322,23 +344,43 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
       setState(() => _isLoading = true);
 
       try {
-        await _supabase.auth.updateUser(UserAttributes(data: {'name': result}));
+        // 使用 SupabaseService 保存昵称到 users_profiles 表
+        final success = await _supabaseService.upsertUserProfile(
+          nickname: result.trim(),
+        );
 
-        setState(() => _userName = result);
+        if (success) {
+          setState(() => _userName = result.trim());
 
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('✅ 昵称修改成功'),
-              backgroundColor: Colors.green,
-            ),
-          );
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('✅ 昵称修改成功'),
+                backgroundColor: Colors.green,
+                duration: Duration(seconds: 2),
+              ),
+            );
+          }
+        } else {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('❌ 昵称修改失败，请检查网络连接'),
+                backgroundColor: Colors.red,
+                duration: Duration(seconds: 3),
+              ),
+            );
+          }
         }
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(
             context,
-          ).showSnackBar(SnackBar(content: Text('❌ 昵称修改失败: $e')));
+          ).showSnackBar(SnackBar(
+            content: Text('❌ 昵称修改失败: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ));
         }
       } finally {
         setState(() => _isLoading = false);

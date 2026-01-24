@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/conversation.dart';
 import '../models/pet_diary.dart';
+import '../models/fitness_course.dart';
 
 /// Supabase 数据库服务类
 /// 用于替换 SQLite Helper，提供统一的数据访问接口
@@ -125,11 +127,13 @@ class SupabaseService {
         }
       }
 
-      final response = await _client
-          .from('pets')
-          .insert(petData)
-          .select()
-          .single();
+      final response =
+          await _client.from('pets').insert(petData).select().single().timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          throw TimeoutException('请求超时，请检查网络连接');
+        },
+      );
       return response['id'] as String?;
     } catch (e) {
       print('插入宠物失败: $e');
@@ -183,9 +187,8 @@ class SupabaseService {
         final mapped = Map<String, dynamic>.from(pet);
         // neuter_status: 布尔值 -> 字符串
         if (mapped.containsKey('neuter_status')) {
-          mapped['neuter_status'] = mapped['neuter_status'] == true
-              ? '已绝育'
-              : '未绝育';
+          mapped['neuter_status'] =
+              mapped['neuter_status'] == true ? '已绝育' : '未绝育';
         }
         return mapped;
       }).toList();
@@ -235,12 +238,18 @@ class SupabaseService {
           .from('pets')
           .update(updateData)
           .eq('id', petId)
-          .eq('user_id', userId);
+          .eq('user_id', userId)
+          .timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          throw TimeoutException('请求超时，请检查网络连接');
+        },
+      );
 
       return true;
     } catch (e) {
       print('更新宠物失败: $e');
-      return false;
+      rethrow; // 重新抛出异常以便上层捕获
     }
   }
 
@@ -652,10 +661,8 @@ class SupabaseService {
     if (userId == null) return [];
 
     try {
-      final response = await _client
-          .from('daily_reminders')
-          .select()
-          .eq('user_id', userId);
+      final response =
+          await _client.from('daily_reminders').select().eq('user_id', userId);
 
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
@@ -672,10 +679,8 @@ class SupabaseService {
     if (userId == null) return [];
 
     try {
-      var query = _client
-          .from('daily_reminders')
-          .select()
-          .eq('user_id', userId);
+      var query =
+          _client.from('daily_reminders').select().eq('user_id', userId);
 
       if (petId != null) {
         query = query.eq('pet_id', petId);
@@ -734,10 +739,287 @@ class SupabaseService {
   }
 
   // ============================================================
+  // 用药/疫苗/驱虫提醒（云端）
+  // ============================================================
+
+  // -------------------- 用药提醒 --------------------
+  Future<List<Map<String, dynamic>>> getAllMedicationReminders() async {
+    final userId = await currentUserId;
+    if (userId == null) return [];
+    try {
+      final resp = await _client
+          .from('medication_reminders')
+          .select()
+          .eq('user_id', userId)
+          .order('start_date', ascending: false);
+      return List<Map<String, dynamic>>.from(resp);
+    } catch (e) {
+      print('获取用药提醒失败: $e');
+      return [];
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getMedicationRemindersForPet(
+      String petId) async {
+    final userId = await currentUserId;
+    if (userId == null) return [];
+    try {
+      final resp = await _client
+          .from('medication_reminders')
+          .select()
+          .eq('user_id', userId)
+          .eq('pet_id', petId)
+          .order('start_date', ascending: false);
+      return List<Map<String, dynamic>>.from(resp);
+    } catch (e) {
+      print('获取宠物用药提醒失败: $e');
+      return [];
+    }
+  }
+
+  Future<String?> insertMedicationReminder(Map<String, dynamic> data) async {
+    final userId = await currentUserId;
+    if (userId == null) return null;
+    try {
+      final payload = Map<String, dynamic>.from(data);
+      payload.remove('id');
+      payload['user_id'] = userId;
+      final resp = await _client
+          .from('medication_reminders')
+          .insert(payload)
+          .select()
+          .single();
+      return resp['id'] as String?;
+    } catch (e) {
+      print('插入用药提醒失败: $e');
+      return null;
+    }
+  }
+
+  Future<bool> updateMedicationReminder(Map<String, dynamic> data) async {
+    final userId = await currentUserId;
+    if (userId == null || data['id'] == null) return false;
+    try {
+      final id = data['id'] as String;
+      final payload = Map<String, dynamic>.from(data)
+        ..remove('id')
+        ..remove('user_id')
+        ..['updated_at'] = DateTime.now().toIso8601String();
+      await _client
+          .from('medication_reminders')
+          .update(payload)
+          .eq('id', id)
+          .eq('user_id', userId);
+      return true;
+    } catch (e) {
+      print('更新用药提醒失败: $e');
+      return false;
+    }
+  }
+
+  Future<bool> deleteMedicationReminder(String id) async {
+    final userId = await currentUserId;
+    if (userId == null) return false;
+    try {
+      await _client
+          .from('medication_reminders')
+          .delete()
+          .eq('id', id)
+          .eq('user_id', userId);
+      return true;
+    } catch (e) {
+      print('删除用药提醒失败: $e');
+      return false;
+    }
+  }
+
+  // -------------------- 疫苗提醒 --------------------
+  Future<List<Map<String, dynamic>>> getAllVaccineReminders() async {
+    final userId = await currentUserId;
+    if (userId == null) return [];
+    try {
+      final resp = await _client
+          .from('vaccine_reminders')
+          .select()
+          .eq('user_id', userId)
+          .order('injection_date', ascending: false);
+      return List<Map<String, dynamic>>.from(resp);
+    } catch (e) {
+      print('获取疫苗提醒失败: $e');
+      return [];
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getVaccineRemindersForPet(
+      String petId) async {
+    final userId = await currentUserId;
+    if (userId == null) return [];
+    try {
+      final resp = await _client
+          .from('vaccine_reminders')
+          .select()
+          .eq('user_id', userId)
+          .eq('pet_id', petId)
+          .order('injection_date', ascending: false);
+      return List<Map<String, dynamic>>.from(resp);
+    } catch (e) {
+      print('获取宠物疫苗提醒失败: $e');
+      return [];
+    }
+  }
+
+  Future<String?> insertVaccineReminder(Map<String, dynamic> data) async {
+    final userId = await currentUserId;
+    if (userId == null) return null;
+    try {
+      final payload = Map<String, dynamic>.from(data);
+      payload.remove('id');
+      payload['user_id'] = userId;
+      final resp = await _client
+          .from('vaccine_reminders')
+          .insert(payload)
+          .select()
+          .single();
+      return resp['id'] as String?;
+    } catch (e) {
+      print('插入疫苗提醒失败: $e');
+      return null;
+    }
+  }
+
+  Future<bool> updateVaccineReminder(Map<String, dynamic> data) async {
+    final userId = await currentUserId;
+    if (userId == null || data['id'] == null) return false;
+    try {
+      final id = data['id'] as String;
+      final payload = Map<String, dynamic>.from(data)
+        ..remove('id')
+        ..remove('user_id')
+        ..['updated_at'] = DateTime.now().toIso8601String();
+      await _client
+          .from('vaccine_reminders')
+          .update(payload)
+          .eq('id', id)
+          .eq('user_id', userId);
+      return true;
+    } catch (e) {
+      print('更新疫苗提醒失败: $e');
+      return false;
+    }
+  }
+
+  Future<bool> deleteVaccineReminder(String id) async {
+    final userId = await currentUserId;
+    if (userId == null) return false;
+    try {
+      await _client
+          .from('vaccine_reminders')
+          .delete()
+          .eq('id', id)
+          .eq('user_id', userId);
+      return true;
+    } catch (e) {
+      print('删除疫苗提醒失败: $e');
+      return false;
+    }
+  }
+
+  // -------------------- 驱虫提醒 --------------------
+  Future<List<Map<String, dynamic>>> getAllDewormingReminders() async {
+    final userId = await currentUserId;
+    if (userId == null) return [];
+    try {
+      final resp = await _client
+          .from('deworming_reminders')
+          .select()
+          .eq('user_id', userId)
+          .order('last_date', ascending: false);
+      return List<Map<String, dynamic>>.from(resp);
+    } catch (e) {
+      print('获取驱虫提醒失败: $e');
+      return [];
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getDewormingRemindersForPet(
+      String petId) async {
+    final userId = await currentUserId;
+    if (userId == null) return [];
+    try {
+      final resp = await _client
+          .from('deworming_reminders')
+          .select()
+          .eq('user_id', userId)
+          .eq('pet_id', petId)
+          .order('last_date', ascending: false);
+      return List<Map<String, dynamic>>.from(resp);
+    } catch (e) {
+      print('获取宠物驱虫提醒失败: $e');
+      return [];
+    }
+  }
+
+  Future<String?> insertDewormingReminder(Map<String, dynamic> data) async {
+    final userId = await currentUserId;
+    if (userId == null) return null;
+    try {
+      final payload = Map<String, dynamic>.from(data);
+      payload.remove('id');
+      payload['user_id'] = userId;
+      final resp = await _client
+          .from('deworming_reminders')
+          .insert(payload)
+          .select()
+          .single();
+      return resp['id'] as String?;
+    } catch (e) {
+      print('插入驱虫提醒失败: $e');
+      return null;
+    }
+  }
+
+  Future<bool> updateDewormingReminder(Map<String, dynamic> data) async {
+    final userId = await currentUserId;
+    if (userId == null || data['id'] == null) return false;
+    try {
+      final id = data['id'] as String;
+      final payload = Map<String, dynamic>.from(data)
+        ..remove('id')
+        ..remove('user_id')
+        ..['updated_at'] = DateTime.now().toIso8601String();
+      await _client
+          .from('deworming_reminders')
+          .update(payload)
+          .eq('id', id)
+          .eq('user_id', userId);
+      return true;
+    } catch (e) {
+      print('更新驱虫提醒失败: $e');
+      return false;
+    }
+  }
+
+  Future<bool> deleteDewormingReminder(String id) async {
+    final userId = await currentUserId;
+    if (userId == null) return false;
+    try {
+      await _client
+          .from('deworming_reminders')
+          .delete()
+          .eq('id', id)
+          .eq('user_id', userId);
+      return true;
+    } catch (e) {
+      print('删除驱虫提醒失败: $e');
+      return false;
+    }
+  }
+
+  // ============================================================
   // 对话相关方法
   // ============================================================
 
-  /// 插入对话
+  /// 插入对话（只保存标题）
   Future<String?> insertConversation(Conversation conversation) async {
     final userId = await currentUserId;
     if (userId == null) return null;
@@ -748,10 +1030,12 @@ class SupabaseService {
 
       final conversationData = {
         'user_id': userId,
-        'question': conversation.question,
-        'answer': conversation.answer,
+        'title': conversation.title,
         'is_pinned': conversation.isPinned,
+        'timestamp': conversation.timestamp.toIso8601String(),
         'created_at': conversation.timestamp.toIso8601String(),
+        if (conversation.difyConversationId != null)
+          'dify_conversation_id': conversation.difyConversationId,
       };
 
       final response = await _client
@@ -807,7 +1091,8 @@ class SupabaseService {
     }
   }
 
-  /// 更新对话
+  /// 更新对话（只更新标题和置顶状态，不更新 dify_conversation_id）
+  /// 注意：title 通常不应该被更新，此方法主要用于重命名和置顶操作
   Future<bool> updateConversation(Conversation conversation) async {
     final userId = await currentUserId;
     if (userId == null || conversation.id == null) return false;
@@ -816,8 +1101,7 @@ class SupabaseService {
       await _client
           .from('conversations')
           .update({
-            'question': conversation.question,
-            'answer': conversation.answer,
+            'title': conversation.title,
             'is_pinned': conversation.isPinned,
             'updated_at': DateTime.now().toIso8601String(),
           })
@@ -831,12 +1115,41 @@ class SupabaseService {
     }
   }
 
-  /// 删除对话
+  /// 只更新 Dify conversation_id（不更新 title）
+  Future<bool> updateConversationDifyId({
+    required String conversationId,
+    required String? difyConversationId,
+  }) async {
+    final userId = await currentUserId;
+    if (userId == null) return false;
+
+    try {
+      await _client
+          .from('conversations')
+          .update({
+            'dify_conversation_id': difyConversationId,
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', conversationId)
+          .eq('user_id', userId);
+
+      return true;
+    } catch (e) {
+      print('更新 Dify conversation_id 失败: $e');
+      return false;
+    }
+  }
+
+  /// 删除对话（同时删除相关的消息）
   Future<bool> deleteConversation(String id) async {
     final userId = await currentUserId;
     if (userId == null) return false;
 
     try {
+      // 先删除该 conversation 的所有消息
+      await deleteMessagesByConversationId(id);
+
+      // 再删除 conversation
       await _client
           .from('conversations')
           .delete()
@@ -873,6 +1186,7 @@ class SupabaseService {
     required String conversationId,
     required String text,
     required bool isUser,
+    DateTime? createdAt,
   }) async {
     final userId = await currentUserId;
     if (userId == null) return null;
@@ -883,7 +1197,7 @@ class SupabaseService {
         'user_id': userId,
         'text': text,
         'is_user': isUser,
-        'created_at': DateTime.now().toIso8601String(),
+        'created_at': (createdAt ?? DateTime.now()).toIso8601String(),
       };
 
       final response = await _client
@@ -960,11 +1274,8 @@ class SupabaseService {
         'created_at': diary.timestamp.toIso8601String(),
       };
 
-      final response = await _client
-          .from('pet_diaries')
-          .insert(diaryData)
-          .select()
-          .single();
+      final response =
+          await _client.from('pet_diaries').insert(diaryData).select().single();
       return response['id'] as String?;
     } catch (e) {
       print('插入宠物日记失败: $e');
@@ -1007,6 +1318,488 @@ class SupabaseService {
     } catch (e) {
       print('删除宠物日记失败: $e');
       return false;
+    }
+  }
+
+  // ============================================================
+  // 统一消费记录相关方法
+  // ============================================================
+
+  // ============================================================
+  // Expense 相关方法（映射到 unified_expenses，作为一次性支出）
+  // ============================================================
+
+  Future<String?> insertExpense(Map<String, dynamic> expense) async {
+    // Expense 映射为 UnifiedExpense 的一次性支出
+    final unifiedExpense = Map<String, dynamic>.from(expense);
+    unifiedExpense['expenseType'] = 'one-off';
+    unifiedExpense['category'] = expense['category'] ?? '其他';
+    return await insertUnifiedExpense(unifiedExpense);
+  }
+
+  Future<List<Map<String, dynamic>>> getAllExpenses() async {
+    // 只返回一次性支出
+    final all = await getAllUnifiedExpenses();
+    return all.where((e) => e['expenseType'] == 'one-off').toList();
+  }
+
+  Future<bool> updateExpense(Map<String, dynamic> expense) async {
+    // Expense 映射为 UnifiedExpense 的一次性支出
+    final unifiedExpense = Map<String, dynamic>.from(expense);
+    unifiedExpense['expenseType'] = 'one-off';
+    unifiedExpense['category'] = expense['category'] ?? '其他';
+    return await updateUnifiedExpense(unifiedExpense);
+  }
+
+  Future<bool> deleteExpense(String expenseId) async {
+    return await deleteUnifiedExpense(expenseId);
+  }
+
+  // ============================================================
+  // 日常消费品记录相关方法
+  // ============================================================
+
+  Future<String?> insertDailyCostItem(Map<String, dynamic> item) async {
+    final userId = await currentUserId;
+    if (userId == null) return null;
+
+    try {
+      final data = Map<String, dynamic>.from(item);
+      data.remove('id');
+      data['user_id'] = userId;
+
+      data['item_name'] = data['itemName'];
+      data.remove('itemName');
+      data['total_price'] = data['totalPrice'];
+      data.remove('totalPrice');
+      data['purchase_date'] = data['purchaseDate'];
+      data.remove('purchaseDate');
+      data['finish_date'] = data['finishDate'];
+      data.remove('finishDate');
+      data['image_path'] = data['imagePath'];
+      data.remove('imagePath');
+      // 移除 createdAt，数据库会自动设置 created_at
+      data.remove('createdAt');
+
+      final response =
+          await _client.from('daily_cost_items').insert(data).select().single();
+      return response['id'] as String?;
+    } catch (e) {
+      print('插入日常消费品记录失败: $e');
+      return null;
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getAllDailyCostItems() async {
+    final userId = await currentUserId;
+    if (userId == null) return [];
+
+    try {
+      final response = await _client
+          .from('daily_cost_items')
+          .select()
+          .eq('user_id', userId)
+          .order('purchase_date', ascending: false)
+          .order('created_at', ascending: false);
+
+      return List<Map<String, dynamic>>.from(response).map((row) {
+        final map = Map<String, dynamic>.from(row);
+        map['itemName'] = map['item_name'];
+        map.remove('item_name');
+        map['totalPrice'] = map['total_price'];
+        map.remove('total_price');
+        map['purchaseDate'] = map['purchase_date'];
+        map.remove('purchase_date');
+        map['finishDate'] = map['finish_date'];
+        map.remove('finish_date');
+        map['imagePath'] = map['image_path'];
+        map.remove('image_path');
+        map['createdAt'] = map['created_at'] ?? map['createdAt'];
+        return map;
+      }).toList();
+    } catch (e) {
+      print('获取日常消费品记录失败: $e');
+      return [];
+    }
+  }
+
+  Future<bool> updateDailyCostItem(Map<String, dynamic> item) async {
+    final userId = await currentUserId;
+    if (userId == null || item['id'] == null) return false;
+
+    try {
+      final itemId = item['id'] as String;
+      final updateData = Map<String, dynamic>.from(item);
+      updateData.remove('id');
+      updateData.remove('user_id');
+      updateData['item_name'] = updateData['itemName'];
+      updateData.remove('itemName');
+      updateData['total_price'] = updateData['totalPrice'];
+      updateData.remove('totalPrice');
+      updateData['purchase_date'] = updateData['purchaseDate'];
+      updateData.remove('purchaseDate');
+      updateData['finish_date'] = updateData['finishDate'];
+      updateData.remove('finishDate');
+      updateData['image_path'] = updateData['imagePath'];
+      updateData.remove('imagePath');
+      // 移除 createdAt，数据库会自动管理时间戳
+      updateData.remove('createdAt');
+      updateData['updated_at'] = DateTime.now().toIso8601String();
+
+      await _client
+          .from('daily_cost_items')
+          .update(updateData)
+          .eq('id', itemId)
+          .eq('user_id', userId);
+
+      return true;
+    } catch (e) {
+      print('更新日常消费品记录失败: $e');
+      return false;
+    }
+  }
+
+  Future<bool> deleteDailyCostItem(String itemId) async {
+    final userId = await currentUserId;
+    if (userId == null) return false;
+
+    try {
+      await _client
+          .from('daily_cost_items')
+          .delete()
+          .eq('id', itemId)
+          .eq('user_id', userId);
+
+      return true;
+    } catch (e) {
+      print('删除日常消费品记录失败: $e');
+      return false;
+    }
+  }
+
+  // ============================================================
+  // 健身记录相关方法
+  // ============================================================
+
+  Future<String?> insertFitnessRecord(Map<String, dynamic> record) async {
+    final userId = await currentUserId;
+    if (userId == null) return null;
+
+    try {
+      final data = Map<String, dynamic>.from(record);
+      data.remove('id');
+      data['user_id'] = userId;
+      data['course_id'] = data['courseId'];
+      data.remove('courseId');
+      data['course_name'] = data['courseName'];
+      data.remove('courseName');
+      data['completed_at'] = data['completedAt'];
+      data.remove('completedAt');
+      data['duration_minutes'] = data['durationMinutes'];
+      data.remove('durationMinutes');
+      data['calories_burned'] = data['caloriesBurned'];
+      data.remove('caloriesBurned');
+      data['pet_calories_burned'] = data['petCaloriesBurned'];
+      data.remove('petCaloriesBurned');
+
+      final response =
+          await _client.from('fitness_records').insert(data).select().single();
+      return response['id'] as String?;
+    } catch (e) {
+      print('插入健身记录失败: $e');
+      return null;
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getAllFitnessRecords() async {
+    final userId = await currentUserId;
+    if (userId == null) return [];
+
+    try {
+      final response = await _client
+          .from('fitness_records')
+          .select()
+          .eq('user_id', userId)
+          .order('completed_at', ascending: false);
+
+      return List<Map<String, dynamic>>.from(response).map((row) {
+        final map = Map<String, dynamic>.from(row);
+        map['courseId'] = map['course_id'];
+        map.remove('course_id');
+        map['courseName'] = map['course_name'];
+        map.remove('course_name');
+        map['completedAt'] = map['completed_at'];
+        map.remove('completed_at');
+        map['durationMinutes'] = map['duration_minutes'];
+        map.remove('duration_minutes');
+        map['caloriesBurned'] = map['calories_burned'];
+        map.remove('calories_burned');
+        map['petCaloriesBurned'] = map['pet_calories_burned'];
+        map.remove('pet_calories_burned');
+        return map;
+      }).toList();
+    } catch (e) {
+      print('获取健身记录失败: $e');
+      return [];
+    }
+  }
+
+  Future<bool> deleteFitnessRecord(String recordId) async {
+    final userId = await currentUserId;
+    if (userId == null) return false;
+
+    try {
+      await _client
+          .from('fitness_records')
+          .delete()
+          .eq('id', recordId)
+          .eq('user_id', userId);
+
+      return true;
+    } catch (e) {
+      print('删除健身记录失败: $e');
+      return false;
+    }
+  }
+
+  // ============================================================
+  // 健康计划相关方法
+  // ============================================================
+
+  Future<String?> insertHealthPlan(Map<String, dynamic> plan) async {
+    final userId = await currentUserId;
+    if (userId == null) return null;
+
+    try {
+      final data = Map<String, dynamic>.from(plan);
+      data.remove('id');
+      data['user_id'] = userId;
+      data['start_date'] = data['startDate'];
+      data.remove('startDate');
+      data['end_date'] = data['endDate'];
+      data.remove('endDate');
+
+      final response =
+          await _client.from('health_plans').insert(data).select().single();
+      return response['id'] as String?;
+    } catch (e) {
+      print('插入健康计划失败: $e');
+      return null;
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getAllHealthPlans() async {
+    final userId = await currentUserId;
+    if (userId == null) return [];
+
+    try {
+      final response = await _client
+          .from('health_plans')
+          .select()
+          .eq('user_id', userId)
+          .order('start_date', ascending: false);
+
+      return List<Map<String, dynamic>>.from(response).map((row) {
+        final map = Map<String, dynamic>.from(row);
+        map['startDate'] = map['start_date'];
+        map.remove('start_date');
+        map['endDate'] = map['end_date'];
+        map.remove('end_date');
+        return map;
+      }).toList();
+    } catch (e) {
+      print('获取健康计划失败: $e');
+      return [];
+    }
+  }
+
+  // ============================================================
+  // 宠物护照相关方法
+  // ============================================================
+
+  Future<String?> upsertPetPassport(Map<String, dynamic> passport) async {
+    final userId = await currentUserId;
+    if (userId == null) return null;
+
+    try {
+      final data = Map<String, dynamic>.from(passport);
+      data.remove('id');
+      data['user_id'] = userId;
+
+      // 字段名映射
+      data['pet_id'] = data['petId'] ?? data['pet_id'];
+      data.remove('petId');
+      data['photo_path'] = data['photoPath'] ?? data['photo_path'];
+      data.remove('photoPath');
+      data['owner_name'] = data['ownerName'] ?? data['owner_name'];
+      data.remove('ownerName');
+      data['adoption_date'] = data['adoptionDate'] ?? data['adoption_date'];
+      data.remove('adoptionDate');
+      data['mbti_type'] = data['mbtiType'] ?? data['mbti_type'];
+      data.remove('mbtiType');
+      data['mbti_description'] =
+          data['mbtiDescription'] ?? data['mbti_description'];
+      data.remove('mbtiDescription');
+      data['interest_tags'] = data['interestTags'] ?? data['interest_tags'];
+      data.remove('interestTags');
+      data['friend_count'] = data['friendCount'] ?? data['friend_count'];
+      data.remove('friendCount');
+
+      final achievements = data['achievements'];
+      data.remove('achievements');
+
+      final response = await _client
+          .from('pet_passports')
+          .upsert(data, onConflict: 'user_id,pet_id')
+          .select()
+          .single();
+      final resultId = response['id'] as String?;
+
+      // 处理成就
+      if (achievements != null && resultId != null) {
+        // 先删除旧的成就
+        await _client
+            .from('pet_passport_achievements')
+            .delete()
+            .eq('passport_id', resultId);
+
+        // 插入新成就
+        final List<dynamic> achievementList =
+            achievements is List ? achievements : [];
+        if (achievementList.isNotEmpty) {
+          final rows = achievementList.map((a) {
+            final m = Map<String, dynamic>.from(a as Map);
+            m['passport_id'] = resultId;
+            m['achievement_id'] = m['id'] ?? m['achievement_id'];
+            m.remove('id');
+            m['achievement_name'] = m['name'] ?? m['achievement_name'];
+            m.remove('name');
+            m['achievement_description'] =
+                m['description'] ?? m['achievement_description'];
+            m.remove('description');
+            m['icon_name'] = m['iconName'] ?? m['icon_name'];
+            m.remove('iconName');
+            m['unlocked_at'] = m['unlockedAt'] ?? m['unlocked_at'];
+            m.remove('unlockedAt');
+            return m;
+          }).toList();
+
+          await _client.from('pet_passport_achievements').insert(rows);
+        }
+      }
+
+      return resultId;
+    } catch (e) {
+      print('同步宠物护照失败: $e');
+      return null;
+    }
+  }
+
+  Future<Map<String, dynamic>?> getPassportByPetId(String petId) async {
+    final userId = await currentUserId;
+    if (userId == null) return null;
+
+    try {
+      final response = await _client
+          .from('pet_passports')
+          .select()
+          .eq('user_id', userId)
+          .eq('pet_id', petId)
+          .maybeSingle();
+
+      if (response == null) return null;
+
+      final map = Map<String, dynamic>.from(response);
+
+      // 加载成就
+      final achievementsResponse = await _client
+          .from('pet_passport_achievements')
+          .select()
+          .eq('passport_id', map['id']);
+
+      final achievements =
+          List<Map<String, dynamic>>.from(achievementsResponse).map((a) {
+        final m = Map<String, dynamic>.from(a);
+        m['id'] = m['achievement_id'];
+        m['name'] = m['achievement_name'];
+        m['description'] = m['achievement_description'];
+        m['iconName'] = m['icon_name'];
+        m['unlockedAt'] = m['unlocked_at'];
+        return m;
+      }).toList();
+
+      map['achievements'] = achievements;
+
+      // 字段名映射
+      map['petId'] = map['pet_id'];
+      map['photoPath'] = map['photo_path'];
+      map['ownerName'] = map['owner_name'];
+      map['adoptionDate'] = map['adoption_date'];
+      map['mbtiType'] = map['mbti_type'];
+      map['mbtiDescription'] = map['mbti_description'];
+      map['interestTags'] = map['interest_tags'];
+      map['friendCount'] = map['friend_count'];
+      map['createdAt'] = map['created_at'];
+      map['updatedAt'] = map['updated_at'];
+
+      return map;
+    } catch (e) {
+      print('获取宠物护照失败: $e');
+      return null;
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getAllPassports() async {
+    final userId = await currentUserId;
+    if (userId == null) return [];
+
+    try {
+      final response =
+          await _client.from('pet_passports').select().eq('user_id', userId);
+
+      final List<Map<String, dynamic>> passports = [];
+
+      for (final row in response) {
+        final map = Map<String, dynamic>.from(row);
+
+        // 加载成就
+        final achievementsResponse = await _client
+            .from('pet_passport_achievements')
+            .select()
+            .eq('passport_id', map['id']);
+
+        final achievements =
+            List<Map<String, dynamic>>.from(achievementsResponse).map((a) {
+          final m = Map<String, dynamic>.from(a);
+          m['id'] = m['achievement_id'];
+          m['name'] = m['achievement_name'];
+          m['description'] = m['achievement_description'];
+          m['iconName'] = m['icon_name'];
+          m['unlockedAt'] = m['unlocked_at'];
+          return m;
+        }).toList();
+
+        map['achievements'] = achievements;
+
+        // 字段名映射
+        map['petId'] = map['pet_id'];
+        map['photoPath'] = map['photo_path'];
+        map['ownerName'] = map['owner_name'];
+        map['adoptionDate'] = map['adoption_date'];
+        map['mbtiType'] = map['mbti_type'];
+        map['mbtiDescription'] = map['mbti_description'];
+        map['interestTags'] = map['interest_tags'];
+        map['friendCount'] = map['friend_count'];
+        map['createdAt'] = map['created_at'];
+        map['updatedAt'] = map['updated_at'];
+
+        passports.add(map);
+      }
+
+      return passports;
+    } catch (e) {
+      print('获取所有宠物护照失败: $e');
+      return [];
     }
   }
 
@@ -1461,5 +2254,316 @@ class SupabaseService {
 
       return map;
     }).toList();
+  }
+
+  // ============================================================
+  // 健身课程相关方法
+  // ============================================================
+
+  /// 获取所有激活的健身课程
+  Future<List<FitnessCourse>> getFitnessCourses() async {
+    try {
+      final response = await _client
+          .from('fitness_courses')
+          .select()
+          .eq('is_active', true)
+          .order('sort_order', ascending: false)
+          .order('created_at', ascending: false);
+
+      return List<Map<String, dynamic>>.from(response)
+          .map((json) => FitnessCourse.fromSupabaseJson(json))
+          .toList();
+    } catch (e) {
+      // 区分不同类型的错误
+      if (e.toString().contains('network') ||
+          e.toString().contains('timeout')) {
+        print('获取健身课程失败: 网络错误 - $e');
+      } else if (e.toString().contains('permission') ||
+          e.toString().contains('policy')) {
+        print('获取健身课程失败: 权限错误 - $e');
+      } else {
+        print('获取健身课程失败: $e');
+      }
+      return [];
+    }
+  }
+
+  /// 根据宠物类型获取课程
+  Future<List<FitnessCourse>> getFitnessCoursesByPetType(String petType) async {
+    try {
+      // 验证petType值
+      if (!['dog', 'cat'].contains(petType)) {
+        print(
+            '获取宠物类型健身课程失败: Invalid petType: $petType. Must be either dog or cat');
+        return [];
+      }
+
+      final response = await _client
+          .from('fitness_courses')
+          .select()
+          .eq('pet_type', petType)
+          .eq('is_active', true)
+          .order('sort_order', ascending: false);
+
+      return List<Map<String, dynamic>>.from(response)
+          .map((json) => FitnessCourse.fromSupabaseJson(json))
+          .toList();
+    } catch (e) {
+      // 区分不同类型的错误
+      if (e.toString().contains('network') ||
+          e.toString().contains('timeout')) {
+        print('获取宠物类型健身课程失败: 网络错误 - $e');
+      } else if (e.toString().contains('permission') ||
+          e.toString().contains('policy')) {
+        print('获取宠物类型健身课程失败: 权限错误 - $e');
+      } else {
+        print('获取宠物类型健身课程失败: $e');
+      }
+      return [];
+    }
+  }
+
+  /// 获取自指定时间后的更新课程（增量更新）
+  /// 注意：此方法用于优化网络请求，只获取更新的课程
+  Future<List<FitnessCourse>> getFitnessCoursesUpdatedAfter(
+      DateTime since) async {
+    try {
+      final response = await _client
+          .from('fitness_courses')
+          .select()
+          .eq('is_active', true)
+          .gte('updated_at', since.toIso8601String())
+          .order('updated_at', ascending: false);
+
+      return List<Map<String, dynamic>>.from(response)
+          .map((json) => FitnessCourse.fromSupabaseJson(json))
+          .toList();
+    } catch (e) {
+      // 区分不同类型的错误
+      if (e.toString().contains('network') ||
+          e.toString().contains('timeout')) {
+        print('获取增量健身课程失败: 网络错误 - $e');
+      } else if (e.toString().contains('permission') ||
+          e.toString().contains('policy')) {
+        print('获取增量健身课程失败: 权限错误 - $e');
+      } else {
+        print('获取增量健身课程失败: $e');
+      }
+      // 增量更新失败时，返回空列表（上层会降级到全量更新）
+      return [];
+    }
+  }
+
+  /// 处理健身课程数据的字段映射和类型转换
+  void _processFitnessCourseData(Map<String, dynamic> data) {
+    // 字段名映射
+    final fieldMapping = {
+      'courseId': 'course_id',
+      'durationMinutes': 'duration_minutes',
+      'caloriesEstimate': 'calories_estimate',
+      'petCaloriesEstimate': 'pet_calories_estimate',
+      'iconEmoji': 'icon_emoji',
+      'petType': 'pet_type',
+      'isActive': 'is_active',
+      'sortOrder': 'sort_order',
+    };
+
+    for (var entry in fieldMapping.entries) {
+      if (data.containsKey(entry.key)) {
+        data[entry.value] = data[entry.key];
+        data.remove(entry.key);
+      }
+    }
+
+    // 处理actions字段（JSONB类型）
+    if (data.containsKey('actions')) {
+      final actions = data['actions'];
+      if (actions is List) {
+        // 如果actions是List<FitnessAction>，转换为List<Map>
+        data['actions'] = actions.map((action) {
+          if (action is FitnessAction) {
+            return action.toSupabaseJson();
+          }
+          // 如果已经是Map格式，直接使用
+          return action as Map<String, dynamic>;
+        }).toList();
+      }
+    }
+
+    // 处理tags字段（TEXT[]类型）
+    if (data.containsKey('tags')) {
+      // 确保tags是List<String>
+      if (data['tags'] is List) {
+        data['tags'] = List<String>.from(data['tags']);
+      }
+    }
+  }
+
+  /// 插入健身课程（管理后台使用）
+  Future<String?> insertFitnessCourse(Map<String, dynamic> course) async {
+    try {
+      final data = Map<String, dynamic>.from(course);
+      data.remove('id'); // 让数据库生成UUID
+
+      // 使用辅助方法处理字段映射和复杂类型转换
+      _processFitnessCourseData(data);
+
+      // 数据验证
+      // 验证必需字段
+      if (data['course_id'] == null || (data['course_id'] as String).isEmpty) {
+        print('插入健身课程失败: course_id is required');
+        return null;
+      }
+
+      // 验证intensity值
+      if (data.containsKey('intensity')) {
+        final intensity = data['intensity'] as String?;
+        if (intensity != null &&
+            !['low', 'medium', 'high'].contains(intensity)) {
+          print('插入健身课程失败: intensity must be low, medium, or high');
+          return null;
+        }
+      }
+
+      // 验证petType值
+      if (data.containsKey('pet_type')) {
+        final petType = data['pet_type'] as String?;
+        if (petType != null && !['dog', 'cat'].contains(petType)) {
+          print('插入健身课程失败: pet_type must be dog or cat');
+          return null;
+        }
+      }
+
+      final response =
+          await _client.from('fitness_courses').insert(data).select().single();
+
+      return response['id'] as String?;
+    } catch (e) {
+      // 区分不同类型的错误
+      if (e.toString().contains('network') ||
+          e.toString().contains('timeout')) {
+        print('插入健身课程失败: 网络错误 - $e');
+      } else if (e.toString().contains('permission') ||
+          e.toString().contains('policy')) {
+        print('插入健身课程失败: 权限错误 - $e');
+      } else if (e.toString().contains('duplicate') ||
+          e.toString().contains('unique')) {
+        print('插入健身课程失败: 数据重复错误 - $e');
+      } else if (e.toString().contains('validation') ||
+          e.toString().contains('constraint')) {
+        print('插入健身课程失败: 数据验证错误 - $e');
+      } else {
+        print('插入健身课程失败: $e');
+      }
+      return null;
+    }
+  }
+
+  /// 更新健身课程
+  Future<bool> updateFitnessCourse(Map<String, dynamic> course) async {
+    try {
+      final courseId = course['id'];
+      if (courseId == null) {
+        print('更新健身课程失败: course id is required');
+        return false;
+      }
+
+      final data = Map<String, dynamic>.from(course);
+      data.remove('id');
+
+      // 使用辅助方法处理字段映射和复杂类型转换
+      _processFitnessCourseData(data);
+
+      // 数据验证
+      // 验证intensity值（如果提供）
+      if (data.containsKey('intensity')) {
+        final intensity = data['intensity'] as String?;
+        if (intensity != null &&
+            !['low', 'medium', 'high'].contains(intensity)) {
+          print('更新健身课程失败: intensity must be low, medium, or high');
+          return false;
+        }
+      }
+
+      // 验证petType值（如果提供）
+      if (data.containsKey('pet_type')) {
+        final petType = data['pet_type'] as String?;
+        if (petType != null && !['dog', 'cat'].contains(petType)) {
+          print('更新健身课程失败: pet_type must be dog or cat');
+          return false;
+        }
+      }
+
+      await _client.from('fitness_courses').update(data).eq('id', courseId);
+
+      return true;
+    } catch (e) {
+      // 区分不同类型的错误
+      if (e.toString().contains('network') ||
+          e.toString().contains('timeout')) {
+        print('更新健身课程失败: 网络错误 - $e');
+      } else if (e.toString().contains('permission') ||
+          e.toString().contains('policy')) {
+        print('更新健身课程失败: 权限错误 - $e');
+      } else if (e.toString().contains('validation') ||
+          e.toString().contains('constraint')) {
+        print('更新健身课程失败: 数据验证错误 - $e');
+      } else {
+        print('更新健身课程失败: $e');
+      }
+      return false;
+    }
+  }
+
+  /// 根据course_id获取单个课程
+  Future<FitnessCourse?> getFitnessCourseById(String courseId) async {
+    try {
+      final response = await _client
+          .from('fitness_courses')
+          .select()
+          .eq('course_id', courseId)
+          .eq('is_active', true)
+          .maybeSingle();
+
+      if (response == null) return null;
+
+      return FitnessCourse.fromSupabaseJson(response);
+    } catch (e) {
+      // 区分不同类型的错误
+      if (e.toString().contains('network') ||
+          e.toString().contains('timeout')) {
+        print('获取健身课程失败: 网络错误 - $e');
+      } else if (e.toString().contains('permission') ||
+          e.toString().contains('policy')) {
+        print('获取健身课程失败: 权限错误 - $e');
+      } else {
+        print('获取健身课程失败: $e');
+      }
+      return null;
+    }
+  }
+
+  /// 删除健身课程（软删除，设置is_active=false）
+  /// 注意：使用数据库的id字段（UUID），不是course_id
+  Future<bool> deleteFitnessCourse(String courseId) async {
+    try {
+      await _client
+          .from('fitness_courses')
+          .update({'is_active': false}).eq('id', courseId);
+
+      return true;
+    } catch (e) {
+      // 区分不同类型的错误
+      if (e.toString().contains('network') ||
+          e.toString().contains('timeout')) {
+        print('删除健身课程失败: 网络错误 - $e');
+      } else if (e.toString().contains('permission') ||
+          e.toString().contains('policy')) {
+        print('删除健身课程失败: 权限错误 - $e');
+      } else {
+        print('删除健身课程失败: $e');
+      }
+      return false;
+    }
   }
 }

@@ -4,7 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
 
 // 导入主应用文件，登录成功后将跳转到这里
-import 'home_screen.dart'; // 导入主页
+import 'main.dart';
 // 导入 LeanCloud 服务
 import 'config/leancloud_service.dart';
 
@@ -151,7 +151,7 @@ class _PhoneLoginPageState extends State<PhoneLoginPage> {
         if (mounted) {
           // 登录成功后，使用 pushReplacement 清除堆栈，防止返回登录页
           Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (context) => const HomeScreen()),
+            MaterialPageRoute(builder: (context) => const MyApp()),
           );
         }
       } else {
@@ -269,9 +269,8 @@ class _PhoneLoginPageState extends State<PhoneLoginPage> {
                     width: 120,
                     height: 56,
                     child: ElevatedButton(
-                      onPressed: _countdown > 0 || _isLoading
-                          ? null
-                          : _requestSmsCode,
+                      onPressed:
+                          _countdown > 0 || _isLoading ? null : _requestSmsCode,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF5D5FEF),
                         foregroundColor: Colors.white,
