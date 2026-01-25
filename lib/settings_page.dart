@@ -26,7 +26,8 @@ class SettingsPage extends StatelessWidget {
         backgroundColor: backgroundColor.withOpacity(0.8),
         elevation: 0,
         centerTitle: true,
-        title: const Text('设置', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+        title: const Text('设置',
+            style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
         leading: IconButton(
           icon: const Icon(
             Icons.arrow_back_ios_new,
@@ -89,7 +90,7 @@ class _AppSettingsState extends State<AppSettings> {
       padding: const EdgeInsets.symmetric(horizontal: 16.0),
       children: [
         const SizedBox(height: 16),
-        
+
         // ==============================================
         // [入口] 高级会员订阅入口
         // ==============================================
@@ -128,7 +129,8 @@ class _AppSettingsState extends State<AppSettings> {
                     color: Colors.white.withOpacity(0.2),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.diamond_outlined, color: Colors.white, size: 28),
+                  child: const Icon(Icons.diamond_outlined,
+                      color: Colors.white, size: 28),
                 ),
                 const SizedBox(width: 16),
                 const Expanded(
@@ -154,7 +156,8 @@ class _AppSettingsState extends State<AppSettings> {
                     ],
                   ),
                 ),
-                const Icon(Icons.arrow_forward_ios, color: Colors.white70, size: 16),
+                const Icon(Icons.arrow_forward_ios,
+                    color: Colors.white70, size: 16),
               ],
             ),
           ),
@@ -400,7 +403,8 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
   void initState() {
     super.initState();
     // 初始化礼花控制器，设置持续时间
-    _confettiController = ConfettiController(duration: const Duration(seconds: 3));
+    _confettiController =
+        ConfettiController(duration: const Duration(seconds: 3));
   }
 
   @override
@@ -414,7 +418,10 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
     setState(() {
       _isLoading = true; // 开始加载
     });
-
+    final supabase = Supabase.instance.client;
+    final res =
+        await supabase.functions.invoke('recharge-test', body: {'amount': 1});
+    final data = res.data;
     // 1. 模拟网络请求延迟 (2秒)
     await Future.delayed(const Duration(seconds: 2));
 
@@ -433,7 +440,8 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
       barrierDismissible: false, // 必须点击按钮才能关闭
       builder: (BuildContext context) {
         return Dialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           child: Padding(
             padding: const EdgeInsets.all(24.0),
             child: Column(
@@ -453,7 +461,8 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
                           color: Colors.green.shade100,
                           shape: BoxShape.circle,
                         ),
-                        child: const Icon(Icons.check, color: Colors.green, size: 40),
+                        child: const Icon(Icons.check,
+                            color: Colors.green, size: 40),
                       ),
                     );
                   },
@@ -487,7 +496,8 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
                       ),
                       padding: const EdgeInsets.symmetric(vertical: 14),
                     ),
-                    child: const Text("太棒了", style: TextStyle(color: Colors.white, fontSize: 16)),
+                    child: const Text("太棒了",
+                        style: TextStyle(color: Colors.white, fontSize: 16)),
                   ),
                 ),
               ],
@@ -513,7 +523,8 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
             children: [
               Expanded(
                 child: SingleChildScrollView(
-                  padding: EdgeInsets.only(bottom: 120 + MediaQuery.of(context).padding.bottom),
+                  padding: EdgeInsets.only(
+                      bottom: 120 + MediaQuery.of(context).padding.bottom),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
@@ -601,11 +612,7 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
             bottom: 0,
             child: Container(
               padding: EdgeInsets.fromLTRB(
-                24, 
-                16, 
-                24, 
-                16 + MediaQuery.of(context).padding.bottom
-              ),
+                  24, 16, 24, 16 + MediaQuery.of(context).padding.bottom),
               decoration: BoxDecoration(
                 color: Colors.white,
                 boxShadow: [
@@ -687,7 +694,7 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
                 Colors.blue,
                 Colors.pink,
                 Colors.green,
-              ], 
+              ],
             ),
           ),
         ],
@@ -737,7 +744,7 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
           Container(
             padding: const EdgeInsets.all(4),
             decoration: BoxDecoration(
-              color: brandColor, 
+              color: brandColor,
               shape: BoxShape.circle,
             ),
             child: const Icon(Icons.check, color: Colors.white, size: 12),
@@ -750,7 +757,7 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
                 fontSize: 15,
                 color: Colors.black87,
                 fontWeight: FontWeight.w500,
-                height: 1.2, 
+                height: 1.2,
               ),
             ),
           ),
@@ -796,13 +803,15 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
                     Text(
                       title,
                       style: TextStyle(
-                        fontWeight: FontWeight.bold, 
+                        fontWeight: FontWeight.bold,
                         fontSize: 16,
                         color: isSelected ? brandColor : Colors.black87,
                       ),
                     ),
                     Icon(
-                      isSelected ? Icons.check_circle : Icons.radio_button_unchecked,
+                      isSelected
+                          ? Icons.check_circle
+                          : Icons.radio_button_unchecked,
                       color: isSelected ? brandColor : Colors.grey.shade400,
                       size: 22,
                     ),
@@ -828,13 +837,13 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
               ],
             ),
           ),
-          
           if (badgeText != null)
             Positioned(
               top: -12,
               left: 0,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
                   color: const Color(0xFF7B61FF),
                   borderRadius: const BorderRadius.only(

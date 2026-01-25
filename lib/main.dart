@@ -4,9 +4,10 @@ import 'package:intl/date_symbol_data_local.dart'; // 添加 intl 包
 import 'package:flutter_localizations/flutter_localizations.dart'; // 添加本地化支持
 import 'package:supabase_flutter/supabase_flutter.dart'; // ✅ 添加 Supabase
 import 'login_page.dart'; // <-- 这是新添加的导入
-
 import 'home_screen.dart';
 import 'settings/theme_constants.dart';
+
+
 
 
 void main() async {
@@ -112,6 +113,7 @@ class MyApp extends StatelessWidget {
           Locale('en', 'US'), // 英文
         ],
         locale: const Locale('zh', 'CN'), // 默认使用中文
+
         home: const HomeScreen(),
       ),
     );

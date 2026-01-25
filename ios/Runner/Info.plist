@@ -47,5 +47,13 @@
 			<string>UIInterfaceOrientationLandscapeLeft</string>
 			<string>UIInterfaceOrientationLandscapeRight</string>
 		</array>
+		<key>NSBonjourServices</key>
+		<array>
+			<string>_dartobservatory._tcp</string>
+		</array>
+		<key>NSLocalNetworkUsageDescription</key>
+		<string>允许应用访问本地网络以便进行调试</string>
+		<key>NSPhotoLibraryAddUsageDescription</key>
+		<string>允许应用保存图片到相册</string>
 	</dict>
 </plist>

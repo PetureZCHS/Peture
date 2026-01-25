@@ -60,7 +60,7 @@ class _PetDiaryGeneratingPageState extends State<PetDiaryGeneratingPage>
       final stream = widget.diaryService.generatePetDiary(
         query: widget.userInput,
         style: widget.style,
-        userId: 'pet_diary_user_${DateTime.now().millisecondsSinceEpoch}',
+        // nickname 和 breed 可以根据需要从用户数据中获取
       );
 
       // 监听流事件

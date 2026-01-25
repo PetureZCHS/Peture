@@ -1263,8 +1263,13 @@ class SupabaseService {
     if (userId == null) return null;
 
     try {
-      // 确保用户资料存在
-      await _ensureUserProfileExists(userId);
+      // 尝试确保用户资料存在，但不阻塞日记保存
+      // 如果用户资料检查失败（网络问题），仍然尝试保存日记
+      try {
+        await _ensureUserProfileExists(userId);
+      } catch (e) {
+        print('检查用户资料时出错（将继续保存日记）: $e');
+      }
 
       final diaryData = {
         'user_id': userId,

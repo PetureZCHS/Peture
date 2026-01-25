@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/physics.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
+import 'package:my_pet/pages/image_generation/preparation_page.dart';
 // import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
 
 // --- 您的页面引用 (保持不变) ---
@@ -632,6 +633,7 @@ class _HomeDashboardContentState extends State<_HomeDashboardContent> {
                 _buildFeatureCard(width, '营养食谱', 'Food', Icons.restaurant_menu_rounded, AppColors.goldGradient, const PetRecipeListPage()),
                 _buildFeatureCard(width, '训宠响片', 'Training', Icons.touch_app_rounded, AppColors.magicGradient, const DogClickerScreen()),
                 _buildFeatureCard(width, '寻宠救援', '希望您永远使用不到此功能', Icons.phonelink_ring_rounded, const LinearGradient(colors: [Color(0xFFFF416C), Color(0xFFFF4B2B)]), const LostPetRescuePage(), subtitleMaxLines: 2),
+                _buildFeatureCard(width, 'AI 图像实验室', 'Image Lab', Icons.auto_fix_high_rounded, AppColors.natureGradient, const PreparationPage()),
               ],
                 );
               },
