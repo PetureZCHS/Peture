@@ -221,7 +221,8 @@ class _PreparationPageState extends State<PreparationPage>
       // 注意：当前Supabase Flutter SDK版本可能不支持onProgress参数
       // 这里使用模拟进度来提供用户反馈（上限到 0.95），并在 finally 中确保定时器被取消
       // 记录是否使用了压缩生成的临时文件，以便上传完成后清理它（避免临时目录膨胀）
-      final bool _usedCompressedTempFile = fileToUpload.path != originalFile.path;
+      final bool usedCompressedTempFile =
+          fileToUpload.path != originalFile.path;
 
       final uploadFuture = supabase.storage.from('ai-wallpapers').upload(
             filePath,
@@ -262,7 +263,7 @@ class _PreparationPageState extends State<PreparationPage>
         }
 
         // 如果我们使用了压缩生成的临时文件，尝试删除它以释放临时目录空间
-        if (_usedCompressedTempFile) {
+        if (usedCompressedTempFile) {
           try {
             if (await fileToUpload.exists()) {
               await fileToUpload.delete();
