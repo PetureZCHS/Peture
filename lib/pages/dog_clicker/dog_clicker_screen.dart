@@ -5,6 +5,7 @@ import 'dart:math' as math;
 import 'package:audioplayers/audioplayers.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../utils/ui_helpers.dart';
+import '../../widgets/skeuomorphic_clicker_device.dart';
 
 /// 训宠响片游戏页面
 /// 点击屏幕中央的按钮播放点击音效
@@ -21,7 +22,6 @@ class _DogClickerScreenState extends State<DogClickerScreen>
   late AudioPlayer _audioPlayer;
   int _clickCount = 0;
   int _failCount = 0; // 失败记录次数
-  bool _isPressed = false;
   bool _isCoolingDown = false; // 点击防抖标志
   int _selectedFilterIndex = 0; // 选中的筛选标签索引
   List<String> _filterOptions = ['喂食', '握手', '坐下']; // 筛选选项（改为可变列表，默认不包含"全部"）
@@ -480,6 +480,501 @@ class _DogClickerScreenState extends State<DogClickerScreen>
     );
   }
 
+  /// 显示重置确认对话框
+  void _showResetConfirmDialog() {
+    final currentProject = _filterOptions[_selectedFilterIndex];
+
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFF2A2A2A), Color(0xFF1A1A1A)],
+            ),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: const Color(0xFF3A3A3A)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // 图标
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    colors: [
+                      Colors.orange.withOpacity(0.3),
+                      Colors.red.withOpacity(0.3),
+                    ],
+                  ),
+                ),
+                child: const Icon(
+                  Icons.refresh_rounded,
+                  color: Colors.orange,
+                  size: 40,
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // 标题
+              const Text(
+                '重置训练数据',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // 描述
+              Text(
+                '确定要重置「$currentProject」的训练数据吗？\n此操作不可恢复。',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.white.withOpacity(0.7),
+                  height: 1.5,
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // 按钮
+              Row(
+                children: [
+                  Expanded(
+                    child: TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          side:
+                              BorderSide(color: Colors.white.withOpacity(0.2)),
+                        ),
+                      ),
+                      child: Text(
+                        '取消',
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.7),
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        _resetCurrentProjectData();
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.orange[700],
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        elevation: 0,
+                      ),
+                      child: const Text(
+                        '确定重置',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 重置当前项目数据
+  Future<void> _resetCurrentProjectData() async {
+    final currentProject = _filterOptions[_selectedFilterIndex];
+    await _deleteProjectRecord(currentProject);
+
+    setState(() {
+      _clickCount = 0;
+      _failCount = 0;
+    });
+  }
+
+  /// 显示详细统计数据
+  void _showDetailedStatistics() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.7,
+        minChildSize: 0.4,
+        maxChildSize: 0.9,
+        builder: (context, scrollController) => Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFF2A2A2A), Color(0xFF1A1A1A)],
+            ),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            children: [
+              // 拖拽条
+              Container(
+                margin: const EdgeInsets.only(top: 12),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+
+              // 标题
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF4CAF50), Color(0xFF2E7D32)],
+                        ),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(
+                        Icons.analytics_rounded,
+                        color: Colors.white,
+                        size: 24,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '训练统计',
+                            style: TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                          Text(
+                            '查看所有训练项目的详细数据',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.white54,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // 总体统计卡片
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: _buildOverallStatsCard(),
+              ),
+
+              const SizedBox(height: 16),
+
+              // 各项目统计列表
+              Expanded(
+                child: ListView.builder(
+                  controller: scrollController,
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  itemCount: _filterOptions.length,
+                  itemBuilder: (context, index) {
+                    final project = _filterOptions[index];
+                    final success = _successCounts[project] ?? 0;
+                    final failure = _failureCounts[project] ?? 0;
+                    final total = success + failure;
+                    final rate = total > 0 ? (success / total * 100) : 0.0;
+                    final isSelected = index == _selectedFilterIndex;
+
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: isSelected
+                              ? [
+                                  const Color(0xFF3A3A3A),
+                                  const Color(0xFF2D2D2D)
+                                ]
+                              : [
+                                  const Color(0xFF2D2D2D),
+                                  const Color(0xFF252525)
+                                ],
+                        ),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: isSelected
+                              ? const Color(0xFF4CAF50).withOpacity(0.5)
+                              : Colors.transparent,
+                          width: 1.5,
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              // 项目名称
+                              Expanded(
+                                child: Row(
+                                  children: [
+                                    Text(
+                                      project,
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                        color: isSelected
+                                            ? const Color(0xFF4CAF50)
+                                            : Colors.white,
+                                      ),
+                                    ),
+                                    if (isSelected) ...[
+                                      const SizedBox(width: 8),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 8,
+                                          vertical: 2,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFF4CAF50)
+                                              .withOpacity(0.2),
+                                          borderRadius:
+                                              BorderRadius.circular(8),
+                                        ),
+                                        child: const Text(
+                                          '当前',
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            color: Color(0xFF4CAF50),
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                              // 成功率
+                              Text(
+                                '${rate.toStringAsFixed(0)}%',
+                                style: TextStyle(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.bold,
+                                  color: rate >= 70
+                                      ? const Color(0xFF4CAF50)
+                                      : rate >= 40
+                                          ? const Color(0xFFFFC107)
+                                          : const Color(0xFFFF5722),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          // 进度条
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(4),
+                            child: LinearProgressIndicator(
+                              value: rate / 100,
+                              backgroundColor: Colors.white.withOpacity(0.1),
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                rate >= 70
+                                    ? const Color(0xFF4CAF50)
+                                    : rate >= 40
+                                        ? const Color(0xFFFFC107)
+                                        : const Color(0xFFFF5722),
+                              ),
+                              minHeight: 6,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          // 详细数据
+                          Row(
+                            children: [
+                              _buildStatItem(
+                                icon: Icons.check_circle_outline,
+                                label: '成功',
+                                value: success.toString(),
+                                color: const Color(0xFF4CAF50),
+                              ),
+                              const SizedBox(width: 20),
+                              _buildStatItem(
+                                icon: Icons.replay,
+                                label: '重试',
+                                value: failure.toString(),
+                                color: const Color(0xFFFF9800),
+                              ),
+                              const SizedBox(width: 20),
+                              _buildStatItem(
+                                icon: Icons.touch_app,
+                                label: '总次数',
+                                value: total.toString(),
+                                color: const Color(0xFF2196F3),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 构建总体统计卡片
+  Widget _buildOverallStatsCard() {
+    final totalClicks = _totalSuccessCount + _totalFailureCount;
+    final overallRate =
+        totalClicks > 0 ? (_totalSuccessCount / totalClicks * 100) : 0.0;
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF3A3A3A), Color(0xFF2D2D2D)],
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFF4A4A4A)),
+      ),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _buildOverallStatColumn(
+                icon: Icons.emoji_events_rounded,
+                label: '总成功',
+                value: _totalSuccessCount.toString(),
+                color: const Color(0xFF4CAF50),
+              ),
+              Container(
+                width: 1,
+                height: 50,
+                color: Colors.white.withOpacity(0.1),
+              ),
+              _buildOverallStatColumn(
+                icon: Icons.replay_rounded,
+                label: '总重试',
+                value: _totalFailureCount.toString(),
+                color: const Color(0xFFFF9800),
+              ),
+              Container(
+                width: 1,
+                height: 50,
+                color: Colors.white.withOpacity(0.1),
+              ),
+              _buildOverallStatColumn(
+                icon: Icons.insights_rounded,
+                label: '综合成功率',
+                value: '${overallRate.toStringAsFixed(0)}%',
+                color: overallRate >= 70
+                    ? const Color(0xFF4CAF50)
+                    : overallRate >= 40
+                        ? const Color(0xFFFFC107)
+                        : const Color(0xFFFF5722),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 构建总体统计列
+  Widget _buildOverallStatColumn({
+    required IconData icon,
+    required String label,
+    required String value,
+    required Color color,
+  }) {
+    return Column(
+      children: [
+        Icon(icon, color: color, size: 28),
+        const SizedBox(height: 8),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+            color: color,
+            fontFamily: 'monospace',
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            color: Colors.white.withOpacity(0.5),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// 构建统计项
+  Widget _buildStatItem({
+    required IconData icon,
+    required String label,
+    required String value,
+    required Color color,
+  }) {
+    return Row(
+      children: [
+        Icon(icon, color: color, size: 16),
+        const SizedBox(width: 4),
+        Text(
+          '$label: ',
+          style: TextStyle(
+            fontSize: 12,
+            color: Colors.white.withOpacity(0.5),
+          ),
+        ),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
+        ),
+      ],
+    );
+  }
+
   /// 播放点击音效
   Future<void> _playClickSound() async {
     // 冷却检查，防止连点
@@ -549,11 +1044,6 @@ class _DogClickerScreenState extends State<DogClickerScreen>
         centerTitle: true,
         actions: [
           IconButton(
-            icon: const Icon(Icons.bar_chart, size: 28),
-            onPressed: () => _showStatistics(context),
-            tooltip: '训练统计',
-          ),
-          IconButton(
             icon: const Icon(Icons.help_outline, size: 28),
             onPressed: () => _showHelpGuide(context),
             tooltip: '训练指南',
@@ -620,1075 +1110,50 @@ class _DogClickerScreenState extends State<DogClickerScreen>
             ],
           ),
 
-          // 内容层
+          // 内容层 - 简化为直接显示设备
           SafeArea(
-            child: Column(
-              children: [
-                // 优化后的固定标签栏 - 更紧凑
-                Container(
-                  margin: const EdgeInsets.fromLTRB(16, 6, 16, 10),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.6),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: Colors.white.withOpacity(0.4)),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.04),
-                        blurRadius: 8,
-                        offset: const Offset(0, 1),
-                      ),
-                    ],
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(14),
-                    child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                      child: Container(
-                        height: 52,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 5),
-                        child: ListView.builder(
-                          scrollDirection: Axis.horizontal,
-                          itemCount: _filterOptions.length + 1, // +1 为添加按钮
-                          itemBuilder: (context, index) {
-                            // 添加按钮
-                            if (index == _filterOptions.length) {
-                              return Padding(
-                                padding:
-                                    const EdgeInsets.symmetric(horizontal: 3),
-                                child: InkWell(
-                                  onTap: _showAddProjectDialog,
-                                  borderRadius: BorderRadius.circular(12),
-                                  child: Container(
-                                    padding: const EdgeInsets.all(10),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFFF5F5F5)
-                                          .withOpacity(0.8),
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(
-                                        color: const Color(0xFFE0E0E0),
-                                        width: 1,
-                                      ),
-                                    ),
-                                    child: Icon(
-                                      Icons.add_circle_outline,
-                                      color: const Color(0xFF5A8EFA),
-                                      size: 18,
-                                    ),
-                                  ),
-                                ),
-                              );
-                            }
-
-                            final isSelected = _selectedFilterIndex == index;
-                            return Padding(
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 3),
-                              child: InkWell(
-                                onTap: () {
-                                  setState(() {
-                                    _selectedFilterIndex = index;
-                                    _updateCurrentCounts();
-                                  });
-                                },
-                                borderRadius: BorderRadius.circular(12),
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 14,
-                                    vertical: 7,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    gradient: isSelected
-                                        ? const LinearGradient(
-                                            colors: [
-                                              Color(0xFF5A8EFA),
-                                              Color(0xFF8B77FF),
-                                            ],
-                                            begin: Alignment.topLeft,
-                                            end: Alignment.bottomRight,
-                                          )
-                                        : null,
-                                    color: isSelected
-                                        ? null
-                                        : const Color(0xFFF5F5F5)
-                                            .withOpacity(0.8),
-                                    borderRadius: BorderRadius.circular(12),
-                                    boxShadow: isSelected
-                                        ? [
-                                            BoxShadow(
-                                              color: const Color(
-                                                0xFF5A8EFA,
-                                              ).withOpacity(0.3),
-                                              blurRadius: 6,
-                                              offset: const Offset(0, 2),
-                                            ),
-                                          ]
-                                        : null,
-                                  ),
-                                  child: Center(
-                                    child: Text(
-                                      _filterOptions[index],
-                                      style: TextStyle(
-                                        color: isSelected
-                                            ? Colors.white
-                                            : const Color(0xFF666666),
-                                        fontWeight: isSelected
-                                            ? FontWeight.bold
-                                            : FontWeight.w600,
-                                        fontSize: 13,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-
-                // 原有的内容区域
-                Expanded(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const SizedBox(height: 12),
-                        // 可点击的圆形按钮 - 放大尺寸
-                        Column(
-                          children: [
-                            // 成功标记按钮引导文案 - 简化
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 8,
-                              ),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFE8F5E9).withOpacity(0.9),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    Icons.stars,
-                                    color: Colors.green[700],
-                                    size: 18,
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    '宠物成功时点击 → 立即给予奖励',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: Colors.green[800],
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(height: 24),
-
-                            // 成功按钮 - 更大尺寸
-                            AnimatedScale(
-                              scale: _isPressed ? 0.88 : 1.0, // 增加按压深度
-                              duration:
-                                  const Duration(milliseconds: 100), // 加快按压响应
-                              curve: Curves.easeInOutQuad, // 更柔和的弹性曲线
-                              child: Material(
-                                color: Colors.transparent,
-                                child: InkWell(
-                                  // 冷却期间禁用点击，防止误触，且不显示水波纹
-                                  onTap: _isCoolingDown
-                                      ? null
-                                      : () {
-                                          _playClickSound(); // 发出响片声音
-                                        },
-                                  onTapDown: _isCoolingDown
-                                      ? null
-                                      : (_) {
-                                          setState(() => _isPressed = true);
-                                        },
-                                  onTapUp: _isCoolingDown
-                                      ? null
-                                      : (_) {
-                                          setState(() => _isPressed = false);
-                                        },
-                                  onTapCancel: _isCoolingDown
-                                      ? null
-                                      : () {
-                                          setState(() => _isPressed = false);
-                                        },
-                                  borderRadius: BorderRadius.circular(190),
-                                  splashColor: Colors.white.withOpacity(0.3),
-                                  highlightColor: Colors.white.withOpacity(0.1),
-                                  child: Ink(
-                                    width: 380,
-                                    height: 380,
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      gradient: const LinearGradient(
-                                        colors: [
-                                          Color(0xFF5A8EFA),
-                                          Color(0xFF8B77FF),
-                                        ],
-                                        begin: Alignment.topLeft,
-                                        end: Alignment.bottomRight,
-                                      ),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: const Color(0xFF5A8EFA)
-                                              .withOpacity(0.4),
-                                          blurRadius: 30,
-                                          offset: const Offset(0, 10),
-                                        ),
-                                      ],
-                                    ),
-                                    child: const Center(
-                                      child: Text(
-                                        'Click!',
-                                        style: TextStyle(
-                                          fontSize: 64,
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.white,
-                                          letterSpacing: 1,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-
-                        const SizedBox(height: 24),
-
-                        // 失败按钮区域 - 简化
-                        Material(
-                          color: Colors.transparent,
-                          child: InkWell(
-                            onTap: () async {
-                              // 只记录失败，不发出声音
-                              setState(() => _failCount++);
-                              // 失败时给予轻微震动反馈
-                              await HapticFeedback.lightImpact();
-                              await _saveFailureCount();
-                              if (mounted) {
-                                _showFailureTip(context);
-                              }
-                            },
-                            borderRadius: BorderRadius.circular(14),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 24,
-                                vertical: 12,
-                              ),
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: [
-                                    Colors.orange[400]!,
-                                    Colors.deepOrange[400]!,
-                                  ],
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                ),
-                                borderRadius: BorderRadius.circular(14),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.orange.withOpacity(0.25),
-                                    blurRadius: 8,
-                                    offset: const Offset(0, 3),
-                                  ),
-                                ],
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    Icons.close_rounded,
-                                    color: Colors.white,
-                                    size: 20,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  const Text(
-                                    '标记失败',
-                                    style: TextStyle(
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w600,
-                                      color: Colors.white,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-
-                        const SizedBox(height: 40),
-
-                        // 底部统计卡片
-                        Container(
-                          padding: const EdgeInsets.all(20),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.6),
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                                color: Colors.white.withOpacity(0.4)),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.04),
-                                blurRadius: 10,
-                                offset: const Offset(0, 4),
-                              ),
-                            ],
-                          ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(20),
-                            child: BackdropFilter(
-                              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                              child: Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceAround,
-                                children: [
-                                  _buildStatItem(
-                                    Icons.check_circle_outline,
-                                    '成功',
-                                    _clickCount,
-                                    Colors.green,
-                                  ),
-                                  Container(
-                                    height: 40,
-                                    width: 1,
-                                    color: Colors.grey.withOpacity(0.2),
-                                  ),
-                                  _buildStatItem(
-                                    Icons.refresh,
-                                    '重试',
-                                    _failCount,
-                                    Colors.orange,
-                                  ),
-                                  Container(
-                                    height: 40,
-                                    width: 1,
-                                    color: Colors.grey.withOpacity(0.2),
-                                  ),
-                                  _buildStatItem(
-                                    Icons.trending_up,
-                                    '成功率',
-                                    (_clickCount + _failCount) > 0
-                                        ? ((_clickCount /
-                                                    (_clickCount +
-                                                        _failCount)) *
-                                                100)
-                                            .toInt()
-                                        : 0,
-                                    Colors.blue,
-                                    suffix: '%',
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// 显示训练统计
-  void _showStatistics(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (context) => StatefulBuilder(
-        builder: (BuildContext context, StateSetter setModalState) {
-          return Container(
-            height: MediaQuery.of(context).size.height * 0.75,
-            decoration: const BoxDecoration(
-              color: Color(0xFFFAFAFA),
-              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-            ),
-            child: Column(
-              children: [
-                // 顶部把手
-                Container(
-                  margin: const EdgeInsets.only(top: 10),
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[300],
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-
-                // 标题栏 - 简化
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 16, 24, 12),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [Color(0xFF5A8EFA), Color(0xFF8B77FF)],
-                          ),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Icon(
-                          Icons.analytics_rounded,
-                          color: Colors.white,
-                          size: 24,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      const Text(
-                        '训练统计',
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF2C2C2C),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                // 总体统计卡片 - 重新设计
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF5A8EFA), Color(0xFF8B77FF)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFF5A8EFA).withOpacity(0.3),
-                          blurRadius: 12,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: _buildOverallStat(
-                            Icons.check_circle_rounded,
-                            '总成功',
-                            _totalSuccessCount.toString(),
-                          ),
-                        ),
-                        Container(
-                          width: 1,
-                          height: 40,
-                          color: Colors.white.withOpacity(0.3),
-                        ),
-                        Expanded(
-                          child: _buildOverallStat(
-                            Icons.refresh_rounded,
-                            '总重试',
-                            _totalFailureCount.toString(),
-                          ),
-                        ),
-                        Container(
-                          width: 1,
-                          height: 40,
-                          color: Colors.white.withOpacity(0.3),
-                        ),
-                        Expanded(
-                          child: _buildOverallStat(
-                            Icons.trending_up_rounded,
-                            '成功率',
-                            _totalSuccessCount + _totalFailureCount > 0
-                                ? '${((_totalSuccessCount / (_totalSuccessCount + _totalFailureCount)) * 100).toStringAsFixed(0)}%'
-                                : '0%',
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-
-                const SizedBox(height: 20),
-
-                // 项目列表标题
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  child: Row(
-                    children: [
-                      Text(
-                        '各项目详情',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.grey[700],
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.grey[200],
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Text(
-                          '${_filterOptions.length}',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.grey[600],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 12),
-
-                // 各项目统计 - 优化列表
-                Expanded(
-                  child: ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    itemCount: _filterOptions.length,
-                    itemBuilder: (context, index) {
-                      // 重新排序：当前选中的项目排在第一位
-                      String option;
-                      final currentOption =
-                          _filterOptions[_selectedFilterIndex];
-
-                      // 将选中具体项目排在第一位
-                      if (index == 0) {
-                        option = currentOption;
-                      } else {
-                        // 其他项目按原顺序，跳过当前选中的
-                        final otherOptions = _filterOptions
-                            .where((o) => o != currentOption)
-                            .toList();
-                        option = otherOptions[index - 1];
-                      }
-
-                      final successCount = _successCounts[option] ?? 0;
-                      final failureCount = _failureCounts[option] ?? 0;
-                      final total = successCount + failureCount;
-                      final successRate =
-                          total > 0 ? (successCount / total * 100) : 0;
-
-                      // 判断是否为当前选中的项目
-                      final isCurrentProject = option == currentOption;
-
-                      // 判断是否为自定义项目（不是默认的3个项目）
-                      final isCustomProject = ![
-                        '喂食',
-                        '握手',
-                        '坐下',
-                      ].contains(option);
-
-                      return Dismissible(
-                        key: Key(option),
-                        direction: DismissDirection.endToStart,
-                        confirmDismiss: (direction) async {
-                          // 显示操作选择对话框
-                          return await showDialog<bool>(
-                                context: context,
-                                builder: (context) => AlertDialog(
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(20),
-                                  ),
-                                  title: Row(
-                                    children: [
-                                      Container(
-                                        padding: const EdgeInsets.all(8),
-                                        decoration: BoxDecoration(
-                                          color: Colors.orange.shade50,
-                                          borderRadius: BorderRadius.circular(
-                                            10,
-                                          ),
-                                        ),
-                                        child: Icon(
-                                          Icons.cleaning_services_rounded,
-                                          color: Colors.orange[700],
-                                          size: 24,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 12),
-                                      const Text(
-                                        '选择操作',
-                                        style: TextStyle(fontSize: 20),
-                                      ),
-                                    ],
-                                  ),
-                                  content: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        '「$option」',
-                                        style: const TextStyle(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 16),
-                                      _buildActionOption(
-                                        context,
-                                        icon: Icons.delete_outline_rounded,
-                                        title: '清除训练记录',
-                                        subtitle: '仅删除成功和重试次数，保留项目',
-                                        color: Colors.orange,
-                                        onTap: () async {
-                                          Navigator.pop(context);
-                                          await _deleteProjectRecord(option);
-                                          setModalState(
-                                            () {},
-                                          ); // 刷新 BottomSheet
-                                        },
-                                      ),
-                                      const SizedBox(height: 12),
-                                      _buildActionOption(
-                                        context,
-                                        icon: Icons.delete_forever_rounded,
-                                        title: '删除整个项目',
-                                        subtitle: isCustomProject
-                                            ? '删除项目及所有训练数据'
-                                            : '删除默认项目及所有训练数据',
-                                        color: Colors.red,
-                                        onTap: () {
-                                          Navigator.pop(context);
-                                          _showDeleteProjectConfirm(
-                                            context,
-                                            option,
-                                            isCustomProject,
-                                            setModalState,
-                                          );
-                                        },
-                                      ),
-                                    ],
-                                  ),
-                                  actions: [
-                                    TextButton(
-                                      onPressed: () =>
-                                          Navigator.pop(context, false),
-                                      child: const Text('取消'),
-                                    ),
-                                  ],
-                                ),
-                              ) ??
-                              false;
-                        },
-                        onDismissed: (direction) {
-                          // 这里不会被调用，因为 confirmDismiss 总是返回 false
-                        },
-                        background: Container(
-                          margin: const EdgeInsets.only(bottom: 10),
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [Color(0xFFFF9800), Color(0xFFFF6B6B)],
-                              begin: Alignment.centerLeft,
-                              end: Alignment.centerRight,
-                            ),
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          alignment: Alignment.centerRight,
-                          padding: const EdgeInsets.only(right: 24),
-                          child: const Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.cleaning_services_rounded,
-                                color: Colors.white,
-                                size: 28,
-                              ),
-                              SizedBox(height: 4),
-                              Text(
-                                '管理',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 13,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        child: Card(
-                          margin: const EdgeInsets.only(bottom: 10),
-                          elevation: 0,
-                          color: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                            side: isCurrentProject
-                                ? const BorderSide(
-                                    color: Color(0xFF5A8EFA),
-                                    width: 2,
-                                  )
-                                : BorderSide(
-                                    color: Colors.grey.shade200,
-                                    width: 1,
-                                  ),
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    // 项目名称标签
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 12,
-                                        vertical: 6,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        gradient: isCurrentProject
-                                            ? const LinearGradient(
-                                                colors: [
-                                                  Color(0xFF5A8EFA),
-                                                  Color(0xFF8B77FF),
-                                                ],
-                                              )
-                                            : null,
-                                        color: isCurrentProject
-                                            ? null
-                                            : Colors.grey[100],
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          if (isCurrentProject)
-                                            const Padding(
-                                              padding: EdgeInsets.only(
-                                                right: 6,
-                                              ),
-                                              child: Icon(
-                                                Icons.star_rounded,
-                                                color: Colors.white,
-                                                size: 16,
-                                              ),
-                                            ),
-                                          Text(
-                                            option,
-                                            style: TextStyle(
-                                              fontSize: 15,
-                                              fontWeight: FontWeight.bold,
-                                              color: isCurrentProject
-                                                  ? Colors.white
-                                                  : const Color(0xFF666666),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    const Spacer(),
-                                    // 成功率百分比
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 10,
-                                        vertical: 4,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: (successRate >= 70
-                                                ? Colors.green
-                                                : Colors.orange)
-                                            .withOpacity(0.1),
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      child: Text(
-                                        '${successRate.toStringAsFixed(0)}%',
-                                        style: TextStyle(
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.bold,
-                                          color: successRate >= 70
-                                              ? Colors.green[700]
-                                              : Colors.orange[700],
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 12),
-                                // 数据统计
-                                Row(
-                                  children: [
-                                    _buildCompactStat(
-                                      Icons.check_circle_rounded,
-                                      successCount,
-                                      Colors.green,
-                                      '成功',
-                                    ),
-                                    const SizedBox(width: 20),
-                                    _buildCompactStat(
-                                      Icons.refresh_rounded,
-                                      failureCount,
-                                      Colors.orange,
-                                      '重试',
-                                    ),
-                                    const SizedBox(width: 20),
-                                    _buildCompactStat(
-                                      Icons.format_list_numbered_rounded,
-                                      total,
-                                      Colors.blue,
-                                      '总计',
-                                    ),
-                                  ],
-                                ),
-                                if (total > 0) ...[
-                                  const SizedBox(height: 12),
-                                  // 进度条
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(4),
-                                    child: LinearProgressIndicator(
-                                      value: successCount / total,
-                                      backgroundColor: Colors.grey[200],
-                                      valueColor: AlwaysStoppedAnimation<Color>(
-                                        successRate >= 70
-                                            ? Colors.green
-                                            : Colors.orange,
-                                      ),
-                                      minHeight: 6,
-                                    ),
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  /// 构建紧凑型统计项
-  Widget _buildCompactStat(
-    IconData icon,
-    int value,
-    Color color,
-    String label,
-  ) {
-    return Row(
-      children: [
-        Icon(icon, color: color, size: 18),
-        const SizedBox(width: 6),
-        Text(
-          '$value',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-            color: color,
-          ),
-        ),
-        const SizedBox(width: 4),
-        Text(label, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
-      ],
-    );
-  }
-
-  /// 构建总体统计项（白色文字用于渐变背景）
-  Widget _buildOverallStat(IconData icon, String label, String value) {
-    return Column(
-      children: [
-        Icon(icon, color: Colors.white, size: 28),
-        const SizedBox(height: 8),
-        Text(
-          value,
-          style: const TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            color: Colors.white.withOpacity(0.9),
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-      ],
-    );
-  }
-
-  /// 构建操作选项按钮
-  Widget _buildActionOption(
-    BuildContext context, {
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: color.withOpacity(0.05),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: color.withOpacity(0.3), width: 1.5),
-          ),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(icon, color: color, size: 24),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
+            child: Center(
+              child: SingleChildScrollView(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Text(
-                      title,
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: color,
-                      ),
+                    // 拟物化响片设备（包含项目选择和统计）
+                    SkeuomorphicClickerDevice(
+                      successCount: _clickCount,
+                      failCount: _failCount,
+                      totalSuccessCount: _totalSuccessCount,
+                      totalFailCount: _totalFailureCount,
+                      currentProject: _filterOptions[_selectedFilterIndex],
+                      projects: _filterOptions,
+                      selectedIndex: _selectedFilterIndex,
+                      onSuccess: _playClickSound,
+                      onFail: () async {
+                        setState(() => _failCount++);
+                        await HapticFeedback.lightImpact();
+                        await _saveFailureCount();
+                        if (mounted) {
+                          _showFailureTip(context);
+                        }
+                      },
+                      onProjectChanged: (index) {
+                        setState(() {
+                          _selectedFilterIndex = index;
+                          _updateCurrentCounts();
+                        });
+                      },
+                      onAddProject: _showAddProjectDialog,
+                      onDeleteProject: _deleteCustomProject,
+                      onReset: _showResetConfirmDialog,
+                      onShowStats: _showDetailedStatistics,
+                      isCoolingDown: _isCoolingDown,
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      subtitle,
-                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                    ),
+                    const SizedBox(height: 16),
                   ],
                 ),
               ),
-              Icon(Icons.arrow_forward_ios_rounded, color: color, size: 16),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  /// 显示删除项目确认对话框
-  void _showDeleteProjectConfirm(
-    BuildContext context,
-    String projectName,
-    bool isCustomProject,
-    StateSetter setModalState,
-  ) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.red.shade50,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(
-                Icons.warning_rounded,
-                color: Colors.red[700],
-                size: 24,
-              ),
             ),
-            const SizedBox(width: 12),
-            const Text('确认删除项目'),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('确定要删除「$projectName」项目吗？'),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.red.withOpacity(0.05),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                  color: Colors.red.withOpacity(0.3),
-                  width: 1,
-                ),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.info_outline_rounded,
-                    color: Colors.red[700],
-                    size: 20,
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      isCustomProject
-                          ? '此操作将永久删除项目及其所有训练数据，且无法恢复'
-                          : '此操作将删除该默认项目及其所有训练数据。注意：项目本身会保留在列表中，但所有记录将被清空',
-                      style: const TextStyle(fontSize: 13),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('取消'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              if (isCustomProject) {
-                await _deleteCustomProject(projectName);
-              } else {
-                await _deleteProjectRecord(projectName);
-              }
-              setModalState(() {}); // 刷新 BottomSheet
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-            child: const Text('确认删除'),
           ),
         ],
       ),
@@ -1721,210 +1186,204 @@ class _DogClickerScreenState extends State<DogClickerScreen>
 
   /// 显示帮助指南对话框
   void _showHelpGuide(BuildContext context) {
-    showDialog(
+    showModalBottomSheet(
       context: context,
-      barrierColor: Colors.black.withOpacity(0.5),
-      builder: (context) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-        elevation: 0,
-        backgroundColor: Colors.transparent,
-        child: Container(
-          constraints: const BoxConstraints(maxWidth: 520, maxHeight: 700),
-          decoration: BoxDecoration(
-            color: const Color(0xFFFAFAFA),
-            borderRadius: BorderRadius.circular(28),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.15),
-                blurRadius: 30,
-                offset: const Offset(0, 10),
-              ),
-            ],
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.9,
+        minChildSize: 0.5,
+        maxChildSize: 0.95,
+        builder: (context, scrollController) => Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Color(0xFF1A1A1A),
+                Color(0xFF0F0F0F),
+              ],
+            ),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
           ),
           child: Column(
-            mainAxisSize: MainAxisSize.min,
             children: [
-              // 顶部渐变标题栏
+              // 顶部拖拽条
               Container(
-                padding: const EdgeInsets.fromLTRB(28, 24, 24, 24),
+                margin: const EdgeInsets.only(top: 12),
+                width: 40,
+                height: 4,
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      const Color(0xFF6B7FBD).withOpacity(0.95),
-                      const Color(0xFF8B9DC3).withOpacity(0.90),
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(28),
-                  ),
+                  color: Colors.white.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(2),
                 ),
+              ),
+              // 标题栏
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
                 child: Row(
                   children: [
+                    // 图标
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.25),
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF4CAF50), Color(0xFF8BC34A)],
+                        ),
                         borderRadius: BorderRadius.circular(14),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.1),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
+                            color: const Color(0xFF4CAF50).withOpacity(0.4),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
                           ),
                         ],
                       ),
                       child: const Icon(
-                        Icons.psychology_rounded,
+                        Icons.school_rounded,
                         color: Colors.white,
-                        size: 28,
+                        size: 24,
                       ),
                     ),
                     const SizedBox(width: 16),
-                    const Expanded(
+                    // 标题
+                    Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
+                          const Text(
                             '响片训练指南',
                             style: TextStyle(
-                              fontSize: 21,
+                              fontSize: 22,
                               fontWeight: FontWeight.bold,
                               color: Colors.white,
-                              letterSpacing: 0.3,
-                              height: 1.2,
+                              letterSpacing: 0.5,
                             ),
                           ),
-                          SizedBox(height: 2),
+                          const SizedBox(height: 4),
                           Text(
-                            'Clicker Training Guide',
+                            'Professional Clicker Training',
                             style: TextStyle(
-                              fontSize: 11,
-                              color: Colors.white70,
-                              letterSpacing: 0.5,
+                              fontSize: 12,
+                              color: Colors.white.withOpacity(0.5),
+                              letterSpacing: 1,
                             ),
                           ),
                         ],
                       ),
                     ),
-                    Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        onTap: () => Navigator.pop(context),
-                        borderRadius: BorderRadius.circular(20),
-                        child: Container(
-                          padding: const EdgeInsets.all(8),
-                          child: const Icon(
-                            Icons.close_rounded,
-                            color: Colors.white,
-                            size: 22,
-                          ),
+                    // 关闭按钮
+                    GestureDetector(
+                      onTap: () => Navigator.pop(context),
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(
+                          Icons.close_rounded,
+                          color: Colors.white.withOpacity(0.7),
+                          size: 20,
                         ),
                       ),
                     ),
                   ],
                 ),
               ),
-
+              const SizedBox(height: 20),
               // 内容区域
               Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
+                child: ListView(
+                  controller: scrollController,
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
                   physics: const BouncingScrollPhysics(),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // 核心概念区块
-                      _buildConceptCard(
-                        icon: Icons.lightbulb_rounded,
-                        title: '什么是正向强化训练？',
-                        content:
-                            '是一种科学的训练方法，通过奖励正确行为引导宠物学习，比惩罚更有效、更人道，更好的与主人建立信任关系。',
-                        gradient: LinearGradient(
-                          colors: [
-                            const Color(0xFFFFF8E1).withOpacity(0.6),
-                            const Color(0xFFFFECB3).withOpacity(0.5),
-                          ],
-                        ),
-                        iconColor: const Color(0xFF8D6E63),
-                      ),
+                  children: [
+                    // 核心理念卡片
+                    _buildDarkConceptCard(
+                      icon: Icons.psychology_rounded,
+                      iconGradient: const [
+                        Color(0xFF7C4DFF),
+                        Color(0xFFB388FF)
+                      ],
+                      title: '正向强化训练',
+                      subtitle: 'Positive Reinforcement',
+                      content: '科学证明最有效的训练方法，通过奖励正确行为引导宠物学习，建立深厚的信任关系。',
+                    ),
+                    const SizedBox(height: 12),
+                    _buildDarkConceptCard(
+                      icon: Icons.touch_app_rounded,
+                      iconGradient: const [
+                        Color(0xFF4CAF50),
+                        Color(0xFF8BC34A)
+                      ],
+                      title: '响片的作用',
+                      subtitle: 'Clicker Function',
+                      content: '精准的行为标记器。清脆的声音告诉宠物："做对了！"每次点击都是奖励的承诺。',
+                    ),
 
-                      const SizedBox(height: 14),
+                    const SizedBox(height: 28),
 
-                      _buildConceptCard(
-                        icon: Icons.notifications_active_rounded,
-                        title: '响片的作用',
-                        content: '行为标记器，声音精准告诉宠物："这个动作对了！"\n点击响片 = 承诺必定给予奖励',
-                        gradient: LinearGradient(
-                          colors: [
-                            const Color(0xFFE3F2FD).withOpacity(0.6),
-                            const Color(0xFFBBDEFB).withOpacity(0.5),
-                          ],
-                        ),
-                        iconColor: const Color(0xFF5F7C8A),
-                      ),
+                    // 使用步骤
+                    _buildSectionHeader(
+                      title: '使用步骤',
+                      subtitle: 'STEPS',
+                      color: const Color(0xFF2196F3),
+                    ),
+                    const SizedBox(height: 16),
+                    _buildDarkStepCard(
+                      step: 1,
+                      title: '响片充能',
+                      subtitle: '建立条件反射',
+                      duration: '2-3天',
+                      steps: [
+                        '按响片 → 立刻给零食',
+                        '重复10-15次',
+                        '观察：听到声音是否期待',
+                      ],
+                      color: const Color(0xFF2196F3),
+                    ),
+                    const SizedBox(height: 12),
+                    _buildDarkStepCard(
+                      step: 2,
+                      title: '开始训练',
+                      subtitle: '标记正确行为',
+                      duration: '每次5-10分钟',
+                      steps: [
+                        '等待或引导目标行为',
+                        '行为发生瞬间 → 点击',
+                        '3秒内给予奖励',
+                      ],
+                      color: const Color(0xFF00BCD4),
+                    ),
 
-                      const SizedBox(height: 32),
+                    const SizedBox(height: 28),
 
-                      // 分步指南
-                      _buildStepGuideSection(),
+                    // 黄金法则
+                    _buildSectionHeader(
+                      title: '训练黄金法则',
+                      subtitle: 'GOLDEN RULES',
+                      color: const Color(0xFFFFB74D),
+                    ),
+                    const SizedBox(height: 16),
+                    _buildGoldenRulesGrid(),
 
-                      const SizedBox(height: 28),
+                    const SizedBox(height: 28),
 
-                      // 黄金法则
-                      _buildGoldenRulesCard(),
+                    // Pro Tips
+                    _buildSectionHeader(
+                      title: '专业小贴士',
+                      subtitle: 'PRO TIPS',
+                      color: const Color(0xFFE91E63),
+                    ),
+                    const SizedBox(height: 16),
+                    _buildProTipsCard(),
 
-                      const SizedBox(height: 20),
+                    const SizedBox(height: 24),
 
-                      // 底部提示
-                      Container(
-                        padding: const EdgeInsets.all(20),
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [
-                              const Color(0xFFF3E5F5).withOpacity(0.6),
-                              const Color(0xFFE1BEE7).withOpacity(0.5),
-                            ],
-                          ),
-                          borderRadius: BorderRadius.circular(18),
-                          border: Border.all(
-                            color: const Color(0xFFE1BEE7).withOpacity(0.3),
-                            width: 1,
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.7),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Icon(
-                                Icons.favorite_rounded,
-                                color: const Color(0xFF8E7A9E),
-                                size: 22,
-                              ),
-                            ),
-                            const SizedBox(width: 14),
-                            Expanded(
-                              child: Text(
-                                '训练是一场充满爱的旅程\n享受与宠物相处的每一刻',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  color: const Color(0xFF6A5D7B),
-                                  fontWeight: FontWeight.w600,
-                                  height: 1.5,
-                                  letterSpacing: 0.2,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
+                    // 底部鼓励
+                    _buildMotivationCard(),
+                  ],
                 ),
               ),
             ],
@@ -1934,74 +1393,76 @@ class _DogClickerScreenState extends State<DogClickerScreen>
     );
   }
 
-  /// 构建概念卡片
-  Widget _buildConceptCard({
+  /// 深色概念卡片
+  Widget _buildDarkConceptCard({
     required IconData icon,
+    required List<Color> iconGradient,
     required String title,
+    required String subtitle,
     required String content,
-    required Gradient gradient,
-    required Color iconColor,
   }) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        gradient: gradient,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.white.withOpacity(0.8), width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        color: Colors.white.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.08),
+        ),
       ),
-      child: Column(
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 第一行：图标 + 标题
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(11),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(14),
-                  boxShadow: [
-                    BoxShadow(
-                      color: iconColor.withOpacity(0.15),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
+          // 图标
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(colors: iconGradient),
+              borderRadius: BorderRadius.circular(14),
+              boxShadow: [
+                BoxShadow(
+                  color: iconGradient[0].withOpacity(0.3),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
                 ),
-                child: Icon(icon, color: iconColor, size: 24),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Text(
+              ],
+            ),
+            child: Icon(icon, color: Colors.white, size: 22),
+          ),
+          const SizedBox(width: 16),
+          // 内容
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
                   title,
                   style: const TextStyle(
-                    fontSize: 14,
+                    fontSize: 16,
                     fontWeight: FontWeight.bold,
-                    color: Color(0xFF4A4A4A),
-                    letterSpacing: 0.2,
-                    height: 1.3,
+                    color: Colors.white,
                   ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          // 第二行：描述文字（左对齐）
-          Text(
-            content,
-            style: const TextStyle(
-              fontSize: 13,
-              color: Color(0xFF6B6B6B),
-              height: 1.6,
-              letterSpacing: 0.1,
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: iconGradient[0].withOpacity(0.8),
+                    letterSpacing: 1,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  content,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Colors.white.withOpacity(0.7),
+                    height: 1.6,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -2009,103 +1470,75 @@ class _DogClickerScreenState extends State<DogClickerScreen>
     );
   }
 
-  /// 构建步骤式指南章节（优化排版）
-  Widget _buildStepGuideSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+  /// 区块标题
+  Widget _buildSectionHeader({
+    required String title,
+    required String subtitle,
+    required Color color,
+  }) {
+    return Row(
       children: [
-        // 区块标题
-        Row(
+        Container(
+          width: 4,
+          height: 28,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [color, color.withOpacity(0.4)],
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+            ),
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              width: 5,
-              height: 24,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    const Color(0xFF6B7FBD).withOpacity(0.9),
-                    const Color(0xFF8B9DC3).withOpacity(0.7),
-                  ],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                ),
-                borderRadius: BorderRadius.circular(3),
-              ),
-            ),
-            const SizedBox(width: 12),
-            const Text(
-              '使用步骤',
-              style: TextStyle(
-                fontSize: 16,
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 18,
                 fontWeight: FontWeight.bold,
-                color: Color(0xFF2C2C2C),
-                letterSpacing: 0.3,
+                color: Colors.white,
               ),
             ),
-            const SizedBox(width: 6),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: const Color(0xFF6B7FBD).withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Text(
-                '2步',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF6B7FBD),
-                ),
+            Text(
+              subtitle,
+              style: TextStyle(
+                fontSize: 10,
+                color: color.withOpacity(0.8),
+                letterSpacing: 2,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ],
-        ),
-        const SizedBox(height: 18),
-
-        // 步骤1
-        _buildCompactStepCard(
-          stepNumber: '01',
-          title: '响片"充能"',
-          description: '建立响片声 = 奖励的连接',
-          steps: ['按按钮发出音效，立刻给零食', '重复直到宠物听到声音就期待', '此阶段无需宠物做任何动作'],
-          color: const Color(0xFF6B7FBD),
-        ),
-
-        const SizedBox(height: 14),
-
-        // 步骤2
-        _buildCompactStepCard(
-          stepNumber: '02',
-          title: '开始训练',
-          description: '标记正确行为并奖励',
-          steps: ['每次训练5-10分钟', '宠物做对 → 立即点击按钮', '3秒内给予奖励', '标记失败后不给奖励'],
-          color: const Color(0xFF8B9DC3),
         ),
       ],
     );
   }
 
-  /// 构建紧凑型步骤卡片
-  Widget _buildCompactStepCard({
-    required String stepNumber,
+  /// 深色步骤卡片
+  Widget _buildDarkStepCard({
+    required int step,
     required String title,
-    required String description,
+    required String subtitle,
+    required String duration,
     required List<String> steps,
     required Color color,
   }) {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withOpacity(0.2), width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: color.withOpacity(0.08),
-            blurRadius: 12,
-            offset: const Offset(0, 3),
-          ),
-        ],
+        gradient: LinearGradient(
+          colors: [
+            color.withOpacity(0.15),
+            color.withOpacity(0.05),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withOpacity(0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2113,35 +1546,36 @@ class _DogClickerScreenState extends State<DogClickerScreen>
           // 标题行
           Row(
             children: [
+              // 步骤编号
               Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 6,
-                ),
+                width: 36,
+                height: 36,
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [color, color.withOpacity(0.75)],
+                    colors: [color, color.withOpacity(0.7)],
                   ),
                   borderRadius: BorderRadius.circular(10),
                   boxShadow: [
                     BoxShadow(
-                      color: color.withOpacity(0.3),
-                      blurRadius: 6,
+                      color: color.withOpacity(0.4),
+                      blurRadius: 8,
                       offset: const Offset(0, 2),
                     ),
                   ],
                 ),
-                child: Text(
-                  stepNumber,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 12,
-                    letterSpacing: 1.2,
+                child: Center(
+                  child: Text(
+                    '$step',
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
               ),
               const SizedBox(width: 14),
+              // 标题
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -2149,19 +1583,40 @@ class _DogClickerScreenState extends State<DogClickerScreen>
                     Text(
                       title,
                       style: const TextStyle(
-                        fontSize: 15,
+                        fontSize: 16,
                         fontWeight: FontWeight.bold,
-                        color: Color(0xFF4A4A4A),
-                        letterSpacing: 0.2,
+                        color: Colors.white,
                       ),
                     ),
-                    const SizedBox(height: 2),
                     Text(
-                      description,
-                      style: const TextStyle(
+                      subtitle,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.white.withOpacity(0.5),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // 时长标签
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.schedule_rounded, color: color, size: 14),
+                    const SizedBox(width: 4),
+                    Text(
+                      duration,
+                      style: TextStyle(
                         fontSize: 11,
-                        color: Color(0xFF9E9E9E),
-                        letterSpacing: 0.1,
+                        color: color,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ],
@@ -2171,235 +1626,231 @@ class _DogClickerScreenState extends State<DogClickerScreen>
           ),
           const SizedBox(height: 16),
           // 步骤列表
-          ...steps.asMap().entries.map(
-                (entry) => Padding(
-                  padding: EdgeInsets.only(
-                    bottom: entry.key < steps.length - 1 ? 10 : 0,
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Container(
-                        margin: const EdgeInsets.only(top: 6),
-                        width: 6,
-                        height: 6,
-                        decoration: BoxDecoration(
-                          color: color.withOpacity(0.6),
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: color.withOpacity(0.3),
-                              blurRadius: 4,
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Text(
-                          entry.value,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            color: Color(0xFF6B6B6B),
-                            height: 1.6,
-                            letterSpacing: 0.1,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+          ...steps.asMap().entries.map((entry) {
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: entry.key < steps.length - 1 ? 10 : 0,
               ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 22,
+                    height: 22,
+                    decoration: BoxDecoration(
+                      color: color.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Center(
+                      child: Text(
+                        '${entry.key + 1}',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: color,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      entry.value,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.white.withOpacity(0.8),
+                        height: 1.4,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
         ],
       ),
     );
   }
 
-  /// 构建黄金法则卡片
-  Widget _buildGoldenRulesCard() {
+  /// 黄金法则网格
+  Widget _buildGoldenRulesGrid() {
     final rules = [
-      {'icon': Icons.filter_1_rounded, 'text': '一次只教一个技能'},
-      {'icon': Icons.volume_off_rounded, 'text': '安静无干扰的环境'},
-      {'icon': Icons.celebration_rounded, 'text': '结束在成功的时刻'},
-      {'icon': Icons.calendar_today_rounded, 'text': '每天坚持，勿过度'},
+      {
+        'icon': Icons.looks_one_rounded,
+        'text': '一次只教一个',
+        'color': const Color(0xFFFF9800)
+      },
+      {
+        'icon': Icons.volume_off_rounded,
+        'text': '安静的环境',
+        'color': const Color(0xFF9C27B0)
+      },
+      {
+        'icon': Icons.emoji_events_rounded,
+        'text': '结束在成功',
+        'color': const Color(0xFF4CAF50)
+      },
+      {
+        'icon': Icons.timer_rounded,
+        'text': '短时多次',
+        'color': const Color(0xFF2196F3)
+      },
     ];
 
-    Widget buildRuleItem(Map<String, Object> rule) {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              const Color(0xFFFFF3E0).withOpacity(0.5),
-              const Color(0xFFFFE0B2).withOpacity(0.4),
-            ],
+    return GridView.count(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      crossAxisCount: 2,
+      mainAxisSpacing: 12,
+      crossAxisSpacing: 12,
+      childAspectRatio: 1.8,
+      children: rules.map((rule) {
+        final color = rule['color'] as Color;
+        return Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: color.withOpacity(0.2)),
           ),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: const Color(0xFFFFCC80).withOpacity(0.25),
-            width: 1.5,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFFFFB74D).withOpacity(0.05),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.8),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
                 rule['icon'] as IconData,
-                color: const Color(0xFF8D6E63),
-                size: 18,
+                color: color,
+                size: 26,
               ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
+              const SizedBox(height: 8),
+              Text(
                 rule['text'] as String,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
-                  color: Color(0xFF6D5D5D),
-                  height: 1.4,
-                  letterSpacing: 0.1,
+                  color: Colors.white.withOpacity(0.9),
                 ),
+                textAlign: TextAlign.center,
               ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // 区块标题
-        Row(
-          children: [
-            Container(
-              width: 5,
-              height: 24,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    const Color(0xFFFFB74D).withOpacity(0.9),
-                    const Color(0xFFFF9800).withOpacity(0.7),
-                  ],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                ),
-                borderRadius: BorderRadius.circular(3),
-              ),
-            ),
-            const SizedBox(width: 12),
-            const Text(
-              '训练黄金法则',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF2C2C2C),
-                letterSpacing: 0.3,
-              ),
-            ),
-            const SizedBox(width: 6),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFFB74D).withOpacity(0.15),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Text(
-                '必读',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFFE65100),
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-
-        // 法则网格 - 使用 Column + Row + Expanded 布局，确保卡片等高对齐
-        Column(
-          children: [
-            IntrinsicHeight(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Expanded(child: buildRuleItem(rules[0])),
-                  const SizedBox(width: 10),
-                  Expanded(child: buildRuleItem(rules[1])),
-                ],
-              ),
-            ),
-            const SizedBox(height: 10),
-            IntrinsicHeight(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Expanded(child: buildRuleItem(rules[2])),
-                  const SizedBox(width: 10),
-                  Expanded(child: buildRuleItem(rules[3])),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ],
+            ],
+          ),
+        );
+      }).toList(),
     );
   }
 
-  /// 构建统计项
-  Widget _buildStatItem(
-    IconData icon,
-    String label,
-    int value,
-    Color color, {
-    String suffix = '',
-  }) {
-    return Column(
-      children: [
-        Icon(icon, color: color, size: 22),
-        const SizedBox(height: 4),
-        AnimatedSwitcher(
-          duration: const Duration(milliseconds: 300),
-          transitionBuilder: (Widget child, Animation<double> animation) =>
-              FadeTransition(
-            opacity: animation,
-            child: ScaleTransition(scale: animation, child: child),
+  /// Pro Tips 卡片
+  Widget _buildProTipsCard() {
+    final tips = [
+      '🎯 时机比奖励更重要，行为发生的瞬间点击',
+      '🍖 使用高价值零食，如鸡肉干、奶酪',
+      '😊 保持愉快心情，狗狗能感受到你的情绪',
+      '🔄 失败了？回到上一个成功的步骤重来',
+    ];
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            const Color(0xFFE91E63).withOpacity(0.1),
+            const Color(0xFF9C27B0).withOpacity(0.05),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: const Color(0xFFE91E63).withOpacity(0.2),
+        ),
+      ),
+      child: Column(
+        children: tips.asMap().entries.map((entry) {
+          return Padding(
+            padding: EdgeInsets.only(
+              bottom: entry.key < tips.length - 1 ? 14 : 0,
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  entry.value.substring(0, 2),
+                  style: const TextStyle(fontSize: 18),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    entry.value.substring(2).trim(),
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.white.withOpacity(0.85),
+                      height: 1.5,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  /// 底部鼓励卡片
+  Widget _buildMotivationCard() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF4CAF50), Color(0xFF8BC34A)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF4CAF50).withOpacity(0.3),
+            blurRadius: 15,
+            offset: const Offset(0, 6),
           ),
-          child: Text(
-            '$value$suffix',
-            key: ValueKey<String>('$value$suffix'),
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: color,
+        ],
+      ),
+      child: Row(
+        children: [
+          // 狗爪图标
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Text('🐾', style: TextStyle(fontSize: 28)),
+          ),
+          const SizedBox(width: 16),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '训练是一场充满爱的旅程',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+                SizedBox(height: 4),
+                Text(
+                  '享受与毛孩子相处的每一刻 ❤️',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Colors.white70,
+                  ),
+                ),
+              ],
             ),
           ),
-        ),
-        const SizedBox(height: 1),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 11,
-            color: Colors.grey[600],
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
