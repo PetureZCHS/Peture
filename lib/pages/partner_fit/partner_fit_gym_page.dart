@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../models/fitness_course.dart';
 import '../../data/fitness_courses_data.dart';
+import '../../services/fitness_courses_manager.dart';
 import 'partner_fit_course_detail_page.dart';
 import 'partner_fit_history_page.dart';
 
@@ -22,6 +23,13 @@ class _PartnerFitGymPageState extends State<PartnerFitGymPage> {
   // 搜索关键词
   String _searchKeyword = '';
 
+  // 课程列表（状态变量）
+  List<FitnessCourse> _courses = [];
+
+  // 加载状态
+  bool _isLoading = true;
+  bool _isLoadingMore = false;
+
   // 分类列表（锻炼强度）
   final List<String> _categories = [
     '全部',
@@ -33,9 +41,76 @@ class _PartnerFitGymPageState extends State<PartnerFitGymPage> {
   // 宠物类型列表
   final List<String> _petTypes = ['全部', '狗狗专属', '猫咪专属'];
 
+  @override
+  void initState() {
+    super.initState();
+    _loadCourses();
+  }
+
+  // 加载课程（渐进式加载）
+  Future<void> _loadCourses() async {
+    setState(() => _isLoading = true);
+
+    try {
+      // 先加载核心课程并立即显示
+      final coreCourses = FitnessCoursesManager().getCoreCourses();
+      if (mounted) {
+        setState(() {
+          _courses = coreCourses;
+          _isLoading = false;
+          _isLoadingMore = true;
+        });
+      }
+
+      // 异步加载扩展课程
+      final allCourses = await FitnessCoursesManager().getAllCourses();
+      if (mounted) {
+        setState(() {
+          _courses = allCourses;
+          _isLoadingMore = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _isLoadingMore = false;
+        });
+        
+        // 改进错误处理：提供友好的用户提示和重试选项
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('加载扩展课程失败，已显示核心课程'),
+            duration: const Duration(seconds: 3),
+            action: SnackBarAction(
+              label: '重试',
+              onPressed: _loadCourses,
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+  // 刷新功能
+  Future<void> _refreshCourses() async {
+    setState(() => _isLoadingMore = true);
+    try {
+      await FitnessCoursesManager().refreshCache();
+      await _loadCourses();
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoadingMore = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('刷新失败: $e')),
+        );
+      }
+    }
+  }
+
   // 获取筛选后的课程列表
   List<FitnessCourse> get filteredCourses {
-    var courses = FitnessCoursesData.getAllCourses();
+    var courses = _courses;
 
     // 按锻炼强度筛选
     if (_selectedCategoryIndex > 0) {
@@ -212,22 +287,77 @@ class _PartnerFitGymPageState extends State<PartnerFitGymPage> {
 
           // 课程网格
           Expanded(
-            child: filteredCourses.isEmpty
-                ? _buildEmptyState()
-                : GridView.builder(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 2,
-                          crossAxisSpacing: 16,
-                          mainAxisSpacing: 16,
-                          childAspectRatio: 1.0,
-                        ),
-                    itemCount: filteredCourses.length,
-                    itemBuilder: (context, index) {
-                      return _buildGridCard(filteredCourses[index]);
-                    },
-                  ),
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : filteredCourses.isEmpty
+                    ? _buildEmptyState()
+                    : Stack(
+                        children: [
+                          RefreshIndicator(
+                            onRefresh: _refreshCourses,
+                            child: GridView.builder(
+                              padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                              gridDelegate:
+                                  const SliverGridDelegateWithFixedCrossAxisCount(
+                                    crossAxisCount: 2,
+                                    crossAxisSpacing: 16,
+                                    mainAxisSpacing: 16,
+                                    childAspectRatio: 1.0,
+                                  ),
+                              itemCount: filteredCourses.length,
+                              itemBuilder: (context, index) {
+                                return _buildGridCard(filteredCourses[index]);
+                              },
+                            ),
+                          ),
+                          // 增量加载指示器
+                          if (_isLoadingMore)
+                            Positioned(
+                              top: 8,
+                              right: 16,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(16),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.1),
+                                      blurRadius: 4,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    SizedBox(
+                                      width: 14,
+                                      height: 14,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        valueColor: AlwaysStoppedAnimation<Color>(
+                                          const Color(0xFF5A8EFA),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    const Text(
+                                      '加载中...',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Color(0xFF424242),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
           ),
         ],
       ),
@@ -279,6 +409,8 @@ class _PartnerFitGymPageState extends State<PartnerFitGymPage> {
 
   // 新卡片样式（Grid卡片）
   Widget _buildGridCard(FitnessCourse course) {
+    final isCoreCourse = FitnessCoursesData.coreCourseIds.contains(course.id);
+
     return Card(
       elevation: 0,
       color: Colors.white,
@@ -293,81 +425,106 @@ class _PartnerFitGymPageState extends State<PartnerFitGymPage> {
           );
         },
         borderRadius: BorderRadius.circular(20),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // 图标容器
-              Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF5A8EFA), Color(0xFF8B77FF)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFF5A8EFA).withOpacity(0.3),
-                      blurRadius: 8,
-                      offset: const Offset(0, 3),
-                    ),
-                  ],
-                ),
-                child: Center(
-                  child: Text(
-                    course.iconEmoji,
-                    style: const TextStyle(fontSize: 28),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              // 标题
-              Flexible(
-                child: Text(
-                  course.name,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF1E1E1E),
-                    height: 1.2,
-                  ),
-                  maxLines: 2,
-                  textAlign: TextAlign.center,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              const SizedBox(height: 4),
-              // 时长和标签
-              Wrap(
-                alignment: WrapAlignment.center,
-                spacing: 2,
+        child: Stack(
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.access_time, size: 11, color: Colors.grey[600]),
-                  Text(
-                    '${course.durationMinutes}分钟',
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: Colors.grey[600],
-                      fontWeight: FontWeight.w500,
+                  // 图标容器
+                  Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF5A8EFA), Color(0xFF8B77FF)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF5A8EFA).withOpacity(0.3),
+                          blurRadius: 8,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                    child: Center(
+                      child: Text(
+                        course.iconEmoji,
+                        style: const TextStyle(fontSize: 28),
+                      ),
                     ),
                   ),
-                  Text(
-                    '·',
-                    style: TextStyle(color: Colors.grey[400], fontSize: 10),
+                  const SizedBox(height: 8),
+                  // 标题
+                  Flexible(
+                    child: Text(
+                      course.name,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF1E1E1E),
+                        height: 1.2,
+                      ),
+                      maxLines: 2,
+                      textAlign: TextAlign.center,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
-                  Text(
-                    course.petType == 'dog' ? '🐶' : '🐱',
-                    style: const TextStyle(fontSize: 10),
+                  const SizedBox(height: 4),
+                  // 时长和标签
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    spacing: 2,
+                    children: [
+                      Icon(Icons.access_time, size: 11, color: Colors.grey[600]),
+                      Text(
+                        '${course.durationMinutes}分钟',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: Colors.grey[600],
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      Text(
+                        '·',
+                        style: TextStyle(color: Colors.grey[400], fontSize: 10),
+                      ),
+                      Text(
+                        course.petType == 'dog' ? '🐶' : '🐱',
+                        style: const TextStyle(fontSize: 10),
+                      ),
+                    ],
                   ),
                 ],
               ),
-            ],
-          ),
+            ),
+            // 核心课程标识
+            if (isCoreCourse)
+              Positioned(
+                top: 8,
+                right: 8,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.green.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Text(
+                    '核心课程',
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: Colors.green,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ),
+          ],
         ),
       ),
     );

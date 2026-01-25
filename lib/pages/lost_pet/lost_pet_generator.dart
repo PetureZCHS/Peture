@@ -22,7 +22,7 @@ class LostPetInfo {
 
 class LostPetMaterials {
   final String urgencyLevel;
-  final String searchStrategyTip;
+  final List<String> searchChecklist; // Changed from searchStrategyTip
   final String wechatMomentsText;
   final String xiaohongshuTitle;
   final String xiaohongshuText;
@@ -34,7 +34,7 @@ class LostPetMaterials {
 
   LostPetMaterials({
     required this.urgencyLevel,
-    required this.searchStrategyTip,
+    required this.searchChecklist,
     required this.wechatMomentsText,
     required this.xiaohongshuTitle,
     required this.xiaohongshuText,
@@ -52,9 +52,26 @@ class LostPetGenerator {
     
     // 1. Analysis
     final urgencyLevel = 'High'; // Always high for lost pets
-    final searchStrategyTip = isCat
-        ? '家养猫走失主要在楼道、地下室和通风管道，通常不会跑远，建议带着猫粮和它熟悉的物品在深夜轻声呼唤。'
-        : '狗狗走失通常会沿气味跑远，建议立即查看监控确定方向，并沿途询问路人，黄金72小时内扩散范围越广越好。';
+    
+    final List<String> searchChecklist = isCat
+        ? [
+            '检查楼道每一层（包括电表箱、杂物堆）',
+            '检查地下室、车库、通风管道口',
+            '带着猫粮/罐头在深夜人少时轻声呼唤',
+            '在家门口摆放带有它气味的猫砂或垫子',
+            '打印海报张贴在小区出入口、电梯内',
+            '询问小区保安、保洁阿姨是否见过',
+            '调取小区/楼道监控录像',
+          ]
+        : [
+            '立即调取走失地附近的监控录像确定方向',
+            '沿途询问路人、保安、环卫工人',
+            '前往附近的公园、草地、垃圾站寻找',
+            '打印海报张贴在方圆3公里内的显眼处',
+            '联系附近的流浪狗救助站/收容所',
+            '在本地宠物群/业主群发布寻宠信息',
+            '利用“剪刀法”等玄学（宁可信其有）',
+          ];
 
     // 2. Social Media - WeChat Moments
     final rewardText = info.rewardAmount != null && info.rewardAmount!.isNotEmpty
@@ -81,13 +98,13 @@ $rewardText！麻烦大家帮忙转发扩散，好人一生平安！🙏
 它胆子${isCat ? '小' : '大'}，可能${isCat ? '躲在角落' : '在到处乱跑'}。
 如果有好心人看到，请一定一定联系我！
 📞电话：${info.contactInfo}
-💰${rewardText}
+💰$rewardText
 
 #寻${isCat ? '猫' : '狗'} #寻宠 #${info.lostLocation}寻宠 #宠物走失 #扩散 #救救孩子
 ''';
 
     // 4. Short Message
-    final shortMessageText = '【寻宠】${info.lostLocation}走失一只${info.description}的${isCat ? '猫' : '狗'}，名${info.name}。如有线索请联系${info.contactInfo}，${rewardText}。';
+    final shortMessageText = '【寻宠】${info.lostLocation}走失一只${info.description}的${isCat ? '猫' : '狗'}，名${info.name}。如有线索请联系${info.contactInfo}，$rewardText。';
 
     // 5. Poster Content
     final posterHeadline = '寻${isCat ? '猫' : '狗'}启事 / $rewardText';
@@ -100,7 +117,7 @@ $rewardText！麻烦大家帮忙转发扩散，好人一生平安！🙏
 
     return LostPetMaterials(
       urgencyLevel: urgencyLevel,
-      searchStrategyTip: searchStrategyTip,
+      searchChecklist: searchChecklist,
       wechatMomentsText: wechatMomentsText,
       xiaohongshuTitle: xiaohongshuTitle,
       xiaohongshuText: xiaohongshuText,

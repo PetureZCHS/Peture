@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'post_detail_page.dart'; // 导入帖子详情页
@@ -6,6 +7,7 @@ import 'post_detail_page.dart'; // 导入帖子详情页
 class Post {
   final String id;
   final String imageUrl;
+  final File? imageFile; // 支持本地图片文件
   final String content;
   final String userAvatarUrl;
   final String username;
@@ -15,6 +17,7 @@ class Post {
   Post({
     required this.id,
     required this.imageUrl,
+    this.imageFile,
     required this.content,
     required this.userAvatarUrl,
     required this.username,
@@ -252,9 +255,9 @@ class _CommunityScreenState extends State<CommunityScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF0F4F8), // 修改背景色
+      backgroundColor: Colors.transparent, // 修改背景色
       appBar: AppBar(
-        backgroundColor: const Color(0xFFF0F4F8), // 修改AppBar背景色
+        backgroundColor: Colors.transparent, // 修改AppBar背景色
         elevation: 0,
         // 小红书风格的顶部导航栏
         centerTitle: true,
@@ -355,14 +358,21 @@ class _CommunityScreenState extends State<CommunityScreen>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 顶部：图片（主体）- 使用真实网络图片
+            // 顶部：图片（主体）- 优先使用本地图片，否则使用网络图片
             ClipRRect(
               borderRadius: const BorderRadius.only(
                 topLeft: Radius.circular(8),
                 topRight: Radius.circular(8),
               ),
-              child: Image.network(
-                post.imageUrl,
+              child: post.imageFile != null
+                  ? Image.file(
+                      post.imageFile!,
+                      height: post.imageHeight,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                    )
+                  : Image.network(
+                      post.imageUrl,
                 height: post.imageHeight,
                 width: double.infinity,
                 fit: BoxFit.cover,

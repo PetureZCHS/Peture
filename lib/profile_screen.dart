@@ -1,16 +1,13 @@
 // lib/profile_screen_upgraded.dart
 
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'services/supabase_service.dart';
 import 'models/pet.dart';
 import 'settings_page.dart';
-import 'pages/unified_expense/unified_expense_home_page.dart';
-import 'pages/reminder/intelligent_reminder_page.dart';
 import 'pages/pet_profile_form_page.dart';
-import 'account_settings_page.dart';
 import 'utils/ui_helpers.dart';
-import 'home_screen.dart' show DataChangeNotifier;
 
 // =========================================================
 // 全局设计系统 - 美学升级版
@@ -18,26 +15,28 @@ import 'home_screen.dart' show DataChangeNotifier;
 
 class AppStyles {
   static const TextStyle sectionTitle = TextStyle(
+    fontSize: 20,
+    fontWeight: FontWeight.bold,
+    color: AppColors.primaryText,
+    letterSpacing: 0.5,
+  );
+  static const TextStyle petName = TextStyle(
     fontSize: 18,
     fontWeight: FontWeight.w600,
     color: AppColors.primaryText,
   );
-  static const TextStyle petName = TextStyle(
-    fontSize: 17,
-    fontWeight: FontWeight.w500,
-    color: AppColors.primaryText,
-  );
   static const TextStyle petDetails = TextStyle(
-    fontSize: 15,
+    fontSize: 14,
     color: AppColors.secondaryText,
+    height: 1.4,
   );
   static const TextStyle ownerId = TextStyle(
-    fontSize: 13,
+    fontSize: 14,
     color: AppColors.secondaryText,
   );
   static const TextStyle listItemTitle = TextStyle(
-    fontSize: 15,
-    fontWeight: FontWeight.normal,
+    fontSize: 16,
+    fontWeight: FontWeight.w500,
     color: AppColors.primaryText,
   );
 }
@@ -58,62 +57,33 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  final _supabaseService = SupabaseService();
-  String? _userNickname;
+  String _userNickname = ''; // 用户昵称状态
 
-  @override
-  void initState() {
-    super.initState();
-    _loadUserNickname();
-  }
-
-  /// 加载用户昵称
-  Future<void> _loadUserNickname() async {
-    try {
-      final profile = await _supabaseService.getUserProfile();
-      if (mounted) {
-        setState(() {
-          _userNickname = profile?['nickname'] as String?;
-        });
-      }
-    } catch (e) {
-      debugPrint('加载用户昵称失败: $e');
-    }
+  void _updateNickname(String newName) {
+    setState(() {
+      _userNickname = newName;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F7), // 添加背景色，与Container的渐变底部颜色一致
-      // 🎨 美学升级：径向渐变背景，营造深度与呼吸感
-      body: Container(
-        width: double.infinity, // 确保Container填充整个宽度
-        height: double.infinity, // 确保Container填充整个高度
-        decoration: const BoxDecoration(
-          gradient: RadialGradient(
-            center: Alignment.topCenter,
-            radius: 1.8,
-            colors: [Colors.white, Color(0xFFF5F5F7)],
-            stops: [0.0, 1.0],
+      backgroundColor: Colors.transparent,
+      body: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpaces.horizontalPadding,
           ),
-        ),
-        child: SingleChildScrollView(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpaces.horizontalPadding,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: 60),
-                _buildHeader(context),
-                const SizedBox(height: AppSpaces.sectionSpacing),
-                _buildMedicalRecordsSection(context),
-                const SizedBox(height: AppSpaces.sectionSpacing),
-                const PetProfileSection(),
-                const SizedBox(height: 50),
-              ],
-            ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 60),
+              _buildHeader(context),
+              const SizedBox(height: AppSpaces.sectionSpacing),
+              PetProfileSection(onProfileUpdate: _updateNickname),
+              const SizedBox(height: 120), // Bottom padding for nav bar
+            ],
           ),
         ),
       ),
@@ -121,268 +91,141 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildHeader(BuildContext context) {
-    final String userNickname = _userNickname ?? '';
-    final String displayName = userNickname.isEmpty ? '点击设置昵称' : userNickname;
-    final String avatarText = userNickname.isEmpty 
-        ? '?' 
-        : (userNickname.length > 0 ? userNickname[0].toUpperCase() : '?');
+    // 使用状态中的昵称
+    final String displayName = _userNickname.isEmpty ? '点击设置昵称' : _userNickname;
+    final String avatarText = _userNickname.isEmpty ? '?' : _userNickname[0];
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         GestureDetector(
-          onTap: () async {
-            // 跳转到账户设置页面
-            final result = await Navigator.push(
+          onTap: () {
+            // TODO: 跳转到设置昵称页面
+            ScaffoldMessenger.of(
               context,
-              MaterialPageRoute(
-                builder: (context) => const AccountSettingsPage(),
-              ),
-            );
-            // 返回后刷新昵称
-            if (result == true || mounted) {
-              _loadUserNickname();
-            }
+            ).showSnackBar(const SnackBar(content: Text('昵称设置功能开发中...')));
           },
           child: Row(
             children: [
               // 🎨 美学升级：动态化用户头像，个性化设计
-              CircleAvatar(
-                radius: 24,
-                backgroundColor: AppColors.primary.withOpacity(0.1),
-                child: CircleAvatar(
-                  radius: 22,
-                  backgroundColor: AppColors.primary,
-                  child: Text(
-                    avatarText,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
+              Container(
+                padding: const EdgeInsets.all(3),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: const LinearGradient(
+                    colors: [
+                      AppColors.primaryGradientStart,
+                      AppColors.primaryGradientEnd,
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.primary.withOpacity(0.4),
+                      blurRadius: 16,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: Container(
+                  padding: const EdgeInsets.all(2),
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                  ),
+                  child: CircleAvatar(
+                    radius: 32,
+                    backgroundColor: AppColors.primary,
+                    child: Text(
+                      avatarText,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 24,
+                      ),
                     ),
                   ),
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 20),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     displayName,
                     style: AppStyles.ownerId.copyWith(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w500,
-                      color: userNickname.isEmpty
-                          ? AppColors.secondaryText.withOpacity(0.6)
-                          : AppColors.primaryText,
+                      fontSize: 24,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.primaryText,
+                      letterSpacing: -0.5,
                     ),
                   ),
-                  if (userNickname.isEmpty)
-                    Text(
-                      '轻触设置',
+                  const SizedBox(height: 4),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      '主人',
                       style: AppStyles.ownerId.copyWith(
-                        fontSize: 11,
-                        color: AppColors.secondaryText.withOpacity(0.5),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.primary,
                       ),
                     ),
-                ],
-              ),
-            ],
-          ),
-        ),
-        IconButton(
-          icon: const Icon(Icons.settings, color: AppColors.secondaryText),
-          onPressed: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => const SettingsPage()),
-            );
-          },
-        ),
-      ],
-    );
-  }
-
-  Widget _buildMedicalRecordsSection(BuildContext context) {
-    return _CustomSection(
-      title: '问诊/分析记录',
-      children: [
-        _buildActionItem(
-          icon: Icons.account_balance_wallet,
-          label: '宠物消费',
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => const UnifiedExpenseHomePage(),
-              ),
-            );
-          },
-        ),
-        _buildActionItem(
-          icon: Icons.notifications_active,
-          label: '智能提醒',
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => const IntelligentReminderPage(),
-              ),
-            );
-          },
-        ),
-      ],
-    );
-  }
-
-  Widget _buildActionItem({
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-  }) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        // 🎨 美学升级：自定义水波纹颜色和高亮颜色
-        splashColor: Colors.white.withOpacity(0.3), // 水波纹颜色 - 白色半透明
-        highlightColor: Colors.white.withOpacity(0.15), // 按压时的高亮颜色
-        // 🎨 水波纹扩散半径
-        radius: 80, // 增大扩散半径，让水波纹更明显
-        child: Padding(
-          padding: const EdgeInsets.all(12.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                // 🎨 美学升级：图标尺寸增大20%，颜色改为白色
-                child: Icon(
-                  icon,
-                  color: Colors.white,
-                  size: 33.6,
-                ), // 28 * 1.2 = 33.6
-              ),
-              const SizedBox(height: 8),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // 🎨 美学升级：文字颜色改为白色，字重增强
-                  Text(
-                    label,
-                    style: AppStyles.listItemTitle.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const Icon(
-                    Icons.arrow_forward_ios,
-                    size: 12,
-                    color: Colors.white70,
                   ),
                 ],
               ),
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _CustomSection extends StatelessWidget {
-  final String title;
-  final List<Widget> children;
-
-  const _CustomSection({required this.title, required this.children});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(title, style: AppStyles.sectionTitle),
-        const SizedBox(height: 16),
-        // 🎨 美学升级：品牌主色渐变背景 + 多层阴影 + 光泽效果
-        Container(
-          decoration: BoxDecoration(
-            // 品牌主色线性渐变
-            gradient: const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                AppColors.primaryGradientStart,
-                AppColors.primaryGradientEnd,
-              ],
+        ClipOval(
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+            child: Container(
+              width: 44, height: 44,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.4),
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white.withOpacity(0.6)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: IconButton(
+                icon: const Icon(Icons.settings_rounded, color: AppColors.primaryText, size: 22),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const SettingsPage()),
+                  );
+                },
+              ),
             ),
-            borderRadius: BorderRadius.circular(12),
-            // 多层阴影效果
-            boxShadow: [
-              // 第一层：接触阴影
-              BoxShadow(
-                offset: const Offset(0, 2),
-                blurRadius: 4.0,
-                color: Colors.black.withOpacity(0.04),
-              ),
-              // 第二层：弥散光晕
-              BoxShadow(
-                offset: const Offset(0, 12),
-                blurRadius: 24.0,
-                color: Colors.black.withOpacity(0.06),
-              ),
-            ],
-          ),
-          child: Stack(
-            children: [
-              // 光泽效果层 - 调整为更柔和的效果
-              Positioned(
-                top: 0,
-                left: 0,
-                right: 0,
-                height: 60,
-                child: Container(
-                  decoration: BoxDecoration(
-                    borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(12),
-                      topRight: Radius.circular(12),
-                    ),
-                    gradient: RadialGradient(
-                      center: const Alignment(-0.3, -0.3),
-                      radius: 0.8,
-                      colors: [
-                        Colors.white.withOpacity(0.08),
-                        Colors.transparent,
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              // 内容层
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 20.0),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: children,
-                ),
-              ),
-            ],
           ),
         ),
       ],
     );
   }
+
+// Removed _buildMedicalRecordsSection and _buildGlassActionItem
+
 }
 
 // =========================================================
 // 宠物档案部分
 // =========================================================
 class PetProfileSection extends StatefulWidget {
-  const PetProfileSection({super.key});
+  final Function(String)? onProfileUpdate;
+
+  const PetProfileSection({super.key, this.onProfileUpdate});
 
   @override
   State<PetProfileSection> createState() => _PetProfileSectionState();
@@ -396,15 +239,6 @@ class _PetProfileSectionState extends State<PetProfileSection> {
   void initState() {
     super.initState();
     _loadPets();
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    // 每次页面可见时检查是否需要刷新
-    if (DataChangeNotifier.checkAndReset()) {
-      _loadPets();
-    }
   }
 
   Future<void> _loadPets() async {
@@ -438,8 +272,6 @@ class _PetProfileSectionState extends State<PetProfileSection> {
           setState(() {
             pets.add(petWithId);
           });
-          // 标记数据已变更，切换到健康记录页时需要刷新
-          DataChangeNotifier.markPetDataChanged();
         }
 
         if (mounted) {
@@ -451,11 +283,7 @@ class _PetProfileSectionState extends State<PetProfileSection> {
         if (mounted) {
           ScaffoldMessenger.of(
             context,
-          ).showSnackBar(const SnackBar(
-            content: Text('保存失败，请检查网络连接'),
-            backgroundColor: Colors.red,
-            duration: Duration(seconds: 3),
-          ));
+          ).showSnackBar(const SnackBar(content: Text('宠物档案添加失败，请检查网络连接')));
         }
       }
     }).catchError((error, stackTrace) {
@@ -467,27 +295,21 @@ class _PetProfileSectionState extends State<PetProfileSection> {
 
       // 检查是否是数据库约束错误（可能是 user_id 类型不匹配）
       final errorStr = error.toString().toLowerCase();
-      String errorMessage = '保存失败，请检查网络连接';
+      String errorMessage = '添加失败，请检查终端日志';
 
       if (errorStr.contains('foreign key') || errorStr.contains('user_id')) {
-        errorMessage = '保存失败：用户ID格式错误，请重新登录';
+        errorMessage = '添加失败：用户ID格式错误，请重新登录';
       } else if (errorStr.contains('null') || errorStr.contains('not null')) {
-        errorMessage = '保存失败：缺少必要字段';
+        errorMessage = '添加失败：缺少必要字段';
       } else if (errorStr.contains('network') ||
-          errorStr.contains('connection') ||
-          errorStr.contains('timeout') ||
-          errorStr.contains('failed')) {
-        errorMessage = '保存失败，请检查网络连接';
+          errorStr.contains('connection')) {
+        errorMessage = '添加失败，请检查网络连接';
       }
 
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(
-          content: Text(errorMessage),
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 3),
-        ));
+        ).showSnackBar(SnackBar(content: Text(errorMessage)));
       }
     });
   }
@@ -529,8 +351,6 @@ class _PetProfileSectionState extends State<PetProfileSection> {
                       setState(() {
                         pets.removeWhere((pet) => pet.id == petToDelete.id);
                       });
-                      // 标记数据已变更
-                      DataChangeNotifier.markPetDataChanged();
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(content: Text('${petToDelete.name} 的档案已删除')),
                       );
@@ -561,72 +381,105 @@ class _PetProfileSectionState extends State<PetProfileSection> {
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             const Text('宠物档案', style: AppStyles.sectionTitle),
-            ElevatedButton.icon(
-              onPressed: () async {
-                final result = await Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const PetProfileFormPage(),
-                  ),
-                );
-
-                if (result != null && mounted) {
-                  // 从表单页面返回的数据
-                  final petData = result as Map<String, dynamic>;
-
-                  // 计算年龄（根据出生日期）
-                  String age = '1岁0个月';
-                  if (petData['birth_date'] != null) {
-                    final birthDate = DateTime.tryParse(petData['birth_date']);
-                    if (birthDate != null) {
-                      final now = DateTime.now();
-                      int years = now.year - birthDate.year;
-                      int months = now.month - birthDate.month;
-                      // Adjust for month and day
-                      if (months < 0 ||
-                          (months == 0 && now.day < birthDate.day)) {
-                        years--;
-                        months += 12;
-                      }
-                      if (now.day < birthDate.day && months > 0) {
-                        months--;
-                      }
-                      age = '${years}岁${months}个月';
-                    }
-                  }
-
-                  // 创建Pet对象，包含所有表单字段
-                  final newPet = Pet(
-                    type: petData['type'] ?? '狗', // 宠物类型
-                    name: petData['name'] ?? '',
-                    age: age, // 根据出生日期计算
-                    gender: petData['gender'] ?? '哥哥',
-                    breed: petData['breed'] ?? '', // 品种
-                    avatar: petData['avatar'], // 头像路径
-                    birthDate: petData['birth_date']
-                        ?.toString()
-                        .split('T')[0], // 出生日期（只保留年月日）
-                    neuterStatus: petData['neuter_status'], // 绝育状态
-                    weight: petData['weight'] != null
-                        ? (petData['weight'] as num).toDouble()
-                        : null, // 体重
-                  );
-
-                  _addPet(newPet);
-                }
-              },
-              icon: const Icon(Icons.add, size: 18),
-              label: const Text('添加宠物'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+            Container(
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [
+                    AppColors.primaryGradientStart,
+                    AppColors.primaryGradientEnd,
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
                 ),
-                elevation: 0,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.primary.withOpacity(0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () async {
+                    final result = await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const PetProfileFormPage(),
+                      ),
+                    );
+
+                    if (result != null && mounted) {
+                      // 从表单页面返回的数据
+                      final petData = result as Map<String, dynamic>;
+
+                      // 更新主人昵称
+                      if (petData['owner_name'] != null &&
+                          widget.onProfileUpdate != null) {
+                        widget.onProfileUpdate!(petData['owner_name']);
+                      }
+
+                      // 计算年龄（根据出生日期）
+                      String age = '1岁0个月';
+                      if (petData['birth_date'] != null) {
+                        final birthDate = DateTime.tryParse(petData['birth_date']);
+                        if (birthDate != null) {
+                          final now = DateTime.now();
+                          int years = now.year - birthDate.year;
+                          int months = now.month - birthDate.month;
+                          // Adjust for month and day
+                          if (months < 0 ||
+                              (months == 0 && now.day < birthDate.day)) {
+                            years--;
+                            months += 12;
+                          }
+                          if (now.day < birthDate.day && months > 0) {
+                            months--;
+                          }
+                          age = '$years岁$months个月';
+                        }
+                      }
+
+                      // 创建Pet对象，包含所有表单字段
+                      final newPet = Pet(
+                        type: petData['type'] ?? '狗', // 宠物类型
+                        name: petData['name'] ?? '',
+                        age: age, // 根据出生日期计算
+                        gender: petData['gender'] ?? '哥哥',
+                        breed: petData['breed'] ?? '', // 品种
+                        avatar: petData['avatar'], // 头像路径
+                        birthDate: petData['birth_date']
+                            ?.toString()
+                            .split('T')[0], // 出生日期（只保留年月日）
+                        neuterStatus: petData['neuter_status'], // 绝育状态
+                        weight: petData['weight'] != null
+                            ? (petData['weight'] as num).toDouble()
+                            : null, // 体重
+                      );
+
+                      _addPet(newPet);
+                    }
+                  },
+                  borderRadius: BorderRadius.circular(12),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    child: Row(
+                      children: const [
+                        Icon(Icons.add, size: 18, color: Colors.white),
+                        SizedBox(width: 4),
+                        Text(
+                          '添加宠物',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -692,7 +545,7 @@ class _PetProfileSectionState extends State<PetProfileSection> {
                     );
                   },
                   separatorBuilder: (context, index) =>
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 16),
                 ),
               ),
       ],
@@ -762,115 +615,174 @@ class _PetProfileCardState extends State<PetProfileCard>
           scale: _scaleAnimation.value,
           child: Container(
             decoration: BoxDecoration(
-              color: AppColors.cardBackground,
-              borderRadius: BorderRadius.circular(12),
-              // 🎨 美学升级：多层阴影效果
+              borderRadius: BorderRadius.circular(24),
               boxShadow: [
-                // 第一层：接触阴影
                 BoxShadow(
-                  offset: const Offset(0, 2),
-                  blurRadius: 4.0,
-                  color: Colors.black.withOpacity(0.04),
-                ),
-                // 第二层：弥散光晕
-                BoxShadow(
-                  offset: const Offset(0, 12),
-                  blurRadius: 24.0,
-                  color: Colors.black.withOpacity(0.06),
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 20,
+                  offset: const Offset(0, 10),
                 ),
               ],
             ),
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTapDown: _onTapDown,
-                onTapUp: _onTapUp,
-                onTapCancel: _onTapCancel,
-                // 🎨 美学升级：添加 Material Design 水波纹效果，形状与卡片圆角保持一致
-                borderRadius: BorderRadius.circular(12),
-                // 🎨 增强水波纹效果：更明显的颜色和扩散半径
-                splashColor: AppColors.primary.withOpacity(
-                  0.2,
-                ), // 增加不透明度从0.1到0.2
-                highlightColor: AppColors.primary.withOpacity(
-                  0.08,
-                ), // 增加不透明度从0.05到0.08
-                // 增加水波纹扩散半径
-                radius: 150,
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Row(
-                    children: [
-                      // 🎨 美学升级：根据宠物类型的主题色背景
-                      Container(
-                        width: 60,
-                        height: 60,
-                        decoration: BoxDecoration(
-                          color: AppColors.petTypeColors[widget.pet.type] ??
-                              AppColors.petTypeColors['其他'],
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: Image.network(
-                            'https://loremflickr.com/150/150/animal,${widget.pet.breed.toLowerCase()}',
-                            width: 60,
-                            height: 60,
-                            fit: BoxFit.cover,
-                            loadingBuilder: (context, child, progress) {
-                              return progress == null
-                                  ? child
-                                  : const Center(
-                                      child: CircularProgressIndicator(),
-                                    );
-                            },
-                            errorBuilder: (context, error, stackTrace) {
-                              return Container(
-                                width: 60,
-                                height: 60,
-                                decoration: BoxDecoration(
-                                  color: AppColors
-                                          .petTypeColors[widget.pet.type] ??
-                                      AppColors.petTypeColors['其他'],
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Icon(
-                                  Icons.pets,
-                                  color: AppColors.primary.withOpacity(0.6),
-                                  size: 28,
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(24),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.6),
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: Colors.white.withOpacity(0.6), width: 1),
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        Colors.white.withOpacity(0.8),
+                        Colors.white.withOpacity(0.4),
+                      ],
+                    ),
+                  ),
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTapDown: _onTapDown,
+                      onTapUp: _onTapUp,
+                      onTapCancel: _onTapCancel,
+                      borderRadius: BorderRadius.circular(24),
+                      splashColor: AppColors.primary.withOpacity(0.1),
+                      highlightColor: AppColors.primary.withOpacity(0.05),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Row(
                           children: [
-                            // 🎨 美学升级：宠物名字用品牌主色并加粗
-                            Text(
-                              widget.pet.name,
-                              style: AppStyles.petName.copyWith(
-                                color: AppColors.primary,
-                                fontWeight: FontWeight.bold,
+                            // 宠物头像
+                            Hero(
+                              tag: 'pet_avatar_${widget.pet.id}',
+                              child: Container(
+                                width: 80,
+                                height: 80,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(20),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.1),
+                                      blurRadius: 10,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ],
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(20),
+                                  child: widget.pet.avatar != null && widget.pet.avatar!.isNotEmpty
+                                      ? Image.network(
+                                          widget.pet.avatar!,
+                                          width: 80,
+                                          height: 80,
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (context, error, stackTrace) {
+                                            return Container(
+                                              color: AppColors.petTypeColors[widget.pet.type] ??
+                                                  AppColors.petTypeColors['其他'],
+                                              child: Icon(
+                                                Icons.pets,
+                                                color: Colors.white.withOpacity(0.8),
+                                                size: 30,
+                                              ),
+                                            );
+                                          },
+                                        )
+                                      : Container(
+                                          color: AppColors.petTypeColors[widget.pet.type] ??
+                                              AppColors.petTypeColors['其他'],
+                                          child: Icon(
+                                            Icons.pets,
+                                            color: Colors.white.withOpacity(0.8),
+                                            size: 30,
+                                          ),
+                                        ),
+                                ),
                               ),
                             ),
-                            const SizedBox(height: 4),
-                            Text(
-                              '${widget.pet.age} | ${widget.pet.gender} | ${widget.pet.breed}',
-                              style: AppStyles.petDetails,
+                            const SizedBox(width: 16),
+                            // 宠物信息
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    widget.pet.name,
+                                    style: const TextStyle(
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppColors.primaryText,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Row(
+                                    children: [
+                                      Text(
+                                        widget.pet.age,
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          color: AppColors.secondaryText.withOpacity(0.8),
+                                        ),
+                                      ),
+                                      Padding(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                                        child: Container(
+                                          width: 1,
+                                          height: 12,
+                                          color: AppColors.secondaryText.withOpacity(0.3),
+                                        ),
+                                      ),
+                                      Text(
+                                        widget.pet.gender,
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          color: AppColors.secondaryText.withOpacity(0.8),
+                                        ),
+                                      ),
+                                      Padding(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                                        child: Container(
+                                          width: 1,
+                                          height: 12,
+                                          color: AppColors.secondaryText.withOpacity(0.3),
+                                        ),
+                                      ),
+                                      Expanded(
+                                        child: Text(
+                                          widget.pet.breed,
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            color: AppColors.secondaryText.withOpacity(0.8),
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                            // 箭头图标
+                            Container(
+                              width: 32,
+                              height: 32,
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.5),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.chevron_right_rounded,
+                                color: AppColors.secondaryText,
+                                size: 20,
+                              ),
                             ),
                           ],
                         ),
                       ),
-                      const Icon(
-                        Icons.arrow_forward_ios,
-                        size: 16,
-                        color: AppColors.secondaryText,
-                      ),
-                    ],
+                    ),
                   ),
                 ),
               ),
@@ -902,86 +814,6 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage> {
   void initState() {
     super.initState();
     _currentPet = widget.pet;
-  }
-
-  /// 删除宠物
-  Future<void> _deletePet(BuildContext context) async {
-    // 显示确认对话框
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('确认删除'),
-          content: Text('确定要删除 ${_currentPet.name} 的档案吗？此操作不可恢复。'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('取消'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              style: TextButton.styleFrom(
-                foregroundColor: Colors.red,
-              ),
-              child: const Text('删除'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (confirmed != true) {
-      return; // 用户取消删除
-    }
-
-    // 执行删除操作
-    try {
-      final success = await _supabaseService.deletePet(_currentPet.id!);
-      
-      if (success) {
-        // 标记数据已变更
-        DataChangeNotifier.markPetDataChanged();
-        
-        if (mounted) {
-          // 先显示成功提示
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('宠物档案已删除'),
-              backgroundColor: Colors.green,
-              duration: Duration(seconds: 2),
-            ),
-          );
-          
-          // 延迟返回上一页，避免 Navigator 锁定错误
-          await Future.delayed(const Duration(milliseconds: 100));
-          
-          if (mounted) {
-            // 返回 null 表示已删除，而不是返回 Pet 对象
-            Navigator.of(context).pop(null);
-          }
-        }
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('删除失败，请检查网络连接'),
-              backgroundColor: Colors.red,
-              duration: Duration(seconds: 3),
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('删除失败: $e'),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 3),
-          ),
-        );
-      }
-    }
   }
 
   Widget _buildInfoCard(String label, String value) {
@@ -1061,10 +893,6 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage> {
           ),
           actions: [
             IconButton(
-              icon: const Icon(Icons.delete_outline, color: Colors.red),
-              onPressed: () => _deletePet(context),
-            ),
-            IconButton(
               icon: const Icon(Icons.edit, color: AppColors.primary),
               onPressed: () async {
                 final initialData = {
@@ -1081,8 +909,9 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage> {
                 final result = await Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) =>
-                        PetProfileFormPage(initialData: initialData),
+                    builder:
+                        (context) =>
+                            PetProfileFormPage(initialData: initialData),
                   ),
                 );
 
@@ -1095,16 +924,11 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage> {
                       final now = DateTime.now();
                       int years = now.year - birthDate.year;
                       int months = now.month - birthDate.month;
-                      // Adjust for month and day
-                      if (months < 0 ||
-                          (months == 0 && now.day < birthDate.day)) {
+                      if (months < 0) {
                         years--;
                         months += 12;
                       }
-                      if (now.day < birthDate.day && months > 0) {
-                        months--;
-                      }
-                      age = '${years}岁${months}个月';
+                      age = '$years岁$months个月';
                     } catch (e) {
                       debugPrint('Error calculating age: $e');
                     }
@@ -1130,11 +954,7 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage> {
                     if (!success) {
                       if (mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('保存失败，请检查网络连接'),
-                            backgroundColor: Colors.red,
-                            duration: Duration(seconds: 3),
-                          ),
+                          const SnackBar(content: Text('更新失败，请检查网络连接')),
                         );
                       }
                       return;
@@ -1142,8 +962,6 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage> {
                     setState(() {
                       _currentPet = updatedPet;
                     });
-                    // 标记数据已变更
-                    DataChangeNotifier.markPetDataChanged();
                     if (mounted) {
                       ScaffoldMessenger.of(
                         context,
@@ -1153,11 +971,7 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage> {
                     if (mounted) {
                       ScaffoldMessenger.of(
                         context,
-                      ).showSnackBar(const SnackBar(
-                        content: Text('保存失败，请检查网络连接'),
-                        backgroundColor: Colors.red,
-                        duration: Duration(seconds: 3),
-                      ));
+                      ).showSnackBar(const SnackBar(content: Text('更新失败，请重试')));
                     }
                   }
                 }

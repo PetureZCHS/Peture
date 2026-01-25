@@ -25,7 +25,7 @@ class _PetDiaryGeneratingPageState extends State<PetDiaryGeneratingPage>
   String _aiGeneratedContent = '';
   late AnimationController _cursorAnimationController; // 光标闪烁动画
   late AnimationController _loadingAnimationController; // 加载旋转动画
-  bool _isGenerating = true; // 是否正在生成
+  final bool _isGenerating = true; // 是否正在生成
 
   @override
   void initState() {
