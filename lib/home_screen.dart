@@ -4,7 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/physics.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
-import 'package:my_pet/pages/image_generation/preparation_page.dart';
+import 'package:my_pet/pages/image_generation/preparation_page.dart'
+    hide AppColors;
 // import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
 
 // --- 您的页面引用 (保持不变) ---
