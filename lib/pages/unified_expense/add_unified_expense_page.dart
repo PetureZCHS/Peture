@@ -31,6 +31,9 @@ class _AddUnifiedExpensePageState extends State<AddUnifiedExpensePage> {
   // Note
   final TextEditingController _noteController = TextEditingController();
   
+  // Custom Categories
+  List<UnifiedExpenseCategory> _customCategories = [];
+  
   // Recurring Extra Fields
   final TextEditingController _itemNameController = TextEditingController();
   DateTime? _estimatedEndDate;
@@ -428,17 +431,25 @@ class _AddUnifiedExpensePageState extends State<AddUnifiedExpensePage> {
   }
 
   Widget _buildCategoryGrid(List<UnifiedExpenseCategory> categories) {
+    // 合并默认分类和自定义分类
+    final allCategories = [...categories, ..._customCategories.where((c) => c.expenseType == _selectedExpenseType)];
+    
     return GridView.builder(
       padding: const EdgeInsets.all(20),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 5,
-        mainAxisSpacing: 16,
-        crossAxisSpacing: 16,
-        childAspectRatio: 0.8,
+        mainAxisSpacing: 12,
+        crossAxisSpacing: 12,
+        childAspectRatio: 0.7,
       ),
-      itemCount: categories.length,
+      itemCount: allCategories.length + 1, // +1 for add button
       itemBuilder: (context, index) {
-        final cat = categories[index];
+        // 最后一个是添加按钮
+        if (index == allCategories.length) {
+          return _buildAddCategoryButton();
+        }
+        
+        final cat = allCategories[index];
         final isSelected = _selectedCategory?.name == cat.name;
         return GestureDetector(
           onTap: () => setState(() => _selectedCategory = cat),
@@ -457,19 +468,162 @@ class _AddUnifiedExpensePageState extends State<AddUnifiedExpensePage> {
                   size: 24,
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 6),
               Text(
                 cat.name,
                 style: TextStyle(
-                  fontSize: 12,
+                  fontSize: 11,
                   color: isSelected ? Color(cat.color) : const Color(0xFF8E8E93),
                   fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
                 ),
-                maxLines: 1,
+                maxLines: 2,
                 overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
               ),
             ],
           ),
+        );
+      },
+    );
+  }
+
+  Widget _buildAddCategoryButton() {
+    return GestureDetector(
+      onTap: _showAddCategoryDialog,
+      child: Column(
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: const Color(0xFFF2F2F7),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFFE5E5EA), width: 1),
+            ),
+            child: const Icon(
+              Icons.add,
+              color: Color(0xFF8E8E93),
+              size: 24,
+            ),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            '添加',
+            style: TextStyle(
+              fontSize: 11,
+              color: Color(0xFF8E8E93),
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAddCategoryDialog() {
+    final nameController = TextEditingController();
+    int selectedColor = 0xFF4FC3F7;
+    int selectedIcon = Icons.category.codePoint;
+    
+    final colors = [
+      0xFFFF8A65, 0xFF4FC3F7, 0xFFF06292, 0xFFBA68C8,
+      0xFFFFD54F, 0xFF81C784, 0xFF9575CD, 0xFFA1887F,
+    ];
+    
+    final icons = [
+      Icons.category, Icons.pets, Icons.favorite, Icons.star,
+      Icons.home, Icons.shopping_cart, Icons.local_cafe, Icons.sports_esports,
+    ];
+    
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('添加分类'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  TextField(
+                    controller: nameController,
+                    autofocus: true,
+                    decoration: const InputDecoration(
+                      hintText: '分类名称',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text('选择颜色', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    children: colors.map((color) {
+                      final isSelected = selectedColor == color;
+                      return GestureDetector(
+                        onTap: () => setDialogState(() => selectedColor = color),
+                        child: Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            color: Color(color),
+                            shape: BoxShape.circle,
+                            border: isSelected ? Border.all(color: Colors.black, width: 2) : null,
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text('选择图标', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    children: icons.map((icon) {
+                      final isSelected = selectedIcon == icon.codePoint;
+                      return GestureDetector(
+                        onTap: () => setDialogState(() => selectedIcon = icon.codePoint),
+                        child: Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: isSelected ? Color(selectedColor) : const Color(0xFFF2F2F7),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Icon(icon, color: isSelected ? Colors.white : Color(selectedColor), size: 20),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('取消'),
+                ),
+                TextButton(
+                  onPressed: () {
+                    if (nameController.text.trim().isNotEmpty) {
+                      final newCategory = UnifiedExpenseCategory(
+                        name: nameController.text.trim(),
+                        icon: selectedIcon,
+                        color: selectedColor,
+                        expenseType: _selectedExpenseType,
+                      );
+                      setState(() {
+                        _customCategories.add(newCategory);
+                        _selectedCategory = newCategory;
+                      });
+                      Navigator.pop(ctx);
+                    }
+                  },
+                  child: const Text('确定'),
+                ),
+              ],
+            );
+          },
         );
       },
     );
@@ -502,26 +656,6 @@ class _AddUnifiedExpensePageState extends State<AddUnifiedExpensePage> {
                   text: '默认账本',
                   onTap: () {}
                 ),
-                if (_selectedExpenseType == ExpenseTypeEnum.recurring) ...[
-                   const SizedBox(width: 8),
-                   GestureDetector(
-                     onTap: () {
-                         showDialog(context: context, builder: (c) => AlertDialog(
-                           title: const Text('物品名称'),
-                           content: TextField(
-                             controller: _itemNameController,
-                             decoration: const InputDecoration(hintText: '例如: 皇家猫粮10kg'),
-                           ),
-                           actions: [TextButton(onPressed: () => Navigator.pop(c), child: const Text('确定'))],
-                         ));
-                     },
-                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(color: const Color(0xFFF2F2F7), borderRadius: BorderRadius.circular(14)),
-                      child: Text(_itemNameController.text.isEmpty ? '输入物品名' : _itemNameController.text, style: const TextStyle(fontSize: 13, color: Color(0xFF1C1C1E))),
-                     ),
-                   )
-                ]
               ],
             ),
           ),

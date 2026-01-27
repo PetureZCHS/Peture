@@ -69,6 +69,9 @@ dependencies:
   
   # --- 图片缓存依赖 ---
   cached_network_image: ^3.4.0
+  
+  # --- 传感器依赖（摇晃检测）---
+  sensors_plus: ^6.1.1
 
   # 图片压缩
   flutter_image_compress: ^2.3.0
