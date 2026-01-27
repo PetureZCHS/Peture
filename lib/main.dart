@@ -1,13 +1,11 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:adaptive_theme/adaptive_theme.dart';
 import 'package:intl/date_symbol_data_local.dart'; // 添加 intl 包
 import 'package:flutter_localizations/flutter_localizations.dart'; // 添加本地化支持
 import 'package:supabase_flutter/supabase_flutter.dart'; // ✅ 添加 Supabase
 import 'login_page.dart'; // <-- 这是新添加的导入
 import 'home_screen.dart';
-import 'settings/theme_constants.dart';
 
 
 
@@ -101,21 +99,15 @@ class _RootRouterState extends State<RootRouter> {
 }
 
 class MyApp extends StatelessWidget {
-  final int currentThemeIndex;
-  final AdaptiveThemeMode initialThemeMode;
-
-  const MyApp({
-    super.key,
-    this.currentThemeIndex = 0,
-    this.initialThemeMode = AdaptiveThemeMode.light,
-  });
+  const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     double appBarTextFontSize = 20;
-    return AdaptiveTheme(
-      // --- 修改开始: 更新为新的浅色主题 ---
-      light: ThemeData(
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      title: '智宠合生',
+      theme: ThemeData(
         useMaterial3: true,
         brightness: Brightness.light,
         scaffoldBackgroundColor: const Color(0xFFF7F7F7), // 浅灰色背景
@@ -142,36 +134,19 @@ class MyApp extends StatelessWidget {
           ),
         ),
       ),
-      // --- 修改结束 ---
-      dark: ThemeData(
-        useMaterial3: true,
-        brightness: Brightness.dark,
-        colorSchemeSeed: ThemeConstants.themeColors[currentThemeIndex],
-        appBarTheme: AppBarTheme(
-          titleTextStyle: TextStyle(fontSize: appBarTextFontSize),
-        ),
-      ),
-      initial: initialThemeMode,
-      // debugShowFloatingThemeButton: true,
-      builder: (theme, darkTheme) => MaterialApp(
-        debugShowCheckedModeBanner: false,
-        title: '智宠合生',
-        theme: theme,
-        darkTheme: darkTheme,
-        // 添加本地化支持
-        localizationsDelegates: const [
-          GlobalMaterialLocalizations.delegate,
-          GlobalWidgetsLocalizations.delegate,
-          GlobalCupertinoLocalizations.delegate,
-        ],
-        supportedLocales: const [
-          Locale('zh', 'CN'), // 中文简体
-          Locale('en', 'US'), // 英文
-        ],
-        locale: const Locale('zh', 'CN'), // 默认使用中文
+      // 添加本地化支持
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: const [
+        Locale('zh', 'CN'), // 中文简体
+        Locale('en', 'US'), // 英文
+      ],
+      locale: const Locale('zh', 'CN'), // 默认使用中文
 
-        home: const HomeScreen(),
-      ),
+      home: const HomeScreen(),
     );
   }
 }
