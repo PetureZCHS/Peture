@@ -242,9 +242,8 @@ class SupabaseEdgeFunctionService {
         print('✅ 响应成功');
         final answer = data['answer']?.toString() ?? '';
         if (answer.isNotEmpty) {
-          final preview = answer.length > 50
-              ? '${answer.substring(0, 50)}...'
-              : answer;
+          final preview =
+              answer.length > 50 ? '${answer.substring(0, 50)}...' : answer;
           print('   answer: $preview');
         }
         print('   conversation_id: ${data['conversation_id']}');
@@ -301,40 +300,56 @@ class PetDiaryEdgeService {
   /// 参数说明：
   /// - query: 用户输入的原始内容（必填）
   /// - style: 日记风格（必填）
-  /// - userId: 用户标识（可选，默认为 'flutter_diary_user'）
+  /// - nickname: 宠物主人昵称（可选）
+  /// - breed: 宠物品种（可选）
   ///
   /// 返回一个流，包含 DiaryContentEvent、DiaryDoneEvent、DiaryErrorEvent
   Stream<DiaryStreamEvent> generatePetDiary({
     required String query,
     required String style,
-    String userId = 'flutter_diary_user',
+    String? nickname,
+    String? breed,
   }) async* {
     try {
-      // ✅ 根据 Dify Workflow API 文档构建请求体
-      // inputs 对象包含 query 和 style
-      final body = {
-        'inputs': {'query': query, 'style': style},
-        'response_mode': 'streaming',
-        'user': userId, // ⚠️ 注意:Edge Function 使用 user 参数
+      // ✅ 获取当前用户的 Session Token
+      final session = supabase.auth.currentSession;
+      if (session == null) {
+        yield DiaryErrorEvent('用户未登录，请先登录');
+        return;
+      }
+
+      final accessToken = session.accessToken;
+
+      // ✅ 根据 diary-v3 Edge Function 要求构建请求体
+      final inputs = {
+        'query': query,
+        'style': style,
+        if (nickname != null) 'nickname': nickname,
+        if (breed != null) 'breed': breed,
       };
 
-      print('📝 调用 Diary Edge Function');
+      final body = {
+        'inputs': inputs,
+        'response_mode': 'streaming',
+      };
+
+      print('📝 调用 Diary-v3 Edge Function');
       print('📦 参数:');
       print(
         '   - inputs.query: ${query.substring(0, 30.clamp(0, query.length))}...',
       );
       print('   - inputs.style: $style');
+      if (nickname != null) print('   - inputs.nickname: $nickname');
+      if (breed != null) print('   - inputs.breed: $breed');
       print('   - response_mode: streaming');
-      print('   - user: $userId');
 
       final url = Uri.parse(SupabaseConstants.diaryUrl);
 
-      // 构建 HTTP 请求
+      // ✅ 使用用户的 JWT Token 而不是 Anon Key
       final request = http.Request('POST', url)
         ..headers.addAll({
           'Content-Type': 'application/json',
-          'apikey': SupabaseConstants.anonKey,
-          'Authorization': 'Bearer ${SupabaseConstants.anonKey}',
+          'Authorization': 'Bearer $accessToken', // ✅ 使用用户 Token
         })
         ..body = jsonEncode(body);
 
@@ -485,18 +500,33 @@ class PetDiaryEdgeService {
   Future<String?> generatePetDiaryBlocking({
     required String query,
     required String style,
-    String userId = 'flutter_diary_user',
+    String? nickname,
+    String? breed,
   }) async {
     try {
-      // ✅ 根据 Dify Workflow API 文档构建请求体
-      // inputs 对象包含 query 和 style
-      final body = {
-        'inputs': {'query': query, 'style': style},
-        'response_mode': 'blocking',
-        'user': userId, // ⚠️ 注意:Edge Function 使用 user 参数
+      // ✅ 获取当前用户的 Session Token
+      final session = supabase.auth.currentSession;
+      if (session == null) {
+        print('❌ 用户未登录');
+        return null;
+      }
+
+      final accessToken = session.accessToken;
+
+      // ✅ 根据 diary-v3 Edge Function 要求构建请求体
+      final inputs = {
+        'query': query,
+        'style': style,
+        if (nickname != null) 'nickname': nickname,
+        if (breed != null) 'breed': breed,
       };
 
-      print('📝 阻塞模式调用 Diary Edge Function');
+      final body = {
+        'inputs': inputs,
+        'response_mode': 'blocking',
+      };
+
+      print('📝 阻塞模式调用 Diary-v3 Edge Function');
       print('📦 请求体: ${jsonEncode(body)}');
 
       final url = Uri.parse(SupabaseConstants.diaryUrl);
@@ -504,8 +534,7 @@ class PetDiaryEdgeService {
         url,
         headers: {
           'Content-Type': 'application/json',
-          'apikey': SupabaseConstants.anonKey,
-          'Authorization': 'Bearer ${SupabaseConstants.anonKey}',
+          'Authorization': 'Bearer $accessToken', // ✅ 使用用户 Token
         },
         body: jsonEncode(body),
       );
@@ -516,21 +545,21 @@ class PetDiaryEdgeService {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
         print('✅ Diary 响应成功');
 
-        // 尝试从不同的可能字段中获取文本
-        final text =
-            data['text'] as String? ??
-            data['result'] as String? ??
-            data['output'] as String? ??
-            '';
-
-        if (text.isNotEmpty) {
-          final preview = text.length > 50
-              ? '${text.substring(0, 50)}...'
-              : text;
-          print('   生成文本: $preview');
+        // 从 Dify Workflow 响应中提取文本
+        String? text;
+        if (data['data'] != null && data['data']['outputs'] != null) {
+          text = data['data']['outputs']['text'] as String?;
         }
 
-        return text;
+        if (text != null && text.isNotEmpty) {
+          final preview =
+              text.length > 50 ? '${text.substring(0, 50)}...' : text;
+          print('   生成文本: $preview');
+          return text;
+        } else {
+          print('   ⚠️ 响应中未找到文本内容');
+          return null;
+        }
       } else {
         print('❌ 请求失败: ${response.body}');
         return null;

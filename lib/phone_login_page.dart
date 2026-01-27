@@ -197,9 +197,8 @@ class _PhoneLoginPageState extends State<PhoneLoginPage> {
                     width: 120,
                     height: 56,
                     child: ElevatedButton(
-                      onPressed: _countdown > 0 || _isLoading
-                          ? null
-                          : _requestSmsCode,
+                      onPressed:
+                          _countdown > 0 || _isLoading ? null : _requestSmsCode,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF5D5FEF),
                         foregroundColor: Colors.white,

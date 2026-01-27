@@ -25,7 +25,7 @@ class _PetDiaryGeneratingPageState extends State<PetDiaryGeneratingPage>
   String _aiGeneratedContent = '';
   late AnimationController _cursorAnimationController; // 光标闪烁动画
   late AnimationController _loadingAnimationController; // 加载旋转动画
-  bool _isGenerating = true; // 是否正在生成
+  final bool _isGenerating = true; // 是否正在生成
 
   @override
   void initState() {
@@ -60,7 +60,7 @@ class _PetDiaryGeneratingPageState extends State<PetDiaryGeneratingPage>
       final stream = widget.diaryService.generatePetDiary(
         query: widget.userInput,
         style: widget.style,
-        userId: 'pet_diary_user_${DateTime.now().millisecondsSinceEpoch}',
+        // nickname 和 breed 可以根据需要从用户数据中获取
       );
 
       // 监听流事件

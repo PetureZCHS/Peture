@@ -554,8 +554,9 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
                                                   fit: BoxFit.cover,
                                                   loadingBuilder: (context,
                                                       child, loadingProgress) {
-                                                    if (loadingProgress == null)
+                                                    if (loadingProgress == null) {
                                                       return child;
+                                                    }
                                                     return Center(
                                                       child: SizedBox(
                                                         width: 16,
@@ -692,10 +693,10 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
                                             ),
                                           ),
                                         );
-                                      }).toList(),
+                                      }),
                                     ],
                                   );
-                                }).toList(),
+                                }),
                                 const SizedBox(height: 40),
                               ],
                             ),
@@ -947,7 +948,7 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
                                 .map(
                                   (year) => Center(
                                     child: Text(
-                                      '${year}年',
+                                      '$year年',
                                       style: const TextStyle(
                                         fontSize: 20,
                                         fontWeight: FontWeight.w500,
@@ -1030,7 +1031,7 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
                                 .map(
                                   (day) => Center(
                                     child: Text(
-                                      '${day}日',
+                                      '$day日',
                                       style: const TextStyle(
                                         fontSize: 20,
                                         fontWeight: FontWeight.w500,

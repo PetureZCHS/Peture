@@ -18,23 +18,28 @@ class PartnerFitTrainingPage extends StatefulWidget {
 }
 
 class _PartnerFitTrainingPageState extends State<PartnerFitTrainingPage>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   int currentActionIndex = 0;
   int remainingSeconds = 0;
-  Timer? countdownTimer;
   bool isPaused = false;
-  
-  // 实际运动时长（正计时）
+
+  // 动画控制 (来自 Develop 分支)
+  late AnimationController _animationController;
+  late Animation<double> _progressAnimation;
+  DateTime? _startTime;
+  Duration? _remainingDuration;
+  double? _pausedAnimationValue;
+
+  // 实际运动时长（正计时 - 来自当前分支）
   int actualDurationSeconds = 0;
   Timer? actualDurationTimer;
-  DateTime? workoutStartTime;
   
-  // 音效相关
+  // 音效相关 (来自当前分支)
   final AudioPlayer _tickSoundPlayer = AudioPlayer();
   bool _tickSoundEnabled = true;
   static const String _tickSoundEnabledKey = 'partner_fit_tick_sound_enabled';
   
-  // 鼓励文字动画（致敬 Keep）
+  // 鼓励文字动画（致敬 Keep - 来自当前分支）
   late AnimationController _encouragementController;
   late Animation<double> _encouragementFadeAnimation;
   String? _encouragementText;
@@ -51,7 +56,8 @@ class _PartnerFitTrainingPageState extends State<PartnerFitTrainingPage>
   @override
   void initState() {
     super.initState();
-    // 初始化鼓励文字动画
+    
+    // 初始化鼓励文字动画控制器
     _encouragementController = AnimationController(
       duration: const Duration(milliseconds: 1500),
       vsync: this,
@@ -63,18 +69,60 @@ class _PartnerFitTrainingPageState extends State<PartnerFitTrainingPage>
       parent: _encouragementController,
       curve: Curves.easeOut,
     ));
-    
+
+    // 初始化倒计时动画控制器 (Develop 特性)
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 1), // 初始值，会在_startAction中更新
+    );
+
+    _progressAnimation = Tween<double>(
+      begin: 1.0,
+      end: 0.0,
+    ).animate(_animationController)
+      ..addListener(() {
+        if (mounted) {
+          setState(() {
+            // 动画更新时重新计算剩余时间
+            if (_remainingDuration != null && _startTime != null) {
+              final elapsed = DateTime.now().difference(_startTime!);
+              final totalDuration = _remainingDuration!;
+              if (elapsed < totalDuration) {
+                final newRemainingSeconds = (totalDuration - elapsed).inSeconds;
+                
+                // 只有当秒数发生变化时才执行特定逻辑
+                if (newRemainingSeconds != remainingSeconds) {
+                  remainingSeconds = newRemainingSeconds;
+                  // 播放嘀嗒音效 (当前分支特性)
+                  if (remainingSeconds > 0 && _tickSoundEnabled) {
+                    _playTickSound();
+                  }
+                }
+              } else {
+                remainingSeconds = 0;
+              }
+            }
+          });
+        }
+      })
+      ..addStatusListener((status) {
+        if (status == AnimationStatus.completed) {
+          // 动作完成
+          _handleActionComplete();
+        }
+      });
+
     _loadTickSoundSetting();
-    _startWorkout();
+    _startWorkout(); // 开始实际时长计时
     _startAction();
   }
 
   @override
   void dispose() {
-    countdownTimer?.cancel();
     actualDurationTimer?.cancel();
-    _tickSoundPlayer.dispose();
+    _animationController.dispose();
     _encouragementController.dispose();
+    _tickSoundPlayer.dispose();
     super.dispose();
   }
 
@@ -82,17 +130,31 @@ class _PartnerFitTrainingPageState extends State<PartnerFitTrainingPage>
   Future<void> _loadTickSoundSetting() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      setState(() {
-        _tickSoundEnabled = prefs.getBool(_tickSoundEnabledKey) ?? true;
-      });
+      if (mounted) {
+        setState(() {
+          _tickSoundEnabled = prefs.getBool(_tickSoundEnabledKey) ?? true;
+        });
+      }
     } catch (e) {
       debugPrint('加载音效设置失败: $e');
     }
   }
 
+  /// 播放嘀嗒音效
+  Future<void> _playTickSound() async {
+    try {
+      // 使用系统提示音
+      await SystemSound.play(SystemSoundType.click);
+      // 配合触觉反馈
+      await HapticFeedback.selectionClick();
+    } catch (e) {
+      debugPrint('播放嘀嗒音效失败: $e');
+    }
+  }
+
   /// 开始训练（启动实际运动时长计时）
   void _startWorkout() {
-    workoutStartTime = DateTime.now();
+    actualDurationTimer?.cancel();
     actualDurationTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!isPaused && mounted) {
         setState(() {
@@ -109,33 +171,39 @@ class _PartnerFitTrainingPageState extends State<PartnerFitTrainingPage>
       isPaused = false;
     });
 
-    countdownTimer?.cancel();
-    countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (!isPaused) {
-        setState(() {
-          if (remainingSeconds > 0) {
-            remainingSeconds--;
-            // 播放嘀嗒音效
-            if (_tickSoundEnabled) {
-              _playTickSound();
-            }
-          } else {
-            timer.cancel();
-            // 动作完成时显示鼓励文字
-            _showEncouragement();
-            // 延迟一下再切换到下一个动作，让用户看到鼓励文字
-            Future.delayed(const Duration(milliseconds: 500), () {
-              if (mounted) {
-                _nextAction();
-              }
-            });
-          }
-        });
+    // 这里不再使用 Timer (Develop 分支改用了 AnimationController)
+    
+    // 设置动画控制器持续时间 (Develop 逻辑)
+    _animationController.duration = Duration(seconds: action.durationSeconds);
+    _remainingDuration = Duration(seconds: action.durationSeconds);
+    _startTime = DateTime.now();
+    _pausedAnimationValue = null; // 重置暂停值
+
+    // 重新创建从1.0到0.0的动画
+    _progressAnimation = Tween<double>(
+      begin: 1.0,
+      end: 0.0,
+    ).animate(_animationController);
+
+    // 重置动画并开始
+    _animationController.reset();
+    _animationController.forward();
+  }
+
+  void _handleActionComplete() {
+    // 动作完成时显示鼓励文字 (当前分支特性)
+    _showEncouragement();
+    
+    // 延迟一下再切换到下一个动作，让用户看到鼓励文字
+    Future.delayed(const Duration(milliseconds: 500), () {
+      if (mounted) {
+        _nextAction();
       }
     });
   }
 
   void _nextAction() {
+    _animationController.stop();
     if (currentActionIndex < widget.course.actions.length - 1) {
       setState(() {
         currentActionIndex++;
@@ -146,12 +214,24 @@ class _PartnerFitTrainingPageState extends State<PartnerFitTrainingPage>
       _completeWorkout();
     }
   }
-  
+
+  void _previousAction() {
+    _animationController.stop();
+    if (currentActionIndex > 0) {
+      setState(() {
+        currentActionIndex--;
+      });
+      _startAction();
+    }
+  }
+
   /// 显示鼓励文字（致敬 Keep 风格）
   void _showEncouragement() {
-    _encouragementText = _encouragementTexts[
-      (currentActionIndex % _encouragementTexts.length)
-    ];
+    setState(() {
+      _encouragementText = _encouragementTexts[
+        (currentActionIndex % _encouragementTexts.length)
+      ];
+    });
     _encouragementController.reset();
     _encouragementController.forward().then((_) {
       Future.delayed(const Duration(milliseconds: 800), () {
@@ -162,42 +242,45 @@ class _PartnerFitTrainingPageState extends State<PartnerFitTrainingPage>
     });
   }
 
-  void _previousAction() {
-    if (currentActionIndex > 0) {
-      setState(() {
-        currentActionIndex--;
-      });
-      _startAction();
-    }
-  }
-
   void _togglePause() {
     setState(() {
       isPaused = !isPaused;
     });
-  }
 
-  /// 播放嘀嗒音效
-  Future<void> _playTickSound() async {
-    if (!_tickSoundEnabled) return;
-    try {
-      // 使用系统提示音（轻量级，无需额外音频文件）
-      SystemSound.play(SystemSoundType.click);
-      // 配合触觉反馈增强体验
-      HapticFeedback.selectionClick();
-    } catch (e) {
-      debugPrint('播放嘀嗒音效失败: $e');
+    if (isPaused) {
+      // 暂停时停止动画并保存剩余时间和当前动画值 (Develop 逻辑)
+      _animationController.stop();
+      _pausedAnimationValue = _progressAnimation.value;
+      if (_startTime != null && _remainingDuration != null) {
+        final elapsed = DateTime.now().difference(_startTime!);
+        _remainingDuration = _remainingDuration! - elapsed;
+      }
+    } else {
+      // 继续时从暂停位置重新开始动画 (Develop 逻辑)
+      if (_remainingDuration != null && _remainingDuration!.inSeconds > 0 && _pausedAnimationValue != null) {
+        _animationController.duration = _remainingDuration;
+        _startTime = DateTime.now();
+
+        // 从暂停时的位置开始动画
+        _progressAnimation = Tween<double>(
+          begin: _pausedAnimationValue,
+          end: 0.0,
+        ).animate(_animationController);
+
+        _animationController.reset();
+        _animationController.forward();
+      }
     }
   }
 
   Future<void> _completeWorkout() async {
-    countdownTimer?.cancel();
+    _animationController.stop();
     actualDurationTimer?.cancel();
 
-    // 计算实际运动时长（分钟）
+    // 计算实际运动时长（分钟）(当前分支特性)
     final actualDurationMinutes = (actualDurationSeconds / 60).ceil();
 
-    // 保存训练记录（使用实际运动时长）
+    // 保存训练记录
     final record = FitnessRecord(
       courseId: widget.course.id,
       courseName: widget.course.name,
@@ -208,10 +291,10 @@ class _PartnerFitTrainingPageState extends State<PartnerFitTrainingPage>
     );
 
     final supabaseService = SupabaseService();
+    // 可能需要检查网络或本地存储，这里沿用现有逻辑
     final result = await supabaseService.insertFitnessRecord(record.toMap());
     
     if (result == null) {
-      // 保存失败，显示错误提示
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -235,14 +318,11 @@ class _PartnerFitTrainingPageState extends State<PartnerFitTrainingPage>
     }
   }
 
-  /// 格式化时间显示（使用等宽字体，小于100秒时仅显示秒数）
+  /// 格式化时间显示 (当前分支特性：等宽字体适配)
   String _formatTime(int seconds) {
-    // 如果小于100秒，仅显示秒数
     if (seconds < 100) {
       return seconds.toString();
     }
-    
-    // 大于等于100秒，显示 MM:SS 格式
     final mins = seconds ~/ 60;
     final secs = seconds % 60;
     return '${mins.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
@@ -324,12 +404,12 @@ class _PartnerFitTrainingPageState extends State<PartnerFitTrainingPage>
                       child: Stack(
                         alignment: Alignment.center,
                         children: [
-                          // 进度圆环
+                          // 进度圆环 (使用 Develop 的 _progressAnimation)
                           SizedBox(
                             width: 220,
                             height: 220,
                             child: CircularProgressIndicator(
-                              value: remainingSeconds / action.durationSeconds,
+                              value: _progressAnimation.value,
                               strokeWidth: 12,
                               backgroundColor: const Color(0xFFF0F2F5),
                               valueColor: const AlwaysStoppedAnimation<Color>(
@@ -348,7 +428,7 @@ class _PartnerFitTrainingPageState extends State<PartnerFitTrainingPage>
                                   fontWeight: FontWeight.w700,
                                   color: Color(0xFF1E1E1E),
                                   letterSpacing: 2,
-                                  fontFamily: 'monospace', // 等宽字体，避免冒号抖动
+                                  fontFamily: 'monospace', // 当前分支特性：等宽字体
                                 ),
                               ),
                               Text(
@@ -361,7 +441,7 @@ class _PartnerFitTrainingPageState extends State<PartnerFitTrainingPage>
                                 ),
                               ),
                               const SizedBox(height: 8),
-                              // 实际运动时长
+                              // 实际运动时长 (当前分支特性)
                               Text(
                                 '实际运动时长：${_formatActualDuration(actualDurationSeconds)}',
                                 style: const TextStyle(
@@ -389,15 +469,16 @@ class _PartnerFitTrainingPageState extends State<PartnerFitTrainingPage>
                       ),
                       textAlign: TextAlign.center,
                     ),
-
+                    
                     const SizedBox(height: 16),
                     
-                    // 鼓励文字（致敬 Keep）
+                    // 鼓励文字（致敬 Keep - 来自当前分支）
                     AnimatedBuilder(
                       animation: _encouragementFadeAnimation,
                       builder: (context, child) {
+                        // 确保动画在不可见时不占位
                         if (_encouragementText == null || _encouragementFadeAnimation.value == 0) {
-                          return const SizedBox.shrink();
+                          return const SizedBox.shrink(); 
                         }
                         return Opacity(
                           opacity: _encouragementFadeAnimation.value,
@@ -532,7 +613,7 @@ class _PartnerFitTrainingPageState extends State<PartnerFitTrainingPage>
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // 音效开关
+                   // 音效开关 (当前分支特性)
                   IconButton(
                     onPressed: () async {
                       setState(() {
@@ -554,7 +635,6 @@ class _PartnerFitTrainingPageState extends State<PartnerFitTrainingPage>
                     constraints: const BoxConstraints(),
                   ),
                   const SizedBox(height: 12),
-                  // 控制按钮
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
@@ -599,7 +679,7 @@ class _PartnerFitTrainingPageState extends State<PartnerFitTrainingPage>
                     ],
                   ),
                   const SizedBox(height: 8),
-                  // 致敬 Keep 的小标签
+                  // 致敬 Keep 的小标签 (当前分支特性)
                   Text(
                     'Inspired by Keep',
                     style: TextStyle(

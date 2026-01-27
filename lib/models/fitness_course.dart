@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 /// 健身课程模型
 class FitnessCourse {
   final String id;
@@ -49,6 +51,86 @@ class FitnessCourse {
         return '通用';
     }
   }
+
+  // 新增：JSON序列化（用于缓存）
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'description': description,
+      'durationMinutes': durationMinutes,
+      'intensity': intensity,
+      'petType': petType,
+      'caloriesEstimate': caloriesEstimate,
+      'petCaloriesEstimate': petCaloriesEstimate,
+      'iconEmoji': iconEmoji,
+      'tags': tags,
+      'actions': actions.map((action) => action.toJson()).toList(),
+    };
+  }
+
+  factory FitnessCourse.fromJson(Map<String, dynamic> json) {
+    // 数据验证和默认值处理
+    return FitnessCourse(
+      id: json['id'] as String? ?? '',
+      name: json['name'] as String? ?? '',
+      description: json['description'] as String? ?? '',
+      durationMinutes: (json['durationMinutes'] as num?)?.toInt() ?? 0,
+      intensity: json['intensity'] as String? ?? 'medium',
+      petType: json['petType'] as String? ?? 'dog',
+      caloriesEstimate: (json['caloriesEstimate'] as num?)?.toInt() ?? 0,
+      petCaloriesEstimate: (json['petCaloriesEstimate'] as num?)?.toInt() ?? 0,
+      iconEmoji: json['iconEmoji'] as String? ?? '🏃',
+      tags: json['tags'] != null 
+          ? List<String>.from(json['tags'] as List)
+          : [],
+      actions: json['actions'] != null
+          ? (json['actions'] as List)
+              .map((action) => FitnessAction.fromJson(action as Map<String, dynamic>))
+              .toList()
+          : [],
+    );
+  }
+
+  // 新增：从Supabase JSON创建对象
+  factory FitnessCourse.fromSupabaseJson(Map<String, dynamic> json) {
+    return FitnessCourse(
+      id: json['course_id'] as String? ?? '', // 注意：使用course_id作为id
+      name: json['name'] as String? ?? '',
+      description: json['description'] as String? ?? '',
+      durationMinutes: (json['duration_minutes'] as num?)?.toInt() ?? 0,
+      intensity: json['intensity'] as String? ?? 'medium',
+      petType: json['pet_type'] as String? ?? 'dog',
+      caloriesEstimate: (json['calories_estimate'] as num?)?.toInt() ?? 0,
+      petCaloriesEstimate: (json['pet_calories_estimate'] as num?)?.toInt() ?? 0,
+      iconEmoji: json['icon_emoji'] as String? ?? '🏃',
+      tags: json['tags'] != null 
+          ? List<String>.from(json['tags'] as List)
+          : [],
+      actions: (json['actions'] as List<dynamic>? ?? [])
+          .map((action) => FitnessAction.fromSupabaseJson(action as Map<String, dynamic>))
+          .toList(),
+    );
+  }
+
+  // 转换为Supabase格式
+  Map<String, dynamic> toSupabaseJson() {
+    return {
+      'course_id': id,
+      'name': name,
+      'description': description,
+      'duration_minutes': durationMinutes,
+      'intensity': intensity,
+      'pet_type': petType,
+      'calories_estimate': caloriesEstimate,
+      'pet_calories_estimate': petCaloriesEstimate,
+      'icon_emoji': iconEmoji,
+      'tags': tags,
+      'actions': actions.map((action) => action.toSupabaseJson()).toList(),
+      'is_active': true,
+      'sort_order': 0,
+    };
+  }
 }
 
 /// 健身动作模型
@@ -68,6 +150,53 @@ class FitnessAction {
     required this.benefit,
     required this.petBenefit,
   });
+
+  // 新增：JSON序列化
+  Map<String, dynamic> toJson() {
+    return {
+      'name': name,
+      'audioGuide': audioGuide,
+      'durationSeconds': durationSeconds,
+      'demonstration': demonstration,
+      'benefit': benefit,
+      'petBenefit': petBenefit,
+    };
+  }
+
+  factory FitnessAction.fromJson(Map<String, dynamic> json) {
+    // 数据验证和默认值处理
+    return FitnessAction(
+      name: json['name'] as String? ?? '',
+      audioGuide: json['audioGuide'] as String? ?? '',
+      durationSeconds: (json['durationSeconds'] as num?)?.toInt() ?? 0,
+      demonstration: json['demonstration'] as String? ?? '',
+      benefit: json['benefit'] as String? ?? '',
+      petBenefit: json['petBenefit'] as String? ?? '',
+    );
+  }
+
+  // 新增：Supabase JSON转换
+  factory FitnessAction.fromSupabaseJson(Map<String, dynamic> json) {
+    return FitnessAction(
+      name: json['name'] as String? ?? '',
+      audioGuide: json['audioGuide'] as String? ?? '',
+      durationSeconds: (json['durationSeconds'] as num?)?.toInt() ?? 0,
+      demonstration: json['demonstration'] as String? ?? '',
+      benefit: json['benefit'] as String? ?? '',
+      petBenefit: json['petBenefit'] as String? ?? '',
+    );
+  }
+
+  Map<String, dynamic> toSupabaseJson() {
+    return {
+      'name': name,
+      'audioGuide': audioGuide,
+      'durationSeconds': durationSeconds,
+      'demonstration': demonstration,
+      'benefit': benefit,
+      'petBenefit': petBenefit,
+    };
+  }
 }
 
 /// 健身记录模型
