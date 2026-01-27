@@ -24,7 +24,6 @@ import 'community_screen.dart';
 import 'medical_record_screen.dart';
 import 'profile_screen.dart';
 import 'pages/growth_log/growth_log_page.dart'; 
-import 'widgets/weight_trend_card.dart';
 import 'utils/ui_helpers.dart';
  
 /// 搜索结果数据模型
@@ -78,7 +77,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   int _lastHapticIndex = 0;
 
   late AnimationController _tabController;
-  bool _isUniverseMode = false;
+  bool _showTimeline = false; // 原 _isUniverseMode，现改为时间线模式
 
   /// 用于通知 MedicalRecordScreen 刷新数据的通知器
   final ValueNotifier<int> _medicalScreenRefreshNotifier =
@@ -157,7 +156,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   void _toggleViewMode() {
     setState(() {
-      _isUniverseMode = !_isUniverseMode;
+      _showTimeline = !_showTimeline;
     });
     HapticFeedback.mediumImpact();
   }
@@ -177,8 +176,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           ),
         );
       },
-      child: _isUniverseMode
-          ? const _HomeUniverseContent(key: ValueKey('universe'))
+      child: _showTimeline
+          ? const _HomeUniverseContent(key: ValueKey('timeline')) // 重用这个类名，虽然现在是 timeline
           : const _HomeDashboardContent(key: ValueKey('dashboard')),
     );
 
@@ -221,9 +220,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                             color: Colors.white.withOpacity(0.8), width: 1),
                       ),
                       child: Icon(
-                          _isUniverseMode
+                          _showTimeline
                               ? Icons.grid_view_rounded
-                              : Icons.hub_rounded,
+                              : Icons.timeline_rounded, // 切换图标为时间线
                           color: AppColors.textDark,
                           size: 22),
                     ),
@@ -598,6 +597,9 @@ class _HomeDashboardContentState extends State<_HomeDashboardContent> {
 
     return Stack(
       children: [ 
+        // 背景光弥散效果
+        const _AmbientBackground(),
+
         ListView(
       // [关键点1] 强制开启滚动物理效果，即使内容少也能滑动
       physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
@@ -615,15 +617,7 @@ class _HomeDashboardContentState extends State<_HomeDashboardContent> {
 
         const SizedBox(height: 16),
         
-        // 1.2 成长日志中枢
-        _buildGrowthLogCard(context),
 
-        const SizedBox(height: 16),
-
-        // 1.5 体重趋势卡片
-        const WeightTrendCard(),
-
-        const SizedBox(height: 16), 
 
         // 2. 功能网格
         LayoutBuilder(
@@ -907,105 +901,7 @@ class _HomeDashboardContentState extends State<_HomeDashboardContent> {
     );
   }
 
-  // 成长日志卡片
-  Widget _buildGrowthLogCard(BuildContext context) {
-    return GestureDetector(
-      onTap: () {
-        HapticFeedback.mediumImpact();
-        Navigator.of(context).push(CupertinoPageRoute(builder: (_) => const GrowthLogPage()));
-      },
-      child: Container(
-        height: 100, 
-        width: double.infinity,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(24),
-           boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 15, offset: const Offset(0, 8)),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(24),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-            child: Container(
-              decoration: BoxDecoration(
-                // 仿照 WeightTrendCard 的风格，但用清新的绿色调
-                color: Colors.white.withOpacity(0.65),
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: Colors.white.withOpacity(0.6), width: 1),
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft, end: Alignment.bottomRight,
-                  colors: [
-                    Colors.white.withOpacity(0.8),
-                    const Color(0xFFE0F2F1).withOpacity(0.4), // Light Teal
-                  ],
-                ),
-              ),
-              child: Stack(
-                  children: [
-                    Positioned(
-                      right: -10, bottom: -20,
-                      child: Opacity(
-                        opacity: 0.05,
-                        child: Icon(Icons.timeline_rounded, size: 140, color: Colors.teal),
-                      )
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 0), // centered cleanly
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFE0F2F1), // Light Teal bg
-                              shape: BoxShape.circle,
-                              border: Border.all(color: Colors.white, width: 2),
-                              boxShadow: [
-                                BoxShadow(color: Colors.teal.withOpacity(0.1), blurRadius: 8, offset: const Offset(0, 4)),
-                              ],
-                            ),
-                            child: const Icon(Icons.history_edu_rounded, color: Colors.teal, size: 26),
-                          ),
-                          const SizedBox(width: 16),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: const [
-                              Text(
-                                "成长日志",
-                                style: TextStyle(
-                                  fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.textDark
-                                ),
-                              ),
-                              SizedBox(height: 4),
-                              Text(
-                                "记录每一个重要时刻",
-                                style: TextStyle(
-                                  fontSize: 13, color: AppColors.secondaryText
-                                ),
-                              ),
-                            ],
-                          ),
-                          const Spacer(),
-                          Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.5),
-                              shape: BoxShape.circle
-                            ),
-                            child: const Icon(Icons.arrow_forward_rounded, size: 18, color: Colors.teal),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ]
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+
 
   // --- 小卡片 ---
   Widget _buildFeatureCard(double width, String title, String subtitle,
@@ -1105,7 +1001,9 @@ class _HomeDashboardContentState extends State<_HomeDashboardContent> {
 }
 
 // =========================================================
-// 4. 模式 B: 沉浸式星球主页
+
+// =========================================================
+// 4. 模式 B: 成长日志时间线
 // =========================================================
 
 class _HomeUniverseContent extends StatelessWidget {
@@ -1113,7 +1011,6 @@ class _HomeUniverseContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final double screenWidth = MediaQuery.of(context).size.width;
 
     return GestureDetector(
       onTap: () {
@@ -1123,64 +1020,100 @@ class _HomeUniverseContent extends StatelessWidget {
         fit: StackFit.expand,
         alignment: Alignment.center,
         children: [
-          Center(
-            child: HolographicSphereMenu(
-              radius: screenWidth * 0.38,
-              items: [
-                SphereItemData(
-                    title: 'AI 问诊',
-                    icon: Icons.medical_services_rounded,
-                    gradient: AppColors.warmGradient,
-                    page: const ChatPageWithDatabase()),
-                SphereItemData(
-                    title: '电子档案',
-                    icon: Icons.badge_rounded,
-                    gradient: AppColors.coolGradient,
-                    page: const PetPassportPage()),
-                SphereItemData(
-                    title: '成长日记',
-                    icon: Icons.menu_book_rounded,
-                    gradient: AppColors.natureGradient,
-                    page: const PetDiaryComposePage()),
-                SphereItemData(
-                    title: '活力健身',
-                    icon: Icons.directions_run_rounded,
-                    gradient: AppColors.oceanGradient,
-                    page: const PartnerFitGymPage()),
-                SphereItemData(
-                    title: '营养食谱',
-                    icon: Icons.restaurant_menu_rounded,
-                    gradient: AppColors.goldGradient,
-                    page: const PetRecipeListPage()),
-                SphereItemData(
-                    title: '训宠响片',
-                    icon: Icons.touch_app_rounded,
-                    gradient: AppColors.magicGradient,
-                    page: const DogClickerScreen()),
-                SphereItemData(
-                    title: '寻宠救援',
-                    icon: Icons.phonelink_ring_rounded,
-                    gradient: const LinearGradient(
-                        colors: [Color(0xFFFF416C), Color(0xFFFF4B2B)]),
-                    page: const LostPetRescuePage()),
-                SphereItemData(
-                    title: '社区话题',
-                    icon: Icons.explore_rounded,
-                    gradient: AppColors.warmGradient,
-                    page: const CommunityScreen()),
-                SphereItemData(
-                    title: '商城',
-                    icon: Icons.shopping_bag_rounded,
-                    gradient: AppColors.coolGradient,
-                    page: const PetShopPage()),
-                SphereItemData(
-                    title: '设置',
-                    icon: Icons.settings_rounded,
-                    gradient: const LinearGradient(
-                        colors: [Color(0xFF606c88), Color(0xFF3f4c6b)]),
-                    page: const ProfileScreen()),
-              ],
+             // 直接嵌入成长日志，并标记为 embedded
+             const GrowthLogPage(isEmbedded: true),
+        ],
+      ),
+    );
+  }
+}
+
+
+// =========================================================
+// 6. 光弥散背景组件
+// =========================================================
+
+class _AmbientBackground extends StatefulWidget {
+  const _AmbientBackground();
+
+  @override
+  State<_AmbientBackground> createState() => _AmbientBackgroundState();
+}
+
+class _AmbientBackgroundState extends State<_AmbientBackground>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 15),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        // 使用正弦波生成平滑的位移
+        final t = _controller.value;
+        
+        return Stack(
+          children: [
+            // 左上角 - 蓝青色光晕
+            Positioned(
+              top: -100 + 40 * math.sin(t * 2 * math.pi),
+              left: -80 + 30 * math.cos(t * 2 * math.pi),
+              child: _buildOrb(320, AppColors.orb1),
             ),
+            
+            // 右上方 - 紫色光晕
+            Positioned(
+              top: 80 + 50 * math.cos(t * 2 * math.pi),
+              right: -100 + 40 * math.sin(t * 2 * math.pi),
+              child: _buildOrb(300, AppColors.orb2),
+            ),
+            
+            // 底部 - 暖橙色光晕
+            Positioned(
+              bottom: 100 + 60 * math.sin(t * math.pi),
+              left: -50 + 20 * math.cos(t * math.pi),
+              child: _buildOrb(350, AppColors.orb3),
+            ),
+            
+            // 加入一个全屏的磨砂层，让光晕更加柔和漫射
+            BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 60, sigmaY: 60),
+              child: Container(color: Colors.transparent),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildOrb(double size, Color color) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.45),
+        shape: BoxShape.circle,
+        // 使用非常大的 blur radius 模拟弥散光
+        boxShadow: [
+          BoxShadow(
+            color: color.withOpacity(0.45),
+            blurRadius: 100,
+            spreadRadius: 20,
           ),
         ],
       ),
@@ -1188,268 +1121,3 @@ class _HomeUniverseContent extends StatelessWidget {
   }
 }
 
-// =========================================================
-// 5. 星球组件逻辑
-// =========================================================
-
-class HolographicSphereMenu extends StatefulWidget {
-  final List<SphereItemData> items;
-  final double radius;
-
-  const HolographicSphereMenu({
-    super.key,
-    required this.items,
-    this.radius = 160.0,
-  });
-
-  @override
-  State<HolographicSphereMenu> createState() => _HolographicSphereMenuState();
-}
-
-class _HolographicSphereMenuState extends State<HolographicSphereMenu>
-    with TickerProviderStateMixin {
-  double _angleX = 0.0;
-  double _angleY = 0.0;
-
-  late AnimationController _breathingController;
-  late AnimationController _inertiaController;
-  double _velocityX = 0.0;
-  double _velocityY = 0.0;
-  final double _autoRotateSpeed = 0.0002;
-
-  final double _touchSensitivity = 0.006;
-  final double _friction = 0.96;
-
-  @override
-  void initState() {
-    super.initState();
-    _angleY = 0.2;
-
-    _breathingController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 3),
-    )..repeat(reverse: true);
-
-    _inertiaController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 1),
-    )..addListener(_physicsLoop);
-
-    _inertiaController.repeat();
-  }
-
-  void _physicsLoop() {
-    if (!mounted) return;
-    setState(() {
-      _velocityX *= _friction;
-      _velocityY *= _friction;
-
-      _angleY -= _velocityX;
-      _angleX += _velocityY;
-
-      if (_velocityX.abs() < 0.0001 && _velocityY.abs() < 0.0001) {
-        _angleY -= _autoRotateSpeed;
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _breathingController.dispose();
-    _inertiaController.dispose();
-    super.dispose();
-  }
-
-  void _onPanStart(DragStartDetails details) {
-    _inertiaController.stop();
-  }
-
-  void _onPanUpdate(DragUpdateDetails details) {
-    setState(() {
-      _angleY -= details.delta.dx * _touchSensitivity;
-      _angleX += details.delta.dy * _touchSensitivity;
-    });
-    HapticFeedback.selectionClick();
-  }
-
-  void _onPanEnd(DragEndDetails details) {
-    _velocityX = details.velocity.pixelsPerSecond.dx * 0.0003;
-    _velocityY = -details.velocity.pixelsPerSecond.dy * 0.0003;
-    _inertiaController.repeat();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onPanStart: _onPanStart,
-      onPanUpdate: _onPanUpdate,
-      onPanEnd: _onPanEnd,
-      behavior: HitTestBehavior.opaque,
-      child: Center(
-        child: AnimatedBuilder(
-          animation: _breathingController,
-          builder: (context, child) {
-            double breathScale = 1.0 + (_breathingController.value * 0.05);
-            return Transform.scale(
-              scale: breathScale,
-              child: SizedBox(
-                width: widget.radius * 2.8,
-                height: widget.radius * 2.8,
-                child: Stack(
-                  alignment: Alignment.center,
-                  children: [
-                    Container(
-                      width: widget.radius * 1.0,
-                      height: widget.radius * 1.0,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        gradient: RadialGradient(
-                          colors: [
-                            Colors.white.withOpacity(0.5),
-                            const Color(0xFFE0F7FA).withOpacity(0.15),
-                            Colors.transparent,
-                          ],
-                          stops: const [0.0, 0.4, 1.0],
-                        ),
-                      ),
-                    ).blurred(sigmaX: 50, sigmaY: 50),
-                    ..._build3DItems(),
-                  ],
-                ),
-              ),
-            );
-          },
-        ),
-      ),
-    );
-  }
-
-  List<Widget> _build3DItems() {
-    final List<_ProjectedItem> projected = [];
-    final int count = widget.items.length;
-    final double phi = math.pi * (3.0 - math.sqrt(5.0));
-
-    final double centerOffset = widget.radius * 1.4;
-
-    for (int i = 0; i < count; i++) {
-      final double y = 1 - (i / (count - 1)) * 2;
-      final double radiusAtY = math.sqrt(1 - y * y);
-      final double theta = phi * i;
-
-      final double x = math.cos(theta) * radiusAtY;
-      final double z = math.sin(theta) * radiusAtY;
-
-      double y1 = y * math.cos(_angleX) - z * math.sin(_angleX);
-      double z1 = y * math.sin(_angleX) + z * math.cos(_angleX);
-      double x2 = x * math.cos(_angleY) - z1 * math.sin(_angleY);
-      double z2 = x * math.sin(_angleY) + z1 * math.cos(_angleY);
-
-      if (z2 < -0.3) continue;
-
-      projected.add(_ProjectedItem(
-        x: x2 * widget.radius,
-        y: y1 * widget.radius,
-        z: z2,
-        data: widget.items[i],
-      ));
-    }
-
-    projected.sort((a, b) => a.z.compareTo(b.z));
-
-    return projected.map((item) {
-      final double zNorm = (item.z + 1) / 2;
-      final double scale = 0.4 + (0.6 * zNorm * zNorm);
-      final double opacity = 0.2 + (0.8 * zNorm);
-      final bool isFront = item.z > 0.88;
-
-      const double iconSize = 72.0;
-      const double halfIconSize = iconSize / 2;
-
-      return Positioned(
-        left: centerOffset + item.x - halfIconSize,
-        top: centerOffset + item.y - halfIconSize,
-        child: Transform.scale(
-          scale: scale,
-          child: Opacity(
-            opacity: opacity.clamp(0.0, 1.0),
-            child: GestureDetector(
-              onTap: () {
-                HapticFeedback.mediumImpact();
-                Navigator.of(context)
-                    .push(CupertinoPageRoute(builder: (_) => item.data.page));
-              },
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: iconSize,
-                    height: iconSize,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: item.data.gradient,
-                      boxShadow: [
-                        if (isFront)
-                          BoxShadow(
-                              color: item.data.gradient.colors.first
-                                  .withOpacity(0.5),
-                              blurRadius: 20,
-                              spreadRadius: 1),
-                        BoxShadow(
-                            color: Colors.black.withOpacity(0.15),
-                            blurRadius: 8,
-                            offset: const Offset(0, 4)),
-                      ],
-                    ),
-                    child: Icon(item.data.icon, color: Colors.white, size: 30),
-                  ),
-                  const SizedBox(height: 6),
-                  AnimatedOpacity(
-                    duration: const Duration(milliseconds: 200),
-                    opacity: isFront ? 1.0 : 0.0,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.8),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Text(
-                        item.data.title,
-                        style: const TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.textDark),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      );
-    }).toList();
-  }
-}
-
-class SphereItemData {
-  final String title;
-  final IconData icon;
-  final LinearGradient gradient;
-  final Widget page;
-
-  SphereItemData(
-      {required this.title,
-      required this.icon,
-      required this.gradient,
-      required this.page});
-}
-
-class _ProjectedItem {
-  final double x;
-  final double y;
-  final double z;
-  final SphereItemData data;
-  _ProjectedItem(
-      {required this.x, required this.y, required this.z, required this.data});
-}

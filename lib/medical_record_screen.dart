@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import 'services/supabase_service.dart';
 import 'models/pet.dart';
 import 'home_screen.dart'; // 导入 DataChangeNotifier
+import 'widgets/weight_trend_card.dart';
 import 'utils/ui_helpers.dart';
 
 // =========================================================
@@ -1230,6 +1231,13 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> with SingleTi
           firstChild: const SizedBox.shrink(),
           secondChild: _buildExpandedPetSelector(),
         ),
+
+        // 体重趋势卡片
+        if (_selectedPet != null && _selectedPet!.id != null)
+           Padding(
+            padding: const EdgeInsets.only(top: 24.0),
+            child: WeightTrendCard(petId: _selectedPet!.id!),
+          ),
       ],
     );
   }

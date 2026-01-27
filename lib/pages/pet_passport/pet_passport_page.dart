@@ -10,6 +10,7 @@ import '../../widgets/weight_trend_card.dart';
 import '../../utils/user_avatar_helper.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'edit_pet_passport_page.dart';
+import '../../home_screen.dart'; // 导入 DataChangeNotifier
 
 /// 宠物身份证（护照风格）页面
 class PetPassportPage extends StatefulWidget {
@@ -963,6 +964,8 @@ class _PetPassportPageState extends State<PetPassportPage>
       setState(() {
         _passports[pet.id!] = result;
       });
+      // 通知其他页面刷新数据
+      DataChangeNotifier.markPetDataChanged();
     }
   }
 }

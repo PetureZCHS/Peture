@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'services/supabase_service.dart';
 import 'models/pet.dart';
+import 'home_screen.dart'; // 导入 DataChangeNotifier
 import 'settings_page.dart';
 import 'pages/pet_profile_form_page.dart';
 import 'utils/ui_helpers.dart';
@@ -272,6 +273,8 @@ class _PetProfileSectionState extends State<PetProfileSection> {
           setState(() {
             pets.add(petWithId);
           });
+          // 通知其他页面（如医疗记录页）数据已变更
+          DataChangeNotifier.markPetDataChanged();
         }
 
         if (mounted) {
@@ -351,6 +354,9 @@ class _PetProfileSectionState extends State<PetProfileSection> {
                       setState(() {
                         pets.removeWhere((pet) => pet.id == petToDelete.id);
                       });
+                      // 通知其他页面（如医疗记录页）数据已变更
+                      DataChangeNotifier.markPetDataChanged();
+                      
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(content: Text('${petToDelete.name} 的档案已删除')),
                       );

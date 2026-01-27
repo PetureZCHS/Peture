@@ -30,6 +30,8 @@ class _AddUnifiedExpensePageState extends State<AddUnifiedExpensePage> {
   
   // Note
   final TextEditingController _noteController = TextEditingController();
+  final FocusNode _noteFocusNode = FocusNode();
+  bool _isNoteFocused = false;
   
   // Custom Categories
   List<UnifiedExpenseCategory> _customCategories = [];
@@ -44,8 +46,15 @@ class _AddUnifiedExpensePageState extends State<AddUnifiedExpensePage> {
   @override
   void initState() {
     super.initState();
+    _noteFocusNode.addListener(_onNoteFocusChange);
     _loadPets();
     _initData();
+  }
+
+  void _onNoteFocusChange() {
+    setState(() {
+      _isNoteFocused = _noteFocusNode.hasFocus;
+    });
   }
 
   void _initData() {
@@ -98,6 +107,8 @@ class _AddUnifiedExpensePageState extends State<AddUnifiedExpensePage> {
 
   @override
   void dispose() {
+    _noteFocusNode.removeListener(_onNoteFocusChange);
+    _noteFocusNode.dispose();
     _noteController.dispose();
     _itemNameController.dispose();
     super.dispose();
@@ -665,6 +676,14 @@ class _AddUnifiedExpensePageState extends State<AddUnifiedExpensePage> {
              alignment: Alignment.centerLeft,
              child: TextField(
                controller: _noteController,
+               focusNode: _noteFocusNode,
+               textInputAction: TextInputAction.done,
+               onSubmitted: (_) {
+                 _noteFocusNode.unfocus();
+               },
+               onTapOutside: (event) {
+                 _noteFocusNode.unfocus();
+               },
                decoration: const InputDecoration(
                  hintText: '添加备注...',
                  border: InputBorder.none,
@@ -677,7 +696,7 @@ class _AddUnifiedExpensePageState extends State<AddUnifiedExpensePage> {
           
           const Divider(height: 1, color: Color(0xFFF2F2F7)),
           
-          _buildKeypad(),
+          if (!_isNoteFocused) _buildKeypad(),
         ],
       ),
     );
