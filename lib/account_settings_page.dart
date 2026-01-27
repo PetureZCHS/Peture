@@ -38,6 +38,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
 
   // 加载用户信息
   Future<void> _loadUserInfo() async {
+    if (!mounted) return;
     setState(() => _isLoading = true);
 
     try {
@@ -50,17 +51,21 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
         final profile = await _supabaseService.getUserProfile();
         final nickname = profile?['nickname'] as String?;
 
-        setState(() {
-          _userEmail = user.email;
-          // 优先使用数据库中的昵称，如果没有则使用 Auth 的元数据
-          _userName = nickname ?? user.userMetadata?['name'] ?? '';
-          _avatarPath = avatarPath;
-        });
+        if (mounted) {
+          setState(() {
+            _userEmail = user.email;
+            // 优先使用数据库中的昵称，如果没有则使用 Auth 的元数据
+            _userName = nickname ?? user.userMetadata?['name'] ?? '';
+            _avatarPath = avatarPath;
+          });
+        }
       }
     } catch (e) {
       debugPrint('❌ 加载用户信息失败: $e');
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -164,7 +169,9 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
           ).showSnackBar(SnackBar(content: Text('❌ 密码修改失败: $e')));
         }
       } finally {
-        setState(() => _isLoading = false);
+        if (mounted) {
+          setState(() => _isLoading = false);
+        }
       }
     }
   }
@@ -222,7 +229,9 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
       );
 
       if (pickedFile == null) {
-        setState(() => _isLoading = false);
+        if (mounted) {
+          setState(() => _isLoading = false);
+        }
         return;
       }
 
@@ -273,11 +282,11 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
         }
       }
 
-      setState(() {
-        _avatarPath = newPath;
-      });
-
       if (mounted) {
+        setState(() {
+          _avatarPath = newPath;
+        });
+
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('✅ 头像更换成功'),
@@ -292,7 +301,9 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
         ).showSnackBar(SnackBar(content: Text('❌ 更换头像失败: $e')));
       }
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -350,9 +361,9 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
         );
 
         if (success) {
-          setState(() => _userName = result.trim());
-
           if (mounted) {
+            setState(() => _userName = result.trim());
+
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
                 content: Text('✅ 昵称修改成功'),
@@ -383,7 +394,9 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
           ));
         }
       } finally {
-        setState(() => _isLoading = false);
+        if (mounted) {
+          setState(() => _isLoading = false);
+        }
       }
     }
   }

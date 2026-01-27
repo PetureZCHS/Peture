@@ -84,7 +84,7 @@ class _PartnerFitCompletionPageState extends State<PartnerFitCompletionPage>
 
                 const SizedBox(height: 24),
 
-                // 完成文字
+                // 完成文字（Keep 风格）
                 const Text(
                   '太棒了！',
                   style: TextStyle(fontSize: 36, fontWeight: FontWeight.bold),
@@ -95,6 +95,20 @@ class _PartnerFitCompletionPageState extends State<PartnerFitCompletionPage>
                 Text(
                   '你完成了「${widget.course.name}」',
                   style: TextStyle(fontSize: 18, color: Colors.grey[700]),
+                  textAlign: TextAlign.center,
+                ),
+                
+                const SizedBox(height: 4),
+                
+                // Keep 风格的鼓励文案
+                Text(
+                  '自律给我自由',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: const Color(0xFFFF6B35).withOpacity(0.8), // Keep 橙色
+                    fontWeight: FontWeight.w500,
+                    fontStyle: FontStyle.italic,
+                  ),
                   textAlign: TextAlign.center,
                 ),
 
@@ -133,7 +147,7 @@ class _PartnerFitCompletionPageState extends State<PartnerFitCompletionPage>
                         children: [
                           _buildStatItem(
                             icon: Icons.timer,
-                            value: '${widget.course.durationMinutes}',
+                            value: '${widget.record.durationMinutes}',
                             unit: '分钟',
                             label: '训练时长',
                           ),
@@ -237,6 +251,17 @@ class _PartnerFitCompletionPageState extends State<PartnerFitCompletionPage>
                 ),
 
                 const SizedBox(height: 40),
+                
+                // 致敬 Keep 的小标签
+                Text(
+                  'Inspired by Keep',
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: Colors.grey.shade400,
+                    fontWeight: FontWeight.w300,
+                    letterSpacing: 0.5,
+                  ),
+                ),
               ],
             ),
           ),
@@ -288,7 +313,7 @@ class _PartnerFitCompletionPageState extends State<PartnerFitCompletionPage>
         '''
 🎉 我刚刚完成了「${widget.course.name}」！
 
-⏱️ 训练时长：${widget.course.durationMinutes}分钟
+⏱️ 训练时长：${widget.record.durationMinutes}分钟
 🔥 消耗卡路里：${widget.record.caloriesBurned}大卡
 🐾 宠物消耗：${widget.record.petCaloriesBurned}个罐头的能量
 

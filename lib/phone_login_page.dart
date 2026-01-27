@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:async';
 
 // 导入主应用文件，登录成功后将跳转到这里
 import 'main.dart';
-// 导入 LeanCloud 服务
-import 'config/leancloud_service.dart';
 
 /// 手机号验证码登录页面
 class PhoneLoginPage extends StatefulWidget {
@@ -29,6 +27,9 @@ class _PhoneLoginPageState extends State<PhoneLoginPage> {
   // 倒计时
   int _countdown = 0;
   Timer? _timer;
+
+  // Supabase 客户端
+  final SupabaseClient _supabase = Supabase.instance.client;
 
   @override
   void dispose() {
@@ -62,7 +63,7 @@ class _PhoneLoginPageState extends State<PhoneLoginPage> {
     return phoneRegex.hasMatch(phone);
   }
 
-  /// 请求验证码
+  /// 请求验证码（当前短信登录暂不可用，仅展示提示）
   Future<void> _requestSmsCode() async {
     final phone = _phoneController.text.trim();
 
@@ -71,41 +72,10 @@ class _PhoneLoginPageState extends State<PhoneLoginPage> {
       return;
     }
 
-    setState(() {
-      _isLoading = true;
-    });
-
-    try {
-      final success = await LeanCloudService.requestSmsCode(phone);
-
-      setState(() {
-        _isLoading = false;
-      });
-
-      if (success) {
-        setState(() {
-          _isCodeSent = true;
-        });
-
-        _startCountdown();
-        _showMessage('验证码已发送');
-
-        // 测试号直接提示验证码
-        if (phone == '18639529172') {
-          _showMessage('测试号验证码: 746018', duration: 5);
-        }
-      } else {
-        _showMessage('发送验证码失败，请稍后重试');
-      }
-    } catch (e) {
-      setState(() {
-        _isLoading = false;
-      });
-      _showMessage('发送验证码失败: $e');
-    }
+    _showMessage('短信登录功能暂不可用，请使用邮箱登录或稍后再试');
   }
 
-  /// 验证验证码并登录
+  /// 验证验证码并登录（当前短信登录暂不可用，仅展示提示）
   Future<void> _verifySmsCodeAndLogin() async {
     final phone = _phoneController.text.trim();
     final code = _codeController.text.trim();
@@ -116,53 +86,11 @@ class _PhoneLoginPageState extends State<PhoneLoginPage> {
     }
 
     if (code.isEmpty) {
-      _showMessage('请输入验证码');
+      _showMessage('当前短信登录功能暂不可用，请使用邮箱登录');
       return;
     }
 
-    if (!_agreedToTerms) {
-      _showMessage('请先阅读并同意服务协议');
-      return;
-    }
-
-    setState(() {
-      _isLoading = true;
-    });
-
-    try {
-      // 使用验证码登录
-      final user = await LeanCloudService.verifyAndLogin(phone, code);
-
-      setState(() {
-        _isLoading = false;
-      });
-
-      if (user != null) {
-        // 保存用户会话信息
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('sessionToken', user['sessionToken'] ?? '');
-        await prefs.setString('userId', user['objectId'] ?? '');
-        await prefs.setString('mobilePhoneNumber', phone);
-
-        _showMessage('登录成功！');
-        // 延迟一下再跳转，让用户看到成功提示
-        await Future.delayed(const Duration(milliseconds: 500));
-
-        if (mounted) {
-          // 登录成功后，使用 pushReplacement 清除堆栈，防止返回登录页
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (context) => const MyApp()),
-          );
-        }
-      } else {
-        _showMessage('登录失败，请检查验证码是否正确');
-      }
-    } catch (e) {
-      setState(() {
-        _isLoading = false;
-      });
-      _showMessage('登录失败: $e');
-    }
+    _showMessage('短信登录功能暂不可用，请使用邮箱登录或稍后再试');
   }
 
   /// 显示提示消息
@@ -356,13 +284,6 @@ class _PhoneLoginPageState extends State<PhoneLoginPage> {
 
               const SizedBox(height: 16),
 
-              // 提示信息
-              Center(
-                child: Text(
-                  '测试号 18639529172 验证码固定为 746018',
-                  style: TextStyle(fontSize: 12, color: Colors.grey[500]),
-                ),
-              ),
             ],
           ),
         ),

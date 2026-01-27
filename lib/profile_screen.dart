@@ -57,7 +57,7 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  String _userNickname = ''; // 用户昵称状态
+  String _userNickname = ''; // 用户昵称状态 
 
   void _updateNickname(String newName) {
     setState(() {
@@ -103,7 +103,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             // TODO: 跳转到设置昵称页面
             ScaffoldMessenger.of(
               context,
-            ).showSnackBar(const SnackBar(content: Text('昵称设置功能开发中...')));
+            ).showSnackBar(const SnackBar(content: Text('昵称设置功能开发中...'))); 
           },
           child: Row(
             children: [

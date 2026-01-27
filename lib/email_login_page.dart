@@ -1,10 +1,26 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'main.dart'; // 导入主应用文件，登录成功后将跳转到这里
 import 'email_register_page.dart'; // 导入注册页面
 
 class EmailLoginPage extends StatefulWidget {
-  const EmailLoginPage({super.key});
+  const EmailLoginPage({
+    super.key,
+    this.initialEmail,
+    this.initialMessage,
+    this.forceOtp = false,
+  });
+
+  /// 可选：预填的邮箱（从注册页跳转时带上）
+  final String? initialEmail;
+
+  /// 可选：进入页面后立即提示的消息（如“已注册，可直接使用验证码登录”）
+  final String? initialMessage;
+
+  /// 可选：强制进入时使用验证码登录模式
+  final bool forceOtp;
 
   @override
   State<EmailLoginPage> createState() => _EmailLoginPageState();
@@ -13,20 +29,73 @@ class EmailLoginPage extends StatefulWidget {
 class _EmailLoginPageState extends State<EmailLoginPage> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
+  final TextEditingController _codeController = TextEditingController(); // 验证码输入
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   final SupabaseClient _supabase = Supabase.instance.client;
   bool _isLoading = false;
   bool _obscurePassword = true; // 控制密码是否可见
 
+  // 登录模式：true = 邮箱验证码登录（默认），false = 密码登录
+  bool _useOtpLogin = true;
+
+  int _countdown = 0;
+  Timer? _countdownTimer;
+
+  @override
+  void initState() {
+    super.initState();
+
+    // 预填邮箱
+    if (widget.initialEmail != null) {
+      _emailController.text = widget.initialEmail!;
+    }
+
+    // 根据外部请求，强制使用验证码模式
+    if (widget.forceOtp) {
+      _useOtpLogin = true;
+    }
+
+    // 进入页面后弹提示（如：已注册，可直接用验证码登录）
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (widget.initialMessage != null) {
+        _showMessage(widget.initialMessage!, isError: false);
+      }
+    });
+  }
+
   @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
+    _codeController.dispose();
+    _countdownTimer?.cancel();
     super.dispose();
+  }
+
+  // 启动验证码倒计时
+  void _startCountdown() {
+    _countdownTimer?.cancel();
+    setState(() {
+      _countdown = 60;
+    });
+
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (_countdown <= 1) {
+        timer.cancel();
+        setState(() {
+          _countdown = 0;
+        });
+      } else {
+        setState(() {
+          _countdown--;
+        });
+      }
+    });
   }
 
   // 邮箱登录（只使用密码登录）
   Future<void> _emailLogin() async {
+    // 仅在“密码登录”模式下使用
     if (!_formKey.currentState!.validate()) {
       return;
     }
@@ -72,6 +141,136 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
       String errorMsg = '登录失败';
       if (e.message.contains('Invalid login credentials')) {
         errorMsg = '邮箱或密码错误';
+      } else if (e.message.contains('Email not confirmed')) {
+        errorMsg = '请先验证您的邮箱';
+      } else if (e.message.contains('User not found')) {
+        errorMsg = '用户不存在，请先注册';
+      } else {
+        errorMsg = '${e.message} (状态码: ${e.statusCode})';
+      }
+      _showMessage(errorMsg);
+    } catch (e) {
+      print('❌ 其他错误: $e');
+      _showMessage('登录失败: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  // 发送邮箱验证码（用于登录）
+  Future<void> _sendLoginCode() async {
+    final email = _emailController.text.trim();
+
+    if (email.isEmpty) {
+      _showMessage('请输入邮箱地址');
+      return;
+    }
+    if (!_isValidEmail(email)) {
+      _showMessage('请输入有效的邮箱地址');
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      print('🔍 尝试发送登录验证码到: $email');
+
+      // 登录验证码：不创建新用户，只允许已有账号使用验证码登录
+      await _supabase.auth.signInWithOtp(
+        email: email,
+        shouldCreateUser: false,
+        emailRedirectTo: null,
+      );
+
+      _startCountdown();
+      _showMessage('验证码已发送，请查收邮箱', isError: false);
+    } on AuthException catch (e) {
+      print('❌ 发送登录验证码失败: ${e.message}');
+      print('Status Code: ${e.statusCode}');
+
+      String errorMsg = '发送验证码失败';
+      if (e.message.contains('User not found')) {
+        errorMsg = '用户不存在，请先注册';
+      } else if (e.message.contains('Email not confirmed')) {
+        errorMsg = '请先验证您的邮箱';
+      } else if (e.message.contains('rate limit exceeded') ||
+          e.message.contains('Too many requests')) {
+        errorMsg = '操作太频繁，请稍后再试';
+      } else {
+        errorMsg = '${e.message} (状态码: ${e.statusCode})';
+      }
+      _showMessage(errorMsg);
+    } catch (e) {
+      print('❌ 发送验证码时出现其他错误: $e');
+      _showMessage('发送验证码失败: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  // 验证验证码并登录
+  Future<void> _verifyCodeAndLogin() async {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    final email = _emailController.text.trim();
+    final code = _codeController.text.trim();
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      print('🔍 使用验证码尝试登录: $email, code: $code');
+
+      final response = await _supabase.auth.verifyOTP(
+        email: email,
+        token: code,
+        type: OtpType.email,
+      );
+
+      if (response.session != null || response.user != null) {
+        print('✅ 验证码登录成功: ${response.user?.email}');
+
+        // 隐藏键盘
+        FocusScope.of(context).unfocus();
+
+        if (mounted) {
+          Navigator.of(context).pushReplacement(
+            PageRouteBuilder(
+              pageBuilder: (context, animation, secondaryAnimation) =>
+                  const MyApp(),
+              transitionsBuilder:
+                  (context, animation, secondaryAnimation, child) {
+                return FadeTransition(opacity: animation, child: child);
+              },
+              transitionDuration: const Duration(milliseconds: 400),
+            ),
+          );
+        }
+      } else {
+        _showMessage('验证码验证失败，请重试');
+      }
+    } on AuthException catch (e) {
+      print('❌ 验证码登录失败: ${e.message}');
+      print('Status Code: ${e.statusCode}');
+
+      String errorMsg = '登录失败';
+      if (e.message.contains('Invalid login credentials') ||
+          e.message.contains('Invalid otp') ||
+          e.message.contains('invalid or expired otp')) {
+        errorMsg = '验证码错误或已过期';
       } else if (e.message.contains('Email not confirmed')) {
         errorMsg = '请先验证您的邮箱';
       } else if (e.message.contains('User not found')) {
@@ -148,10 +347,91 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  '请输入您的邮箱地址和密码',
+                  _useOtpLogin
+                      ? '请输入邮箱并获取验证码登录'
+                      : '请输入您的邮箱地址和密码',
                   style: TextStyle(fontSize: 16, color: Colors.grey[600]),
                 ),
                 const SizedBox(height: 40),
+
+                // 登录方式切换：验证码登录 / 密码登录
+                Container(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF3F4F6),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  padding: const EdgeInsets.all(4),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: _isLoading
+                              ? null
+                              : () {
+                                  setState(() {
+                                    _useOtpLogin = true;
+                                  });
+                                },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                vertical: 10, horizontal: 12),
+                            decoration: BoxDecoration(
+                              color: _useOtpLogin
+                                  ? Colors.white
+                                  : Colors.transparent,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            alignment: Alignment.center,
+                            child: Text(
+                              '验证码登录',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: _useOtpLogin
+                                    ? const Color(0xFF5D5FEF)
+                                    : Colors.grey[700],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: _isLoading
+                              ? null
+                              : () {
+                                  setState(() {
+                                    _useOtpLogin = false;
+                                  });
+                                },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                vertical: 10, horizontal: 12),
+                            decoration: BoxDecoration(
+                              color: !_useOtpLogin
+                                  ? Colors.white
+                                  : Colors.transparent,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            alignment: Alignment.center,
+                            child: Text(
+                              '密码登录',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: !_useOtpLogin
+                                    ? const Color(0xFF5D5FEF)
+                                    : Colors.grey[700],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 24),
 
                 // 邮箱输入框
                 TextFormField(
@@ -184,47 +464,111 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
                 ),
                 const SizedBox(height: 24),
 
-                // 密码输入框
-                TextFormField(
-                  controller: _passwordController,
-                  obscureText: _obscurePassword,
-                  decoration: InputDecoration(
-                    labelText: '密码',
-                    hintText: '请输入您的密码',
-                    prefixIcon: const Icon(Icons.lock_outline),
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        _obscurePassword
-                            ? Icons.visibility_outlined
-                            : Icons.visibility_off_outlined,
+                // 根据登录模式显示不同输入框
+                if (_useOtpLogin) ...[
+                  // 验证码输入 + 发送按钮
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextFormField(
+                          controller: _codeController,
+                          keyboardType: TextInputType.number,
+                          decoration: InputDecoration(
+                            labelText: '验证码',
+                            hintText: '请输入6位验证码',
+                            prefixIcon: const Icon(Icons.verified_outlined),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(16.0),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(16.0),
+                              borderSide: const BorderSide(
+                                color: Color(0xFF5D5FEF),
+                                width: 2,
+                              ),
+                            ),
+                          ),
+                          validator: (value) {
+                            if (!_useOtpLogin) return null;
+                            if (value == null || value.isEmpty) {
+                              return '请输入验证码';
+                            }
+                            if (value.length != 6) {
+                              return '验证码为6位数字';
+                            }
+                            return null;
+                          },
+                        ),
                       ),
-                      onPressed: () {
-                        setState(() {
-                          _obscurePassword = !_obscurePassword;
-                        });
-                      },
-                    ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16.0),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16.0),
-                      borderSide: const BorderSide(
-                        color: Color(0xFF5D5FEF),
-                        width: 2,
+                      const SizedBox(width: 12),
+                      SizedBox(
+                        height: 56,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.white,
+                            foregroundColor: const Color(0xFF5D5FEF),
+                            side: const BorderSide(color: Color(0xFF5D5FEF)),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16.0),
+                            ),
+                          ),
+                          onPressed:
+                              _isLoading || _countdown > 0 ? null : _sendLoginCode,
+                          child: Text(
+                            _countdown > 0 ? '重发(${_countdown}s)' : '发送验证码',
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
                       ),
-                    ),
+                    ],
                   ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return '请输入密码';
-                    }
-                    if (value.length < 6) {
-                      return '密码至少6位';
-                    }
-                    return null;
-                  },
-                ),
+                ] else ...[
+                  // 密码输入框
+                  TextFormField(
+                    controller: _passwordController,
+                    obscureText: _obscurePassword,
+                    decoration: InputDecoration(
+                      labelText: '密码',
+                      hintText: '请输入您的密码',
+                      prefixIcon: const Icon(Icons.lock_outline),
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _obscurePassword
+                              ? Icons.visibility_outlined
+                              : Icons.visibility_off_outlined,
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            _obscurePassword = !_obscurePassword;
+                          });
+                        },
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16.0),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16.0),
+                        borderSide: const BorderSide(
+                          color: Color(0xFF5D5FEF),
+                          width: 2,
+                        ),
+                      ),
+                    ),
+                    validator: (value) {
+                      if (_useOtpLogin) return null;
+                      if (value == null || value.isEmpty) {
+                        return '请输入密码';
+                      }
+                      if (value.length < 6) {
+                        return '密码至少6位';
+                      }
+                      return null;
+                    },
+                  ),
+                ],
 
                 const SizedBox(height: 32),
 
@@ -241,7 +585,9 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
                       padding: const EdgeInsets.symmetric(vertical: 18.0),
                       elevation: 0,
                     ),
-                    onPressed: _isLoading ? null : _emailLogin,
+                    onPressed: _isLoading
+                        ? null
+                        : (_useOtpLogin ? _verifyCodeAndLogin : _emailLogin),
                     child: _isLoading
                         ? const SizedBox(
                             height: 20,
