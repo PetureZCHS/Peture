@@ -11,6 +11,7 @@ class EmailLoginPage extends StatefulWidget {
     this.initialEmail,
     this.initialMessage,
     this.forceOtp = false,
+    this.startCountdownOnInit = false,
   });
 
   /// 可选：预填的邮箱（从注册页跳转时带上）
@@ -21,6 +22,10 @@ class EmailLoginPage extends StatefulWidget {
 
   /// 可选：强制进入时使用验证码登录模式
   final bool forceOtp;
+
+  /// 可选：进入页面时是否直接进入验证码倒计时
+  /// 场景：从注册页跳转过来时，验证码已经发送，这里应直接显示灰色倒计时按钮
+  final bool startCountdownOnInit;
 
   @override
   State<EmailLoginPage> createState() => _EmailLoginPageState();
@@ -53,6 +58,12 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
     // 根据外部请求，强制使用验证码模式
     if (widget.forceOtp) {
       _useOtpLogin = true;
+    }
+
+    // 如果从注册页跳转且已经发送过验证码，则直接启动倒计时
+    if (widget.startCountdownOnInit && widget.forceOtp) {
+      _useOtpLogin = true;
+      _startCountdown();
     }
 
     // 进入页面后弹提示（如：已注册，可直接用验证码登录）
@@ -138,20 +149,27 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
       print('❌ 密码登录失败: ${e.message}');
       print('Status Code: ${e.statusCode}');
 
-      String errorMsg = '登录失败';
+      String errorMsg = '登录失败，请稍后重试';
       if (e.message.contains('Invalid login credentials')) {
-        errorMsg = '邮箱或密码错误';
+        errorMsg = '邮箱或密码错误，请检查后重新输入';
       } else if (e.message.contains('Email not confirmed')) {
-        errorMsg = '请先验证您的邮箱';
+        errorMsg = '该邮箱尚未完成验证，请先前往邮箱点击验证链接';
       } else if (e.message.contains('User not found')) {
-        errorMsg = '用户不存在，请先注册';
+        errorMsg = '该邮箱尚未注册，请先完成注册';
+      } else if (e.statusCode == 500) {
+        errorMsg = '服务器内部错误（代码 500），请稍后重试或联系管理员';
+      } else if (e.statusCode == 429 ||
+          e.message.contains('Too many requests') ||
+          e.message.contains('rate limit')) {
+        errorMsg = '尝试次数过多，请稍后再试';
       } else {
-        errorMsg = '${e.message} (状态码: ${e.statusCode})';
+        errorMsg =
+            '登录失败，服务器返回错误代码 ${e.statusCode ?? '未知'}，请稍后重试或联系管理员';
       }
       _showMessage(errorMsg);
     } catch (e) {
       print('❌ 其他错误: $e');
-      _showMessage('登录失败: $e');
+      _showMessage('登录失败，本地出现未知错误，请检查网络后重试');
     } finally {
       if (mounted) {
         setState(() {
@@ -194,21 +212,26 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
       print('❌ 发送登录验证码失败: ${e.message}');
       print('Status Code: ${e.statusCode}');
 
-      String errorMsg = '发送验证码失败';
-      if (e.message.contains('User not found')) {
-        errorMsg = '用户不存在，请先注册';
+      String errorMsg = '发送验证码失败，请稍后重试';
+      if (e.message.contains('User not found') ||
+          e.message.contains('Signups not allowed for otp')) {
+        errorMsg = '该邮箱尚未注册，请先前往注册页面完成注册';
       } else if (e.message.contains('Email not confirmed')) {
-        errorMsg = '请先验证您的邮箱';
+        errorMsg = '该邮箱尚未完成验证，请先在邮箱中完成验证操作';
       } else if (e.message.contains('rate limit exceeded') ||
-          e.message.contains('Too many requests')) {
-        errorMsg = '操作太频繁，请稍后再试';
+          e.message.contains('Too many requests') ||
+          e.statusCode == 429) {
+        errorMsg = '验证码请求过于频繁，请稍后再试';
+      } else if (e.statusCode == 500) {
+        errorMsg = '验证码服务暂时不可用（代码 500），请稍后重试或联系管理员';
       } else {
-        errorMsg = '${e.message} (状态码: ${e.statusCode})';
+        errorMsg =
+            '发送验证码失败，服务器返回错误代码 ${e.statusCode ?? '未知'}，请稍后重试或联系管理员';
       }
       _showMessage(errorMsg);
     } catch (e) {
       print('❌ 发送验证码时出现其他错误: $e');
-      _showMessage('发送验证码失败: $e');
+      _showMessage('发送验证码失败，本地出现未知错误，请检查网络后重试');
     } finally {
       if (mounted) {
         setState(() {
@@ -266,22 +289,29 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
       print('❌ 验证码登录失败: ${e.message}');
       print('Status Code: ${e.statusCode}');
 
-      String errorMsg = '登录失败';
+      String errorMsg = '登录失败，请稍后重试';
       if (e.message.contains('Invalid login credentials') ||
           e.message.contains('Invalid otp') ||
           e.message.contains('invalid or expired otp')) {
         errorMsg = '验证码错误或已过期';
       } else if (e.message.contains('Email not confirmed')) {
-        errorMsg = '请先验证您的邮箱';
+        errorMsg = '该邮箱尚未完成验证，请先在邮箱中完成验证操作';
       } else if (e.message.contains('User not found')) {
-        errorMsg = '用户不存在，请先注册';
+        errorMsg = '该邮箱尚未注册，请先前往注册页面完成注册';
+      } else if (e.statusCode == 500) {
+        errorMsg = '验证码登录服务暂时不可用（代码 500），请稍后重试或联系管理员';
+      } else if (e.statusCode == 429 ||
+          e.message.contains('Too many requests') ||
+          e.message.contains('rate limit')) {
+        errorMsg = '验证码尝试次数过多，请稍后再试';
       } else {
-        errorMsg = '${e.message} (状态码: ${e.statusCode})';
+        errorMsg =
+            '登录失败，服务器返回错误代码 ${e.statusCode ?? '未知'}，请稍后重试或联系管理员';
       }
       _showMessage(errorMsg);
     } catch (e) {
       print('❌ 其他错误: $e');
-      _showMessage('登录失败: $e');
+      _showMessage('登录失败，本地出现未知错误，请检查网络后重试');
     } finally {
       if (mounted) {
         setState(() {

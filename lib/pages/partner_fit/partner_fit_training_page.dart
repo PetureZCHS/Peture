@@ -280,7 +280,7 @@ class _PartnerFitTrainingPageState extends State<PartnerFitTrainingPage>
     // 计算实际运动时长（分钟）(当前分支特性)
     final actualDurationMinutes = (actualDurationSeconds / 60).ceil();
 
-    // 保存训练记录
+    // 构建训练记录
     final record = FitnessRecord(
       courseId: widget.course.id,
       courseName: widget.course.name,
@@ -291,19 +291,34 @@ class _PartnerFitTrainingPageState extends State<PartnerFitTrainingPage>
     );
 
     final supabaseService = SupabaseService();
-    // 可能需要检查网络或本地存储，这里沿用现有逻辑
-    final result = await supabaseService.insertFitnessRecord(record.toMap());
-    
-    if (result == null) {
+    // 先检查是否登录
+    final loggedIn = await supabaseService.isLoggedIn;
+
+    if (!loggedIn) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('保存失败，请检查网络连接'),
+            content: Text('当前未登录，无法将训练记录同步到云端，请先通过邮箱登录。'),
             backgroundColor: Colors.red,
           ),
         );
       }
-      return;
+      // 仍然允许进入完成页面，只是本次记录不会存到 Supabase
+    } else {
+      // 尝试保存训练记录
+      final result = await supabaseService.insertFitnessRecord(record.toMap());
+
+      if (result == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('训练记录保存失败，可能是网络或 Supabase 权限问题，请稍后重试。'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        // 即使保存失败，也允许用户看到完成页面的反馈
+      }
     }
 
     // 导航到完成页面
@@ -328,15 +343,11 @@ class _PartnerFitTrainingPageState extends State<PartnerFitTrainingPage>
     return '${mins.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
   }
 
-  /// 格式化实际运动时长
+  /// 格式化实际运动时长为 mm:ss
   String _formatActualDuration(int seconds) {
     final mins = seconds ~/ 60;
     final secs = seconds % 60;
-    if (mins > 0) {
-      return '${mins}分${secs}秒';
-    } else {
-      return '${secs}秒';
-    }
+    return '${mins.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
   }
 
   double get progress {
@@ -441,7 +452,7 @@ class _PartnerFitTrainingPageState extends State<PartnerFitTrainingPage>
                                 ),
                               ),
                               const SizedBox(height: 8),
-                              // 实际运动时长 (当前分支特性)
+                              // 实际运动时长（显示为 mm:ss）
                               Text(
                                 '实际运动时长：${_formatActualDuration(actualDurationSeconds)}',
                                 style: const TextStyle(
@@ -678,17 +689,7 @@ class _PartnerFitTrainingPageState extends State<PartnerFitTrainingPage>
                       ),
                     ],
                   ),
-                  const SizedBox(height: 8),
-                  // 致敬 Keep 的小标签 (当前分支特性)
-                  Text(
-                    'Inspired by Keep',
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: Colors.grey.shade400,
-                      fontWeight: FontWeight.w300,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
+                const SizedBox(height: 8),
                 ],
               ),
             ),

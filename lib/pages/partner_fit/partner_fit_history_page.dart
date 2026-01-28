@@ -110,8 +110,8 @@ class _PartnerFitHistoryPageState extends State<PartnerFitHistoryPage> {
                           ),
                           _buildStatColumn(
                             icon: Icons.timer,
-                            value: '${stats['totalMinutes'] ?? 0}',
-                            label: '总分钟',
+                            value: _formatMinutesToMmSs(stats['totalMinutes'] ?? 0),
+                            label: '总时长',
                           ),
                         ],
                       ),
@@ -252,7 +252,7 @@ class _PartnerFitHistoryPageState extends State<PartnerFitHistoryPage> {
                 const Icon(Icons.timer, size: 14, color: Color(0xFF5A8EFA)),
                 const SizedBox(width: 4),
                 Text(
-                  '${record.durationMinutes} 分钟',
+                  _formatMinutesToMmSs(record.durationMinutes),
                   style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                 ),
               ],
@@ -265,6 +265,14 @@ class _PartnerFitHistoryPageState extends State<PartnerFitHistoryPage> {
         ),
       ),
     );
+  }
+
+  /// 将分钟数转换为 mm:ss（向下取整到分钟）
+  String _formatMinutesToMmSs(int minutes) {
+    final totalSeconds = minutes * 60;
+    final mins = totalSeconds ~/ 60;
+    final secs = totalSeconds % 60;
+    return '${mins.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
   }
 
   String _formatDateTime(DateTime dateTime) {

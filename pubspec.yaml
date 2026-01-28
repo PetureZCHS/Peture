@@ -75,7 +75,6 @@ dependencies:
 
   # 图片压缩
   flutter_image_compress: ^2.3.0
-  image_gallery_saver: ^2.0.2
 
 dev_dependencies:
   flutter_test:

@@ -1,4 +1,4 @@
-import 'package:image_gallery_saver/image_gallery_saver.dart';
+import 'package:gal/gal.dart';
 
 import 'package:flutter/material.dart';
 import 'dart:io';
@@ -515,18 +515,13 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
                                   return;
                                 }
 
-                                final result = await ImageGallerySaver.saveImage(bytes,
-                                    quality: 100,
-                                    name: 'peture_${DateTime.now().millisecondsSinceEpoch}');
+                                await Gal.putImageBytes(
+                                  bytes,
+                                  album: 'Peture',
+                                );
                                 if (context.mounted) {
-                                  final bool saved = result is Map && (result["isSuccess"] == true || (result["filePath"] != null && result["filePath"] != ""));
-                                  if (saved) {
-                                    ScaffoldMessenger.of(context)
-                                        .showSnackBar(const SnackBar(content: Text("已保存到相册！")));
-                                  } else {
-                                    ScaffoldMessenger.of(context)
-                                        .showSnackBar(const SnackBar(content: Text("保存失败")));
-                                  }
+                                  ScaffoldMessenger.of(context)
+                                      .showSnackBar(const SnackBar(content: Text("已保存到相册！")));
                                 }
                               } catch (e) {
                                 if (context.mounted) {
