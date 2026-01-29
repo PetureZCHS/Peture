@@ -152,6 +152,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         _medicalScreenRefreshNotifier.value++;
         _needsMedicalScreenRefresh = false;
       }
+      // 注意：首次加载现在由 didChangeDependencies 中的 _hasLoadedData 标志控制，避免启动卡顿
     }
   }
 

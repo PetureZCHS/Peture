@@ -657,7 +657,9 @@ class _PetProfileCardState extends State<PetProfileCard>
                           children: [
                             // 宠物头像
                             Hero(
-                              tag: 'pet_avatar_${widget.pet.id}',
+                              // Home 使用 IndexedStack，会导致不同页面的 Hero 同时存在于同一路由树
+                              // 这里加页面前缀，保证 tag 在同一路由树内唯一，避免 Hero tag 冲突崩溃
+                              tag: 'profile_pet_avatar_${widget.pet.id}',
                               child: Container(
                                 width: 80,
                                 height: 80,

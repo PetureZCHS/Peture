@@ -277,6 +277,23 @@ class _PartnerFitTrainingPageState extends State<PartnerFitTrainingPage>
     _animationController.stop();
     actualDurationTimer?.cancel();
 
+    // 如果总时长不足 1 分钟，则不记录训练
+    if (actualDurationSeconds < 60) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('本次训练时间少于 1 分钟，未计入训练记录。'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+
+        // 退出训练并返回健身房主页（与退出对话框一致的返回层级）
+        Navigator.of(context).pop(); // 退出训练页
+        Navigator.of(context).pop(); // 退出详情页
+      }
+      return;
+    }
+
     // 计算实际运动时长（分钟）(当前分支特性)
     final actualDurationMinutes = (actualDurationSeconds / 60).ceil();
 
@@ -657,7 +674,7 @@ class _PartnerFitTrainingPageState extends State<PartnerFitTrainingPage>
                         disabledColor: const Color(0xFFE0E0E0),
                       ),
 
-                      // 暂停/继续
+                      // 暂停/继续（蓝色圆形）
                       GestureDetector(
                         onTap: _togglePause,
                         child: Container(
@@ -671,6 +688,24 @@ class _PartnerFitTrainingPageState extends State<PartnerFitTrainingPage>
                           ),
                           child: Icon(
                             isPaused ? Icons.play_arrow : Icons.pause,
+                            size: 40,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+
+                      // 结束（红色圆形，无文字）
+                      GestureDetector(
+                        onTap: _completeWorkout,
+                        child: Container(
+                          width: 80,
+                          height: 80,
+                          decoration: const BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: Color(0xFFEF5350),
+                          ),
+                          child: const Icon(
+                            Icons.stop,
                             size: 40,
                             color: Colors.white,
                           ),
