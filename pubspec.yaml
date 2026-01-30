@@ -91,6 +91,7 @@ flutter:
 
   assets:
     - assets/logo.png
+    - assets/invitation_banner.png
     - assets/icon/
     - assets/mp3/喂食.mp3
     - assets/mp3/握手.mp3

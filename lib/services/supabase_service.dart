@@ -62,6 +62,60 @@ class SupabaseService {
     }
   }
 
+  /// 当前用户会员类型：'free' | 'lifetime'
+  Future<String> getMembershipType() async {
+    final profile = await getUserProfile();
+    final type = profile?['membership_type'] as String?;
+    return type == 'lifetime' ? 'lifetime' : 'free';
+  }
+
+  /// 是否为终身会员
+  Future<bool> isLifetimeMember() async {
+    return await getMembershipType() == 'lifetime';
+  }
+
+  /// 获取或创建当前用户的 8 位邀请码（仅对白名单邮箱开放，否则 error 为「该功能暂未对小主们开放」）
+  Future<({String? code, String? error})> getOrCreateMyInvitationCode() async {
+    final userId = await currentUserId;
+    if (userId == null) return (code: null, error: '请先登录');
+    try {
+      final res = await _client.functions.invoke('get-or-create-invitation-code');
+      final data = res.data as Map<String, dynamic>?;
+      final err = data?['error'] as String?;
+      final codeVal = data?['code'];
+      if (res.status == 200 && codeVal is String && codeVal.isNotEmpty) {
+        return (code: codeVal, error: null);
+      }
+      if (data?['code'] == 'NOT_ALLOWED' || (res.status == 403)) {
+        return (code: null, error: err ?? '该功能暂未对小主们开放');
+      }
+      return (code: null, error: err ?? '获取失败');
+    } catch (e) {
+      print('获取邀请码异常: $e');
+      return (code: null, error: '网络异常，请重试');
+    }
+  }
+
+  /// 兑换邀请码，成功则当前用户获得终身会员
+  Future<({bool success, String? error})> redeemInvitationCode(String code) async {
+    final userId = await currentUserId;
+    if (userId == null) return (success: false, error: '请先登录');
+    final trimmed = code.trim();
+    if (trimmed.length < 4) return (success: false, error: '请输入有效邀请码');
+    try {
+      final res = await _client.functions.invoke('redeem-invitation', body: {'code': trimmed});
+      final data = res.data as Map<String, dynamic>?;
+      final err = data?['error'] as String?;
+      if (res.status == 200 && data != null && data['success'] == true) {
+        return (success: true, error: null);
+      }
+      return (success: false, error: err ?? '兑换失败');
+    } catch (e) {
+      print('兑换邀请码异常: $e');
+      return (success: false, error: '网络异常，请重试');
+    }
+  }
+
   /// 创建或更新用户资料
   Future<bool> upsertUserProfile({String? nickname, String? avatarUrl}) async {
     final userId = await currentUserId;
@@ -159,6 +213,7 @@ class SupabaseService {
           'id': userId,
           'nickname': null,
           'avatar_url': null,
+          'membership_type': 'free',
           'created_at': DateTime.now().toIso8601String(),
           'updated_at': DateTime.now().toIso8601String(),
         });
