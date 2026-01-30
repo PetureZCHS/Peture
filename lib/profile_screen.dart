@@ -1,13 +1,17 @@
 // lib/profile_screen_upgraded.dart
 
+import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
 import 'services/supabase_service.dart';
 import 'models/pet.dart';
 import 'settings_page.dart';
 import 'pages/pet_profile_form_page.dart';
 import 'utils/ui_helpers.dart';
+import 'utils/user_avatar_helper.dart';
 
 // =========================================================
 // 全局设计系统 - 美学升级版
@@ -57,7 +61,44 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  String _userNickname = ''; // 用户昵称状态 
+  final SupabaseService _supabaseService = SupabaseService();
+  final ImagePicker _picker = ImagePicker();
+  
+  String _userNickname = '';
+  String? _avatarPath;
+  String? _avatarUrl; // Supabase Storage 的 URL
+  bool _loading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserProfile();
+  }
+
+  Future<void> _loadUserProfile() async {
+    setState(() => _loading = true);
+    try {
+      // 从 Supabase 加载昵称和头像 URL
+      final profile = await _supabaseService.getUserProfile();
+      if (mounted) {
+        setState(() {
+          _userNickname = profile?['nickname'] as String? ?? '';
+          _avatarUrl = profile?['avatar_url'] as String?;
+        });
+      }
+      // 加载本地头像（如果有）
+      final localAvatar = await UserAvatarHelper.getCurrentUserAvatarPath();
+      if (mounted && localAvatar != null) {
+        setState(() => _avatarPath = localAvatar);
+      }
+    } catch (e) {
+      debugPrint('加载用户资料失败: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _loading = false);
+      }
+    }
+  }
 
   void _updateNickname(String newName) {
     setState(() {
@@ -91,59 +132,62 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildHeader(BuildContext context) {
-    // 使用状态中的昵称
     final String displayName = _userNickname.isEmpty ? '点击设置昵称' : _userNickname;
-    final String avatarText = _userNickname.isEmpty ? '?' : _userNickname[0];
+    final String avatarText = _userNickname.isEmpty ? '?' : _userNickname[0].toUpperCase();
+    final bool hasAvatar = (_avatarPath != null && File(_avatarPath!).existsSync()) || _avatarUrl != null;
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         GestureDetector(
-          onTap: () {
-            // TODO: 跳转到设置昵称页面
-            ScaffoldMessenger.of(
-              context,
-            ).showSnackBar(const SnackBar(content: Text('昵称设置功能开发中...'))); 
-          },
+          onTap: _showEditNicknameDialog,
           child: Row(
             children: [
-              // 🎨 美学升级：动态化用户头像，个性化设计
-              Container(
-                padding: const EdgeInsets.all(3),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: const LinearGradient(
-                    colors: [
-                      AppColors.primaryGradientStart,
-                      AppColors.primaryGradientEnd,
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.primary.withOpacity(0.4),
-                      blurRadius: 16,
-                      offset: const Offset(0, 8),
-                    ),
-                  ],
-                ),
+              // 头像（可点击更换）
+              GestureDetector(
+                onTap: _showChangeAvatarDialog,
                 child: Container(
-                  padding: const EdgeInsets.all(2),
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
+                  padding: const EdgeInsets.all(3),
+                  decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                  ),
-                  child: CircleAvatar(
-                    radius: 32,
-                    backgroundColor: AppColors.primary,
-                    child: Text(
-                      avatarText,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 24,
+                    gradient: const LinearGradient(
+                      colors: [
+                        AppColors.primaryGradientStart,
+                        AppColors.primaryGradientEnd,
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.primary.withOpacity(0.4),
+                        blurRadius: 16,
+                        offset: const Offset(0, 8),
                       ),
+                    ],
+                  ),
+                  child: Container(
+                    padding: const EdgeInsets.all(2),
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                    ),
+                    child: CircleAvatar(
+                      radius: 32,
+                      backgroundColor: AppColors.primary,
+                      backgroundImage: hasAvatar && _avatarPath != null && File(_avatarPath!).existsSync()
+                          ? FileImage(File(_avatarPath!))
+                          : (_avatarUrl != null ? NetworkImage(_avatarUrl!) : null) as ImageProvider?,
+                      child: !hasAvatar
+                          ? Text(
+                              avatarText,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 24,
+                              ),
+                            )
+                          : null,
                     ),
                   ),
                 ),
@@ -182,37 +226,191 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ],
           ),
         ),
-        ClipOval(
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-            child: Container(
-              width: 44, height: 44,
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.4),
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white.withOpacity(0.6)),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: IconButton(
-                icon: const Icon(Icons.settings_rounded, color: AppColors.primaryText, size: 22),
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => const SettingsPage()),
-                  );
-                },
-              ),
-            ),
-          ),
+        IconButton(
+          icon: const Icon(Icons.settings_outlined, color: AppColors.primaryText),
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const SettingsPage()),
+            ).then((_) => _loadUserProfile()); // 返回时刷新资料
+          },
         ),
       ],
     );
+  }
+
+  // 显示编辑昵称对话框
+  Future<void> _showEditNicknameDialog() async {
+    final nameController = TextEditingController(text: _userNickname);
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('修改昵称'),
+        content: TextField(
+          controller: nameController,
+          decoration: const InputDecoration(
+            labelText: '昵称',
+            hintText: '请输入昵称',
+            prefixIcon: Icon(Icons.person),
+            helperText: '昵称长度为1-20个字符',
+          ),
+          autofocus: true,
+          maxLength: 20,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('取消'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final nickname = nameController.text.trim();
+              if (nickname.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('昵称不能为空'), backgroundColor: Colors.red),
+                );
+                return;
+              }
+              Navigator.pop(context, nickname);
+            },
+            child: const Text('保存'),
+          ),
+        ],
+      ),
+    );
+
+    if (result != null && result.isNotEmpty && mounted) {
+      setState(() => _loading = true);
+      try {
+        final success = await _supabaseService.upsertUserProfile(nickname: result.trim());
+        if (success) {
+          setState(() => _userNickname = result.trim());
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('✅ 昵称修改成功'), backgroundColor: Colors.green),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('❌ 昵称修改失败'), backgroundColor: Colors.red),
+          );
+        }
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('❌ 昵称修改失败: $e'), backgroundColor: Colors.red),
+        );
+      } finally {
+        if (mounted) setState(() => _loading = false);
+      }
+    }
+  }
+
+  // 显示更换头像对话框
+  Future<void> _showChangeAvatarDialog() async {
+    final result = await showModalBottomSheet<ImageSource>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_library),
+              title: const Text('从相册选择'),
+              onTap: () => Navigator.pop(context, ImageSource.gallery),
+            ),
+            ListTile(
+              leading: const Icon(Icons.camera_alt),
+              title: const Text('拍照'),
+              onTap: () => Navigator.pop(context, ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.cancel),
+              title: const Text('取消'),
+              onTap: () => Navigator.pop(context),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (result != null) {
+      await _changeAvatar(result);
+    }
+  }
+
+  // 更换头像
+  Future<void> _changeAvatar(ImageSource source) async {
+    try {
+      setState(() => _loading = true);
+      final XFile? pickedFile = await _picker.pickImage(
+        source: source,
+        maxWidth: 512,
+        maxHeight: 512,
+        imageQuality: 80,
+      );
+
+      if (pickedFile == null) {
+        if (mounted) setState(() => _loading = false);
+        return;
+      }
+
+      // 保存到本地
+      final Directory appDir = await getApplicationDocumentsDirectory();
+      final String avatarsDir = '${appDir.path}/avatars';
+      final Directory avatarDirectory = Directory(avatarsDir);
+      if (!await avatarDirectory.exists()) {
+        await avatarDirectory.create(recursive: true);
+      }
+
+      final String fileName = 'avatar_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final String newPath = '$avatarsDir/$fileName';
+      await File(pickedFile.path).copy(newPath);
+
+      // 删除旧头像
+      if (_avatarPath != null && await File(_avatarPath!).exists()) {
+        try {
+          await File(_avatarPath!).delete();
+        } catch (e) {
+          debugPrint('删除旧头像失败: $e');
+        }
+      }
+
+      // 上传到 Supabase Storage（可选，如果需要云端存储）
+      final userId = await _supabaseService.currentUserId;
+      String? avatarUrl;
+      if (userId != null) {
+        try {
+          final uploadPath = '$userId/avatar.jpg';
+          final url = await _supabaseService.uploadPostImage(File(newPath), uploadPath);
+          avatarUrl = url;
+        } catch (e) {
+          debugPrint('上传头像到 Storage 失败: $e');
+        }
+      }
+
+      // 保存到本地和 Supabase
+      await UserAvatarHelper.saveUserAvatarPath(newPath);
+      final success = await _supabaseService.upsertUserProfile(avatarUrl: avatarUrl);
+      
+      if (mounted) {
+        setState(() {
+          _avatarPath = newPath;
+          if (avatarUrl != null) _avatarUrl = avatarUrl;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(success ? '✅ 头像更换成功' : '⚠️ 头像已保存，但同步失败'),
+            backgroundColor: success ? Colors.green : Colors.orange,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('❌ 更换头像失败: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
 // Removed _buildMedicalRecordsSection and _buildGlassActionItem

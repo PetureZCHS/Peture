@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:io';
+import 'dart:typed_data';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/conversation.dart';
@@ -53,7 +55,7 @@ class SupabaseService {
           .from('users_profiles')
           .select()
           .eq('id', userId)
-          .single();
+          .maybeSingle();
 
       return response;
     } catch (e) {
@@ -2624,6 +2626,420 @@ class SupabaseService {
         print('删除健身课程失败: $e');
       }
       return false;
+    }
+  }
+
+  // ============================================================
+  // 社区帖子（Phase 1：发帖 + 信息流）
+  // ============================================================
+
+  static const String _communityBucket = 'post-images';
+
+  /// 上传帖子图片到 Storage，返回公开 URL
+  /// path 建议格式: {userId}/{postId}_{index}.jpg
+  Future<String?> uploadPostImage(File file, String path) async {
+    try {
+      await _client.storage.from(_communityBucket).upload(
+            path,
+            file,
+            fileOptions: const FileOptions(upsert: true),
+          );
+      final url = _client.storage.from(_communityBucket).getPublicUrl(path);
+      return url;
+    } catch (e) {
+      print('上传帖子图片失败: $e');
+      return null;
+    }
+  }
+
+  /// 上传帖子图片（Uint8List，用于海报等内存图）
+  Future<String?> uploadPostImageBytes(Uint8List bytes, String path) async {
+    try {
+      await _client.storage.from(_communityBucket).uploadBinary(
+            path,
+            bytes,
+            fileOptions: const FileOptions(upsert: true),
+          );
+      return _client.storage.from(_communityBucket).getPublicUrl(path);
+    } catch (e) {
+      print('上传帖子图片失败: $e');
+      return null;
+    }
+  }
+
+  /// 创建帖子
+  Future<Map<String, dynamic>?> createCommunityPost({
+    required String content,
+    required List<String> imageUrls,
+    List<String> topicIds = const [],
+    String sourceType = 'normal',
+  }) async {
+    final userId = await currentUserId;
+    if (userId == null) return null;
+    try {
+      final res = await _client.from('community_posts').insert({
+        'author_id': userId,
+        'content': content,
+        'image_urls': imageUrls,
+        'topic_ids': topicIds,
+        'source_type': sourceType,
+      }).select().single();
+      return res as Map<String, dynamic>?;
+    } catch (e) {
+      print('创建社区帖子失败: $e');
+      return null;
+    }
+  }
+
+  /// 分页拉取帖子列表（含作者昵称、头像）
+  Future<List<Map<String, dynamic>>> listCommunityPosts({
+    int limit = 20,
+    int offset = 0,
+    String? sourceType,
+  }) async {
+    try {
+      var query = _client
+          .from('community_posts')
+          .select('id, content, image_urls, topic_ids, source_type, like_count, comment_count, created_at, author_id');
+      if (sourceType != null && sourceType.isNotEmpty) {
+        query = query.eq('source_type', sourceType);
+      }
+      final list = await query.order('created_at', ascending: false).range(offset, offset + limit - 1);
+      if (list.isEmpty) return [];
+      final posts = List<Map<String, dynamic>>.from(list as List);
+      final authorIds = posts
+          .where((p) => p['author_id'] != null)
+          .map<String>((p) => p['author_id'].toString())
+          .toSet()
+          .toList();
+      final profiles = await _getProfilesByIds(authorIds);
+      for (final p in posts) {
+        final profile = profiles[p['author_id'] as String];
+        p['author_nickname'] = profile?['nickname'] ?? '用户';
+        p['author_avatar_url'] = profile?['avatar_url'];
+      }
+      return posts;
+    } catch (e) {
+      print('拉取社区帖子列表失败: $e');
+      return [];
+    }
+  }
+
+  /// 按 id 列表批量拉取 users_profiles
+  Future<Map<String, Map<String, dynamic>>> _getProfilesByIds(List<String> ids) async {
+    if (ids.isEmpty) return {};
+    try {
+      final list = await _client.from('users_profiles').select('id, nickname, avatar_url').inFilter('id', ids);
+      final map = <String, Map<String, dynamic>>{};
+      for (final row in list as List) {
+        final r = Map<String, dynamic>.from(row as Map);
+        final id = r['id']?.toString();
+        if (id != null) map[id] = r;
+      }
+      return map;
+    } catch (e) {
+      print('批量拉取用户资料失败: $e');
+      return {};
+    }
+  }
+
+  /// 单条帖子详情（含作者信息）
+  Future<Map<String, dynamic>?> getCommunityPost(String postId) async {
+    try {
+      final res = await _client
+          .from('community_posts')
+          .select('id, content, image_urls, topic_ids, source_type, like_count, comment_count, created_at, author_id')
+          .eq('id', postId)
+          .single();
+      final data = res as Map<String, dynamic>?;
+      if (data == null || data['author_id'] == null) return null;
+      final authorId = data['author_id'].toString();
+      final profiles = await _getProfilesByIds([authorId]);
+      final profile = profiles[authorId];
+      data['author_nickname'] = profile?['nickname'] ?? '用户';
+      data['author_avatar_url'] = profile?['avatar_url'];
+      return data;
+    } catch (e) {
+      print('获取社区帖子失败: $e');
+      return null;
+    }
+  }
+
+  // ============================================================
+  // 社区互动（Phase 2：评论、点赞、收藏、关注）
+  // ============================================================
+
+  /// 发表评论
+  Future<Map<String, dynamic>?> createComment({
+    required String postId,
+    required String content,
+    String? parentId,
+  }) async {
+    final userId = await currentUserId;
+    if (userId == null) return null;
+    try {
+      final res = await _client.from('community_post_comments').insert({
+        'post_id': postId,
+        'user_id': userId,
+        'parent_id': parentId,
+        'content': content,
+      }).select().single();
+      return res as Map<String, dynamic>?;
+    } catch (e) {
+      print('发表评论失败: $e');
+      return null;
+    }
+  }
+
+  /// 获取帖子的评论列表（含作者信息）
+  Future<List<Map<String, dynamic>>> getPostComments(String postId) async {
+    try {
+      final list = await _client
+          .from('community_post_comments')
+          .select('id, post_id, user_id, parent_id, content, created_at')
+          .eq('post_id', postId)
+          .order('created_at', ascending: true);
+      if (list.isEmpty) return [];
+      final comments = List<Map<String, dynamic>>.from(list as List);
+      final userIds = comments.map<String>((c) => c['user_id']?.toString() ?? '').where((id) => id.isNotEmpty).toSet().toList();
+      if (userIds.isEmpty) return comments;
+      final profiles = await _getProfilesByIds(userIds);
+      for (final c in comments) {
+        final uid = c['user_id']?.toString();
+        if (uid != null) {
+          final profile = profiles[uid];
+          c['author_nickname'] = profile?['nickname'] ?? '用户';
+          c['author_avatar_url'] = profile?['avatar_url'];
+        }
+      }
+      return comments;
+    } catch (e) {
+      print('获取评论列表失败: $e');
+      return [];
+    }
+  }
+
+  /// 点赞/取消点赞
+  Future<bool> toggleLike(String postId) async {
+    final userId = await currentUserId;
+    if (userId == null) return false;
+    try {
+      final existing = await _client
+          .from('community_post_likes')
+          .select('id')
+          .eq('post_id', postId)
+          .eq('user_id', userId)
+          .maybeSingle();
+      if (existing != null) {
+        await _client
+            .from('community_post_likes')
+            .delete()
+            .eq('post_id', postId)
+            .eq('user_id', userId);
+        return false;
+      } else {
+        await _client.from('community_post_likes').insert({
+          'post_id': postId,
+          'user_id': userId,
+        });
+        return true;
+      }
+    } catch (e) {
+      print('点赞操作失败: $e');
+      return false;
+    }
+  }
+
+  /// 检查当前用户是否已点赞
+  Future<bool> isLiked(String postId) async {
+    final userId = await currentUserId;
+    if (userId == null) return false;
+    try {
+      final res = await _client
+          .from('community_post_likes')
+          .select('id')
+          .eq('post_id', postId)
+          .eq('user_id', userId)
+          .maybeSingle();
+      return res != null;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// 收藏/取消收藏
+  Future<bool> toggleCollection(String postId) async {
+    final userId = await currentUserId;
+    if (userId == null) return false;
+    try {
+      final existing = await _client
+          .from('community_post_collections')
+          .select('id')
+          .eq('post_id', postId)
+          .eq('user_id', userId)
+          .maybeSingle();
+      if (existing != null) {
+        await _client
+            .from('community_post_collections')
+            .delete()
+            .eq('post_id', postId)
+            .eq('user_id', userId);
+        return false;
+      } else {
+        await _client.from('community_post_collections').insert({
+          'post_id': postId,
+          'user_id': userId,
+        });
+        return true;
+      }
+    } catch (e) {
+      print('收藏操作失败: $e');
+      return false;
+    }
+  }
+
+  /// 检查当前用户是否已收藏
+  Future<bool> isCollected(String postId) async {
+    final userId = await currentUserId;
+    if (userId == null) return false;
+    try {
+      final res = await _client
+          .from('community_post_collections')
+          .select('id')
+          .eq('post_id', postId)
+          .eq('user_id', userId)
+          .maybeSingle();
+      return res != null;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// 关注/取消关注
+  /// 返回 true 表示已关注，false 表示已取消关注
+  Future<bool> toggleFollow(String followingId) async {
+    final userId = await currentUserId;
+    if (userId == null || userId == followingId) {
+      print('关注操作失败: userId=$userId, followingId=$followingId');
+      return false;
+    }
+    try {
+      final existing = await _client
+          .from('community_user_follows')
+          .select('id')
+          .eq('follower_id', userId)
+          .eq('following_id', followingId)
+          .maybeSingle();
+      if (existing != null) {
+        // 已关注，执行取消关注
+        await _client
+            .from('community_user_follows')
+            .delete()
+            .eq('follower_id', userId)
+            .eq('following_id', followingId);
+        print('取消关注成功: $followingId');
+        return false; // false = 已取消关注
+      } else {
+        // 未关注，执行关注
+        await _client.from('community_user_follows').insert({
+          'follower_id': userId,
+          'following_id': followingId,
+        });
+        print('关注成功: $followingId');
+        return true; // true = 已关注
+      }
+    } catch (e) {
+      print('关注操作失败: $e');
+      return false;
+    }
+  }
+
+  /// 检查当前用户是否已关注
+  Future<bool> isFollowing(String userId) async {
+    final currentId = await currentUserId;
+    if (currentId == null || currentId == userId) return false;
+    try {
+      final res = await _client
+          .from('community_user_follows')
+          .select('id')
+          .eq('follower_id', currentId)
+          .eq('following_id', userId)
+          .maybeSingle();
+      return res != null;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// 批量检查点赞状态（用于列表）
+  Future<Map<String, bool>> batchCheckLiked(List<String> postIds) async {
+    final userId = await currentUserId;
+    if (userId == null || postIds.isEmpty) return {};
+    try {
+      final list = await _client
+          .from('community_post_likes')
+          .select('post_id')
+          .eq('user_id', userId)
+          .inFilter('post_id', postIds);
+      final map = <String, bool>{};
+      for (final row in list as List) {
+        final pid = row['post_id']?.toString();
+        if (pid != null) map[pid] = true;
+      }
+      return map;
+    } catch (e) {
+      return {};
+    }
+  }
+
+  /// 获取关注流（关注的人的帖子）
+  Future<List<Map<String, dynamic>>> getFollowingFeed({
+    int limit = 20,
+    int offset = 0,
+  }) async {
+    final userId = await currentUserId;
+    if (userId == null) return [];
+    try {
+      // 1. 获取当前用户关注的人列表
+      final follows = await _client
+          .from('community_user_follows')
+          .select('following_id')
+          .eq('follower_id', userId);
+      if (follows.isEmpty) return [];
+      final followingIds = (follows as List)
+          .map<String>((f) => f['following_id']?.toString() ?? '')
+          .where((id) => id.isNotEmpty)
+          .toList();
+      if (followingIds.isEmpty) return [];
+      // 2. 查询这些人的帖子
+      final list = await _client
+          .from('community_posts')
+          .select('id, content, image_urls, topic_ids, source_type, like_count, comment_count, created_at, author_id')
+          .inFilter('author_id', followingIds)
+          .order('created_at', ascending: false)
+          .range(offset, offset + limit - 1);
+      if (list.isEmpty) return [];
+      final posts = List<Map<String, dynamic>>.from(list as List);
+      // 3. 获取作者信息
+      final authorIds = posts
+          .where((p) => p['author_id'] != null)
+          .map<String>((p) => p['author_id'].toString())
+          .toSet()
+          .toList();
+      if (authorIds.isEmpty) return posts;
+      final profiles = await _getProfilesByIds(authorIds);
+      for (final p in posts) {
+        final uid = p['author_id']?.toString();
+        if (uid != null) {
+          final profile = profiles[uid];
+          p['author_nickname'] = profile?['nickname'] ?? '用户';
+          p['author_avatar_url'] = profile?['avatar_url'];
+        }
+      }
+      return posts;
+    } catch (e) {
+      print('获取关注流失败: $e');
+      return [];
     }
   }
 }

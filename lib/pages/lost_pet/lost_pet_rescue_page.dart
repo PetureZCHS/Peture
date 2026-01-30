@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/rendering.dart';
@@ -10,9 +11,9 @@ import 'package:image_picker/image_picker.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:intl/intl.dart';
 import '../../utils/ui_helpers.dart';
-import '../../community_screen.dart';
 import '../../services/supabase_service.dart';
 import '../../models/pet.dart';
+import '../community/publish_post_page.dart';
 import 'lost_pet_generator.dart';
 
 class LostPetRescuePage extends StatefulWidget {
@@ -264,48 +265,29 @@ class _LostPetRescuePageState extends State<LostPetRescuePage> with SingleTicker
   Future<void> _publishToCommunity() async {
     setState(() => _isGenerating = true);
     try {
-      // Wait for any potential layout updates
       await Future.delayed(const Duration(milliseconds: 50));
 
-      // 1. Capture Image
       final boundary = _posterKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
       if (boundary == null) throw Exception('无法获取渲染边界');
 
       ui.Image image = await boundary.toImage(pixelRatio: 2.0);
       ByteData? byteData = await image.toByteData(format: ui.ImageByteFormat.png);
       if (byteData == null) throw Exception('图片数据为空');
-      
-      Uint8List pngBytes = byteData.buffer.asUint8List();
 
-      // 2. Save to temporary file
-      final directory = await getTemporaryDirectory();
-      final imagePath = '${directory.path}/lost_pet_poster_${DateTime.now().millisecondsSinceEpoch}.png';
-      final imageFile = File(imagePath);
-      await imageFile.writeAsBytes(pngBytes);
+      final pngBytes = byteData.buffer.asUint8List();
+      final content = '#寻宠启事 ${_generatedMaterials!.posterHeadline}\n\n${_generatedMaterials!.xiaohongshuText}';
 
-      // 3. Create Post
-      final newPost = Post(
-        id: 'lost_${DateTime.now().millisecondsSinceEpoch}',
-        imageUrl: '', // Local file used
-        imageFile: imageFile,
-        content: '#寻宠启事 ${_generatedMaterials!.posterHeadline}\n\n${_generatedMaterials!.xiaohongshuText}',
-        userAvatarUrl: 'https://api.dicebear.com/7.x/avataaars/png?seed=Felix', // Mock avatar
-        username: '急切的铲屎官',
-        likeCount: 0,
-        imageHeight: 300, // Fixed height for poster
-      );
-
-      // 4. Add to mock data
-      mockPosts.insert(0, newPost);
-
-      // 5. Navigate
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('✅ 已发布到社区'), backgroundColor: Colors.green),
-        );
+        setState(() => _isGenerating = false);
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (context) => const CommunityScreen()),
+          MaterialPageRoute(
+            builder: (context) => PublishPostPage(
+              initialImageBytes: pngBytes,
+              initialContent: content,
+              sourceType: 'lost_pet',
+            ),
+          ),
         );
       }
     } catch (e) {
@@ -314,9 +296,8 @@ class _LostPetRescuePageState extends State<LostPetRescuePage> with SingleTicker
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('发布失败: ${e.toString()}'), backgroundColor: Colors.red),
         );
+        setState(() => _isGenerating = false);
       }
-    } finally {
-      if (mounted) setState(() => _isGenerating = false);
     }
   }
 

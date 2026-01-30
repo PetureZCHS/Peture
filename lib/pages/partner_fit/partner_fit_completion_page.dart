@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:share_plus/share_plus.dart';
 import '../../models/fitness_course.dart';
+import '../community/publish_post_page.dart';
 
 /// 训练完成页面
 class PartnerFitCompletionPage extends StatefulWidget {
@@ -307,6 +307,13 @@ class _PartnerFitCompletionPageState extends State<PartnerFitCompletionPage>
 #活力伙伴 #人宠健身 #萌星球
     ''';
 
-    Share.share(text);
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => PublishPostPage(
+          initialContent: text.trim(),
+          sourceType: 'partner_fit',
+        ),
+      ),
+    );
   }
 }
