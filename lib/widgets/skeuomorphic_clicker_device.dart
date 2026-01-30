@@ -6,27 +6,40 @@ import 'package:sensors_plus/sensors_plus.dart';
 
 /// 高级专业训宠响片设备
 /// 采用现代专业训犬设备风格：哑光深灰机身、RGB氛围灯、高端触控旋钮
+/// 
+/// 交互流程：
+/// 1. 待命状态：显示提示语
+/// 2. 点击响片 (onClick)：播放声音 + 触觉反馈 + 进入待确认状态
+/// 3. 待确认状态 (pendingConfirmation=true)：显示「✓ 成功」「✗ 失败」按钮
+/// 4. 用户确认：onConfirmSuccess 或 onConfirmFail
 class SkeuomorphicClickerDevice extends StatefulWidget {
   final int successCount;
   final int failCount;
+  final int unconfirmedCount; // 未确认的点击次数
   final int totalSuccessCount;
   final int totalFailCount;
   final String currentProject;
   final List<String> projects;
   final int selectedIndex;
-  final VoidCallback onSuccess;
-  final VoidCallback onFail;
+  final VoidCallback onSuccess; // 保留兼容旧逻辑（直接成功）
+  final VoidCallback onFail;    // 保留兼容旧逻辑
+  final VoidCallback? onClick;  // 新：响片点击（只播放声音，不计数）
+  final VoidCallback? onConfirmSuccess; // 新：确认成功
+  final VoidCallback? onConfirmFail;    // 新：确认失败
+  final VoidCallback? onSkipConfirm;    // 新：跳过确认（记为未确认）
   final Function(int) onProjectChanged;
   final VoidCallback onAddProject;
   final Function(String) onDeleteProject; // 删除训练项目
   final VoidCallback onReset; // 重置当前项目统计
   final VoidCallback onShowStats; // 显示详细统计
   final bool isCoolingDown;
+  final bool pendingConfirmation; // 是否处于待确认状态
 
   const SkeuomorphicClickerDevice({
     super.key,
     required this.successCount,
     required this.failCount,
+    this.unconfirmedCount = 0,
     required this.totalSuccessCount,
     required this.totalFailCount,
     required this.currentProject,
@@ -34,12 +47,17 @@ class SkeuomorphicClickerDevice extends StatefulWidget {
     required this.selectedIndex,
     required this.onSuccess,
     required this.onFail,
+    this.onClick,
+    this.onConfirmSuccess,
+    this.onConfirmFail,
+    this.onSkipConfirm,
     required this.onProjectChanged,
     required this.onAddProject,
     required this.onDeleteProject,
     required this.onReset,
     required this.onShowStats,
     required this.isCoolingDown,
+    this.pendingConfirmation = false,
   });
 
   @override
@@ -2477,14 +2495,20 @@ class _SkeuomorphicClickerDeviceState extends State<SkeuomorphicClickerDevice>
           _pressController.reverse();
         }
       },
-      // 点击逻辑：触发训练记录
+      // 点击逻辑：触发响片
       onTap: () {
         if (isCooling || _isDestroyed) return;
-        // 触发其他业务动画
+        // 触发动画效果
         _knobRotationController.forward(from: 0);
         _successFlashController.forward(from: 0);
         _cooldownController.forward(from: 0);
-        widget.onSuccess();
+        // 新流程：如果有 onClick 回调，调用它（只播放声音，进入待确认）
+        // 否则使用旧的 onSuccess 直接记录成功
+        if (widget.onClick != null) {
+          widget.onClick!();
+        } else {
+          widget.onSuccess();
+        }
       },
       // 长按逻辑：触发砸设备蓄力
       onLongPressStart: (details) {
@@ -2763,6 +2787,12 @@ class _SkeuomorphicClickerDeviceState extends State<SkeuomorphicClickerDevice>
 
   /// 控制按钮区
   Widget _buildControlButtons() {
+    // 如果处于待确认状态，显示成功/失败确认按钮
+    if (widget.pendingConfirmation) {
+      return _buildConfirmationButtons();
+    }
+    
+    // 默认状态：只显示重置和统计按钮（无标记失败）
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
@@ -2775,10 +2805,7 @@ class _SkeuomorphicClickerDeviceState extends State<SkeuomorphicClickerDevice>
             widget.onReset();
           },
         ),
-        const SizedBox(width: 16),
-        // 失败标记按钮
-        _buildFailureButton(),
-        const SizedBox(width: 16),
+        const SizedBox(width: 24),
         // 统计按钮
         _buildSmallButton(
           icon: Icons.bar_chart_rounded,
@@ -2789,6 +2816,142 @@ class _SkeuomorphicClickerDeviceState extends State<SkeuomorphicClickerDevice>
           },
         ),
       ],
+    );
+  }
+
+  /// 待确认状态下的确认按钮组
+  Widget _buildConfirmationButtons() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        // 跳过/不确定按钮
+        _buildSmallButton(
+          icon: Icons.skip_next_rounded,
+          color: const Color(0xFF607D8B),
+          onTap: () {
+            HapticFeedback.lightImpact();
+            widget.onSkipConfirm?.call();
+          },
+        ),
+        const SizedBox(width: 12),
+        // 成功确认按钮
+        _buildConfirmSuccessButton(),
+        const SizedBox(width: 12),
+        // 失败确认按钮
+        _buildConfirmFailButton(),
+      ],
+    );
+  }
+
+  /// 确认成功按钮
+  Widget _buildConfirmSuccessButton() {
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.mediumImpact();
+        if (widget.onConfirmSuccess != null) {
+          widget.onConfirmSuccess!();
+        } else {
+          // 兼容旧逻辑
+          widget.onSuccess();
+        }
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Color(0xFF66BB6A),
+              Color(0xFF43A047),
+            ],
+          ),
+          borderRadius: BorderRadius.circular(25),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF4CAF50).withOpacity(0.4),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.check_rounded,
+              color: Colors.white.withOpacity(0.95),
+              size: 18,
+            ),
+            const SizedBox(width: 6),
+            const Text(
+              '成功',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 确认失败按钮
+  Widget _buildConfirmFailButton() {
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.mediumImpact();
+        if (widget.onConfirmFail != null) {
+          widget.onConfirmFail!();
+        } else {
+          // 兼容旧逻辑
+          widget.onFail();
+        }
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Color(0xFFFF7043),
+              Color(0xFFE64A19),
+            ],
+          ),
+          borderRadius: BorderRadius.circular(25),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFFFF5722).withOpacity(0.4),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.close_rounded,
+              color: Colors.white.withOpacity(0.95),
+              size: 18,
+            ),
+            const SizedBox(width: 6),
+            const Text(
+              '失败',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

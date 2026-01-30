@@ -3,7 +3,6 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../services/supabase_service.dart';
-import '../../community_screen.dart';
 
 /// 发帖页：多图 + 文案 + 话题，支持寻宠/搭档分享预填
 class PublishPostPage extends StatefulWidget {
@@ -164,10 +163,8 @@ class _PublishPostPageState extends State<PublishPostPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('发布成功'), backgroundColor: Colors.green),
       );
-      Navigator.of(context).popUntil((r) => r.isFirst);
-      Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => const CommunityScreen()),
-      );
+      // 只需要pop返回，通过返回值true通知调用方刷新数据
+      Navigator.of(context).pop(true);
     } catch (e) {
       if (mounted) {
         setState(() => _loading = false);

@@ -16,6 +16,8 @@ class Post {
   final int likeCount;
   final double imageHeight; // 用于瀑布流的图片高度
   final String? authorId; // 作者 ID（用于关注等功能）
+  final DateTime? createdAt; // 创建时间
+  final List<String> topicIds; // 话题标签
 
   Post({
     required this.id,
@@ -27,6 +29,8 @@ class Post {
     required this.likeCount,
     required this.imageHeight,
     this.authorId,
+    this.createdAt,
+    this.topicIds = const [],
   });
 
   /// 从 Supabase 查询结果构造（用于信息流）
@@ -49,6 +53,28 @@ class Post {
       likeCount = 0;
     }
     
+    // 解析创建时间
+    DateTime? createdAt;
+    try {
+      final createdAtStr = row['created_at']?.toString();
+      if (createdAtStr != null && createdAtStr.isNotEmpty) {
+        createdAt = DateTime.parse(createdAtStr);
+      }
+    } catch (e) {
+      createdAt = null;
+    }
+    
+    // 解析话题标签
+    List<String> topicIds = [];
+    try {
+      final topics = row['topic_ids'];
+      if (topics is List) {
+        topicIds = topics.map((e) => e.toString()).toList();
+      }
+    } catch (e) {
+      topicIds = [];
+    }
+    
     return Post(
       id: row['id']?.toString() ?? '',
       imageUrl: firstUrl,
@@ -59,6 +85,8 @@ class Post {
       likeCount: likeCount,
       imageHeight: 220,
       authorId: row['author_id']?.toString(),
+      createdAt: createdAt,
+      topicIds: topicIds,
     );
   }
 }
@@ -341,9 +369,9 @@ class _CommunityScreenState extends State<CommunityScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.transparent, // 修改背景色
+      backgroundColor: const Color(0xFFF5F5F5), // 浅灰色背景
       appBar: AppBar(
-        backgroundColor: Colors.transparent, // 修改AppBar背景色
+        backgroundColor: const Color(0xFFF5F5F5), // 与背景一致
         elevation: 0,
         // 小红书风格的顶部导航栏
         centerTitle: true,
@@ -387,12 +415,16 @@ class _CommunityScreenState extends State<CommunityScreen>
           IconButton(
             icon: const Icon(Icons.add_circle_outline, color: Color(0xFFFF2442), size: 26),
             tooltip: '发布动态',
-            onPressed: () {
-              Navigator.of(context).push(
+            onPressed: () async {
+              final result = await Navigator.of(context).push<bool>(
                 MaterialPageRoute(
                   builder: (context) => const PublishPostPage(),
                 ),
               );
+              // 如果发帖成功，刷新帖子列表
+              if (result == true && mounted) {
+                _loadPosts();
+              }
             },
           ),
           IconButton(
