@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/rendering.dart';
@@ -10,9 +11,9 @@ import 'package:image_picker/image_picker.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:intl/intl.dart';
 import '../../utils/ui_helpers.dart';
-import '../../community_screen.dart';
 import '../../services/supabase_service.dart';
 import '../../models/pet.dart';
+import '../community/publish_post_page.dart';
 import 'lost_pet_generator.dart';
 
 class LostPetRescuePage extends StatefulWidget {
@@ -264,48 +265,29 @@ class _LostPetRescuePageState extends State<LostPetRescuePage> with SingleTicker
   Future<void> _publishToCommunity() async {
     setState(() => _isGenerating = true);
     try {
-      // Wait for any potential layout updates
       await Future.delayed(const Duration(milliseconds: 50));
 
-      // 1. Capture Image
       final boundary = _posterKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
       if (boundary == null) throw Exception('无法获取渲染边界');
 
       ui.Image image = await boundary.toImage(pixelRatio: 2.0);
       ByteData? byteData = await image.toByteData(format: ui.ImageByteFormat.png);
       if (byteData == null) throw Exception('图片数据为空');
-      
-      Uint8List pngBytes = byteData.buffer.asUint8List();
 
-      // 2. Save to temporary file
-      final directory = await getTemporaryDirectory();
-      final imagePath = '${directory.path}/lost_pet_poster_${DateTime.now().millisecondsSinceEpoch}.png';
-      final imageFile = File(imagePath);
-      await imageFile.writeAsBytes(pngBytes);
+      final pngBytes = byteData.buffer.asUint8List();
+      final content = '#寻宠启事 ${_generatedMaterials!.posterHeadline}\n\n${_generatedMaterials!.xiaohongshuText}';
 
-      // 3. Create Post
-      final newPost = Post(
-        id: 'lost_${DateTime.now().millisecondsSinceEpoch}',
-        imageUrl: '', // Local file used
-        imageFile: imageFile,
-        content: '#寻宠启事 ${_generatedMaterials!.posterHeadline}\n\n${_generatedMaterials!.xiaohongshuText}',
-        userAvatarUrl: 'https://api.dicebear.com/7.x/avataaars/png?seed=Felix', // Mock avatar
-        username: '急切的铲屎官',
-        likeCount: 0,
-        imageHeight: 300, // Fixed height for poster
-      );
-
-      // 4. Add to mock data
-      mockPosts.insert(0, newPost);
-
-      // 5. Navigate
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('✅ 已发布到社区'), backgroundColor: Colors.green),
-        );
+        setState(() => _isGenerating = false);
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (context) => const CommunityScreen()),
+          MaterialPageRoute(
+            builder: (context) => PublishPostPage(
+              initialImageBytes: pngBytes,
+              initialContent: content,
+              sourceType: 'lost_pet',
+            ),
+          ),
         );
       }
     } catch (e) {
@@ -314,9 +296,8 @@ class _LostPetRescuePageState extends State<LostPetRescuePage> with SingleTicker
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('发布失败: ${e.toString()}'), backgroundColor: Colors.red),
         );
+        setState(() => _isGenerating = false);
       }
-    } finally {
-      if (mounted) setState(() => _isGenerating = false);
     }
   }
 
@@ -548,21 +529,43 @@ class _LostPetRescuePageState extends State<LostPetRescuePage> with SingleTicker
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('选择宠物', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.grey[700])),
+        Text(
+          '选择宠物',
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: Colors.grey[700],
+          ),
+        ),
         const SizedBox(height: 8),
         DropdownButtonFormField<Pet>(
           value: _selectedPet,
+          isDense: true,
+          isExpanded: true,
           decoration: InputDecoration(
             hintText: '请选择走失的宠物',
             hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
             prefixIcon: Icon(Icons.pets_rounded, color: Colors.grey[400], size: 20),
             filled: true,
             fillColor: Colors.grey[50],
-            contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
-            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Color(0xFFFF512F), width: 1.5)),
-            errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: Colors.red.shade200, width: 1)),
+            // 选中态只需要单行展示，避免过高导致溢出
+            contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide.none,
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide.none,
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: const BorderSide(color: Color(0xFFFF512F), width: 1.5),
+            ),
+            errorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide(color: Colors.red.shade200, width: 1),
+            ),
           ),
           items: _pets.map((pet) {
             return DropdownMenuItem<Pet>(
@@ -570,26 +573,7 @@ class _LostPetRescuePageState extends State<LostPetRescuePage> with SingleTicker
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (pet.avatar != null && File(pet.avatar!).existsSync())
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(20),
-                      child: Image.file(
-                        File(pet.avatar!),
-                        width: 32,
-                        height: 32,
-                        fit: BoxFit.cover,
-                      ),
-                    )
-                  else
-                    Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        color: Colors.grey[300],
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(Icons.pets, size: 20, color: Colors.grey[600]),
-                    ),
+                  _buildPetAvatar(pet.avatar, size: 32),
                   const SizedBox(width: 12),
                   Flexible(
                     child: Column(
@@ -601,11 +585,13 @@ class _LostPetRescuePageState extends State<LostPetRescuePage> with SingleTicker
                           style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
                           overflow: TextOverflow.ellipsis,
                         ),
-                        Text(
-                          '${pet.type} · ${pet.breed}',
-                          style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                        // 下拉列表里可以显示类型/品种；但“选中后”的输入框里不显示灰字，避免溢出
+                        if (_selectedPet?.id != pet.id)
+                          Text(
+                            '${pet.type} · ${pet.breed}',
+                            style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                            overflow: TextOverflow.ellipsis,
+                          ),
                       ],
                     ),
                   ),
@@ -613,10 +599,76 @@ class _LostPetRescuePageState extends State<LostPetRescuePage> with SingleTicker
               ),
             );
           }).toList(),
+          // 选中后的显示：仅显示头像 + 名字（单行），避免 “Bottom Overflowed by Pixels”
+          selectedItemBuilder: (context) {
+            return _pets.map((pet) {
+              return Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _buildPetAvatar(pet.avatar, size: 32),
+                  const SizedBox(width: 12),
+                  Flexible(
+                    fit: FlexFit.loose,
+                    child: Text(
+                      pet.name,
+                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                    ),
+                  ),
+                ],
+              );
+            }).toList();
+          },
           onChanged: _onPetSelected,
           validator: (value) => value == null ? '请选择宠物' : null,
         ),
       ],
+    );
+  }
+
+  Widget _buildPetAvatar(String? avatar, {double size = 32}) {
+    final radius = size / 2;
+    if (avatar != null && avatar.trim().isNotEmpty) {
+      final a = avatar.trim();
+      final uri = Uri.tryParse(a);
+      final isHttp = uri != null && (uri.scheme == 'http' || uri.scheme == 'https');
+      if (isHttp) {
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(radius),
+          child: Image.network(
+            a,
+            width: size,
+            height: size,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => _petAvatarFallback(size),
+          ),
+        );
+      }
+      if (File(a).existsSync()) {
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(radius),
+          child: Image.file(
+            File(a),
+            width: size,
+            height: size,
+            fit: BoxFit.cover,
+          ),
+        );
+      }
+    }
+    return _petAvatarFallback(size);
+  }
+
+  Widget _petAvatarFallback(double size) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: Colors.grey[300],
+        shape: BoxShape.circle,
+      ),
+      child: Icon(Icons.pets, size: size * 0.6, color: Colors.grey[600]),
     );
   }
   

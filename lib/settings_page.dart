@@ -6,6 +6,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 // 添加数据迁移页面导入
 import 'pages/data_migration_page.dart';
+import 'pages/invitation_code_page.dart';
+import 'pages/my_invitation_code_page.dart';
 import 'login_page.dart';
 
 // ==========================================
@@ -158,6 +160,128 @@ class _AppSettingsState extends State<AppSettings> {
                 ),
                 const Icon(Icons.arrow_forward_ios,
                     color: Colors.white70, size: 16),
+              ],
+            ),
+          ),
+        ),
+
+        // ==============================================
+        // [入口] 我的邀请码（仅对 739319163@qq.com 开放）
+        // ==============================================
+        GestureDetector(
+          onTap: () async {
+            final email = Supabase.instance.client.auth.currentUser?.email?.trim().toLowerCase() ?? '';
+            if (email == '739319163@qq.com') {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (context) => const MyInvitationCodePage()),
+              );
+            } else {
+              if (!context.mounted) return;
+              showDialog(
+                context: context,
+                builder: (ctx) => _WarmTipDialog(message: '该功能暂未对小主们开放'),
+              );
+            }
+          },
+          child: Container(
+            margin: const EdgeInsets.only(bottom: 8),
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFFFFB6C1), Color(0xFFF8C4CC)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFFFFB6C1).withOpacity(0.3),
+                  blurRadius: 12,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.3),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.confirmation_number_rounded, color: Colors.white, size: 28),
+                ),
+                const SizedBox(width: 16),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "我的邀请码",
+                        style: TextStyle(color: Color(0xFF8B4545), fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                      SizedBox(height: 4),
+                      Text(
+                        "一人一码，分享好友兑换终身会员",
+                        style: TextStyle(color: Color(0xFFB85C5C), fontSize: 13),
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(Icons.arrow_forward_ios, color: Color(0xFFB85C5C), size: 16),
+              ],
+            ),
+          ),
+        ),
+
+        // ==============================================
+        // [入口] 输入邀请码（兑换终身会员）
+        // ==============================================
+        GestureDetector(
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (context) => const InvitationCodePage()),
+            );
+          },
+          child: Container(
+            margin: const EdgeInsets.only(bottom: 8),
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Color(0xFFF8C4CC), width: 1.5),
+              boxShadow: [
+                BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 2)),
+              ],
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFB6C1).withOpacity(0.2),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.card_giftcard_rounded, color: Color(0xFFE8919E), size: 28),
+                ),
+                const SizedBox(width: 16),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "输入邀请码",
+                        style: TextStyle(color: Colors.black87, fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                      SizedBox(height: 4),
+                      Text(
+                        "兑换终身会员权益",
+                        style: TextStyle(color: Colors.grey, fontSize: 13),
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(Icons.arrow_forward_ios, color: Colors.grey, size: 16),
               ],
             ),
           ),
@@ -371,6 +495,62 @@ class _AppSettingsState extends State<AppSettings> {
                 ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+// ==========================================
+// 温馨提示弹窗（画风与 invitation_banner 一致）
+// ==========================================
+class _WarmTipDialog extends StatelessWidget {
+  final String message;
+
+  const _WarmTipDialog({required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    const pinkDark = Color(0xFFE8919E);
+    const yellow = Color(0xFFFFF8E7);
+    const pinkBorder = Color(0xFFF8C4CC);
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 28),
+        decoration: BoxDecoration(
+          color: yellow,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: pinkBorder, width: 2),
+          boxShadow: [
+            BoxShadow(
+              color: pinkDark.withOpacity(0.2),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.favorite_border_rounded, size: 48, color: pinkDark),
+            const SizedBox(height: 16),
+            Text(message, style: const TextStyle(fontSize: 16, color: Color(0xFF8B4545), height: 1.4), textAlign: TextAlign.center),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () => Navigator.of(context).pop(),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: pinkDark,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+                child: const Text('好的'),
+              ),
+            ),
+          ],
         ),
       ),
     );

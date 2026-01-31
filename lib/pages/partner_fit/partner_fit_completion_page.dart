@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:share_plus/share_plus.dart';
 import '../../models/fitness_course.dart';
+import '../community/publish_post_page.dart';
 
 /// 训练完成页面
 class PartnerFitCompletionPage extends StatefulWidget {
@@ -100,18 +100,6 @@ class _PartnerFitCompletionPageState extends State<PartnerFitCompletionPage>
                 
                 const SizedBox(height: 4),
                 
-                // Keep 风格的鼓励文案
-                Text(
-                  '自律给我自由',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: const Color(0xFFFF6B35).withOpacity(0.8), // Keep 橙色
-                    fontWeight: FontWeight.w500,
-                    fontStyle: FontStyle.italic,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-
                 const SizedBox(height: 40),
 
                 // 成就卡片
@@ -143,14 +131,14 @@ class _PartnerFitCompletionPageState extends State<PartnerFitCompletionPage>
                       ),
                       const SizedBox(height: 24),
                       Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: [
-                          _buildStatItem(
-                            icon: Icons.timer,
-                            value: '${widget.record.durationMinutes}',
-                            unit: '分钟',
-                            label: '训练时长',
-                          ),
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        _buildStatItem(
+                          icon: Icons.timer,
+                          value: _formatDuration(widget.record.durationMinutes),
+                          unit: 'mm:ss',
+                          label: '训练时长',
+                        ),
                           _buildStatItem(
                             icon: Icons.local_fire_department,
                             value: '${widget.record.caloriesBurned}',
@@ -251,17 +239,6 @@ class _PartnerFitCompletionPageState extends State<PartnerFitCompletionPage>
                 ),
 
                 const SizedBox(height: 40),
-                
-                // 致敬 Keep 的小标签
-                Text(
-                  'Inspired by Keep',
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: Colors.grey.shade400,
-                    fontWeight: FontWeight.w300,
-                    letterSpacing: 0.5,
-                  ),
-                ),
               ],
             ),
           ),
@@ -308,6 +285,14 @@ class _PartnerFitCompletionPageState extends State<PartnerFitCompletionPage>
     );
   }
 
+  /// 将分钟数转换为 mm:ss 形式的字符串
+  String _formatDuration(int minutes) {
+    final totalSeconds = minutes * 60;
+    final mins = totalSeconds ~/ 60;
+    final secs = totalSeconds % 60;
+    return '${mins.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
+  }
+
   void _shareAchievement() {
     final text =
         '''
@@ -322,6 +307,13 @@ class _PartnerFitCompletionPageState extends State<PartnerFitCompletionPage>
 #活力伙伴 #人宠健身 #萌星球
     ''';
 
-    Share.share(text);
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => PublishPostPage(
+          initialContent: text.trim(),
+          sourceType: 'partner_fit',
+        ),
+      ),
+    );
   }
 }

@@ -1,0 +1,65 @@
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+void main() async {
+  // 初始化 Supabase
+  await Supabase.initialize(
+    url: 'https://tcftpcvcldfudzxgemdh.supabase.co',
+    anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRjZnRwY3ZjbGRmdWR6eGdlbWRoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA2NjMzMTQsImV4cCI6MjA3NjIzOTMxNH0.uiusEWfuAw37fL6neZfK3q9NV4HZF7k-kX6hFIJQ83s',
+  );
+
+  final supabase = Supabase.instance.client;
+
+  print('🔍 检查社区帖子评论数据...');
+
+  try {
+    // 获取所有帖子
+    final posts = await supabase
+        .from('community_posts')
+        .select('id, content, comment_count')
+        .limit(10);
+
+    print('📋 找到 ${posts.length} 个帖子:');
+    for (final post in posts) {
+      final postId = post['id'];
+      final content = post['content'];
+      final commentCount = post['comment_count'] ?? 0;
+
+      print('\n📝 帖子 ID: $postId');
+      print('   内容: ${content.substring(0, min(50, content.length))}...');
+      print('   评论数: $commentCount');
+
+      // 获取该帖子的评论
+      final comments = await supabase
+          .from('community_post_comments')
+          .select('id, content, user_id, created_at')
+          .eq('post_id', postId)
+          .order('created_at', ascending: false)
+          .limit(5);
+
+      print('   实际评论: ${comments.length} 条');
+      if (comments.isNotEmpty) {
+        for (final comment in comments) {
+          print('     - ${comment['content']} (用户: ${comment['user_id']})');
+        }
+      }
+    }
+
+    // 检查评论表结构
+    print('\n🔧 检查评论表结构...');
+    final commentColumns = await supabase
+        .from('community_post_comments')
+        .select('*')
+        .limit(1);
+
+    if (commentColumns.isNotEmpty) {
+      print('评论表列: ${commentColumns.first.keys.join(', ')}');
+    } else {
+      print('评论表为空或无权限访问');
+    }
+
+  } catch (e) {
+    print('❌ 错误: $e');
+  }
+}
+
+int min(int a, int b) => a < b ? a : b;

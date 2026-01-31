@@ -1,7 +1,9 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
-import 'post_detail_page.dart'; // 导入帖子详情页
+import 'post_detail_page.dart';
+import 'services/supabase_service.dart';
+import 'pages/community/publish_post_page.dart';
 
 // 帖子数据模型
 class Post {
@@ -13,6 +15,9 @@ class Post {
   final String username;
   final int likeCount;
   final double imageHeight; // 用于瀑布流的图片高度
+  final String? authorId; // 作者 ID（用于关注等功能）
+  final DateTime? createdAt; // 创建时间
+  final List<String> topicIds; // 话题标签
 
   Post({
     required this.id,
@@ -23,7 +28,67 @@ class Post {
     required this.username,
     required this.likeCount,
     required this.imageHeight,
+    this.authorId,
+    this.createdAt,
+    this.topicIds = const [],
   });
+
+  /// 从 Supabase 查询结果构造（用于信息流）
+  static Post fromSupabase(Map<String, dynamic> row) {
+    final imageUrls = row['image_urls'] as List<dynamic>? ?? [];
+    final firstUrl = imageUrls.isNotEmpty ? (imageUrls.first as String?) ?? '' : '';
+    
+    // 安全解析 like_count（可能是 int 或 String）
+    int likeCount = 0;
+    try {
+      final lc = row['like_count'];
+      if (lc is int) {
+        likeCount = lc;
+      } else if (lc is String && lc.isNotEmpty) {
+        likeCount = int.parse(lc);
+      } else if (lc != null) {
+        likeCount = (lc as num).toInt();
+      }
+    } catch (e) {
+      likeCount = 0;
+    }
+    
+    // 解析创建时间
+    DateTime? createdAt;
+    try {
+      final createdAtStr = row['created_at']?.toString();
+      if (createdAtStr != null && createdAtStr.isNotEmpty) {
+        createdAt = DateTime.parse(createdAtStr);
+      }
+    } catch (e) {
+      createdAt = null;
+    }
+    
+    // 解析话题标签
+    List<String> topicIds = [];
+    try {
+      final topics = row['topic_ids'];
+      if (topics is List) {
+        topicIds = topics.map((e) => e.toString()).toList();
+      }
+    } catch (e) {
+      topicIds = [];
+    }
+    
+    return Post(
+      id: row['id']?.toString() ?? '',
+      imageUrl: firstUrl,
+      imageFile: null,
+      content: row['content']?.toString() ?? '',
+      userAvatarUrl: row['author_avatar_url']?.toString() ?? '',
+      username: row['author_nickname']?.toString() ?? '用户',
+      likeCount: likeCount,
+      imageHeight: 220,
+      authorId: row['author_id']?.toString(),
+      createdAt: createdAt,
+      topicIds: topicIds,
+    );
+  }
 }
 
 // 生动的宠物社区模拟数据
@@ -235,29 +300,78 @@ class CommunityScreen extends StatefulWidget {
 class _CommunityScreenState extends State<CommunityScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  final SupabaseService _supabase = SupabaseService();
 
-  // 用于跟踪每个用户的关注状态
+  List<Post> _posts = [];
+  bool _postsLoading = true;
+  bool _postsFromSupabase = false;
+  List<Post> _followingPosts = [];
+  bool _followingLoading = false;
   final Map<String, bool> _followStatus = {};
 
   @override
   void initState() {
     super.initState();
-    // 默认显示"发现"标签（索引 1）
     _tabController = TabController(length: 3, vsync: this, initialIndex: 1);
+    _tabController.addListener(_onTabChanged);
+    _loadPosts();
   }
 
   @override
   void dispose() {
+    _tabController.removeListener(_onTabChanged);
     _tabController.dispose();
     super.dispose();
+  }
+
+  void _onTabChanged() {
+    // 切换到关注Tab时，总是刷新关注流（确保数据最新）
+    if (_tabController.index == 0 && !_followingLoading) {
+      _loadFollowingFeed();
+    }
+  }
+
+  Future<void> _loadPosts() async {
+    setState(() => _postsLoading = true);
+    try {
+      final list = await _supabase.listCommunityPosts(limit: 50);
+      if (!mounted) return;
+      setState(() {
+        _posts = list.map((r) => Post.fromSupabase(r)).toList();
+        _postsFromSupabase = true;
+        _postsLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _posts = List.from(mockPosts);
+        _postsFromSupabase = false;
+        _postsLoading = false;
+      });
+    }
+  }
+
+  Future<void> _loadFollowingFeed() async {
+    setState(() => _followingLoading = true);
+    try {
+      final list = await _supabase.getFollowingFeed(limit: 50);
+      if (!mounted) return;
+      setState(() {
+        _followingPosts = list.map((r) => Post.fromSupabase(r)).toList();
+        _followingLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _followingLoading = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.transparent, // 修改背景色
+      backgroundColor: const Color(0xFFF5F5F5), // 浅灰色背景
       appBar: AppBar(
-        backgroundColor: Colors.transparent, // 修改AppBar背景色
+        backgroundColor: const Color(0xFFF5F5F5), // 与背景一致
         elevation: 0,
         // 小红书风格的顶部导航栏
         centerTitle: true,
@@ -299,6 +413,21 @@ class _CommunityScreenState extends State<CommunityScreen>
         ),
         actions: [
           IconButton(
+            icon: const Icon(Icons.add_circle_outline, color: Color(0xFFFF2442), size: 26),
+            tooltip: '发布动态',
+            onPressed: () async {
+              final result = await Navigator.of(context).push<bool>(
+                MaterialPageRoute(
+                  builder: (context) => const PublishPostPage(),
+                ),
+              );
+              // 如果发帖成功，刷新帖子列表
+              if (result == true && mounted) {
+                _loadPosts();
+              }
+            },
+          ),
+          IconButton(
             icon: const Icon(Icons.search, color: Color(0xFF1E1E1E), size: 24),
             onPressed: () {
               ScaffoldMessenger.of(context).showSnackBar(
@@ -320,20 +449,27 @@ class _CommunityScreenState extends State<CommunityScreen>
 
 
 
-  // 推荐标签页 - 小红书风格双栏瀑布流
+  // 推荐标签页 - 小红书风格双栏瀑布流（优先 Supabase，无数据时用 mock）
   Widget _buildRecommendTab() {
-    return Container(
-      color: const Color(0xFFF5F5F5), // 小红书的背景色
-      child: MasonryGridView.count(
-        crossAxisCount: 2, // 双栏布局
-        mainAxisSpacing: 8, // 垂直间距
-        crossAxisSpacing: 8, // 水平间距
-        padding: const EdgeInsets.fromLTRB(8, 12, 8, 100),
-        itemCount: mockPosts.length,
-        itemBuilder: (context, index) {
-          final post = mockPosts[index];
-          return _buildWaterfallPostCard(post: post);
-        },
+    final displayPosts =
+        (_postsFromSupabase && _posts.isNotEmpty) ? _posts : mockPosts;
+    return RefreshIndicator(
+      onRefresh: _loadPosts,
+      child: Container(
+        color: const Color(0xFFF5F5F5),
+        child: _postsLoading && _posts.isEmpty
+            ? const Center(child: CircularProgressIndicator(color: Color(0xFFFF2442)))
+            : MasonryGridView.count(
+                crossAxisCount: 2,
+                mainAxisSpacing: 8,
+                crossAxisSpacing: 8,
+                padding: const EdgeInsets.fromLTRB(8, 12, 8, 100),
+                itemCount: displayPosts.length,
+                itemBuilder: (context, index) {
+                  final post = displayPosts[index];
+                  return _buildWaterfallPostCard(post: post);
+                },
+              ),
       ),
     );
   }
@@ -341,12 +477,16 @@ class _CommunityScreenState extends State<CommunityScreen>
   // 小红书风格的瀑布流卡片
   Widget _buildWaterfallPostCard({required Post post}) {
     return InkWell(
-      onTap: () {
-        // 点击进入帖子详情页
-        Navigator.push(
+      onTap: () async {
+        // 点击进入帖子详情页，返回时刷新关注流（如果当前在关注Tab）
+        await Navigator.push(
           context,
           MaterialPageRoute(builder: (context) => PostDetailPage(post: post)),
         );
+        // 返回后，如果当前在关注Tab，刷新关注流
+        if (mounted && _tabController.index == 0) {
+          _loadFollowingFeed();
+        }
       },
       borderRadius: BorderRadius.circular(8),
       child: Container(
@@ -436,18 +576,23 @@ class _CommunityScreenState extends State<CommunityScreen>
               padding: const EdgeInsets.fromLTRB(10, 0, 10, 10),
               child: Row(
                 children: [
-                  // 小头像
+                  // 小头像（优先使用用户头像 URL）
                   CircleAvatar(
                     radius: 10,
                     backgroundColor: const Color(0xFFF5F5F5),
-                    child: Text(
-                      post.username[0],
-                      style: const TextStyle(
-                        color: Color(0xFF999999),
-                        fontWeight: FontWeight.w500,
-                        fontSize: 10,
-                      ),
-                    ),
+                    backgroundImage: (post.userAvatarUrl.isNotEmpty)
+                        ? NetworkImage(post.userAvatarUrl)
+                        : null,
+                    child: (post.userAvatarUrl.isEmpty)
+                        ? Text(
+                            post.username.isNotEmpty ? post.username[0] : '宠',
+                            style: const TextStyle(
+                              color: Color(0xFF999999),
+                              fontWeight: FontWeight.w500,
+                              fontSize: 10,
+                            ),
+                          )
+                        : null,
                   ),
                   const SizedBox(width: 6),
                   // 用户昵称
@@ -488,79 +633,109 @@ class _CommunityScreenState extends State<CommunityScreen>
     );
   }
 
-  // 关注标签页
+  // 关注标签页（显示关注的人的帖子）
   Widget _buildFollowTab() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.only(bottom: 100),
-      child: Column(
-        children: [
-          const SizedBox(height: 60),
-          // 空状态提示
-          Icon(Icons.people_outline, size: 80, color: Colors.grey[300]),
-          const SizedBox(height: 16),
-          Text(
-            '还没有关注任何人',
-            style: TextStyle(fontSize: 16, color: Colors.grey[600]),
-          ),
-          const SizedBox(height: 8),
-          TextButton(
-            onPressed: () {
-              setState(() {
-                _tabController.index = 0;
-              });
-            },
-            child: const Text('去推荐页看看'),
-          ),
-          const SizedBox(height: 40),
-          // "为你推荐"模块
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Padding(
-                  padding: EdgeInsets.only(left: 8, bottom: 16),
-                  child: Text(
-                    '为你推荐',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF1E1E1E),
+    if (_followingLoading) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(40),
+          child: CircularProgressIndicator(color: Color(0xFFFF2442)),
+        ),
+      );
+    }
+    if (_followingPosts.isEmpty) {
+      return RefreshIndicator(
+        onRefresh: _loadFollowingFeed,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.only(bottom: 100),
+          child: Column(
+            children: [
+              const SizedBox(height: 60),
+              Icon(Icons.people_outline, size: 80, color: Colors.grey[300]),
+              const SizedBox(height: 16),
+              Text(
+                '还没有关注任何人',
+                style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+              ),
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: () {
+                  setState(() {
+                    _tabController.index = 1; // 切换到发现页
+                  });
+                },
+                child: const Text('去发现页看看'),
+              ),
+              const SizedBox(height: 40),
+              // "为你推荐"模块
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Padding(
+                      padding: EdgeInsets.only(left: 8, bottom: 16),
+                      child: Text(
+                        '为你推荐',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF1E1E1E),
+                        ),
+                      ),
                     ),
-                  ),
+                    _buildRecommendedUser(
+                      username: '萌宠达人',
+                      bio: '分享养宠经验 · 已发布 128 条动态',
+                      avatar: '萌',
+                    ),
+                    _buildRecommendedUser(
+                      username: '宠物医生王',
+                      bio: '专业宠物医师 · 已发布 256 条动态',
+                      avatar: '王',
+                    ),
+                    _buildRecommendedUser(
+                      username: '狗狗训练师',
+                      bio: '行为训练专家 · 已发布 89 条动态',
+                      avatar: '训',
+                    ),
+                    _buildRecommendedUser(
+                      username: '猫咪小管家',
+                      bio: '猫咪护理达人 · 已发布 167 条动态',
+                      avatar: '猫',
+                    ),
+                    _buildRecommendedUser(
+                      username: '宠物营养师',
+                      bio: '科学喂养倡导者 · 已发布 203 条动态',
+                      avatar: '营',
+                    ),
+                  ],
                 ),
-                // 推荐用户列表
-                _buildRecommendedUser(
-                  username: '萌宠达人',
-                  bio: '分享养宠经验 · 已发布 128 条动态',
-                  avatar: '萌',
-                ),
-                _buildRecommendedUser(
-                  username: '宠物医生王',
-                  bio: '专业宠物医师 · 已发布 256 条动态',
-                  avatar: '王',
-                ),
-                _buildRecommendedUser(
-                  username: '狗狗训练师',
-                  bio: '行为训练专家 · 已发布 89 条动态',
-                  avatar: '训',
-                ),
-                _buildRecommendedUser(
-                  username: '猫咪小管家',
-                  bio: '猫咪护理达人 · 已发布 167 条动态',
-                  avatar: '猫',
-                ),
-                _buildRecommendedUser(
-                  username: '宠物营养师',
-                  bio: '科学喂养倡导者 · 已发布 203 条动态',
-                  avatar: '营',
-                ),
-              ],
-            ),
+              ),
+              const SizedBox(height: 20),
+            ],
           ),
-          const SizedBox(height: 20),
-        ],
+        ),
+      );
+    }
+    // 显示关注的人的帖子（瀑布流）
+    return RefreshIndicator(
+      onRefresh: _loadFollowingFeed,
+      child: Container(
+        color: const Color(0xFFF5F5F5),
+        child: MasonryGridView.count(
+          crossAxisCount: 2,
+          mainAxisSpacing: 8,
+          crossAxisSpacing: 8,
+          padding: const EdgeInsets.fromLTRB(8, 12, 8, 100),
+          itemCount: _followingPosts.length,
+          itemBuilder: (context, index) {
+            final post = _followingPosts[index];
+            return _buildWaterfallPostCard(post: post);
+          },
+        ),
       ),
     );
   }
@@ -986,11 +1161,15 @@ class _CommunityScreenState extends State<CommunityScreen>
   // 附近的帖子卡片（带位置标签）
   Widget _buildNearbyPostCard({required Post post}) {
     return InkWell(
-      onTap: () {
-        Navigator.push(
+      onTap: () async {
+        await Navigator.push(
           context,
           MaterialPageRoute(builder: (context) => PostDetailPage(post: post)),
         );
+        // 返回后，如果当前在关注Tab，刷新关注流
+        if (mounted && _tabController.index == 0) {
+          _loadFollowingFeed();
+        }
       },
       borderRadius: BorderRadius.circular(8),
       child: Container(
@@ -1077,13 +1256,18 @@ class _CommunityScreenState extends State<CommunityScreen>
                       CircleAvatar(
                         radius: 9,
                         backgroundColor: const Color(0xFFF5F5F5),
-                        child: Text(
-                          post.username[0],
-                          style: const TextStyle(
-                            fontSize: 9,
-                            color: Color(0xFF999999),
-                          ),
-                        ),
+                        backgroundImage: (post.userAvatarUrl.isNotEmpty)
+                            ? NetworkImage(post.userAvatarUrl)
+                            : null,
+                        child: (post.userAvatarUrl.isEmpty)
+                            ? Text(
+                                post.username.isNotEmpty ? post.username[0] : '宠',
+                                style: const TextStyle(
+                                  fontSize: 9,
+                                  color: Color(0xFF999999),
+                                ),
+                              )
+                            : null,
                       ),
                       const SizedBox(width: 6),
                       Expanded(

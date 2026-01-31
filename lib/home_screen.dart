@@ -19,6 +19,7 @@ import 'pages/shop/shop_page.dart';
 import 'pages/unified_expense/unified_expense_home_page.dart';
 import 'pages/reminder/intelligent_reminder_page.dart';
 import 'settings_page.dart';
+import 'pages/invitation_code_page.dart';
 import 'pages/lost_pet/lost_pet_rescue_page.dart';
 import 'community_screen.dart';
 import 'medical_record_screen.dart';
@@ -106,6 +107,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         _currentPosition = _tabController.value;
       });
     });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      InvitationWelcomeDialog.showIfLifetime(context);
+    });
   }
 
   @override
@@ -151,6 +157,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         _medicalScreenRefreshNotifier.value++;
         _needsMedicalScreenRefresh = false;
       }
+      // 注意：首次加载现在由 didChangeDependencies 中的 _hasLoadedData 标志控制，避免启动卡顿
     }
   }
 

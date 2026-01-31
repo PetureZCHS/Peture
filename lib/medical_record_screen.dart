@@ -400,6 +400,9 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> with SingleTi
   double _currentPosition = 0.0;
   int _lastHapticIndex = 0;
 
+  // 标记是否已经加载过数据（避免重复加载）
+  bool _hasLoadedData = false;
+
   @override
   void initState() {
     super.initState();
@@ -415,7 +418,9 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> with SingleTi
       });
     });
 
-    _loadAllData();
+    // ❌ 移除启动时的同步数据加载，改为延迟加载（避免启动卡顿）
+    // 数据将在首次切换到该 tab 时加载（通过 refreshNotifier 触发）
+    
     // 监听刷新通知
     widget.refreshNotifier?.addListener(_onRefreshRequested);
   }
@@ -423,12 +428,16 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> with SingleTi
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // 每次页面可见时刷新数据，确保宠物列表是最新的
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        _loadAllData();
-      }
-    });
+    // ❌ 移除重复加载，避免启动时多次请求导致卡顿
+    // 改为：只在首次显示且未加载过数据时才加载
+    if (!_hasLoadedData && mounted) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && !_hasLoadedData) {
+          _hasLoadedData = true;
+          _loadAllData();
+        }
+      });
+    }
   }
 
   @override
@@ -466,6 +475,7 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> with SingleTi
   /// 当收到刷新通知时调用
   void _onRefreshRequested() {
     if (mounted) {
+      _hasLoadedData = true; // 标记为已加载
       _loadAllData();
     }
   }
@@ -474,19 +484,13 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> with SingleTi
   final _supabaseService = SupabaseService();
 
   Future<void> _loadAllData() async {
-    // 加载所有宠物
+    // 加载所有宠物（异步执行，不会阻塞 UI）
     final pets = await _supabaseService.getAllPets();
     if (!mounted) return; // 异步操作后检查是否仍然挂载
 
-    print('医疗记录页面：加载到 ${pets.length} 个宠物');
-    for (var pet in pets) {
-      print('  - ${pet['name']} (id: ${pet['id']})');
-    }
-
+    // ❌ 移除 print 语句，减少日志输出导致的性能开销
     setState(() {
       _allPets = pets.map((p) => Pet.fromMap(p)).toList();
-      
-      print('医疗记录页面：_allPets 长度 = ${_allPets.length}');
       
       // 设置默认选中的宠物
       if (_allPets.isNotEmpty) {
@@ -494,9 +498,6 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> with SingleTi
         if (_selectedPet == null || 
             !_allPets.any((pet) => pet.id?.toString() == _selectedPet?.id?.toString())) {
           _selectedPet = _allPets.first;
-          print('医疗记录页面：选择第一个宠物 ${_selectedPet?.name}');
-        } else {
-          print('医疗记录页面：保持当前选中的宠物 ${_selectedPet?.name}');
         }
       } else {
         _selectedPet = null;
@@ -807,14 +808,12 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> with SingleTi
 
   // --- 新的宠物选择器方法 ---
   void _toggleSelectorExpansion() {
-    print('医疗记录页面：点击切换选择器 - 当前状态: $_isSelectorExpanded, 宠物数: ${_allPets.length}');
+    // ❌ 移除所有 print 语句，避免频繁调用时产生大量日志导致卡顿
     if (_allPets.length <= 1) {
-      print('医疗记录页面：宠物数 <= 1，不展开');
       return;
     }
     setState(() {
       _isSelectorExpanded = !_isSelectorExpanded;
-      print('医疗记录页面：切换后状态: $_isSelectorExpanded');
     });
   }
 
@@ -831,26 +830,14 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> with SingleTi
     // 过滤出除当前选中宠物外的其他宠物
     // 使用 toString() 确保正确比较，并处理 null 值
     final selectedPetId = _selectedPet?.id?.toString();
-    print('医疗记录页面：展开选择器 - 当前选中宠物: ${_selectedPet?.name} (ID: $selectedPetId)');
-    print('医疗记录页面：展开选择器 - 总宠物数: ${_allPets.length}');
-    for (var pet in _allPets) {
-      print('  宠物列表: ${pet.name} (id: ${pet.id?.toString()})');
-    }
     
+    // ❌ 移除所有 print 语句，避免频繁重建时产生大量日志导致卡顿
     final availablePets = _allPets.where((pet) {
       final petId = pet.id?.toString();
-      final isMatch = petId != null && petId != selectedPetId;
-      print('  检查宠物 ${pet.name} (id: $petId): ${isMatch ? "显示" : "隐藏"} (选中ID: $selectedPetId)');
-      return isMatch;
+      return petId != null && petId != selectedPetId;
     }).toList();
 
-    print('医疗记录页面：展开选择器 - 可用宠物数: ${availablePets.length}');
-    for (var pet in availablePets) {
-      print('  可用宠物: ${pet.name}');
-    }
-
     if (availablePets.isEmpty) {
-      print('医疗记录页面：没有可用宠物，隐藏选择器');
       return Container(
         margin: const EdgeInsets.only(top: 8),
         padding: const EdgeInsets.all(16),
@@ -1062,7 +1049,9 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> with SingleTi
                             children: [
                               // 宠物头像
                               Hero(
-                                tag: 'pet_avatar_${_selectedPet?.id}',
+                                // Home 使用 IndexedStack，会导致不同页面的 Hero 同时存在于同一路由树
+                                // 这里加页面前缀，保证 tag 在同一路由树内唯一，避免 Hero tag 冲突崩溃
+                                tag: 'medical_pet_avatar_${_selectedPet?.id}',
                                 child: Container(
                                   width: 80,
                                   height: 80,

@@ -57,6 +57,9 @@ dependencies:
   # --- Supabase 依赖（用于 RAG AI 对话） ---
   supabase_flutter: ^2.10.3
   
+  # --- Sentry 错误监控 ---
+  sentry_flutter: ^8.0.0
+  
   # --- 美学升级动画依赖 ---
   liquid_glass_renderer: ^0.2.0-dev.4
   
@@ -74,7 +77,6 @@ dependencies:
 
   # 图片压缩
   flutter_image_compress: ^2.3.0
-  image_gallery_saver: ^2.0.2
 
 dev_dependencies:
   flutter_test:
@@ -88,6 +90,7 @@ flutter:
 
   assets:
     - assets/logo.png
+    - assets/invitation_banner.png
     - assets/icon/
     - assets/mp3/喂食.mp3
     - assets/mp3/握手.mp3

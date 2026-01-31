@@ -22,7 +22,9 @@ class _DogClickerScreenState extends State<DogClickerScreen>
   late AudioPlayer _audioPlayer;
   int _clickCount = 0;
   int _failCount = 0; // 失败记录次数
+  int _unconfirmedCount = 0; // 未确认的点击次数
   bool _isCoolingDown = false; // 点击防抖标志
+  bool _pendingConfirmation = false; // 是否处于待确认状态
   int _selectedFilterIndex = 0; // 选中的筛选标签索引
   List<String> _filterOptions = ['喂食', '握手', '坐下']; // 筛选选项（改为可变列表，默认不包含"全部"）
 
@@ -41,8 +43,10 @@ class _DogClickerScreenState extends State<DogClickerScreen>
   // 各训练项目的统计数据
   final Map<String, int> _successCounts = {};
   final Map<String, int> _failureCounts = {};
+  final Map<String, int> _unconfirmedCounts = {}; // 未确认计数
   int _totalSuccessCount = 0;
   int _totalFailureCount = 0;
+  int _totalUnconfirmedCount = 0;
   bool _isLoading = true;
 
   @override
@@ -102,13 +106,16 @@ class _DogClickerScreenState extends State<DogClickerScreen>
         // 加载总计数
         _totalSuccessCount = prefs.getInt('${_keyPrefix}total_success') ?? 0;
         _totalFailureCount = prefs.getInt('${_keyPrefix}total_failure') ?? 0;
+        _totalUnconfirmedCount = prefs.getInt('${_keyPrefix}total_unconfirmed') ?? 0;
 
-        // 加载各项目的成功和失败次数
+        // 加载各项目的成功、失败和未确认次数
         for (var option in _filterOptions) {
           _successCounts[option] =
               prefs.getInt('$_keyPrefix${option}_success') ?? 0;
           _failureCounts[option] =
               prefs.getInt('$_keyPrefix${option}_failure') ?? 0;
+          _unconfirmedCounts[option] =
+              prefs.getInt('$_keyPrefix${option}_unconfirmed') ?? 0;
         }
 
         // 更新当前项目的计数
@@ -126,6 +133,7 @@ class _DogClickerScreenState extends State<DogClickerScreen>
     final currentOption = _filterOptions[_selectedFilterIndex];
     _clickCount = _successCounts[currentOption] ?? 0;
     _failCount = _failureCounts[currentOption] ?? 0;
+    _unconfirmedCount = _unconfirmedCounts[currentOption] ?? 0;
   }
 
   /// 保存成功记录
@@ -975,7 +983,116 @@ class _DogClickerScreenState extends State<DogClickerScreen>
     );
   }
 
-  /// 播放点击音效
+  /// 响片点击 - 只播放声音和触觉反馈，进入待确认状态
+  Future<void> _handleClickerClick() async {
+    // 冷却检查，防止连点
+    if (_isCoolingDown || _pendingConfirmation) return;
+
+    try {
+      // 开启冷却
+      setState(() {
+        _isCoolingDown = true;
+        _pendingConfirmation = true; // 进入待确认状态
+      });
+      
+      // 250ms 后解除冷却
+      Future.delayed(const Duration(milliseconds: 250), () {
+        if (mounted) {
+          setState(() => _isCoolingDown = false);
+        }
+      });
+
+      final currentOption = _filterOptions[_selectedFilterIndex];
+      final soundPath = _projectSounds[currentOption];
+
+      if (soundPath == null) {
+        debugPrint('项目 $currentOption 没有配置音效');
+        return;
+      }
+
+      // 停止当前播放（如果有），确保快速重播
+      await _audioPlayer.stop();
+      // 播放对应项目的音频资源
+      await _audioPlayer.play(AssetSource(soundPath));
+
+      // 添加强力触感反馈 - 模拟真实机械响片的手感
+      await HapticFeedback.heavyImpact();
+      
+      // 不立即计数，等待用户确认
+    } catch (e) {
+      debugPrint('播放音效失败: $e');
+      // 即使播放失败，也给予触觉反馈
+      await HapticFeedback.mediumImpact();
+    }
+  }
+
+  /// 确认成功
+  Future<void> _handleConfirmSuccess() async {
+    if (!_pendingConfirmation) return;
+    
+    setState(() {
+      _clickCount++;
+      _pendingConfirmation = false;
+    });
+    await _saveSuccessCount();
+    
+    // 轻微的成功触觉反馈
+    await HapticFeedback.lightImpact();
+  }
+
+  /// 确认失败
+  Future<void> _handleConfirmFail() async {
+    if (!_pendingConfirmation) return;
+    
+    setState(() {
+      _failCount++;
+      _pendingConfirmation = false;
+    });
+    await _saveFailureCount();
+    
+    // 触觉反馈
+    await HapticFeedback.mediumImpact();
+    
+    if (mounted) {
+      _showFailureTip(context);
+    }
+  }
+
+  /// 跳过确认（记为未确认）
+  Future<void> _handleSkipConfirm() async {
+    if (!_pendingConfirmation) return;
+    
+    setState(() {
+      _unconfirmedCount++;
+      _pendingConfirmation = false;
+    });
+    await _saveUnconfirmedCount();
+    
+    await HapticFeedback.lightImpact();
+  }
+
+  /// 保存未确认计数
+  Future<void> _saveUnconfirmedCount() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final currentOption = _filterOptions[_selectedFilterIndex];
+
+      // 更新总计数
+      _totalUnconfirmedCount++;
+      await prefs.setInt('${_keyPrefix}total_unconfirmed', _totalUnconfirmedCount);
+
+      // 更新具体项目的计数
+      _unconfirmedCounts[currentOption] = (_unconfirmedCounts[currentOption] ?? 0) + 1;
+      await prefs.setInt(
+        '$_keyPrefix${currentOption}_unconfirmed',
+        _unconfirmedCounts[currentOption]!,
+      );
+    } catch (e) {
+      debugPrint('保存未确认记录失败: $e');
+    }
+  }
+
+  /// 播放点击音效（保留旧方法用于兼容）
   Future<void> _playClickSound() async {
     // 冷却检查，防止连点
     if (_isCoolingDown) return;
@@ -1119,15 +1236,28 @@ class _DogClickerScreenState extends State<DogClickerScreen>
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
+                    // 新手提示（呼吸感文字）
+                    if (!_pendingConfirmation) _buildTrainingTip(),
+                    // 待确认状态提示
+                    if (_pendingConfirmation) _buildConfirmationTip(),
+                    const SizedBox(height: 12),
                     // 拟物化响片设备（包含项目选择和统计）
                     SkeuomorphicClickerDevice(
                       successCount: _clickCount,
                       failCount: _failCount,
+                      unconfirmedCount: _unconfirmedCount,
                       totalSuccessCount: _totalSuccessCount,
                       totalFailCount: _totalFailureCount,
                       currentProject: _filterOptions[_selectedFilterIndex],
                       projects: _filterOptions,
                       selectedIndex: _selectedFilterIndex,
+                      // 新流程的回调
+                      onClick: _handleClickerClick,
+                      onConfirmSuccess: _handleConfirmSuccess,
+                      onConfirmFail: _handleConfirmFail,
+                      onSkipConfirm: _handleSkipConfirm,
+                      pendingConfirmation: _pendingConfirmation,
+                      // 保留旧的回调用于兼容
                       onSuccess: _playClickSound,
                       onFail: () async {
                         setState(() => _failCount++);
@@ -1138,6 +1268,10 @@ class _DogClickerScreenState extends State<DogClickerScreen>
                         }
                       },
                       onProjectChanged: (index) {
+                        // 如果正在待确认状态，先取消
+                        if (_pendingConfirmation) {
+                          _handleSkipConfirm();
+                        }
                         setState(() {
                           _selectedFilterIndex = index;
                           _updateCurrentCounts();
@@ -1157,6 +1291,105 @@ class _DogClickerScreenState extends State<DogClickerScreen>
           ),
         ],
       ),
+    );
+  }
+
+  /// 新手提示 - 呼吸感文字
+  Widget _buildTrainingTip() {
+    return AnimatedBuilder(
+      animation: _orbController,
+      builder: (context, child) {
+        // 使用 sin 函数创建平滑的呼吸效果
+        final breathValue = 0.5 + 0.5 * math.sin(_orbController.value * math.pi * 2);
+        return Opacity(
+          opacity: 0.5 + breathValue * 0.5,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.tips_and_updates_outlined,
+                  color: Colors.white.withOpacity(0.5),
+                  size: 16,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  '在它做对的那一秒，按下快门（响片）',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.6),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w400,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  /// 待确认状态提示
+  Widget _buildConfirmationTip() {
+    return AnimatedBuilder(
+      animation: _orbController,
+      builder: (context, child) {
+        // 脉冲效果
+        final pulseValue = 0.5 + 0.5 * math.sin(_orbController.value * math.pi * 6);
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                const Color(0xFF4CAF50).withOpacity(0.15),
+                const Color(0xFFFF9800).withOpacity(0.15),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: Colors.white.withOpacity(0.1),
+              width: 1,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // 脉冲指示器
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: const Color(0xFF4CAF50).withOpacity(0.5 + pulseValue * 0.5),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF4CAF50).withOpacity(pulseValue * 0.5),
+                      blurRadius: 8,
+                      spreadRadius: 2,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                '它做到了吗？请确认结果',
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.85),
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
