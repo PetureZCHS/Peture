@@ -5,7 +5,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../utils/ui_helpers.dart';
 import '../../services/supabase_edge_service.dart';
+
+import '../../models/pet.dart';
+import '../../services/supabase_service.dart';
 import 'pet_diary_result_page.dart';
+import 'dart:io';
 import '../../library_screen.dart';
 
 /// 撰写日记页面 - AI将用户输入改写成宠物第一人称
@@ -20,7 +24,13 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
     with SingleTickerProviderStateMixin {
   final TextEditingController _inputController = TextEditingController();
   final PetDiaryEdgeService _diaryService = PetDiaryEdgeService();
+  final SupabaseService _supabaseService = SupabaseService();
   late AnimationController _orbController;
+  
+  // 宠物选择
+  List<Pet> _pets = [];
+  Pet? _selectedPet;
+  bool _isLoadingPets = false;
 
   // 当前选中的风格
   String _selectedStyle = '小红书';
@@ -38,6 +48,33 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
       vsync: this,
       duration: const Duration(seconds: 10),
     )..repeat(reverse: true);
+    
+    _loadPets();
+  }
+
+  Future<void> _loadPets() async {
+    if (!mounted) return;
+    setState(() => _isLoadingPets = true);
+    try {
+      final petsData = await _supabaseService.getAllPets();
+      if (mounted) {
+        setState(() {
+          _pets = petsData.map((data) => Pet.fromMap(data)).toList();
+          _isLoadingPets = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('加载宠物列表失败: $e');
+      if (mounted) {
+        setState(() => _isLoadingPets = false);
+      }
+    }
+  }
+
+  void _onPetSelected(Pet? pet) {
+    setState(() {
+      _selectedPet = pet;
+    });
   }
 
   @override
@@ -67,6 +104,14 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
       return;
     }
 
+    // 获取昵称：优先使用宠物的自定义昵称，否则使用用户默认昵称
+    String? nickname;
+    if (_selectedPet != null && _selectedPet!.useCustomNickname && _selectedPet!.ownerNickname != null) {
+      nickname = _selectedPet!.ownerNickname;
+    } else {
+      nickname = await _supabaseService.getOwnerNickname();
+    }
+
     // 直接跳转到结果页面,在那里显示加载动画和流式生成
     Navigator.push(
       context,
@@ -75,6 +120,11 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
           originalText: userInput,
           style: _selectedStyle,
           diaryService: _diaryService,
+          nickname: nickname,
+          petName: _selectedPet?.name,
+          breed: _selectedPet?.breed,
+          gender: _selectedPet?.gender,
+          petType: _selectedPet?.type,
         ),
       ),
     );
@@ -249,7 +299,14 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
                                   ),
                                 ),
                               ),
+
                               const SizedBox(height: 16),
+
+                              // 宠物选择
+                              _buildPetSelector(),
+
+                              const SizedBox(height: 16),
+
                               // 风格选择
                               SingleChildScrollView(
                                 scrollDirection: Axis.horizontal,
@@ -386,6 +443,102 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildPetSelector() {
+    if (_isLoadingPets) {
+      return const SizedBox(
+        height: 48,
+        child: Center(
+            child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2))),
+      );
+    }
+
+    return Container(
+      height: 48, // Match the height of nickname input
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<Pet>(
+          value: _selectedPet,
+          hint: Text('选择主角',
+              style: TextStyle(color: Colors.grey.shade400, fontSize: 13)),
+          isExpanded: true,
+          icon: Icon(Icons.arrow_drop_down, color: Colors.grey.shade400),
+          items: _pets.map((pet) {
+            return DropdownMenuItem<Pet>(
+              value: pet,
+              child: Row(
+                children: [
+                  _buildPetAvatar(pet.avatar, size: 24),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      pet.name,
+                      style: const TextStyle(fontSize: 14),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
+          onChanged: _onPetSelected,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPetAvatar(String? avatar, {double size = 32}) {
+    final radius = size / 2;
+    if (avatar != null && avatar.trim().isNotEmpty) {
+      final a = avatar.trim();
+      final uri = Uri.tryParse(a);
+      final isHttp =
+          uri != null && (uri.scheme == 'http' || uri.scheme == 'https');
+      if (isHttp) {
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(radius),
+          child: Image.network(
+            a,
+            width: size,
+            height: size,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => _petAvatarFallback(size),
+          ),
+        );
+      }
+      if (File(a).existsSync()) {
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(radius),
+          child: Image.file(
+            File(a),
+            width: size,
+            height: size,
+            fit: BoxFit.cover,
+          ),
+        );
+      }
+    }
+    return _petAvatarFallback(size);
+  }
+
+  Widget _petAvatarFallback(double size) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: Colors.grey[300],
+        shape: BoxShape.circle,
+      ),
+      child: Icon(Icons.pets, size: size * 0.6, color: Colors.grey[600]),
     );
   }
 }

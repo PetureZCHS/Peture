@@ -9,6 +9,7 @@ import 'pages/data_migration_page.dart';
 import 'pages/invitation_code_page.dart';
 import 'pages/my_invitation_code_page.dart';
 import 'login_page.dart';
+import 'account_settings_page.dart';
 
 // ==========================================
 // 1. 主设置页面框架 (SettingsPage)
@@ -296,7 +297,11 @@ class _AppSettingsState extends State<AppSettings> {
               iconColor: _iconBlue,
               title: '编辑个人资料',
               onTap: () {
-                // Navigator.push...
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const AccountSettingsPage(),
+                  ),
+                );
               },
             ),
             _buildDivider(),
@@ -305,7 +310,11 @@ class _AppSettingsState extends State<AppSettings> {
               iconColor: _iconBlue,
               title: '修改密码',
               onTap: () {
-                // Navigator.push...
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const AccountSettingsPage(),
+                  ),
+                );
               },
             ),
           ],

@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import '../utils/user_avatar_helper.dart';
+import '../services/supabase_service.dart';
 
 /// 宠物档案表单页面 - 模仿截图设计
 class PetProfileFormPage extends StatefulWidget {
@@ -25,6 +26,11 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
   String? _neuterStatus; // 已绝育/未绝育
   double? _weight; // kg
   String? _userAvatarPath; // 用户头像路径
+
+  // 主人昵称相关
+  bool _useCustomNickname = false; // 是否为该宠物使用自定义称呼
+  String? _ownerNickname; // 该宠物对主人的自定义称呼
+  String _defaultOwnerNickname = '主人'; // 用户默认称呼
 
   final Map<String, List<String>> _speciesOptions = {
     '猫咪': [
@@ -169,9 +175,24 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
   void initState() {
     super.initState();
     _loadUserAvatar();
+    _loadDefaultOwnerNickname();
     if (widget.initialData != null) {
       // 从现有数据加载
       _loadInitialData();
+    }
+  }
+
+  // 加载用户默认的主人昵称
+  Future<void> _loadDefaultOwnerNickname() async {
+    try {
+      final nickname = await SupabaseService().getOwnerNickname();
+      if (mounted) {
+        setState(() {
+          _defaultOwnerNickname = nickname;
+        });
+      }
+    } catch (e) {
+      debugPrint('加载默认昵称失败: $e');
     }
   }
 
@@ -219,6 +240,10 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
       if (data['weight'] != null) {
         _weight = data['weight'] as double?;
       }
+
+      // 加载昵称相关字段
+      _useCustomNickname = data['useCustomNickname'] as bool? ?? false;
+      _ownerNickname = data['ownerNickname'] as String?;
     });
   }
 
@@ -1753,6 +1778,45 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
     );
   }
 
+  // 编辑昵称
+  void _showNicknameEditor() {
+    final controller =
+        TextEditingController(text: _ownerNickname ?? _defaultOwnerNickname);
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('宠物对你的称呼'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(
+            labelText: '称呼',
+            hintText: '例如：妈妈、姐姐、爸爸',
+          ),
+          maxLength: 10,
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('取消'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final nickname = controller.text.trim();
+              if (nickname.isNotEmpty) {
+                setState(() {
+                  _ownerNickname = nickname;
+                });
+                Navigator.pop(context);
+              }
+            },
+            child: const Text('保存'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _savePetProfile() {
     if (_petName == null || _petName!.isEmpty) {
       ScaffoldMessenger.of(
@@ -1793,6 +1857,8 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
       'gender': _gender,
       'neuter_status': _neuterStatus,
       'weight': _weight,
+      'useCustomNickname': _useCustomNickname,
+      'ownerNickname': _useCustomNickname ? _ownerNickname : null,
     };
 
     Navigator.pop(context, result);
@@ -1973,7 +2039,55 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
                               ? '${_weight!.toStringAsFixed(1)} kg'
                               : null,
                           onTap: _showWeightPicker,
+                        ),
+                        // 昵称设置
+                        _FormRow(
+                          label: '对你的称呼',
+                          onTap:
+                              _useCustomNickname ? _showNicknameEditor : null,
                           isLast: true,
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  _useCustomNickname && _ownerNickname != null
+                                      ? _ownerNickname!
+                                      : _defaultOwnerNickname,
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    color: _useCustomNickname
+                                        ? Colors.black87
+                                        : Colors.grey[600],
+                                  ),
+                                ),
+                              ),
+                              if (!_useCustomNickname)
+                                Padding(
+                                  padding: const EdgeInsets.only(right: 8.0),
+                                  child: Text(
+                                    '开启后设定专用称呼',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.grey[400],
+                                    ),
+                                  ),
+                                ),
+                              Switch(
+                                value: _useCustomNickname,
+                                onChanged: (value) {
+                                  setState(() {
+                                    _useCustomNickname = value;
+                                    if (!value) {
+                                      _ownerNickname = null;
+                                    }
+                                  });
+                                  if (value) {
+                                    _showNicknameEditor();
+                                  }
+                                },
+                              ),
+                            ],
+                          ),
                         ),
                       ],
                     ),
@@ -2032,6 +2146,68 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _FormRow extends StatelessWidget {
+  final String label;
+  final Widget child;
+  final VoidCallback? onTap;
+  final bool isLast;
+
+  const _FormRow({
+    super.key,
+    required this.label,
+    required this.child,
+    this.onTap,
+    this.isLast = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.vertical(
+          bottom: isLast ? const Radius.circular(20) : Radius.zero,
+        ),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+          decoration: BoxDecoration(
+            border: isLast
+                ? null
+                : Border(
+                    bottom: BorderSide(color: Colors.grey.shade100, width: 0.5),
+                  ),
+          ),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 70,
+                child: Text(
+                  label,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    color: Colors.black87,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+              Expanded(child: child),
+              if (onTap != null) ...[
+                const SizedBox(width: 8),
+                const Icon(
+                  Icons.arrow_forward_ios,
+                  size: 14,
+                  color: Color(0xFFCCCCCC),
+                ),
+              ],
+            ],
+          ),
+        ),
       ),
     );
   }
