@@ -85,7 +85,8 @@ class _OrderPaymentPageState extends State<OrderPaymentPage> {
                   widget.product.name,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  style: const TextStyle(
+                      fontSize: 16, fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: 6),
                 Text('数量：${widget.quantity}'),
@@ -131,7 +132,8 @@ class _OrderPaymentPageState extends State<OrderPaymentPage> {
                 placeholder: 'assets/icon/app_icon.png',
                 image: logoUrl,
                 fit: BoxFit.contain,
-                imageErrorBuilder: (_, __, ___) => Icon(Icons.qr_code, color: color),
+                imageErrorBuilder: (_, __, ___) =>
+                    Icon(Icons.qr_code, color: color),
               ),
             ),
             const SizedBox(width: 12),
@@ -163,13 +165,15 @@ class _OrderPaymentPageState extends State<OrderPaymentPage> {
             value: 0,
             title: '微信支付',
             color: const Color(0xFF09BB07),
-            logoUrl: 'https://upload.wikimedia.org/wikipedia/commons/7/7c/WeChat_logo.png',
+            logoUrl:
+                'https://upload.wikimedia.org/wikipedia/commons/7/7c/WeChat_logo.png',
           ),
           buildOption(
             value: 1,
             title: '支付宝支付',
             color: const Color(0xFF1677FF),
-            logoUrl: 'https://upload.wikimedia.org/wikipedia/commons/0/0d/Alipay_logo.png',
+            logoUrl:
+                'https://upload.wikimedia.org/wikipedia/commons/0/0d/Alipay_logo.png',
           ),
         ],
       ),
@@ -238,5 +242,3 @@ class _OrderPaymentPageState extends State<OrderPaymentPage> {
     );
   }
 }
-
-

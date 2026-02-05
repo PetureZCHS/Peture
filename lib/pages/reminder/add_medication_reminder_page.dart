@@ -89,11 +89,9 @@ class _AddMedicationReminderPageState extends State<AddMedicationReminderPage> {
     try {
       String frequencyDetails;
       if (_frequencyType == 'daily') {
-        frequencyDetails = _dailyTimes
-            .map((time) {
-              return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
-            })
-            .join(',');
+        frequencyDetails = _dailyTimes.map((time) {
+          return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+        }).join(',');
       } else {
         frequencyDetails = _everyXHours.toString();
       }
@@ -240,9 +238,9 @@ class _AddMedicationReminderPageState extends State<AddMedicationReminderPage> {
       onChanged: (value) {
         setState(() {
           _selectedPetId = value;
-          _selectedPetName = _pets
-              .firstWhere((pet) => pet['id']?.toString() == value)['name']
-              as String;
+          _selectedPetName =
+              _pets.firstWhere((pet) => pet['id']?.toString() == value)['name']
+                  as String;
         });
       },
       validator: (value) => value == null ? '请选择宠物' : null,

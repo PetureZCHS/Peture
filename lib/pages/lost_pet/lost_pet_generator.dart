@@ -1,5 +1,3 @@
-
-
 class LostPetInfo {
   final String name;
   final String species; // 'cat' or 'dog'
@@ -48,11 +46,12 @@ class LostPetMaterials {
 
 class LostPetGenerator {
   static LostPetMaterials generate(LostPetInfo info) {
-    final isCat = info.species.toLowerCase().contains('cat') || info.species.contains('猫');
-    
+    final isCat = info.species.toLowerCase().contains('cat') ||
+        info.species.contains('猫');
+
     // 1. Analysis
     final urgencyLevel = 'High'; // Always high for lost pets
-    
+
     final List<String> searchChecklist = isCat
         ? [
             '检查楼道每一层（包括电表箱、杂物堆）',
@@ -74,10 +73,11 @@ class LostPetGenerator {
           ];
 
     // 2. Social Media - WeChat Moments
-    final rewardText = info.rewardAmount != null && info.rewardAmount!.isNotEmpty
-        ? '悬赏${info.rewardAmount}元'
-        : '必有重谢';
-    
+    final rewardText =
+        info.rewardAmount != null && info.rewardAmount!.isNotEmpty
+            ? '悬赏${info.rewardAmount}元'
+            : '必有重谢';
+
     final wechatMomentsText = '''
 🚨紧急寻${isCat ? '猫' : '狗'}！朋友圈的各位帮帮忙！
 我家${info.name}于${info.lostTime}在${info.lostLocation}走失。
@@ -88,7 +88,8 @@ $rewardText！麻烦大家帮忙转发扩散，好人一生平安！🙏
 ''';
 
     // 3. Social Media - XiaoHongShu
-    final xiaohongshuTitle = '📍${info.lostLocation}寻${isCat ? '猫' : '狗'}！！救救孩子！';
+    final xiaohongshuTitle =
+        '📍${info.lostLocation}寻${isCat ? '猫' : '狗'}！！救救孩子！';
     final xiaohongshuText = '''
 😭😭坐标${info.lostLocation}，我家${info.name}丢了！
 时间：${info.lostTime}
@@ -104,15 +105,20 @@ $rewardText！麻烦大家帮忙转发扩散，好人一生平安！🙏
 ''';
 
     // 4. Short Message
-    final shortMessageText = '【寻宠】${info.lostLocation}走失一只${info.description}的${isCat ? '猫' : '狗'}，名${info.name}。如有线索请联系${info.contactInfo}，$rewardText。';
+    final shortMessageText =
+        '【寻宠】${info.lostLocation}走失一只${info.description}的${isCat ? '猫' : '狗'}，名${info.name}。如有线索请联系${info.contactInfo}，$rewardText。';
 
     // 5. Poster Content
     final posterHeadline = '寻${isCat ? '猫' : '狗'}启事 / $rewardText';
     // Split description into features roughly
-    final features = info.description.split(RegExp(r'[，,。;；]')).where((s) => s.trim().isNotEmpty).toList();
+    final features = info.description
+        .split(RegExp(r'[，,。;；]'))
+        .where((s) => s.trim().isNotEmpty)
+        .toList();
     if (features.isEmpty) features.add(info.description);
-    
-    final posterKeyInfo = '时间：${info.lostTime}\n地点：${info.lostLocation}\n名字：${info.name}';
+
+    final posterKeyInfo =
+        '时间：${info.lostTime}\n地点：${info.lostLocation}\n名字：${info.name}';
     final posterCtaText = '发现请立即拍照留存并联系，好人一生平安！';
 
     return LostPetMaterials(

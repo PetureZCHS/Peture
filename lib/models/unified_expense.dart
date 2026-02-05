@@ -104,7 +104,7 @@ class UnifiedExpense {
     } else if (map['pet_id'] != null) {
       petId = map['pet_id'].toString();
     }
-    
+
     return UnifiedExpense(
       id: map['id']?.toString(), // 支持 int 和 String
       amount: (map['amount'] as num).toDouble(),
@@ -116,9 +116,12 @@ class UnifiedExpense {
       note: map['note'] as String?,
       photoPath: map['photoPath'] as String? ?? map['photo_path'] as String?,
       itemName: map['itemName'] as String? ?? map['item_name'] as String?,
-      estimatedEndDate: map['estimatedEndDate'] as String? ?? map['estimated_end_date'] as String?,
+      estimatedEndDate: map['estimatedEndDate'] as String? ??
+          map['estimated_end_date'] as String?,
       itemType: map['itemType'] as String? ?? map['item_type'] as String?,
-      createdAt: map['createdAt'] as String? ?? map['created_at']?.toString() ?? DateTime.now().toIso8601String(),
+      createdAt: map['createdAt'] as String? ??
+          map['created_at']?.toString() ??
+          DateTime.now().toIso8601String(),
     );
   }
 
@@ -287,13 +290,19 @@ class UnifiedExpenseCategory {
       return allCategories.firstWhere((cat) => cat.name == name);
     } catch (e) {
       // 模糊匹配旧分类
-      if (name.contains('医疗') || name.contains('诊治')) return oneOffCategories[0];
-      if (name.contains('美容') || name.contains('洗护') || name.contains('清洁')) return oneOffCategories[1];
-      if (name.contains('寄养') || name.contains('服务')) return oneOffCategories[2];
-      if (name.contains('食') || name.contains('粮') || name.contains('零食')) return oneOffCategories[3];
-      if (name.contains('玩具') || name.contains('娱乐') || name.contains('服饰')) return oneOffCategories[4];
-      if (name.contains('用品') || name.contains('装备') || name.contains('交通')) return oneOffCategories[5];
-      
+      if (name.contains('医疗') || name.contains('诊治'))
+        return oneOffCategories[0];
+      if (name.contains('美容') || name.contains('洗护') || name.contains('清洁'))
+        return oneOffCategories[1];
+      if (name.contains('寄养') || name.contains('服务'))
+        return oneOffCategories[2];
+      if (name.contains('食') || name.contains('粮') || name.contains('零食'))
+        return oneOffCategories[3];
+      if (name.contains('玩具') || name.contains('娱乐') || name.contains('服饰'))
+        return oneOffCategories[4];
+      if (name.contains('用品') || name.contains('装备') || name.contains('交通'))
+        return oneOffCategories[5];
+
       return oneOffCategories.last;
     }
   }

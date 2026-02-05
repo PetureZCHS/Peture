@@ -11,24 +11,27 @@ import 'add_unified_expense_page.dart';
 
 // --- Local Style Constants to match Home Screen ---
 class ExpenseStyles {
-  // More saturated, deep gradient for background
+  // Cute Peture Style
   static const LinearGradient bgGradient = LinearGradient(
     colors: [
-      Color(0xFFE0EAFC),
-      Color(0xFFCFDEF3)
-    ], // Light Blue-ish Grey - base
+      Color(0xFFFFFBE6), // Light Cream Yellow
+      Color(0xFFFFEEF0), // Light Pink
+    ],
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
   );
 
   static const LinearGradient vibrantGradient = LinearGradient(
-    colors: [Color(0xFF8EC5FC), Color(0xFFE0C3FC)],
+    colors: [Color(0xFFFFB7C5), Color(0xFFFF69B4)], // Pink gradient
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
 
-  static const Color textDark = Color(0xFF2D3142);
-  static const Color textGrey = Color(0xFF9094A6);
+  static const Color textDark = Color(0xFF6D4C41); // Brown text
+  static const Color textGrey = Color(0xFFA1887F); // Light Brown text
+
   static const LinearGradient mainGradient = LinearGradient(
-    colors: [Color(0xFF4facfe), Color(0xFF00f2fe)], // Vibrant Blue Cyan
+    colors: [Color(0xFFFF9E80), Color(0xFFFF69B4)], // Peach to Pink
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
@@ -36,15 +39,16 @@ class ExpenseStyles {
   static BoxDecoration glassDecoration({double radius = 24}) {
     return BoxDecoration(
       borderRadius: BorderRadius.circular(radius),
-      // Reduced opacity to let background saturation show through
-      color: Colors.white.withOpacity(0.40),
-      // Add a slight white shimmer to the border
-      border: Border.all(color: Colors.white.withOpacity(0.6), width: 1.5),
+      color: const Color(0xFFFFFDE7), // Solid Cream color
+      border: Border.all(
+        color: const Color(0xFF8D6E63), // Brown border
+        width: 3.0,
+      ),
       boxShadow: [
         BoxShadow(
-          color: const Color(0xFF4facfe).withOpacity(0.1), // Tinted shadow
-          blurRadius: 20,
-          offset: const Offset(0, 10),
+          color: const Color(0xFF8D6E63).withOpacity(0.2),
+          blurRadius: 0,
+          offset: const Offset(4, 4), // Hard shadow for sticker effect
         ),
       ],
     );
@@ -174,7 +178,8 @@ class _UnifiedExpenseHomePageState extends State<UnifiedExpenseHomePage>
     }
 
     try {
-      _currentLedger = _ledgers.firstWhere((l) => l.isSystemDefault, orElse: () => _ledgers.first);
+      _currentLedger = _ledgers.firstWhere((l) => l.isSystemDefault,
+          orElse: () => _ledgers.first);
     } catch (e) {
       _currentLedger = _ledgers.first;
     }
@@ -227,8 +232,8 @@ class _UnifiedExpenseHomePageState extends State<UnifiedExpenseHomePage>
     if (_currentScope == ViewScope.week) {
       _startDate = DateTime(now.year, now.month, now.day)
           .subtract(Duration(days: now.weekday - 1));
-      _endDate = _startDate.add(
-          const Duration(days: 6, hours: 23, minutes: 59, seconds: 59));
+      _endDate = _startDate
+          .add(const Duration(days: 6, hours: 23, minutes: 59, seconds: 59));
     } else if (_currentScope == ViewScope.month) {
       _startDate = DateTime(now.year, now.month, 1);
       final nextMonth = DateTime(now.year, now.month + 1, 1);
@@ -347,6 +352,7 @@ class _UnifiedExpenseHomePageState extends State<UnifiedExpenseHomePage>
       _isLoading = false;
     });
   }
+
   // 删除消费记录
   Future<void> _deleteExpense(UnifiedExpense expense) async {
     final confirmed = await showDialog<bool>(
@@ -594,15 +600,15 @@ class _UnifiedExpenseHomePageState extends State<UnifiedExpenseHomePage>
         width: 44,
         height: 44,
         decoration: BoxDecoration(
-            color: Colors.white, // Pure white bg as in image
+            color: const Color(0xFFFFFDE7), // Cream
             shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 8,
-                  offset: const Offset(0, 4))
+            border: Border.all(
+                color: const Color(0xFF8D6E63), width: 2), // Brown border
+            boxShadow: const [
+              BoxShadow(color: Color(0xFF8D6E63), offset: Offset(2, 2))
             ]),
-        child: Icon(icon, color: Colors.blueAccent, size: 20),
+        child:
+            Icon(icon, color: const Color(0xFF6D4C41), size: 20), // Brown icon
       ),
     );
   }
@@ -635,59 +641,35 @@ class _UnifiedExpenseHomePageState extends State<UnifiedExpenseHomePage>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white, // Fallback
+      backgroundColor: const Color(0xFFFFFBE6), // Cream fallback
       body: Stack(
         children: [
-          // 1. Saturated Mesh/Gradient Background
+          // 1. Cute Gradient Background
           Positioned.fill(
             child: Container(
-              decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                    Color(0xFFD6E4FF), // Saturated Light Blue
-                    Color(0xFFEBF4FF), // Pale Cyan
-                    Color(0xFFFFDEEB), // Saturated Pink/Purple
-                  ],
-                      stops: [
-                    0.0,
-                    0.5,
-                    1.0
-                  ])),
+              decoration:
+                  const BoxDecoration(gradient: ExpenseStyles.bgGradient),
             ),
           ),
-          // Gradient Orbs for extra "pop"
-          Positioned(
+          // Decor Orbs (Animated)
+          const Positioned(
             top: -100,
             right: -50,
-            child: Container(
-              width: 300,
-              height: 300,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(colors: [
-                  const Color(0xFF4facfe).withOpacity(0.4),
-                  Colors.transparent
-                ]),
-              ),
-            ).blurred(sigmaX: 30, sigmaY: 30),
+            child: AnimatedBackgroundOrb(
+              color: Color(0xFFFFB7C5), // Soft Pink
+              size: 300,
+            ),
           ),
-          Positioned(
+          const Positioned(
             bottom: 100,
             left: -50,
-            child: Container(
-              width: 250,
-              height: 250,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(colors: [
-                  const Color(0xFF00f2fe).withOpacity(0.35),
-                  Colors.transparent
-                ]),
-              ),
-            ).blurred(sigmaX: 30, sigmaY: 30),
+            child: AnimatedBackgroundOrb(
+              color: Color(0xFFFFE4C4), // Bisque/Cream
+              size: 250,
+              offset: Offset(100, 0),
+            ),
           ),
+
 
           SafeArea(
             bottom: false,
@@ -701,71 +683,67 @@ class _UnifiedExpenseHomePageState extends State<UnifiedExpenseHomePage>
                 Expanded(
                   child: Column(
                     children: [
-                      // 2. Sliding Component (TabBar) like Home Nav
+                      // 2. TabBar
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 20.0),
                         child: Container(
                           height: 56,
                           padding: const EdgeInsets.all(4),
                           decoration: BoxDecoration(
-                              color:
-                                  Colors.white.withOpacity(0.3), // Glassy track
+                              color: const Color(0xFFFFFDE7), // Cream
                               borderRadius: BorderRadius.circular(28),
                               border: Border.all(
-                                  color: Colors.white.withOpacity(0.6)),
-                              boxShadow: [
+                                  color: const Color(0xFF8D6E63),
+                                  width: 2), // Brown border
+                              boxShadow: const [
                                 BoxShadow(
-                                    color: Colors.black.withOpacity(0.05),
-                                    blurRadius: 10,
-                                    offset: const Offset(0, 4))
+                                    color: Color(
+                                        0xFF8D6E63), // Brownish Hard Shadow
+                                    offset: Offset(2, 2))
                               ]),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(28),
-                            child: BackdropFilter(
-                              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                              child: TabBar(
-                                controller: _tabController,
-                                indicator: BoxDecoration(
-                                    // Gradient Pill Indicator
-                                    gradient: ExpenseStyles.mainGradient,
-                                    borderRadius: BorderRadius.circular(24),
-                                    boxShadow: [
-                                      BoxShadow(
-                                          color: const Color(0xFF4facfe)
-                                              .withOpacity(0.4),
-                                          blurRadius: 12,
-                                          offset: const Offset(0, 4))
-                                    ]),
-                                labelColor: Colors.white,
-                                unselectedLabelColor:
-                                    ExpenseStyles.textDark.withOpacity(0.6),
-                                labelStyle: const TextStyle(
-                                    fontWeight: FontWeight.bold, fontSize: 13),
-                                tabs: const [
-                                  Tab(
-                                      child: Row(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.center,
-                                          children: [
-                                        Icon(Icons.list_rounded),
-                                        SizedBox(width: 8),
-                                        Text('支出明细')
-                                      ])),
-                                  Tab(
-                                      child: Row(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.center,
-                                          children: [
-                                        Icon(Icons.cached_rounded),
-                                        SizedBox(width: 8),
-                                        Text('成本追踪')
-                                      ])),
-                                ],
-                                indicatorSize: TabBarIndicatorSize.tab,
-                                splashBorderRadius: BorderRadius.circular(24),
-                                dividerColor: Colors.transparent,
-                              ),
-                            ),
+                          child: TabBar(
+                            controller: _tabController,
+                            indicator: BoxDecoration(
+                                // Gradient Pill Indicator
+                                gradient: ExpenseStyles.mainGradient,
+                                borderRadius: BorderRadius.circular(24),
+                                border:
+                                    Border.all(color: Colors.white, width: 2),
+                                boxShadow: [
+                                  BoxShadow(
+                                      color: const Color(0xFFFF69B4)
+                                          .withOpacity(0.3),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 2))
+                                ]),
+                            labelColor: Colors.white,
+                            unselectedLabelColor:
+                                ExpenseStyles.textDark.withOpacity(0.6),
+                            labelStyle: const TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 13),
+                            tabs: const [
+                              Tab(
+                                  child: Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                    Icon(Icons.list_rounded),
+                                    SizedBox(width: 8),
+                                    Text('支出明细')
+                                  ])),
+                              Tab(
+                                  child: Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                    Icon(Icons.cached_rounded),
+                                    SizedBox(width: 8),
+                                    Text('成本追踪')
+                                  ])),
+                            ],
+                            indicatorSize: TabBarIndicatorSize.tab,
+                            splashBorderRadius: BorderRadius.circular(24),
+                            dividerColor: Colors.transparent,
                           ),
                         ),
                       ),
@@ -826,11 +804,7 @@ class _UnifiedExpenseHomePageState extends State<UnifiedExpenseHomePage>
     return Container(
         margin: padding ?? EdgeInsets.zero,
         decoration: ExpenseStyles.glassDecoration(),
-        child: ClipRRect(
-            borderRadius: BorderRadius.circular(24),
-            child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-                child: child)));
+        child: child); // Removed blur for solid cuter look
   }
 
   Widget _buildHeaderControls() {
@@ -846,14 +820,11 @@ class _UnifiedExpenseHomePageState extends State<UnifiedExpenseHomePage>
 
     // Common decoration for header pills
     final headerDeco = BoxDecoration(
-        color: Colors.white.withOpacity(0.35),
+        color: const Color(0xFFFFFDE7),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.6)),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withOpacity(0.03),
-              blurRadius: 10,
-              offset: const Offset(0, 4))
+        border: Border.all(color: const Color(0xFF8D6E63), width: 2),
+        boxShadow: const [
+          BoxShadow(color: Color(0xFF8D6E63), offset: Offset(2, 2))
         ]);
 
     return Padding(
@@ -864,61 +835,48 @@ class _UnifiedExpenseHomePageState extends State<UnifiedExpenseHomePage>
           // Ledger Selector
           GestureDetector(
             onTap: _showLedgerPicker,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(20),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  decoration: headerDeco,
-                  child: Row(
-                    children: [
-                      Icon(
-                          IconData(_currentLedger.iconPoint,
-                              fontFamily: 'MaterialIcons'),
-                          color: Color(_currentLedger.colorValue),
-                          size: 16),
-                      const SizedBox(width: 8),
-                      Text(_currentLedger.name,
-                          style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                              color: ExpenseStyles.textDark)),
-                      const SizedBox(width: 4),
-                      const Icon(Icons.keyboard_arrow_down_rounded,
-                          size: 16, color: ExpenseStyles.textGrey),
-                    ],
-                  ),
-                ),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: headerDeco,
+              child: Row(
+                children: [
+                  Icon(
+                      IconData(_currentLedger.iconPoint,
+                          fontFamily: 'MaterialIcons'),
+                      color: Color(_currentLedger.colorValue),
+                      size: 16),
+                  const SizedBox(width: 8),
+                  Text(_currentLedger.name,
+                      style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: ExpenseStyles.textDark)),
+                  const SizedBox(width: 4),
+                  const Icon(Icons.keyboard_arrow_down_rounded,
+                      size: 16, color: ExpenseStyles.textGrey),
+                ],
               ),
             ),
           ),
 
           // Date Navigator
-          ClipRRect(
-            borderRadius: BorderRadius.circular(20),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-              child: Container(
-                padding: const EdgeInsets.all(4),
-                decoration: headerDeco,
-                child: Row(
-                  children: [
-                    _navButton(Icons.chevron_left_rounded, _previousRange),
-                    Container(
-                      constraints: const BoxConstraints(minWidth: 80),
-                      alignment: Alignment.center,
-                      child: Text(dateStr,
-                          style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: ExpenseStyles.textDark)),
-                    ),
-                    _navButton(Icons.chevron_right_rounded, _nextRange),
-                  ],
+          Container(
+            padding: const EdgeInsets.all(4),
+            decoration: headerDeco,
+            child: Row(
+              children: [
+                _navButton(Icons.chevron_left_rounded, _previousRange),
+                Container(
+                  constraints: const BoxConstraints(minWidth: 80),
+                  alignment: Alignment.center,
+                  child: Text(dateStr,
+                      style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: ExpenseStyles.textDark)),
                 ),
-              ),
+                _navButton(Icons.chevron_right_rounded, _nextRange),
+              ],
             ),
           )
         ],
@@ -951,17 +909,11 @@ class _UnifiedExpenseHomePageState extends State<UnifiedExpenseHomePage>
             ),
           ),
           if (_groupedExpenses.isEmpty)
-            SliverFillRemaining(
-              child: Center(
-                  child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.receipt_long_rounded,
-                      color: Colors.grey[300], size: 60),
-                  const SizedBox(height: 12),
-                  Text('暂无支出', style: TextStyle(color: Colors.grey[400]))
-                ],
-              )),
+            const SliverFillRemaining(
+              child: CuteEmptyState(
+                emoji: '🐱',
+                message: '最近没有花钱哦，喵～',
+              ),
             )
           else
             SliverPadding(
@@ -985,8 +937,9 @@ class _UnifiedExpenseHomePageState extends State<UnifiedExpenseHomePage>
                         padding: const EdgeInsets.symmetric(horizontal: 20),
                         child: _buildGlassCard(
                             child: Column(
-                          children:
-                              expenses.map((e) => _buildExpenseItem(e)).toList(),
+                          children: expenses
+                              .map((e) => _buildExpenseItem(e))
+                              .toList(),
                         )),
                       ),
                       const SizedBox(height: 16),
@@ -1012,17 +965,11 @@ class _UnifiedExpenseHomePageState extends State<UnifiedExpenseHomePage>
             ),
           ),
           if (_recurringExpenses.isEmpty)
-            SliverFillRemaining(
-              child: Center(
-                  child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.repeat_rounded,
-                      color: Colors.grey[300], size: 60),
-                  const SizedBox(height: 12),
-                  Text('暂无订阅', style: TextStyle(color: Colors.grey[400]))
-                ],
-              )),
+            const SliverFillRemaining(
+              child: CuteEmptyState(
+                emoji: '🐕',
+                message: '并没有什么订阅... 汪',
+              ),
             )
           else
             SliverPadding(
@@ -1055,7 +1002,8 @@ class _UnifiedExpenseHomePageState extends State<UnifiedExpenseHomePage>
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text('本期支出',
-                  style: TextStyle(fontSize: 14, color: ExpenseStyles.textGrey)),
+                  style:
+                      TextStyle(fontSize: 14, color: ExpenseStyles.textGrey)),
               GestureDetector(
                 onTap: _toggleVisibility,
                 child: Icon(
@@ -1144,12 +1092,13 @@ class _UnifiedExpenseHomePageState extends State<UnifiedExpenseHomePage>
         right: -30,
         top: -30,
         child: Container(
-            width: 150,
-            height: 150,
-            decoration: BoxDecoration(
-                color:
-                    ExpenseStyles.mainGradient.colors.first.withOpacity(0.1),
-                shape: BoxShape.circle)).blurred(sigmaX: 30, sigmaY: 30),
+                width: 150,
+                height: 150,
+                decoration: BoxDecoration(
+                    color: ExpenseStyles.mainGradient.colors.first
+                        .withOpacity(0.1),
+                    shape: BoxShape.circle))
+            .blurred(sigmaX: 30, sigmaY: 30),
       ),
       Padding(
         padding: const EdgeInsets.all(24.0),
@@ -1306,7 +1255,8 @@ class _UnifiedExpenseHomePageState extends State<UnifiedExpenseHomePage>
                 fontWeight: FontWeight.bold,
                 color: ExpenseStyles.textGrey)),
         Text('支 ¥${total.toStringAsFixed(2)}',
-            style: const TextStyle(fontSize: 12, color: ExpenseStyles.textGrey)),
+            style:
+                const TextStyle(fontSize: 12, color: ExpenseStyles.textGrey)),
       ],
     );
   }
@@ -1421,3 +1371,186 @@ extension _WidgetExt on Widget {
     );
   }
 }
+
+// --- Animation Components ---
+
+class AnimatedBackgroundOrb extends StatefulWidget {
+  final Color color;
+  final double size;
+  final Offset offset;
+
+  const AnimatedBackgroundOrb({
+    super.key, 
+    required this.color, 
+    required this.size,
+    this.offset = Offset.zero,
+  });
+
+  @override
+  State<AnimatedBackgroundOrb> createState() => _AnimatedBackgroundOrbState();
+}
+
+class _AnimatedBackgroundOrbState extends State<AnimatedBackgroundOrb>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _scaleAnim;
+  late Animation<Offset> _slideAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(seconds: 6),
+      vsync: this,
+    )..repeat(reverse: true);
+
+    if (widget.offset.dx > 0) {
+      _controller.forward(from: 0.5);
+    }
+
+    _scaleAnim = Tween<double>(begin: 0.9, end: 1.1).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+    
+    _slideAnim = Tween<Offset>(
+      begin: Offset.zero, 
+      end: const Offset(10, -10),
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        return Transform.translate(
+          offset: _slideAnim.value,
+          child: Transform.scale(
+            scale: _scaleAnim.value,
+            child: Container(
+              width: widget.size,
+              height: widget.size,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: widget.color.withOpacity(0.3),
+              ),
+            ).blurred(sigmaX: 80, sigmaY: 80),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class CuteEmptyState extends StatefulWidget {
+  final String message;
+  final String emoji;
+  final bool isSleeping;
+
+  const CuteEmptyState({
+    super.key, 
+    required this.message, 
+    this.emoji = '🐱',
+    this.isSleeping = true,
+  });
+
+  @override
+  State<CuteEmptyState> createState() => _CuteEmptyStateState();
+}
+
+class _CuteEmptyStateState extends State<CuteEmptyState>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _floatAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      duration: const Duration(seconds: 2),
+      vsync: this,
+    )..repeat(reverse: true);
+    
+    _floatAnim = Tween<double>(begin: 0, end: -10).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Stack(
+            alignment: Alignment.center,
+            clipBehavior: Clip.none,
+            children: [
+              Container(
+                width: 100,
+                height: 30,
+                margin: const EdgeInsets.only(top: 60),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(50),
+                  color: const Color(0xFF8D6E63).withOpacity(0.1),
+                ),
+              ),
+              Transform.scale(
+                scale: 1.0,
+                child: Text(
+                  widget.emoji, 
+                  style: const TextStyle(fontSize: 80),
+                ),
+              ),
+              if (widget.isSleeping)
+                Positioned(
+                  right: -15,
+                  top: -10,
+                  child: AnimatedBuilder(
+                    animation: _floatAnim,
+                    builder: (context, child) {
+                      return Transform.translate(
+                        offset: Offset(5, _floatAnim.value),
+                        child: const Opacity(
+                          opacity: 0.8,
+                          child: Text('Zzz...', 
+                            style: TextStyle(
+                              fontSize: 28, 
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF8D6E63),
+                            )
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          Text(
+            widget.message,
+            style: const TextStyle(
+              fontSize: 16,
+              color: Color(0xFFA1887F),
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+

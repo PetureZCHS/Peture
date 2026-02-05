@@ -108,19 +108,19 @@ class _PetDiaryListPageState extends State<PetDiaryListPage> {
               child: CircularProgressIndicator(color: Color(0xFF7B95FF)),
             )
           : _diaries.isEmpty
-          ? _buildEmptyState()
-          : RefreshIndicator(
-              onRefresh: _loadDiaries,
-              color: const Color(0xFF7B95FF),
-              child: ListView.builder(
-                padding: const EdgeInsets.all(16),
-                itemCount: _diaries.length,
-                itemBuilder: (context, index) {
-                  final diary = _diaries[index];
-                  return _buildDiaryCard(diary);
-                },
-              ),
-            ),
+              ? _buildEmptyState()
+              : RefreshIndicator(
+                  onRefresh: _loadDiaries,
+                  color: const Color(0xFF7B95FF),
+                  child: ListView.builder(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: _diaries.length,
+                    itemBuilder: (context, index) {
+                      final diary = _diaries[index];
+                      return _buildDiaryCard(diary);
+                    },
+                  ),
+                ),
     );
   }
 

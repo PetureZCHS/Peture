@@ -64,7 +64,7 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   final SupabaseService _supabaseService = SupabaseService();
   final ImagePicker _picker = ImagePicker();
-  
+
   String _userNickname = '';
   String? _avatarPath;
   String? _avatarUrl; // Supabase Storage 的 URL
@@ -112,7 +112,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: SingleChildScrollView(
-        physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+        physics: const AlwaysScrollableScrollPhysics(
+            parent: BouncingScrollPhysics()),
         child: Padding(
           padding: const EdgeInsets.symmetric(
             horizontal: AppSpaces.horizontalPadding,
@@ -134,8 +135,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Widget _buildHeader(BuildContext context) {
     final String displayName = _userNickname.isEmpty ? '点击设置昵称' : _userNickname;
-    final String avatarText = _userNickname.isEmpty ? '?' : _userNickname[0].toUpperCase();
-    final bool hasAvatar = (_avatarPath != null && File(_avatarPath!).existsSync()) || _avatarUrl != null;
+    final String avatarText =
+        _userNickname.isEmpty ? '?' : _userNickname[0].toUpperCase();
+    final bool hasAvatar =
+        (_avatarPath != null && File(_avatarPath!).existsSync()) ||
+            _avatarUrl != null;
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -176,9 +180,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     child: CircleAvatar(
                       radius: 32,
                       backgroundColor: AppColors.primary,
-                      backgroundImage: hasAvatar && _avatarPath != null && File(_avatarPath!).existsSync()
+                      backgroundImage: hasAvatar &&
+                              _avatarPath != null &&
+                              File(_avatarPath!).existsSync()
                           ? FileImage(File(_avatarPath!))
-                          : (_avatarUrl != null ? NetworkImage(_avatarUrl!) : null) as ImageProvider?,
+                          : (_avatarUrl != null
+                              ? NetworkImage(_avatarUrl!)
+                              : null) as ImageProvider?,
                       child: !hasAvatar
                           ? Text(
                               avatarText,
@@ -208,7 +216,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   const SizedBox(height: 4),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                     decoration: BoxDecoration(
                       color: AppColors.primary.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(12),
@@ -228,7 +237,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         ),
         IconButton(
-          icon: const Icon(Icons.settings_outlined, color: AppColors.primaryText),
+          icon:
+              const Icon(Icons.settings_outlined, color: AppColors.primaryText),
           onPressed: () {
             Navigator.push(
               context,
@@ -268,7 +278,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
               final nickname = nameController.text.trim();
               if (nickname.isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('昵称不能为空'), backgroundColor: Colors.red),
+                  const SnackBar(
+                      content: Text('昵称不能为空'), backgroundColor: Colors.red),
                 );
                 return;
               }
@@ -283,15 +294,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (result != null && result.isNotEmpty && mounted) {
       setState(() => _loading = true);
       try {
-        final success = await _supabaseService.upsertUserProfile(nickname: result.trim());
+        final success =
+            await _supabaseService.upsertUserProfile(nickname: result.trim());
         if (success) {
           setState(() => _userNickname = result.trim());
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('✅ 昵称修改成功'), backgroundColor: Colors.green),
+            const SnackBar(
+                content: Text('✅ 昵称修改成功'), backgroundColor: Colors.green),
           );
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('❌ 昵称修改失败'), backgroundColor: Colors.red),
+            const SnackBar(
+                content: Text('❌ 昵称修改失败'), backgroundColor: Colors.red),
           );
         }
       } catch (e) {
@@ -361,7 +375,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
         await avatarDirectory.create(recursive: true);
       }
 
-      final String fileName = 'avatar_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final String fileName =
+          'avatar_${DateTime.now().millisecondsSinceEpoch}.jpg';
       final String newPath = '$avatarsDir/$fileName';
       await File(pickedFile.path).copy(newPath);
 
@@ -380,7 +395,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (userId != null) {
         try {
           final uploadPath = '$userId/avatar.jpg';
-          final url = await _supabaseService.uploadPostImage(File(newPath), uploadPath);
+          final url =
+              await _supabaseService.uploadPostImage(File(newPath), uploadPath);
           avatarUrl = url;
         } catch (e) {
           debugPrint('上传头像到 Storage 失败: $e');
@@ -389,8 +405,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
       // 保存到本地和 Supabase
       await UserAvatarHelper.saveUserAvatarPath(newPath);
-      final success = await _supabaseService.upsertUserProfile(avatarUrl: avatarUrl);
-      
+      final success =
+          await _supabaseService.upsertUserProfile(avatarUrl: avatarUrl);
+
       if (mounted) {
         setState(() {
           _avatarPath = newPath;
@@ -415,7 +432,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
 // Removed _buildMedicalRecordsSection and _buildGlassActionItem
-
 }
 
 // =========================================================
@@ -554,7 +570,7 @@ class _PetProfileSectionState extends State<PetProfileSection> {
                       });
                       // 通知其他页面（如医疗记录页）数据已变更
                       DataChangeNotifier.markPetDataChanged();
-                      
+
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(content: Text('${petToDelete.name} 的档案已删除')),
                       );
@@ -628,7 +644,8 @@ class _PetProfileSectionState extends State<PetProfileSection> {
                       // 计算年龄（根据出生日期）
                       String age = '1岁0个月';
                       if (petData['birth_date'] != null) {
-                        final birthDate = DateTime.tryParse(petData['birth_date']);
+                        final birthDate =
+                            DateTime.tryParse(petData['birth_date']);
                         if (birthDate != null) {
                           final now = DateTime.now();
                           int years = now.year - birthDate.year;
@@ -668,7 +685,8 @@ class _PetProfileSectionState extends State<PetProfileSection> {
                   },
                   borderRadius: BorderRadius.circular(12),
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     child: Row(
                       children: const [
                         Icon(Icons.add, size: 18, color: Colors.white),
@@ -836,7 +854,8 @@ class _PetProfileCardState extends State<PetProfileCard>
                   decoration: BoxDecoration(
                     color: Colors.white.withOpacity(0.6),
                     borderRadius: BorderRadius.circular(24),
-                    border: Border.all(color: Colors.white.withOpacity(0.6), width: 1),
+                    border: Border.all(
+                        color: Colors.white.withOpacity(0.6), width: 1),
                     gradient: LinearGradient(
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
@@ -879,30 +898,36 @@ class _PetProfileCardState extends State<PetProfileCard>
                                 ),
                                 child: ClipRRect(
                                   borderRadius: BorderRadius.circular(20),
-                                  child: widget.pet.avatar != null && widget.pet.avatar!.isNotEmpty
+                                  child: widget.pet.avatar != null &&
+                                          widget.pet.avatar!.isNotEmpty
                                       ? Image.network(
                                           widget.pet.avatar!,
                                           width: 80,
                                           height: 80,
                                           fit: BoxFit.cover,
-                                          errorBuilder: (context, error, stackTrace) {
+                                          errorBuilder:
+                                              (context, error, stackTrace) {
                                             return Container(
-                                              color: AppColors.petTypeColors[widget.pet.type] ??
+                                              color: AppColors.petTypeColors[
+                                                      widget.pet.type] ??
                                                   AppColors.petTypeColors['其他'],
                                               child: Icon(
                                                 Icons.pets,
-                                                color: Colors.white.withOpacity(0.8),
+                                                color: Colors.white
+                                                    .withOpacity(0.8),
                                                 size: 30,
                                               ),
                                             );
                                           },
                                         )
                                       : Container(
-                                          color: AppColors.petTypeColors[widget.pet.type] ??
+                                          color: AppColors.petTypeColors[
+                                                  widget.pet.type] ??
                                               AppColors.petTypeColors['其他'],
                                           child: Icon(
                                             Icons.pets,
-                                            color: Colors.white.withOpacity(0.8),
+                                            color:
+                                                Colors.white.withOpacity(0.8),
                                             size: 30,
                                           ),
                                         ),
@@ -930,30 +955,36 @@ class _PetProfileCardState extends State<PetProfileCard>
                                         widget.pet.age,
                                         style: TextStyle(
                                           fontSize: 13,
-                                          color: AppColors.secondaryText.withOpacity(0.8),
+                                          color: AppColors.secondaryText
+                                              .withOpacity(0.8),
                                         ),
                                       ),
                                       Padding(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 8),
                                         child: Container(
                                           width: 1,
                                           height: 12,
-                                          color: AppColors.secondaryText.withOpacity(0.3),
+                                          color: AppColors.secondaryText
+                                              .withOpacity(0.3),
                                         ),
                                       ),
                                       Text(
                                         widget.pet.gender,
                                         style: TextStyle(
                                           fontSize: 13,
-                                          color: AppColors.secondaryText.withOpacity(0.8),
+                                          color: AppColors.secondaryText
+                                              .withOpacity(0.8),
                                         ),
                                       ),
                                       Padding(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 8),
                                         child: Container(
                                           width: 1,
                                           height: 12,
-                                          color: AppColors.secondaryText.withOpacity(0.3),
+                                          color: AppColors.secondaryText
+                                              .withOpacity(0.3),
                                         ),
                                       ),
                                       Expanded(
@@ -961,7 +992,8 @@ class _PetProfileCardState extends State<PetProfileCard>
                                           widget.pet.breed,
                                           style: TextStyle(
                                             fontSize: 13,
-                                            color: AppColors.secondaryText.withOpacity(0.8),
+                                            color: AppColors.secondaryText
+                                                .withOpacity(0.8),
                                           ),
                                           overflow: TextOverflow.ellipsis,
                                         ),
@@ -1115,9 +1147,8 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage> {
                 final result = await Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder:
-                        (context) =>
-                            PetProfileFormPage(initialData: initialData),
+                    builder: (context) =>
+                        PetProfileFormPage(initialData: initialData),
                   ),
                 );
 

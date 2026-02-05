@@ -113,7 +113,8 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
           Row(
             children: [
               IconButton(
-                onPressed: _quantity > 1 ? () => setState(() => _quantity--) : null,
+                onPressed:
+                    _quantity > 1 ? () => setState(() => _quantity--) : null,
                 icon: const Icon(Icons.remove_circle_outline),
               ),
               Text('$_quantity', style: const TextStyle(fontSize: 16)),
@@ -166,7 +167,8 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
               padding: const EdgeInsets.only(bottom: 12),
               child: Text(
                 comment,
-                style: const TextStyle(color: Colors.black87, fontSize: 13, height: 1.4),
+                style: const TextStyle(
+                    color: Colors.black87, fontSize: 13, height: 1.4),
               ),
             ),
           ),
@@ -204,7 +206,8 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
               onPressed: () {},
               style: OutlinedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(30)),
               ),
               child: const Text('加入购物车'),
             ),
@@ -226,7 +229,8 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFFFF5722),
                 padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(30)),
               ),
               child: const Text('立即购买'),
             ),
@@ -236,5 +240,3 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     );
   }
 }
-
-

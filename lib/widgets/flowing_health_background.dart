@@ -8,7 +8,8 @@ class FlowingHealthBackground extends StatefulWidget {
   const FlowingHealthBackground({super.key});
 
   @override
-  State<FlowingHealthBackground> createState() => _FlowingHealthBackgroundState();
+  State<FlowingHealthBackground> createState() =>
+      _FlowingHealthBackgroundState();
 }
 
 class _FlowingHealthBackgroundState extends State<FlowingHealthBackground>
@@ -21,7 +22,7 @@ class _FlowingHealthBackgroundState extends State<FlowingHealthBackground>
   @override
   void initState() {
     super.initState();
-    
+
     // 创建多个不同速度的动画控制器，形成更自然的流动效果
     _controller1 = AnimationController(
       vsync: this,
@@ -70,14 +71,14 @@ class _FlowingHealthBackgroundState extends State<FlowingHealthBackground>
             ),
           ),
         ),
-        
+
         // 流动光晕层 1 - 粉紫色
         AnimatedBuilder(
           animation: _controller1,
           builder: (context, child) {
             final angle1 = _controller1.value * 2 * math.pi;
             final angle2 = (_controller1.value * 2 * math.pi) + math.pi / 3;
-            
+
             return Positioned(
               top: -200 + (math.sin(angle1) * 150),
               left: -100 + (math.cos(angle2) * 120),
@@ -105,7 +106,7 @@ class _FlowingHealthBackgroundState extends State<FlowingHealthBackground>
           builder: (context, child) {
             final angle1 = _controller2.value * 2 * math.pi;
             final angle2 = (_controller2.value * 2 * math.pi) - math.pi / 4;
-            
+
             return Positioned(
               top: 100 + (math.cos(angle1) * 180),
               right: -150 + (math.sin(angle2) * 140),
@@ -133,7 +134,7 @@ class _FlowingHealthBackgroundState extends State<FlowingHealthBackground>
           builder: (context, child) {
             final angle1 = _controller3.value * 2 * math.pi;
             final angle2 = (_controller3.value * 2 * math.pi) + math.pi / 2;
-            
+
             return Positioned(
               bottom: -100 + (math.sin(angle1) * 130),
               left: 100 + (math.cos(angle2) * 160),
@@ -161,7 +162,7 @@ class _FlowingHealthBackgroundState extends State<FlowingHealthBackground>
           builder: (context, child) {
             final angle1 = _controller4.value * 2 * math.pi;
             final angle2 = (_controller4.value * 2 * math.pi) - math.pi / 6;
-            
+
             return Positioned(
               top: 400 + (math.cos(angle1) * 100),
               right: 50 + (math.sin(angle2) * 100),

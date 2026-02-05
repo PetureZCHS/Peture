@@ -40,8 +40,8 @@ class PetPassport {
     this.friendCount = 0,
     DateTime? createdAt,
     DateTime? updatedAt,
-  }) : createdAt = createdAt ?? DateTime.now(),
-       updatedAt = updatedAt ?? DateTime.now();
+  })  : createdAt = createdAt ?? DateTime.now(),
+        updatedAt = updatedAt ?? DateTime.now();
 
   Map<String, dynamic> toMap() {
     return {
@@ -74,12 +74,12 @@ class PetPassport {
       mbtiDescription: map['mbti_description'],
       interestTags:
           map['interest_tags'] != null && map['interest_tags'].isNotEmpty
-          ? (map['interest_tags'] as String).split(',')
-          : [],
+              ? (map['interest_tags'] as String).split(',')
+              : [],
       achievements: map['achievements'] != null
           ? (map['achievements'] as List)
-                .map((a) => Achievement.fromMap(a))
-                .toList()
+              .map((a) => Achievement.fromMap(a))
+              .toList()
           : [],
       bio: map['bio'],
       friendCount: map['friend_count'] ?? 0,

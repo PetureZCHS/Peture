@@ -34,7 +34,7 @@ class _DailyCostHomePageState extends State<DailyCostHomePage> {
       // 优先从 Supabase 加载
       final itemsData = await _supabaseService.getAllDailyCostItems();
       final items = itemsData.map((e) => DailyCostItem.fromMap(e)).toList();
-      
+
       // 前端计算总日均成本
       double totalDailyCost = 0.0;
       for (final item in items) {

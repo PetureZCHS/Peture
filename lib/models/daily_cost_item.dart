@@ -29,9 +29,8 @@ class DailyCostItem {
   /// 如果没有用完日期，则计算从购买日期到今天的天数
   int get usageDays {
     final purchase = DateTime.parse(purchaseDate);
-    final finish = finishDate != null
-        ? DateTime.parse(finishDate!)
-        : DateTime.now();
+    final finish =
+        finishDate != null ? DateTime.parse(finishDate!) : DateTime.now();
 
     final difference = finish.difference(purchase).inDays;
     // 至少算1天，避免除以0

@@ -21,7 +21,7 @@ class DiarySharePage extends StatefulWidget {
 
 class _DiarySharePageState extends State<DiarySharePage> {
   final GlobalKey _globalKey = GlobalKey();
-  
+
   // State for customization
   int _selectedStyleIndex = 0;
   String _selectedSticker = '🐶';
@@ -29,8 +29,23 @@ class _DiarySharePageState extends State<DiarySharePage> {
   bool _isGenerating = false;
 
   // Data options
-  final List<String> _stickers = ['🐶', '🐱', '🐾', '🦴', '🎾', '🍦', '✨', '❤️'];
-  final List<String> _weathers = ['☀️ 晴朗', '☁️ 多云', '🌧️ 下雨', '❄️ 下雪', '🌬️ 大风'];
+  final List<String> _stickers = [
+    '🐶',
+    '🐱',
+    '🐾',
+    '🦴',
+    '🎾',
+    '🍦',
+    '✨',
+    '❤️'
+  ];
+  final List<String> _weathers = [
+    '☀️ 晴朗',
+    '☁️ 多云',
+    '🌧️ 下雨',
+    '❄️ 下雪',
+    '🌬️ 大风'
+  ];
   final List<String> _styleNames = ['简约白', '温暖手账', '拍立得', '萌宠主题'];
 
   @override
@@ -54,7 +69,8 @@ class _DiarySharePageState extends State<DiarySharePage> {
         actions: [
           TextButton(
             onPressed: _isGenerating ? null : () => _captureAndShare(true),
-            child: const Text('分享', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            child: const Text('分享',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -72,7 +88,7 @@ class _DiarySharePageState extends State<DiarySharePage> {
               ),
             ),
           ),
-          
+
           // Controls Area
           Container(
             decoration: const BoxDecoration(
@@ -120,7 +136,7 @@ class _DiarySharePageState extends State<DiarySharePage> {
                       ],
                     ),
                   ),
-                  
+
                   // Bottom Buttons
                   Padding(
                     padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
@@ -128,7 +144,10 @@ class _DiarySharePageState extends State<DiarySharePage> {
                       children: [
                         Expanded(
                           child: OutlinedButton.icon(
-                            onPressed: _isGenerating ? null : () => _captureAndShare(false), // Save (simulated via share for now or file save)
+                            onPressed: _isGenerating
+                                ? null
+                                : () => _captureAndShare(
+                                    false), // Save (simulated via share for now or file save)
                             icon: const Icon(Icons.save_alt),
                             label: const Text('保存到相册'),
                             style: OutlinedButton.styleFrom(
@@ -142,7 +161,9 @@ class _DiarySharePageState extends State<DiarySharePage> {
                         const SizedBox(width: 16),
                         Expanded(
                           child: ElevatedButton.icon(
-                            onPressed: _isGenerating ? null : () => _captureAndShare(true),
+                            onPressed: _isGenerating
+                                ? null
+                                : () => _captureAndShare(true),
                             icon: const Icon(Icons.share),
                             label: const Text('直接分享'),
                             style: ElevatedButton.styleFrom(
@@ -168,11 +189,15 @@ class _DiarySharePageState extends State<DiarySharePage> {
 
   Widget _buildCardPreview() {
     switch (_selectedStyleIndex) {
-      case 1: return _buildWarmStyle();
-      case 2: return _buildPolaroidStyle();
-      case 3: return _buildPetStyle();
+      case 1:
+        return _buildWarmStyle();
+      case 2:
+        return _buildPolaroidStyle();
+      case 3:
+        return _buildPetStyle();
       case 0:
-      default: return _buildSimpleStyle();
+      default:
+        return _buildSimpleStyle();
     }
   }
 
@@ -186,7 +211,8 @@ class _DiarySharePageState extends State<DiarySharePage> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         boxShadow: const [
-          BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, 4)),
+          BoxShadow(
+              color: Colors.black12, blurRadius: 10, offset: Offset(0, 4)),
         ],
       ),
       child: Column(
@@ -197,7 +223,8 @@ class _DiarySharePageState extends State<DiarySharePage> {
           const SizedBox(height: 20),
           Text(
             widget.diary.content,
-            style: GoogleFonts.lato(fontSize: 15, height: 1.6, color: Colors.black87),
+            style: GoogleFonts.lato(
+                fontSize: 15, height: 1.6, color: Colors.black87),
           ),
           const SizedBox(height: 30),
           _buildFooter(),
@@ -214,7 +241,8 @@ class _DiarySharePageState extends State<DiarySharePage> {
         color: const Color(0xFFFDF6E3), // Warm beige
         borderRadius: BorderRadius.circular(4),
         boxShadow: const [
-          BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, 4)),
+          BoxShadow(
+              color: Colors.black12, blurRadius: 10, offset: Offset(0, 4)),
         ],
       ),
       child: Column(
@@ -228,7 +256,8 @@ class _DiarySharePageState extends State<DiarySharePage> {
           const SizedBox(height: 16),
           Text(
             widget.diary.content,
-            style: GoogleFonts.notoSerif(fontSize: 15, height: 1.8, color: Colors.brown[900]),
+            style: GoogleFonts.notoSerif(
+                fontSize: 15, height: 1.8, color: Colors.brown[900]),
           ),
           const SizedBox(height: 30),
           _buildFooter(color: Colors.brown[400]),
@@ -250,7 +279,8 @@ class _DiarySharePageState extends State<DiarySharePage> {
         decoration: BoxDecoration(
           color: Colors.white,
           boxShadow: const [
-            BoxShadow(color: Colors.black26, blurRadius: 5, offset: Offset(0, 2)),
+            BoxShadow(
+                color: Colors.black26, blurRadius: 5, offset: Offset(0, 2)),
           ],
         ),
         child: Column(
@@ -276,7 +306,8 @@ class _DiarySharePageState extends State<DiarySharePage> {
               children: [
                 Text(
                   DateFormat('yyyy.MM.dd').format(widget.diary.timestamp),
-                  style: GoogleFonts.caveat(fontSize: 20, color: Colors.black87),
+                  style:
+                      GoogleFonts.caveat(fontSize: 20, color: Colors.black87),
                 ),
                 Text(_selectedSticker, style: const TextStyle(fontSize: 24)),
               ],
@@ -321,7 +352,8 @@ class _DiarySharePageState extends State<DiarySharePage> {
             ),
             child: Text(
               widget.diary.content,
-              style: GoogleFonts.lato(fontSize: 15, height: 1.6, color: Colors.black87),
+              style: GoogleFonts.lato(
+                  fontSize: 15, height: 1.6, color: Colors.black87),
             ),
           ),
           const SizedBox(height: 30),
@@ -426,7 +458,9 @@ class _DiarySharePageState extends State<DiarySharePage> {
             margin: const EdgeInsets.only(right: 12),
             width: 60,
             decoration: BoxDecoration(
-              color: isSelected ? Colors.blue.withOpacity(0.1) : Colors.transparent,
+              color: isSelected
+                  ? Colors.blue.withOpacity(0.1)
+                  : Colors.transparent,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
                 color: isSelected ? Colors.blue : Colors.grey[200]!,
@@ -455,7 +489,9 @@ class _DiarySharePageState extends State<DiarySharePage> {
             margin: const EdgeInsets.only(right: 12),
             padding: const EdgeInsets.symmetric(horizontal: 16),
             decoration: BoxDecoration(
-              color: isSelected ? Colors.blue.withOpacity(0.1) : Colors.transparent,
+              color: isSelected
+                  ? Colors.blue.withOpacity(0.1)
+                  : Colors.transparent,
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
                 color: isSelected ? Colors.blue : Colors.grey[200]!,
@@ -484,24 +520,27 @@ class _DiarySharePageState extends State<DiarySharePage> {
       await Future.delayed(const Duration(milliseconds: 50));
 
       // 1. Capture Image
-      final boundary = _globalKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+      final boundary = _globalKey.currentContext?.findRenderObject()
+          as RenderRepaintBoundary?;
       if (boundary == null) {
         throw Exception('无法获取渲染边界');
       }
 
       // Use a slightly lower pixel ratio to avoid memory issues, but still high quality
       ui.Image image = await boundary.toImage(pixelRatio: 2.0);
-      ByteData? byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-      
+      ByteData? byteData =
+          await image.toByteData(format: ui.ImageByteFormat.png);
+
       if (byteData == null) {
         throw Exception('图片数据为空');
       }
-      
+
       Uint8List pngBytes = byteData.buffer.asUint8List();
 
       // 2. Save to temporary file
       final directory = await getTemporaryDirectory();
-      final imagePath = '${directory.path}/pet_diary_share_${DateTime.now().millisecondsSinceEpoch}.png';
+      final imagePath =
+          '${directory.path}/pet_diary_share_${DateTime.now().millisecondsSinceEpoch}.png';
       final imageFile = File(imagePath);
       await imageFile.writeAsBytes(pngBytes);
 

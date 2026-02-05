@@ -30,8 +30,9 @@ class _PartnerFitHistoryPageState extends State<PartnerFitHistoryPage> {
     try {
       // 优先从 Supabase 加载
       final recordsData = await _supabaseService.getAllFitnessRecords();
-      final loadedRecords = recordsData.map((e) => FitnessRecord.fromMap(e)).toList();
-      
+      final loadedRecords =
+          recordsData.map((e) => FitnessRecord.fromMap(e)).toList();
+
       // 前端计算统计
       int totalWorkouts = loadedRecords.length;
       int totalCalories = 0;
@@ -70,91 +71,93 @@ class _PartnerFitHistoryPageState extends State<PartnerFitHistoryPage> {
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
           : records.isEmpty
-          ? _buildEmptyState()
-          : Column(
-              children: [
-                // 统计卡片
-                Container(
-                  width: double.infinity,
-                  margin: const EdgeInsets.all(16),
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF5A8EFA), Color(0xFF8B77FF)],
-                    ),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Column(
-                    children: [
-                      const Text(
-                        '总体成就',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
+              ? _buildEmptyState()
+              : Column(
+                  children: [
+                    // 统计卡片
+                    Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.all(16),
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF5A8EFA), Color(0xFF8B77FF)],
                         ),
+                        borderRadius: BorderRadius.circular(16),
                       ),
-                      const SizedBox(height: 20),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      child: Column(
                         children: [
-                          _buildStatColumn(
-                            icon: Icons.fitness_center,
-                            value: '${stats['totalWorkouts'] ?? 0}',
-                            label: '次训练',
+                          const Text(
+                            '总体成就',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
-                          _buildStatColumn(
-                            icon: Icons.local_fire_department,
-                            value: '${stats['totalCalories'] ?? 0}',
-                            label: '总卡路里',
-                          ),
-                          _buildStatColumn(
-                            icon: Icons.timer,
-                            value: _formatMinutesToMmSs(stats['totalMinutes'] ?? 0),
-                            label: '总时长',
+                          const SizedBox(height: 20),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                            children: [
+                              _buildStatColumn(
+                                icon: Icons.fitness_center,
+                                value: '${stats['totalWorkouts'] ?? 0}',
+                                label: '次训练',
+                              ),
+                              _buildStatColumn(
+                                icon: Icons.local_fire_department,
+                                value: '${stats['totalCalories'] ?? 0}',
+                                label: '总卡路里',
+                              ),
+                              _buildStatColumn(
+                                icon: Icons.timer,
+                                value: _formatMinutesToMmSs(
+                                    stats['totalMinutes'] ?? 0),
+                                label: '总时长',
+                              ),
+                            ],
                           ),
                         ],
                       ),
-                    ],
-                  ),
-                ),
+                    ),
 
-                // 记录列表标题
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        '历史记录',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
+                    // 记录列表标题
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
                       ),
-                      Text(
-                        '${records.length} 次',
-                        style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            '历史记录',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          Text(
+                            '${records.length} 次',
+                            style: TextStyle(
+                                fontSize: 14, color: Colors.grey[600]),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                ),
+                    ),
 
-                // 记录列表
-                Expanded(
-                  child: ListView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    itemCount: records.length,
-                    itemBuilder: (context, index) {
-                      return _buildRecordCard(records[index]);
-                    },
-                  ),
+                    // 记录列表
+                    Expanded(
+                      child: ListView.builder(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        itemCount: records.length,
+                        itemBuilder: (context, index) {
+                          return _buildRecordCard(records[index]);
+                        },
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
     );
   }
 

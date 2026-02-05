@@ -153,7 +153,8 @@ class _AddVaccineReminderPageState extends State<AddVaccineReminderPage> {
       'vaccine_name': _vaccineName,
       'injection_date': _injectionDate.toIso8601String(),
       'dose_type': _doseType,
-      'next_due_date': _injectionDate.add(const Duration(days: 21)).toIso8601String(),
+      'next_due_date':
+          _injectionDate.add(const Duration(days: 21)).toIso8601String(),
       'notes': _notesController.text.isEmpty ? null : _notesController.text,
       'status': 'upcoming',
     });
@@ -264,9 +265,9 @@ class _AddVaccineReminderPageState extends State<AddVaccineReminderPage> {
       onChanged: (value) {
         setState(() {
           _selectedPetId = value;
-          _selectedPetName = _pets
-              .firstWhere((pet) => pet['id']?.toString() == value)['name']
-              as String;
+          _selectedPetName =
+              _pets.firstWhere((pet) => pet['id']?.toString() == value)['name']
+                  as String;
         });
       },
       validator: (value) => value == null ? '请选择宠物' : null,

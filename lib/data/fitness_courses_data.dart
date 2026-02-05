@@ -5,12 +5,16 @@ class FitnessCoursesData {
   // 核心课程ID列表 - 这些课程永远本地可用
   // 注意：此列表必须与 FitnessCoursesManager 中的 coreCourseIds 保持一致
   // 当前本地课程包括：
-  // - 核心课程：dog_high_chase, dog_medium_core, dog_medium_strength, 
+  // - 核心课程：dog_high_chase, dog_medium_core, dog_medium_strength,
   //   dog_low_yoga, cat_medium_core, cat_low_yoga
   // - 扩展课程（本地）：cat_medium_flexibility（此课程将作为扩展课程处理）
   static const List<String> coreCourseIds = [
-    'dog_high_chase', 'dog_medium_core', 'dog_medium_strength',
-    'dog_low_yoga', 'cat_medium_core', 'cat_low_yoga'
+    'dog_high_chase',
+    'dog_medium_core',
+    'dog_medium_strength',
+    'dog_low_yoga',
+    'cat_medium_core',
+    'cat_low_yoga'
   ];
 
   // 重命名原方法为 getLocalCourses
@@ -488,9 +492,8 @@ class FitnessCoursesData {
     var courses = getAllCourses();
 
     if (durationMinutes != null) {
-      courses = courses
-          .where((c) => c.durationMinutes == durationMinutes)
-          .toList();
+      courses =
+          courses.where((c) => c.durationMinutes == durationMinutes).toList();
     }
 
     if (intensity != null && intensity.isNotEmpty) {

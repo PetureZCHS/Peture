@@ -181,7 +181,7 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
       _petName = data['name'] as String?;
       _petSpecies = data['species'] as String?;
       _gender = data['gender'] as String?;
-      
+
       // 加载宠物类型
       if (data['type'] != null) {
         final type = data['type'] as String;
@@ -554,7 +554,8 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
                                                   fit: BoxFit.cover,
                                                   loadingBuilder: (context,
                                                       child, loadingProgress) {
-                                                    if (loadingProgress == null) {
+                                                    if (loadingProgress ==
+                                                        null) {
                                                       return child;
                                                     }
                                                     return Center(
@@ -1436,9 +1437,8 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
                                       // 刻度线
                                       Container(
                                         width: isInteger ? 2 : 1.5,
-                                        height: isInteger
-                                            ? 40
-                                            : (isHalf ? 28 : 16),
+                                        height:
+                                            isInteger ? 40 : (isHalf ? 28 : 16),
                                         decoration: BoxDecoration(
                                           color: isInteger
                                               ? const Color(0xFF1A1A1A)

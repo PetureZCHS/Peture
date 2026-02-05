@@ -109,42 +109,40 @@ class _AnimatedMeshGradientState extends State<AnimatedMeshGradient>
         // Background base color
         Container(color: Colors.white),
 
-          // Apply strong blur to the whole stack of blobs
-          ImageFiltered(
-            imageFilter: ImageFilter.blur(sigmaX: 100, sigmaY: 100),
-            child: Stack(
-              children: [
-                _buildAnimatedBlob(
-                  color: color1,
-                  posAnimation: _posAnimation1,
-                  scaleAnimation: _scaleAnimation1,
-                  baseSize: 400,
-                ),
-                _buildAnimatedBlob(
-                  color: color2,
-                  posAnimation: _posAnimation2,
-                  scaleAnimation: _scaleAnimation2,
-                  baseSize: 350,
-                ),
-                _buildAnimatedBlob(
-                  color: color3,
-                  posAnimation: _posAnimation3,
-                  scaleAnimation: _scaleAnimation3,
-                  baseSize: 450,
-                ),
-                _buildAnimatedBlob(
-                  color: color4,
-                  posAnimation: _posAnimation4,
-                  scaleAnimation: _scaleAnimation4,
-                  baseSize: 380,
-                ),
-              ],
-            ),
+        // Apply strong blur to the whole stack of blobs
+        ImageFiltered(
+          imageFilter: ImageFilter.blur(sigmaX: 100, sigmaY: 100),
+          child: Stack(
+            children: [
+              _buildAnimatedBlob(
+                color: color1,
+                posAnimation: _posAnimation1,
+                scaleAnimation: _scaleAnimation1,
+                baseSize: 400,
+              ),
+              _buildAnimatedBlob(
+                color: color2,
+                posAnimation: _posAnimation2,
+                scaleAnimation: _scaleAnimation2,
+                baseSize: 350,
+              ),
+              _buildAnimatedBlob(
+                color: color3,
+                posAnimation: _posAnimation3,
+                scaleAnimation: _scaleAnimation3,
+                baseSize: 450,
+              ),
+              _buildAnimatedBlob(
+                color: color4,
+                posAnimation: _posAnimation4,
+                scaleAnimation: _scaleAnimation4,
+                baseSize: 380,
+              ),
+            ],
           ),
-
-
-        ],
-      );
+        ),
+      ],
+    );
   }
 
   Widget _buildAnimatedBlob({

@@ -33,17 +33,17 @@ class _PartnerFitTrainingPageState extends State<PartnerFitTrainingPage>
   // 实际运动时长（正计时 - 来自当前分支）
   int actualDurationSeconds = 0;
   Timer? actualDurationTimer;
-  
+
   // 音效相关 (来自当前分支)
   final AudioPlayer _tickSoundPlayer = AudioPlayer();
   bool _tickSoundEnabled = true;
   static const String _tickSoundEnabledKey = 'partner_fit_tick_sound_enabled';
-  
+
   // 鼓励文字动画（致敬 Keep - 来自当前分支）
   late AnimationController _encouragementController;
   late Animation<double> _encouragementFadeAnimation;
   String? _encouragementText;
-  
+
   // Keep 风格的鼓励文案
   static const List<String> _encouragementTexts = [
     '加油！',
@@ -56,7 +56,7 @@ class _PartnerFitTrainingPageState extends State<PartnerFitTrainingPage>
   @override
   void initState() {
     super.initState();
-    
+
     // 初始化鼓励文字动画控制器
     _encouragementController = AnimationController(
       duration: const Duration(milliseconds: 1500),
@@ -89,7 +89,7 @@ class _PartnerFitTrainingPageState extends State<PartnerFitTrainingPage>
               final totalDuration = _remainingDuration!;
               if (elapsed < totalDuration) {
                 final newRemainingSeconds = (totalDuration - elapsed).inSeconds;
-                
+
                 // 只有当秒数发生变化时才执行特定逻辑
                 if (newRemainingSeconds != remainingSeconds) {
                   remainingSeconds = newRemainingSeconds;
@@ -172,7 +172,7 @@ class _PartnerFitTrainingPageState extends State<PartnerFitTrainingPage>
     });
 
     // 这里不再使用 Timer (Develop 分支改用了 AnimationController)
-    
+
     // 设置动画控制器持续时间 (Develop 逻辑)
     _animationController.duration = Duration(seconds: action.durationSeconds);
     _remainingDuration = Duration(seconds: action.durationSeconds);
@@ -193,7 +193,7 @@ class _PartnerFitTrainingPageState extends State<PartnerFitTrainingPage>
   void _handleActionComplete() {
     // 动作完成时显示鼓励文字 (当前分支特性)
     _showEncouragement();
-    
+
     // 延迟一下再切换到下一个动作，让用户看到鼓励文字
     Future.delayed(const Duration(milliseconds: 500), () {
       if (mounted) {
@@ -229,8 +229,7 @@ class _PartnerFitTrainingPageState extends State<PartnerFitTrainingPage>
   void _showEncouragement() {
     setState(() {
       _encouragementText = _encouragementTexts[
-        (currentActionIndex % _encouragementTexts.length)
-      ];
+          (currentActionIndex % _encouragementTexts.length)];
     });
     _encouragementController.reset();
     _encouragementController.forward().then((_) {
@@ -257,7 +256,9 @@ class _PartnerFitTrainingPageState extends State<PartnerFitTrainingPage>
       }
     } else {
       // 继续时从暂停位置重新开始动画 (Develop 逻辑)
-      if (_remainingDuration != null && _remainingDuration!.inSeconds > 0 && _pausedAnimationValue != null) {
+      if (_remainingDuration != null &&
+          _remainingDuration!.inSeconds > 0 &&
+          _pausedAnimationValue != null) {
         _animationController.duration = _remainingDuration;
         _startTime = DateTime.now();
 
@@ -497,23 +498,26 @@ class _PartnerFitTrainingPageState extends State<PartnerFitTrainingPage>
                       ),
                       textAlign: TextAlign.center,
                     ),
-                    
+
                     const SizedBox(height: 16),
-                    
+
                     // 鼓励文字（致敬 Keep - 来自当前分支）
                     AnimatedBuilder(
                       animation: _encouragementFadeAnimation,
                       builder: (context, child) {
                         // 确保动画在不可见时不占位
-                        if (_encouragementText == null || _encouragementFadeAnimation.value == 0) {
-                          return const SizedBox.shrink(); 
+                        if (_encouragementText == null ||
+                            _encouragementFadeAnimation.value == 0) {
+                          return const SizedBox.shrink();
                         }
                         return Opacity(
                           opacity: _encouragementFadeAnimation.value,
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 20, vertical: 8),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFFF6B35).withOpacity(0.1), // Keep 风格的橙色
+                              color: const Color(0xFFFF6B35)
+                                  .withOpacity(0.1), // Keep 风格的橙色
                               borderRadius: BorderRadius.circular(20),
                               border: Border.all(
                                 color: const Color(0xFFFF6B35).withOpacity(0.3),
@@ -641,7 +645,7 @@ class _PartnerFitTrainingPageState extends State<PartnerFitTrainingPage>
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                   // 音效开关 (当前分支特性)
+                  // 音效开关 (当前分支特性)
                   IconButton(
                     onPressed: () async {
                       setState(() {
@@ -649,7 +653,8 @@ class _PartnerFitTrainingPageState extends State<PartnerFitTrainingPage>
                       });
                       try {
                         final prefs = await SharedPreferences.getInstance();
-                        await prefs.setBool(_tickSoundEnabledKey, _tickSoundEnabled);
+                        await prefs.setBool(
+                            _tickSoundEnabledKey, _tickSoundEnabled);
                       } catch (e) {
                         debugPrint('保存音效设置失败: $e');
                       }
@@ -668,7 +673,8 @@ class _PartnerFitTrainingPageState extends State<PartnerFitTrainingPage>
                     children: [
                       // 上一个
                       IconButton(
-                        onPressed: currentActionIndex > 0 ? _previousAction : null,
+                        onPressed:
+                            currentActionIndex > 0 ? _previousAction : null,
                         icon: const Icon(Icons.skip_previous, size: 36),
                         color: const Color(0xFF424242),
                         disabledColor: const Color(0xFFE0E0E0),
@@ -714,8 +720,8 @@ class _PartnerFitTrainingPageState extends State<PartnerFitTrainingPage>
 
                       // 下一个
                       IconButton(
-                        onPressed:
-                            currentActionIndex < widget.course.actions.length - 1
+                        onPressed: currentActionIndex <
+                                widget.course.actions.length - 1
                             ? _nextAction
                             : null,
                         icon: const Icon(Icons.skip_next, size: 36),
@@ -724,7 +730,7 @@ class _PartnerFitTrainingPageState extends State<PartnerFitTrainingPage>
                       ),
                     ],
                   ),
-                const SizedBox(height: 8),
+                  const SizedBox(height: 8),
                 ],
               ),
             ),

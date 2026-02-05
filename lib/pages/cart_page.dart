@@ -102,15 +102,13 @@ class _CartPageState extends State<CartPage> {
                   child: ListView(
                     padding: const EdgeInsets.all(16),
                     children: [
-                      ..._cartItems
-                          .map((item) => _buildCartItem(item))
-                          ,
-                      
+                      ..._cartItems.map((item) => _buildCartItem(item)),
+
                       // 优惠券入口
                       _buildCouponSection(),
-                      
+
                       const SizedBox(height: 20),
-                      
+
                       // 结算明细
                       _buildOrderSummary(),
                     ],
@@ -132,7 +130,8 @@ class _CartPageState extends State<CartPage> {
       ),
       child: Row(
         children: [
-          const Text("优惠券", style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+          const Text("优惠券",
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
           const Spacer(),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -141,7 +140,8 @@ class _CartPageState extends State<CartPage> {
               borderRadius: BorderRadius.circular(4),
               border: Border.all(color: const Color(0xFFFECACA)),
             ),
-            child: const Text("暂无可用", style: TextStyle(fontSize: 11, color: Color(0xFFEF4444))),
+            child: const Text("暂无可用",
+                style: TextStyle(fontSize: 11, color: Color(0xFFEF4444))),
           ),
           const SizedBox(width: 4),
           const Icon(Icons.chevron_right, size: 16, color: Colors.grey),
@@ -156,7 +156,7 @@ class _CartPageState extends State<CartPage> {
       total += (double.tryParse(item['price'].toString()) ?? 0) *
           (item['quantity'] as int? ?? 1);
     }
-    
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -166,13 +166,15 @@ class _CartPageState extends State<CartPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text("结算明细", style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+          const Text("结算明细",
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
           const SizedBox(height: 12),
           _buildSummaryRow("商品总价", "¥${total.toStringAsFixed(2)}"),
           const SizedBox(height: 8),
           _buildSummaryRow("配送费", "¥0.00", valueColor: const Color(0xFF10B981)),
           const SizedBox(height: 8),
-          _buildSummaryRow("立减优惠", "-¥0.00", valueColor: const Color(0xFFEF4444)),
+          _buildSummaryRow("立减优惠", "-¥0.00",
+              valueColor: const Color(0xFFEF4444)),
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 12),
             child: Divider(height: 1),
@@ -202,7 +204,11 @@ class _CartPageState extends State<CartPage> {
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(label, style: const TextStyle(color: Colors.grey, fontSize: 13)),
-        Text(value, style: TextStyle(color: valueColor ?? const Color(0xFF111827), fontSize: 13, fontWeight: FontWeight.w500)),
+        Text(value,
+            style: TextStyle(
+                color: valueColor ?? const Color(0xFF111827),
+                fontSize: 13,
+                fontWeight: FontWeight.w500)),
       ],
     );
   }
@@ -284,8 +290,7 @@ class _CartPageState extends State<CartPage> {
                   ),
                   child: Text(
                     item['spec'] ?? '默认规格',
-                    style:
-                        TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                    style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -342,7 +347,8 @@ class _CartPageState extends State<CartPage> {
   Widget _buildBottomBar() {
     double total = 0;
     for (var item in _cartItems) {
-      total += (double.tryParse(item['price'].toString()) ?? 0) * (item['quantity'] as int? ?? 1);
+      total += (double.tryParse(item['price'].toString()) ?? 0) *
+          (item['quantity'] as int? ?? 1);
     }
 
     return Container(
@@ -363,7 +369,8 @@ class _CartPageState extends State<CartPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text("总计 (不含运费)", style: TextStyle(fontSize: 12, color: Colors.grey)),
+              const Text("总计 (不含运费)",
+                  style: TextStyle(fontSize: 12, color: Colors.grey)),
               const SizedBox(height: 4),
               Text(
                 "¥${total.toStringAsFixed(2)}",

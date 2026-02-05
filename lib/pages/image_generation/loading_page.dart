@@ -68,10 +68,11 @@ class SlideFromLeftPageRoute extends PageRouteBuilder {
             final offsetAnimation = Tween<Offset>(
               begin: const Offset(-1.0, 0.0),
               end: Offset.zero,
-            ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOut));
+            ).animate(
+                CurvedAnimation(parent: animation, curve: Curves.easeOut));
 
-            final fadeAnimation = Tween<double>(begin: 0.0, end: 1.0)
-                .animate(CurvedAnimation(parent: animation, curve: Curves.easeIn));
+            final fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+                CurvedAnimation(parent: animation, curve: Curves.easeIn));
 
             return SlideTransition(
               position: offsetAnimation,
@@ -88,7 +89,12 @@ class LoadingPage extends StatefulWidget {
   final String style; // 风格参数（必需）
   final int expectedDurationSeconds; // 预期完成时间（秒），决定进度动画速度
 
-  const LoadingPage({required this.originalImage, this.uploadedFileName, required this.taskId, required this.style, this.expectedDurationSeconds = 180});
+  const LoadingPage(
+      {required this.originalImage,
+      this.uploadedFileName,
+      required this.taskId,
+      required this.style,
+      this.expectedDurationSeconds = 180});
 
   @override
   _LoadingPageState createState() => _LoadingPageState();
@@ -109,9 +115,10 @@ class _LoadingPageState extends State<LoadingPage>
   void initState() {
     super.initState();
     // 定义动画控制器，总时长基于预期完成时长（默认 50s，可通过 constructor 覆盖，用于更平滑长任务的进度表现）
-    _progressController =
-        AnimationController(vsync: this, duration: Duration(seconds: widget.expectedDurationSeconds));
-        
+    _progressController = AnimationController(
+        vsync: this,
+        duration: Duration(seconds: widget.expectedDurationSeconds));
+
     _orbController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 12),
@@ -134,12 +141,13 @@ class _LoadingPageState extends State<LoadingPage>
     }
 
     try {
-        // 立即开始轮询后端（每5s一次）并把进度平滑推进到 95%（时长根据 expectedDurationSeconds）
+      // 立即开始轮询后端（每5s一次）并把进度平滑推进到 95%（时长根据 expectedDurationSeconds）
       _startPollingBackend();
 
       if (!_isTaskFinished) {
         await _progressController.animateTo(0.95,
-            duration: Duration(seconds: widget.expectedDurationSeconds), curve: Curves.decelerate);
+            duration: Duration(seconds: widget.expectedDurationSeconds),
+            curve: Curves.decelerate);
       }
     } catch (e) {
       print('加载过程异常: $e');
@@ -151,11 +159,12 @@ class _LoadingPageState extends State<LoadingPage>
   void _startTimeoutTimer() {
     // 设置最大轮询时间为8分钟（480秒）
     _timeoutTimer = Timer(Duration(seconds: 480), () {
-      if (!_isTaskFinished && !_isTimeout) {  // 添加双重检查以避免重复处理
+      if (!_isTaskFinished && !_isTimeout) {
+        // 添加双重检查以避免重复处理
         _isTimeout = true;
         _pollingTimer?.cancel();
         _isTaskFinished = true;
-        
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -163,7 +172,7 @@ class _LoadingPageState extends State<LoadingPage>
               backgroundColor: Colors.orange,
             ),
           );
-          
+
           // 直接返回到之前的PreparationPage实例
           Future.delayed(const Duration(milliseconds: 800), () {
             if (mounted) {
@@ -200,7 +209,6 @@ class _LoadingPageState extends State<LoadingPage>
     // 每 5s 检查一次，持续轮询直到任务完成（或由错误处理提前终止）。
 
     Future<void> checkOnce() async {
-
       // 如果任务已经标记完成，则立即返回，避免额外的轮询或竞态
       if (_isTaskFinished) return;
 
@@ -239,7 +247,6 @@ class _LoadingPageState extends State<LoadingPage>
           final status = ((data['status'] as String?) ?? '').toUpperCase();
           final path = data['path'] as String?;
 
-
           print('Task status: $status');
 
           if (status == 'PENDING' || status == 'RUNNING') {
@@ -248,17 +255,24 @@ class _LoadingPageState extends State<LoadingPage>
           }
 
           // 成功类状态：立刻停止轮询并进入完成流程（兼容不同后端状态字符串）
-          if (status == 'SUCCEED' || status == 'SUCCEEDED' || status == 'COMPLETED' || status == 'SUCCESS' || status == 'DONE') {
+          if (status == 'SUCCEED' ||
+              status == 'SUCCEEDED' ||
+              status == 'COMPLETED' ||
+              status == 'SUCCESS' ||
+              status == 'DONE') {
             _pollingTimer?.cancel();
             _isTaskFinished = true;
 
             // 优先尝试下载存储中的文件到本地临时目录
             if (path != null && path.isNotEmpty) {
               try {
-                final bytes = await supabase.storage.from('ai-wallpapers').download(path) as Uint8List?;
+                final bytes = await supabase.storage
+                    .from('ai-wallpapers')
+                    .download(path) as Uint8List?;
 
                 if (bytes != null && bytes.isNotEmpty) {
-                  final tmpFile = File('${Directory.systemTemp.path}/ai_gen_${DateTime.now().millisecondsSinceEpoch}.png');
+                  final tmpFile = File(
+                      '${Directory.systemTemp.path}/ai_gen_${DateTime.now().millisecondsSinceEpoch}.png');
                   await tmpFile.writeAsBytes(bytes);
                   _generatedImageFile = tmpFile;
                   _onTaskComplete();
@@ -276,10 +290,14 @@ class _LoadingPageState extends State<LoadingPage>
             String? publicUrl;
             final user = supabase.auth.currentUser;
             if (path != null && path.isNotEmpty) {
-              publicUrl = supabase.storage.from('ai-wallpapers').getPublicUrl(path);
+              publicUrl =
+                  supabase.storage.from('ai-wallpapers').getPublicUrl(path);
             } else if (user != null && widget.uploadedFileName != null) {
-              final storagePath = '${user.id}/generated/${widget.uploadedFileName}';
-              publicUrl = supabase.storage.from('ai-wallpapers').getPublicUrl(storagePath);
+              final storagePath =
+                  '${user.id}/generated/${widget.uploadedFileName}';
+              publicUrl = supabase.storage
+                  .from('ai-wallpapers')
+                  .getPublicUrl(storagePath);
             }
 
             if (publicUrl != null && publicUrl.isNotEmpty) {
@@ -371,7 +389,7 @@ class _LoadingPageState extends State<LoadingPage>
       "增强面部特征识别...",
       "最终渲染处理..."
     ];
-    
+
     // 根据进度选择提示文本
     return techTips[(percentage ~/ 20) % techTips.length];
   }
@@ -404,7 +422,9 @@ class _LoadingPageState extends State<LoadingPage>
               AnimatedBuilder(
                 animation: _orbController,
                 builder: (context, child) {
-                  final curvedValue = CurvedAnimation(parent: _orbController, curve: Curves.easeInOut).value;
+                  final curvedValue = CurvedAnimation(
+                          parent: _orbController, curve: Curves.easeInOut)
+                      .value;
                   return Positioned(
                     top: -100 + (curvedValue * 40),
                     left: -50 + (curvedValue * 20),
@@ -422,7 +442,9 @@ class _LoadingPageState extends State<LoadingPage>
               AnimatedBuilder(
                 animation: _orbController,
                 builder: (context, child) {
-                  final curvedValue = CurvedAnimation(parent: _orbController, curve: Curves.easeInOut).value;
+                  final curvedValue = CurvedAnimation(
+                          parent: _orbController, curve: Curves.easeInOut)
+                      .value;
                   return Positioned(
                     top: 300 + (math.sin(curvedValue * math.pi) * 60),
                     right: -100,
@@ -440,7 +462,9 @@ class _LoadingPageState extends State<LoadingPage>
               AnimatedBuilder(
                 animation: _orbController,
                 builder: (context, child) {
-                  final curvedValue = CurvedAnimation(parent: _orbController, curve: Curves.easeInOut).value;
+                  final curvedValue = CurvedAnimation(
+                          parent: _orbController, curve: Curves.easeInOut)
+                      .value;
                   return Positioned(
                     bottom: -150,
                     left: -80 + (curvedValue * 150),
@@ -457,7 +481,7 @@ class _LoadingPageState extends State<LoadingPage>
               ),
             ],
           ),
-          
+
           // 内容层
           SafeArea(
             child: Center(
@@ -497,7 +521,8 @@ class _LoadingPageState extends State<LoadingPage>
                                   radius: 1.8,
                                   center: Alignment.topCenter,
                                   colors: [
-                                    AppColors.surface.withOpacity(0.15), // 降低透明度
+                                    AppColors.surface
+                                        .withOpacity(0.15), // 降低透明度
                                     AppColors.surface.withOpacity(0.3),
                                     AppColors.surface.withOpacity(0.45),
                                   ],

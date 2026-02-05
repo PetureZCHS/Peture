@@ -39,7 +39,8 @@ class _PetShopPageState extends State<PetShopPage> {
         '好评 ${(96 + index % 3)}%'
       ],
       category: categories[index % categories.length],
-      imageUrl: 'https://dummyimage.com/600x600/fafafa/f1f1f1.png&text=Pet+${index + 1}',
+      imageUrl:
+          'https://dummyimage.com/600x600/fafafa/f1f1f1.png&text=Pet+${index + 1}',
     );
   });
 
@@ -123,7 +124,8 @@ class _PetShopPageState extends State<PetShopPage> {
               crossAxisCount: 2,
               mainAxisSpacing: 12,
               crossAxisSpacing: 12,
-              itemBuilder: (context, index) => _ProductCard(product: _products[index]),
+              itemBuilder: (context, index) =>
+                  _ProductCard(product: _products[index]),
               childCount: _products.length,
             ),
           ),
@@ -145,14 +147,16 @@ class _PetShopPageState extends State<PetShopPage> {
               child: PageView.builder(
                 controller: _bannerController,
                 itemCount: _bannerImages.length,
-                onPageChanged: (index) => setState(() => _currentBanner = index),
+                onPageChanged: (index) =>
+                    setState(() => _currentBanner = index),
                 itemBuilder: (context, index) => FadeInImage.assetNetwork(
                   placeholder: 'assets/icon/app_icon.png',
                   image: _bannerImages[index],
                   fit: BoxFit.cover,
                   imageErrorBuilder: (_, __, ___) => Container(
                     color: Colors.grey[200],
-                    child: const Icon(Icons.pets, size: 60, color: Colors.black26),
+                    child:
+                        const Icon(Icons.pets, size: 60, color: Colors.black26),
                   ),
                 ),
               ),
@@ -174,7 +178,9 @@ class _PetShopPageState extends State<PetShopPage> {
                       height: 6,
                       margin: const EdgeInsets.symmetric(horizontal: 2),
                       decoration: BoxDecoration(
-                        color: _currentBanner == index ? Colors.white : Colors.white54,
+                        color: _currentBanner == index
+                            ? Colors.white
+                            : Colors.white54,
                         borderRadius: BorderRadius.circular(3),
                       ),
                     ),
@@ -205,7 +211,9 @@ class _PetShopPageState extends State<PetShopPage> {
                 MaterialPageRoute(
                   builder: (_) => PetShopCategoryPage(
                     category: category.name,
-                    products: _products.where((p) => p.category == category.name).toList(),
+                    products: _products
+                        .where((p) => p.category == category.name)
+                        .toList(),
                   ),
                 ),
               );
@@ -244,7 +252,8 @@ class _PetShopPageState extends State<PetShopPage> {
     final List<_FlashButton> buttons = [
       _FlashButton('限时秒杀', Colors.redAccent, Icons.flash_on, () {}),
       _FlashButton('领券中心', Colors.orange, Icons.card_giftcard, () {}),
-      _FlashButton('品牌馆', Colors.purple, Icons.workspace_premium_outlined, () {}),
+      _FlashButton(
+          '品牌馆', Colors.purple, Icons.workspace_premium_outlined, () {}),
       _FlashButton('直播福利', Colors.blueAccent, Icons.live_tv, () {
         Navigator.push(
           context,
@@ -267,7 +276,8 @@ class _PetShopPageState extends State<PetShopPage> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: b.color.withOpacity(0.15),
                       foregroundColor: b.color,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14)),
                       elevation: 0,
                       padding: const EdgeInsets.symmetric(vertical: 12),
                     ),
@@ -321,7 +331,8 @@ class _ProductCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             ClipRRect(
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(16)),
               child: AspectRatio(
                 aspectRatio: 1,
                 child: FadeInImage.assetNetwork(
@@ -330,7 +341,8 @@ class _ProductCard extends StatelessWidget {
                   fit: BoxFit.cover,
                   imageErrorBuilder: (_, __, ___) => Container(
                     color: Colors.grey[100],
-                    child: const Icon(Icons.pets, size: 32, color: Colors.black26),
+                    child:
+                        const Icon(Icons.pets, size: 32, color: Colors.black26),
                   ),
                 ),
               ),
@@ -344,7 +356,8 @@ class _ProductCard extends StatelessWidget {
                     product.name,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                    style: const TextStyle(
+                        fontSize: 14, fontWeight: FontWeight.w600),
                   ),
                   const SizedBox(height: 4),
                   Text(
@@ -358,10 +371,12 @@ class _ProductCard extends StatelessWidget {
                     children: product.tags
                         .map(
                           (tag) => Chip(
-                            label: Text(tag, style: const TextStyle(fontSize: 10)),
+                            label:
+                                Text(tag, style: const TextStyle(fontSize: 10)),
                             backgroundColor: const Color(0xFFF5F5F5),
                             padding: const EdgeInsets.symmetric(horizontal: 4),
-                            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            materialTapTargetSize:
+                                MaterialTapTargetSize.shrinkWrap,
                           ),
                         )
                         .toList(),
@@ -457,5 +472,3 @@ class PetShopCategoryPage extends StatelessWidget {
     );
   }
 }
-
-

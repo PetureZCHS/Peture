@@ -39,7 +39,7 @@ class GrowthLogPage extends StatefulWidget {
 
 class _GrowthLogPageState extends State<GrowthLogPage> {
   final ScrollController _scrollController = ScrollController();
-  
+
   // Mock Data
   final List<GrowthEvent> _events = [
     GrowthEvent(
@@ -48,7 +48,7 @@ class _GrowthLogPageState extends State<GrowthLogPage> {
       description: '针对“最近食欲不振”的咨询建议：建议观察排泄情况，尝试加热食物，必要时就医。',
       type: GrowthEventType.aiDiagnosis,
     ),
-     GrowthEvent(
+    GrowthEvent(
       date: DateTime.now().subtract(const Duration(days: 1)),
       title: '疫苗接种: 狂犬疫苗',
       description: '已接种狂犬疫苗（第2针），下次接种时间：2026-02-14。',
@@ -65,9 +65,9 @@ class _GrowthLogPageState extends State<GrowthLogPage> {
       title: '日常记录',
       description: '今天去公园玩得很开心，认识了新朋友。',
       type: GrowthEventType.dailyLog,
-      images: ['https://picsum.photos/200'], 
+      images: ['https://picsum.photos/200'],
     ),
-     GrowthEvent(
+    GrowthEvent(
       date: DateTime.now().subtract(const Duration(days: 5)),
       title: 'AI 问诊记录',
       description: '针对“皮肤瘙痒”的咨询：可能是换季过敏，建议补充卵磷脂。',
@@ -100,7 +100,8 @@ class _GrowthLogPageState extends State<GrowthLogPage> {
         centerTitle: true,
         title: const Text(
           '成长日志',
-          style: TextStyle(color: AppColors.textDark, fontWeight: FontWeight.bold),
+          style:
+              TextStyle(color: AppColors.textDark, fontWeight: FontWeight.bold),
         ),
         actions: [
           IconButton(
@@ -121,11 +122,12 @@ class _GrowthLogPageState extends State<GrowthLogPage> {
           // If embedded, hide the filter button
           if (!widget.isEmbedded)
             IconButton(
-              icon: const Icon(Icons.filter_list_rounded, color: AppColors.textDark),
+              icon: const Icon(Icons.filter_list_rounded,
+                  color: AppColors.textDark),
               onPressed: () {},
             ),
           if (widget.isEmbedded)
-             const SizedBox(width: 60), // Space for Home toggle button
+            const SizedBox(width: 60), // Space for Home toggle button
         ],
       ),
       body: AnimationLimiter(
@@ -142,9 +144,8 @@ class _GrowthLogPageState extends State<GrowthLogPage> {
                 verticalOffset: 50.0,
                 child: FadeInAnimation(
                   child: _GrowthTimelineItem(
-                    event: _events[index], 
-                    isLast: index == _events.length - 1
-                  ),
+                      event: _events[index],
+                      isLast: index == _events.length - 1),
                 ),
               ),
             );
@@ -240,14 +241,14 @@ class _GrowthTimelineItem extends StatelessWidget {
               ),
             ),
           ),
-          
+
           const SizedBox(width: 12),
 
           // 2. 中间：时间线轴 + 节点
           Column(
             children: [
-               Container(
-                 margin: const EdgeInsets.only(top: 18), // Align with time text
+              Container(
+                margin: const EdgeInsets.only(top: 18), // Align with time text
                 width: 12,
                 height: 12,
                 decoration: BoxDecoration(
@@ -351,11 +352,11 @@ class _GrowthTimelineItem extends StatelessWidget {
                               ),
                             ],
                           ),
-                          
+
                           const SizedBox(height: 12),
-                          
+
                           // Body: Description
-                           Text(
+                          Text(
                             event.description,
                             style: TextStyle(
                               fontSize: 14,
@@ -374,7 +375,8 @@ class _GrowthTimelineItem extends StatelessWidget {
                               child: ListView.separated(
                                 scrollDirection: Axis.horizontal,
                                 itemCount: event.images.length,
-                                separatorBuilder: (_, __) => const SizedBox(width: 8),
+                                separatorBuilder: (_, __) =>
+                                    const SizedBox(width: 8),
                                 itemBuilder: (context, imgIndex) {
                                   return Container(
                                     width: 70,
@@ -383,7 +385,8 @@ class _GrowthTimelineItem extends StatelessWidget {
                                       borderRadius: BorderRadius.circular(12),
                                       color: Colors.grey[100],
                                       image: const DecorationImage(
-                                        image: NetworkImage('https://picsum.photos/200'), // Use placeholder for now
+                                        image: NetworkImage(
+                                            'https://picsum.photos/200'), // Use placeholder for now
                                         fit: BoxFit.cover,
                                       ),
                                     ),
@@ -405,4 +408,3 @@ class _GrowthTimelineItem extends StatelessWidget {
     );
   }
 }
-

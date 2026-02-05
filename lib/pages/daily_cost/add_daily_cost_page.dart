@@ -613,4 +613,3 @@ class _AddDailyCostPageState extends State<AddDailyCostPage> {
     );
   }
 }
-

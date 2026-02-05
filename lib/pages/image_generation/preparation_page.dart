@@ -59,7 +59,8 @@ class PreparationPage extends StatefulWidget {
   final File? initialSelectedImage;
   final int initialStyleIndex;
 
-  const PreparationPage({super.key, this.initialSelectedImage, this.initialStyleIndex = 0});
+  const PreparationPage(
+      {super.key, this.initialSelectedImage, this.initialStyleIndex = 0});
 
   @override
   State<PreparationPage> createState() => _PreparationPageState();
@@ -85,7 +86,6 @@ class _PreparationPageState extends State<PreparationPage>
   UploadStatus _uploadStatus = UploadStatus.idle;
   double _uploadProgress = 0.0;
   String _uploadError = '';
-
 
   // 是否正在向后端发起 AI 生图任务（用于按钮内提示）
   bool _isStartingTask = false;
@@ -127,7 +127,7 @@ class _PreparationPageState extends State<PreparationPage>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _scrollToSelectedStyle(animated: false);
     });
-    
+
     // 重置按钮状态，确保不在"正在发起 AI 生图任务..."状态
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_isStartingTask) {
@@ -136,14 +136,10 @@ class _PreparationPageState extends State<PreparationPage>
         });
       }
     });
-    
+
     // 重置导航标记，确保初始状态正确
     _hasNavigatedToLoadingPage = false;
   }
-  
-
-
-
 
   @override
   void dispose() {
@@ -234,7 +230,8 @@ class _PreparationPageState extends State<PreparationPage>
           );
 
       // 使用定时器模拟进度更新（上限 0.95）
-      final progressTimer = Timer.periodic(const Duration(milliseconds: 200), (timer) {
+      final progressTimer =
+          Timer.periodic(const Duration(milliseconds: 200), (timer) {
         if (!mounted) return;
         setState(() {
           // 模拟进度逐步提升，但不超过 0.95
@@ -277,7 +274,8 @@ class _PreparationPageState extends State<PreparationPage>
     } on StorageException catch (e) {
       // Supabase 存储特定错误
       print('❌ StorageException: ${e.message}, Status: ${e.statusCode}');
-      final errorMessage = e.statusCode == '403' ? '权限不足，无法上传图片' : '存储服务错误: ${e.message}';
+      final errorMessage =
+          e.statusCode == '403' ? '权限不足，无法上传图片' : '存储服务错误: ${e.message}';
       setState(() {
         _uploadStatus = UploadStatus.failed;
         _uploadProgress = 0.0;
@@ -382,15 +380,14 @@ class _PreparationPageState extends State<PreparationPage>
         _hasNavigatedToLoadingPage = false;
       }
     });
-    
+
     // 当从LoadingPage返回时，如果之前任务启动失败（即没有成功导航到LoadingPage但_isStartingTask仍为true），
     // 需要重置按钮状态
     // 注意：不要在每次构建时自动重置 `_isStartingTask`，
     // 这会在图片上传完成后且在调用 img-gen-start 之前意外清除提示，
     // 导致“正在发起 AI 生图任务...”从未正确显示。
     // `_isStartingTask` 应由任务启动流程的成功/失败专门控制。
-    
-    
+
     return Scaffold(
       backgroundColor: AppColors.background,
       extendBodyBehindAppBar: true,
@@ -656,7 +653,8 @@ class _PreparationPageState extends State<PreparationPage>
                 // 内联错误提示（替代 SnackBar）
                 if (_uploadError.isNotEmpty)
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16.0, vertical: 8.0),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -726,7 +724,9 @@ class _PreparationPageState extends State<PreparationPage>
                         height: 50,
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(25),
-                          gradient: (_selectedImage != null && !_isStartingTask && _uploadStatus != UploadStatus.uploading)
+                          gradient: (_selectedImage != null &&
+                                  !_isStartingTask &&
+                                  _uploadStatus != UploadStatus.uploading)
                               ? const LinearGradient(
                                   colors: [
                                     Color(0xFF5D5FEF),
@@ -763,13 +763,15 @@ class _PreparationPageState extends State<PreparationPage>
                         child: Material(
                           color: Colors.transparent,
                           child: InkWell(
-                            onTap: (_selectedImage != null && _uploadStatus != UploadStatus.uploading && !_isStartingTask)
-                              ? () async {
-                                // 上传图片到Supabase Storage（先执行上传，成功后再进入任务启动阶段显示提示）
-                                final uploadedFileName =
-                                  await _uploadImageToSupabaseStorage(
-                                    _selectedImage!);
-                            
+                            onTap: (_selectedImage != null &&
+                                    _uploadStatus != UploadStatus.uploading &&
+                                    !_isStartingTask)
+                                ? () async {
+                                    // 上传图片到Supabase Storage（先执行上传，成功后再进入任务启动阶段显示提示）
+                                    final uploadedFileName =
+                                        await _uploadImageToSupabaseStorage(
+                                            _selectedImage!);
+
                                     // 如果上传成功，则导航到LoadingPage
                                     if (uploadedFileName != null && mounted) {
                                       // 上传成功，准备发起生成任务
@@ -790,15 +792,19 @@ class _PreparationPageState extends State<PreparationPage>
                                           4: 'grid',
                                           5: 'autumn',
                                         };
-                                        final style = styleMap[_selectedStyleIndex] ?? 'run';
-                            
+                                        final style =
+                                            styleMap[_selectedStyleIndex] ??
+                                                'run';
+
                                         // 注意：_isStartingTask 已经在上传前设置为 true
 
                                         // 调用 img-gen-start，等待返回 taskId，然后再导航到 LoadingPage
                                         try {
-                                          final supabase = Supabase.instance.client;
+                                          final supabase =
+                                              Supabase.instance.client;
 
-                                          final res = await supabase.functions.invoke(
+                                          final res =
+                                              await supabase.functions.invoke(
                                             'img-gen-start',
                                             body: {
                                               'file_name': uploadedFileName,
@@ -808,15 +814,19 @@ class _PreparationPageState extends State<PreparationPage>
 
                                           // supabase invoke 可能返回 error 字段，先检查
                                           final data = res.data;
-                                          if (data is Map<String, dynamic> && data.containsKey('error')) {
-                                            throw Exception('服务端错误: ${data['error'].toString()}');
+                                          if (data is Map<String, dynamic> &&
+                                              data.containsKey('error')) {
+                                            throw Exception(
+                                                '服务端错误: ${data['error'].toString()}');
                                           }
 
                                           if (data is Map<String, dynamic>) {
-                                            final taskId = data['task_id'] as String?;
+                                            final taskId =
+                                                data['task_id'] as String?;
 
                                             // 输出 task_id 到终端，方便调试
-                                            if (taskId != null && taskId.isNotEmpty) {
+                                            if (taskId != null &&
+                                                taskId.isNotEmpty) {
                                               print('task_id: $taskId');
                                               // 标记已成功导航到LoadingPage
                                               _hasNavigatedToLoadingPage = true;
@@ -825,8 +835,10 @@ class _PreparationPageState extends State<PreparationPage>
                                                 context,
                                                 FadePageRoute(
                                                   page: LoadingPage(
-                                                    originalImage: _selectedImage!,
-                                                    uploadedFileName: uploadedFileName,
+                                                    originalImage:
+                                                        _selectedImage!,
+                                                    uploadedFileName:
+                                                        uploadedFileName,
                                                     taskId: taskId, // 传递任务ID
                                                     style: style,
                                                   ),
@@ -837,9 +849,11 @@ class _PreparationPageState extends State<PreparationPage>
                                                 setState(() {
                                                   // 返回时恢复按钮为可点击状态
                                                   _isStartingTask = false;
-                                                  _hasNavigatedToLoadingPage = false;
+                                                  _hasNavigatedToLoadingPage =
+                                                      false;
                                                   // 同步重置上传状态为 idle，允许再次选择或上传
-                                                  _uploadStatus = UploadStatus.idle;
+                                                  _uploadStatus =
+                                                      UploadStatus.idle;
                                                   _uploadProgress = 0.0;
                                                 });
                                               }
@@ -852,11 +866,13 @@ class _PreparationPageState extends State<PreparationPage>
                                           }
                                         } on SocketException catch (e) {
                                           final msg = '网络错误：无法连接到服务端，请检查网络';
-                                          print('❌ SocketException on img-gen-start: $e');
+                                          print(
+                                              '❌ SocketException on img-gen-start: $e');
                                           if (mounted) {
                                             setState(() {
                                               _isStartingTask = false;
-                                              _uploadStatus = UploadStatus.failed;
+                                              _uploadStatus =
+                                                  UploadStatus.failed;
                                               _uploadError = msg;
                                             });
                                           }
@@ -864,45 +880,50 @@ class _PreparationPageState extends State<PreparationPage>
                                           return;
                                         } on TimeoutException catch (e) {
                                           final msg = '请求超时：AI 生图服务响应缓慢，请稍后重试';
-                                          print('❌ TimeoutException on img-gen-start: $e');
+                                          print(
+                                              '❌ TimeoutException on img-gen-start: $e');
                                           if (mounted) {
                                             setState(() {
                                               _isStartingTask = false;
-                                              _uploadStatus = UploadStatus.failed;
+                                              _uploadStatus =
+                                                  UploadStatus.failed;
                                               _uploadError = msg;
                                             });
                                           }
                                           _hasNavigatedToLoadingPage = false;
                                           return;
                                         } catch (e, st) {
-                                          final msg = 'AI生图任务启动失败：${e.toString()}';
-                                          print('❌ Exception on img-gen-start: $e\n$st');
+                                          final msg =
+                                              'AI生图任务启动失败：${e.toString()}';
+                                          print(
+                                              '❌ Exception on img-gen-start: $e\n$st');
                                           if (mounted) {
                                             setState(() {
                                               _isStartingTask = false;
-                                              _uploadStatus = UploadStatus.failed;
+                                              _uploadStatus =
+                                                  UploadStatus.failed;
                                               _uploadError = msg;
                                             });
                                           }
                                           _hasNavigatedToLoadingPage = false;
                                           return;
                                         }
-                                      
-                                        } else {
-                                          // 如果上传失败，显示错误提示（不使用 SnackBar）
-                                          if (mounted) {
-                                            setState(() {
-                                              _uploadStatus = UploadStatus.failed;
-                                              _uploadError = '图片上传失败，请重试';
-                                              // 上传失败时确保任务启动提示关闭
-                                              _isStartingTask = false;
-                                            });
-                                          }
-                                          // 重置导航标记，以便页面重建时能正确处理状态
-                                          _hasNavigatedToLoadingPage = false;
-                                          return;
+                                      } else {
+                                        // 如果上传失败，显示错误提示（不使用 SnackBar）
+                                        if (mounted) {
+                                          setState(() {
+                                            _uploadStatus = UploadStatus.failed;
+                                            _uploadError = '图片上传失败，请重试';
+                                            // 上传失败时确保任务启动提示关闭
+                                            _isStartingTask = false;
+                                          });
                                         }
-                                    } else if (mounted && _uploadStatus == UploadStatus.failed) {
+                                        // 重置导航标记，以便页面重建时能正确处理状态
+                                        _hasNavigatedToLoadingPage = false;
+                                        return;
+                                      }
+                                    } else if (mounted &&
+                                        _uploadStatus == UploadStatus.failed) {
                                       // 上传失败：页面内显示错误并提供重试（通过下方的错误提示区）
                                     }
                                   }
@@ -911,7 +932,8 @@ class _PreparationPageState extends State<PreparationPage>
                             child: Center(
                               child: _uploadStatus == UploadStatus.uploading
                                   ? Row(
-                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
                                       children: const [
                                         SizedBox(
                                           height: 16,
@@ -941,7 +963,8 @@ class _PreparationPageState extends State<PreparationPage>
                                     )
                                   : _isStartingTask
                                       ? Row(
-                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
                                           children: const [
                                             SizedBox(
                                               height: 16,
@@ -1103,11 +1126,15 @@ class _PreparationPageState extends State<PreparationPage>
 
     // 每个卡片宽度 100 + 间距 12
     const double itemExtent = 112.0;
-    final target = (_selectedStyleIndex * itemExtent) - (MediaQuery.of(context).size.width / 2) + (itemExtent / 2);
-    final clamped = target.clamp(0.0, _styleScrollController.position.maxScrollExtent);
+    final target = (_selectedStyleIndex * itemExtent) -
+        (MediaQuery.of(context).size.width / 2) +
+        (itemExtent / 2);
+    final clamped =
+        target.clamp(0.0, _styleScrollController.position.maxScrollExtent);
 
     if (animated) {
-      _styleScrollController.animateTo(clamped, duration: const Duration(milliseconds: 400), curve: Curves.easeOut);
+      _styleScrollController.animateTo(clamped,
+          duration: const Duration(milliseconds: 400), curve: Curves.easeOut);
     } else {
       _styleScrollController.jumpTo(clamped);
     }

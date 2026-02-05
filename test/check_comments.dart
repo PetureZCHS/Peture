@@ -4,7 +4,8 @@ void main() async {
   // 初始化 Supabase
   await Supabase.initialize(
     url: 'https://tcftpcvcldfudzxgemdh.supabase.co',
-    anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRjZnRwY3ZjbGRmdWR6eGdlbWRoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA2NjMzMTQsImV4cCI6MjA3NjIzOTMxNH0.uiusEWfuAw37fL6neZfK3q9NV4HZF7k-kX6hFIJQ83s',
+    anonKey:
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRjZnRwY3ZjbGRmdWR6eGdlbWRoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA2NjMzMTQsImV4cCI6MjA3NjIzOTMxNH0.uiusEWfuAw37fL6neZfK3q9NV4HZF7k-kX6hFIJQ83s',
   );
 
   final supabase = Supabase.instance.client;
@@ -46,17 +47,14 @@ void main() async {
 
     // 检查评论表结构
     print('\n🔧 检查评论表结构...');
-    final commentColumns = await supabase
-        .from('community_post_comments')
-        .select('*')
-        .limit(1);
+    final commentColumns =
+        await supabase.from('community_post_comments').select('*').limit(1);
 
     if (commentColumns.isNotEmpty) {
       print('评论表列: ${commentColumns.first.keys.join(', ')}');
     } else {
       print('评论表为空或无权限访问');
     }
-
   } catch (e) {
     print('❌ 错误: $e');
   }

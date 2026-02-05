@@ -72,10 +72,10 @@ class _DataMigrationPageState extends State<DataMigrationPage> {
                       '• 疫苗记录\n'
                       '• 每日提醒\n'
                       '• 对话记录 + 聊天消息\n'
-      '• 宠物日记\n'
-      '• 统一消费 / 日常消费\n'
-      '• 健身记录 / 健康计划\n'
-      '• 宠物护照\n\n'
+                      '• 宠物日记\n'
+                      '• 统一消费 / 日常消费\n'
+                      '• 健身记录 / 健康计划\n'
+                      '• 宠物护照\n\n'
                       '⚠️ 请确保网络连接正常，迁移过程中请勿关闭应用。',
                       style: TextStyle(fontSize: 14, height: 1.5),
                     ),
@@ -222,7 +222,6 @@ class _DataMigrationPageState extends State<DataMigrationPage> {
         _status += '总共迁移了 $_migratedItems 个数据项\n';
         _isMigrating = false;
       });
-
     } catch (e) {
       setState(() {
         _status += '\n❌ 迁移失败: $e\n';
@@ -385,12 +384,14 @@ class _DataMigrationPageState extends State<DataMigrationPage> {
     });
 
     try {
-      final reminders = await MedicalRecordHelper.instance.getAllDailyReminders();
+      final reminders =
+          await MedicalRecordHelper.instance.getAllDailyReminders();
       _totalItems += reminders.length;
 
       for (final reminderMap in reminders) {
         try {
-          final result = await _supabaseService.insertDailyReminder(reminderMap);
+          final result =
+              await _supabaseService.insertDailyReminder(reminderMap);
 
           if (result != null) {
             _migratedItems++;
@@ -434,7 +435,8 @@ class _DataMigrationPageState extends State<DataMigrationPage> {
             _migratedItems++;
             setState(() {
               _progress = _migratedItems / _totalItems;
-              _status += '✅ 统一消费记录迁移成功（${expense.category} ¥${expense.amount}）\n';
+              _status +=
+                  '✅ 统一消费记录迁移成功（${expense.category} ¥${expense.amount}）\n';
             });
           } else {
             setState(() {
@@ -550,7 +552,8 @@ class _DataMigrationPageState extends State<DataMigrationPage> {
             _migratedItems++;
             setState(() {
               _progress = _migratedItems / _totalItems;
-              _status += '✅ 对话 "${conversation.title.length > 20 ? conversation.title.substring(0, 20) + '...' : conversation.title}" 迁移成功\n';
+              _status +=
+                  '✅ 对话 "${conversation.title.length > 20 ? conversation.title.substring(0, 20) + '...' : conversation.title}" 迁移成功\n';
             });
 
             final localConversationId = int.tryParse(conversation.id ?? '');
@@ -702,8 +705,10 @@ class _DataMigrationPageState extends State<DataMigrationPage> {
         _status += '• 对话记录: ${conversations.length} 条\n';
         _status += '• 宠物日记: ${diaries.length} 篇\n\n';
 
-        if (pets.isNotEmpty || medicalRecords.isNotEmpty ||
-            weightRecords.isNotEmpty || vaccineRecords.isNotEmpty ||
+        if (pets.isNotEmpty ||
+            medicalRecords.isNotEmpty ||
+            weightRecords.isNotEmpty ||
+            vaccineRecords.isNotEmpty ||
             reminders.isNotEmpty) {
           _status += '✅ 数据迁移验证成功！\n';
           _status += '您现在可以使用 Supabase 云数据库了。\n';

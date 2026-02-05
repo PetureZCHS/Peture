@@ -170,10 +170,14 @@ class _AppSettingsState extends State<AppSettings> {
         // ==============================================
         GestureDetector(
           onTap: () async {
-            final email = Supabase.instance.client.auth.currentUser?.email?.trim().toLowerCase() ?? '';
+            final email = Supabase.instance.client.auth.currentUser?.email
+                    ?.trim()
+                    .toLowerCase() ??
+                '';
             if (email == '739319163@qq.com') {
               Navigator.of(context).push(
-                MaterialPageRoute(builder: (context) => const MyInvitationCodePage()),
+                MaterialPageRoute(
+                    builder: (context) => const MyInvitationCodePage()),
               );
             } else {
               if (!context.mounted) return;
@@ -209,7 +213,8 @@ class _AppSettingsState extends State<AppSettings> {
                     color: Colors.white.withOpacity(0.3),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.confirmation_number_rounded, color: Colors.white, size: 28),
+                  child: const Icon(Icons.confirmation_number_rounded,
+                      color: Colors.white, size: 28),
                 ),
                 const SizedBox(width: 16),
                 const Expanded(
@@ -218,17 +223,22 @@ class _AppSettingsState extends State<AppSettings> {
                     children: [
                       Text(
                         "我的邀请码",
-                        style: TextStyle(color: Color(0xFF8B4545), fontSize: 18, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                            color: Color(0xFF8B4545),
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold),
                       ),
                       SizedBox(height: 4),
                       Text(
                         "一人一码，分享好友兑换终身会员",
-                        style: TextStyle(color: Color(0xFFB85C5C), fontSize: 13),
+                        style:
+                            TextStyle(color: Color(0xFFB85C5C), fontSize: 13),
                       ),
                     ],
                   ),
                 ),
-                const Icon(Icons.arrow_forward_ios, color: Color(0xFFB85C5C), size: 16),
+                const Icon(Icons.arrow_forward_ios,
+                    color: Color(0xFFB85C5C), size: 16),
               ],
             ),
           ),
@@ -240,7 +250,8 @@ class _AppSettingsState extends State<AppSettings> {
         GestureDetector(
           onTap: () {
             Navigator.of(context).push(
-              MaterialPageRoute(builder: (context) => const InvitationCodePage()),
+              MaterialPageRoute(
+                  builder: (context) => const InvitationCodePage()),
             );
           },
           child: Container(
@@ -251,7 +262,10 @@ class _AppSettingsState extends State<AppSettings> {
               borderRadius: BorderRadius.circular(16),
               border: Border.all(color: Color(0xFFF8C4CC), width: 1.5),
               boxShadow: [
-                BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 2)),
+                BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2)),
               ],
             ),
             child: Row(
@@ -262,7 +276,8 @@ class _AppSettingsState extends State<AppSettings> {
                     color: const Color(0xFFFFB6C1).withOpacity(0.2),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.card_giftcard_rounded, color: Color(0xFFE8919E), size: 28),
+                  child: const Icon(Icons.card_giftcard_rounded,
+                      color: Color(0xFFE8919E), size: 28),
                 ),
                 const SizedBox(width: 16),
                 const Expanded(
@@ -271,7 +286,10 @@ class _AppSettingsState extends State<AppSettings> {
                     children: [
                       Text(
                         "输入邀请码",
-                        style: TextStyle(color: Colors.black87, fontSize: 18, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                            color: Colors.black87,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold),
                       ),
                       SizedBox(height: 4),
                       Text(
@@ -281,7 +299,8 @@ class _AppSettingsState extends State<AppSettings> {
                     ],
                   ),
                 ),
-                const Icon(Icons.arrow_forward_ios, color: Colors.grey, size: 16),
+                const Icon(Icons.arrow_forward_ios,
+                    color: Colors.grey, size: 16),
               ],
             ),
           ),
@@ -535,7 +554,10 @@ class _WarmTipDialog extends StatelessWidget {
           children: [
             Icon(Icons.favorite_border_rounded, size: 48, color: pinkDark),
             const SizedBox(height: 16),
-            Text(message, style: const TextStyle(fontSize: 16, color: Color(0xFF8B4545), height: 1.4), textAlign: TextAlign.center),
+            Text(message,
+                style: const TextStyle(
+                    fontSize: 16, color: Color(0xFF8B4545), height: 1.4),
+                textAlign: TextAlign.center),
             const SizedBox(height: 24),
             SizedBox(
               width: double.infinity,
@@ -545,7 +567,8 @@ class _WarmTipDialog extends StatelessWidget {
                   backgroundColor: pinkDark,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14)),
                 ),
                 child: const Text('好的'),
               ),

@@ -5,7 +5,7 @@ import 'email_login_page.dart';
 
 /// 密码强度等级
 enum PasswordStrength {
-  weak,   // 弱：只有单一种类（大写/小写/数字）
+  weak, // 弱：只有单一种类（大写/小写/数字）
   medium, // 中：有两种种类
   strong, // 强：有三种种类（大写+小写+数字）
 }
@@ -253,14 +253,12 @@ class _EmailRegisterPageState extends State<EmailRegisterPage> {
         errorMessage = '该邮箱已被注册，请直接前往登录页登录';
       } else if (e.message.contains('Invalid email')) {
         errorMessage = '邮箱格式不正确，请检查是否有输入错误';
-      } else if (e.message.contains('rate limit') ||
-          e.statusCode == 429) {
+      } else if (e.message.contains('rate limit') || e.statusCode == 429) {
         errorMessage = '验证码请求过于频繁，请稍后再试';
       } else if (e.statusCode == 500) {
         errorMessage = '验证码服务暂时不可用（代码 500），请稍后重试或联系管理员';
       } else {
-        errorMessage =
-            '发送验证码失败，服务器返回错误代码 ${e.statusCode ?? '未知'}，请稍后重试或联系管理员';
+        errorMessage = '发送验证码失败，服务器返回错误代码 ${e.statusCode ?? '未知'}，请稍后重试或联系管理员';
       }
 
       setState(() {
@@ -343,14 +341,12 @@ class _EmailRegisterPageState extends State<EmailRegisterPage> {
       if (e.message.contains('Invalid token') ||
           e.message.contains('expired')) {
         errorMessage = '验证码无效或已过期，请重新获取后再试';
-      } else if (e.message.contains('rate limit') ||
-          e.statusCode == 429) {
+      } else if (e.message.contains('rate limit') || e.statusCode == 429) {
         errorMessage = '验证码验证尝试过于频繁，请稍后再试';
       } else if (e.statusCode == 500) {
         errorMessage = '验证码验证服务暂时不可用（代码 500），请稍后重试或联系管理员';
       } else {
-        errorMessage =
-            '验证码验证失败，服务器返回错误代码 ${e.statusCode ?? '未知'}，请稍后重试或联系管理员';
+        errorMessage = '验证码验证失败，服务器返回错误代码 ${e.statusCode ?? '未知'}，请稍后重试或联系管理员';
       }
 
       setState(() {
@@ -536,7 +532,8 @@ class _EmailRegisterPageState extends State<EmailRegisterPage> {
                             ),
                             errorBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(16.0),
-                              borderSide: const BorderSide(color: Colors.red, width: 2),
+                              borderSide:
+                                  const BorderSide(color: Colors.red, width: 2),
                             ),
                           ),
                           validator: (value) {
@@ -594,7 +591,9 @@ class _EmailRegisterPageState extends State<EmailRegisterPage> {
                     ),
                     onPressed: _isLoading
                         ? null
-                        : (_isCodeSent ? _verifyCodeAndRegister : _sendVerificationCode),
+                        : (_isCodeSent
+                            ? _verifyCodeAndRegister
+                            : _sendVerificationCode),
                     child: _isLoading
                         ? Row(
                             mainAxisAlignment: MainAxisAlignment.center,
@@ -821,8 +820,7 @@ class _EmailPasswordSetupPageState extends State<EmailPasswordSetupPage> {
       }
     } on AuthException catch (e) {
       setState(() {
-        _errorMessage =
-            '密码设置失败，服务器返回错误代码 ${e.statusCode ?? '未知'}，请稍后重试或联系管理员';
+        _errorMessage = '密码设置失败，服务器返回错误代码 ${e.statusCode ?? '未知'}，请稍后重试或联系管理员';
       });
     } catch (e) {
       setState(() {
@@ -967,13 +965,13 @@ class _EmailPasswordSetupPageState extends State<EmailPasswordSetupPage> {
                           ),
                           child: FractionallySizedBox(
                             alignment: Alignment.centerLeft,
-                            widthFactor:
-                                _passwordStrength.strength == PasswordStrength.weak
-                                    ? 0.33
-                                    : _passwordStrength.strength ==
-                                            PasswordStrength.medium
-                                        ? 0.66
-                                        : 1.0,
+                            widthFactor: _passwordStrength.strength ==
+                                    PasswordStrength.weak
+                                ? 0.33
+                                : _passwordStrength.strength ==
+                                        PasswordStrength.medium
+                                    ? 0.66
+                                    : 1.0,
                             child: Container(
                               decoration: BoxDecoration(
                                 borderRadius: BorderRadius.circular(2),

@@ -12,7 +12,8 @@ class AddUnifiedExpensePageV2 extends StatefulWidget {
   const AddUnifiedExpensePageV2({super.key, this.expense});
 
   @override
-  State<AddUnifiedExpensePageV2> createState() => _AddUnifiedExpensePageV2State();
+  State<AddUnifiedExpensePageV2> createState() =>
+      _AddUnifiedExpensePageV2State();
 }
 
 class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
@@ -57,8 +58,8 @@ class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
   void _initData() {
     if (widget.expense != null) {
       final amount = widget.expense!.amount;
-      _amountStr = amount == amount.toInt() 
-          ? amount.toInt().toString() 
+      _amountStr = amount == amount.toInt()
+          ? amount.toInt().toString()
           : amount.toString();
 
       _selectedExpenseType = widget.expense!.expenseType == 'one-off'
@@ -70,7 +71,8 @@ class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
           : UnifiedExpenseCategory.recurringCategories;
 
       try {
-        _selectedCategory = categories.firstWhere((c) => c.name == widget.expense!.category);
+        _selectedCategory =
+            categories.firstWhere((c) => c.name == widget.expense!.category);
       } catch (_) {
         _selectedCategory = UnifiedExpenseCategory(
           name: widget.expense!.category,
@@ -124,7 +126,7 @@ class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
 
   void _onKeypadTap(String value) {
     HapticFeedback.lightImpact();
-    
+
     setState(() {
       if (value == 'DEL') {
         if (_amountStr.isNotEmpty) {
@@ -156,7 +158,7 @@ class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
 
   Future<void> _selectDate() async {
     HapticFeedback.selectionClick();
-    
+
     final DateTime? picked = await showDatePicker(
       context: context,
       initialDate: _selectedDate,
@@ -212,15 +214,19 @@ class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
         petName: _selectedPetName,
         note: _noteController.text.isEmpty ? null : _noteController.text,
         itemName: _selectedExpenseType == ExpenseTypeEnum.recurring
-            ? (_itemNameController.text.isEmpty ? _selectedCategory!.name : _itemNameController.text)
+            ? (_itemNameController.text.isEmpty
+                ? _selectedCategory!.name
+                : _itemNameController.text)
             : null,
-        estimatedEndDate: _selectedExpenseType == ExpenseTypeEnum.recurring && _estimatedEndDate != null
+        estimatedEndDate: _selectedExpenseType == ExpenseTypeEnum.recurring &&
+                _estimatedEndDate != null
             ? DateFormat('yyyy-MM-dd').format(_estimatedEndDate!)
             : null,
         itemType: _selectedExpenseType == ExpenseTypeEnum.recurring
             ? _selectedItemType?.value
             : null,
-        createdAt: widget.expense?.createdAt ?? DateTime.now().toIso8601String(),
+        createdAt:
+            widget.expense?.createdAt ?? DateTime.now().toIso8601String(),
         photoPath: null,
       );
 
@@ -229,7 +235,8 @@ class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
 
       if (widget.expense == null) {
         await UnifiedExpenseHelper.instance.insertExpense(expense);
-        final result = await supabaseService.insertUnifiedExpense(expense.toMap());
+        final result =
+            await supabaseService.insertUnifiedExpense(expense.toMap());
         if (result != null) success = true;
       } else {
         await UnifiedExpenseHelper.instance.updateExpense(expense);
@@ -255,13 +262,18 @@ class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
     }
   }
 
-  void _showToast(String message, {bool isError = false, bool isWarning = false}) {
+  void _showToast(String message,
+      {bool isError = false, bool isWarning = false}) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(
           children: [
             Icon(
-              isError ? Icons.error_outline : (isWarning ? Icons.warning_amber_rounded : Icons.check_circle_outline),
+              isError
+                  ? Icons.error_outline
+                  : (isWarning
+                      ? Icons.warning_amber_rounded
+                      : Icons.check_circle_outline),
               color: Colors.white,
               size: 20,
             ),
@@ -269,7 +281,9 @@ class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
             Expanded(child: Text(message)),
           ],
         ),
-        backgroundColor: isError ? const Color(0xFFFF3B30) : (isWarning ? Colors.orange : const Color(0xFF34C759)),
+        backgroundColor: isError
+            ? const Color(0xFFFF3B30)
+            : (isWarning ? Colors.orange : const Color(0xFF34C759)),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         margin: const EdgeInsets.all(16),
@@ -398,7 +412,12 @@ class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
           color: isSelected ? Colors.white : Colors.transparent,
           borderRadius: BorderRadius.circular(18),
           boxShadow: isSelected
-              ? [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 4, offset: const Offset(0, 1))]
+              ? [
+                  BoxShadow(
+                      color: Colors.black.withOpacity(0.08),
+                      blurRadius: 4,
+                      offset: const Offset(0, 1))
+                ]
               : null,
         ),
         child: Text(
@@ -406,7 +425,8 @@ class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
           style: TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w600,
-            color: isSelected ? const Color(0xFF1C1C1E) : const Color(0xFF8E8E93),
+            color:
+                isSelected ? const Color(0xFF1C1C1E) : const Color(0xFF8E8E93),
           ),
         ),
       ),
@@ -445,7 +465,8 @@ class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
                       color: const Color(0xFFFFE5E5),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: const Icon(Icons.pets, size: 16, color: Color(0xFFFF6B6B)),
+                    child: const Icon(Icons.pets,
+                        size: 16, color: Color(0xFFFF6B6B)),
                   ),
                   const SizedBox(width: 8),
                   Text(
@@ -453,11 +474,14 @@ class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
-                      color: _selectedPetName != null ? const Color(0xFF1C1C1E) : const Color(0xFF8E8E93),
+                      color: _selectedPetName != null
+                          ? const Color(0xFF1C1C1E)
+                          : const Color(0xFF8E8E93),
                     ),
                   ),
                   const SizedBox(width: 4),
-                  const Icon(Icons.keyboard_arrow_down_rounded, size: 18, color: Color(0xFF8E8E93)),
+                  const Icon(Icons.keyboard_arrow_down_rounded,
+                      size: 18, color: Color(0xFF8E8E93)),
                 ],
               ),
             ),
@@ -552,10 +576,10 @@ class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
   }
 
   Widget _buildPetOption(Map<String, dynamic> pet, {bool isPublic = false}) {
-    final isSelected = isPublic 
-        ? _selectedPetId == null 
+    final isSelected = isPublic
+        ? _selectedPetId == null
         : _selectedPetId == pet['id']?.toString();
-    
+
     return GestureDetector(
       onTap: () {
         HapticFeedback.selectionClick();
@@ -571,7 +595,9 @@ class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
         decoration: BoxDecoration(
           color: isSelected ? const Color(0xFFFFF0F0) : Colors.transparent,
           borderRadius: BorderRadius.circular(14),
-          border: isSelected ? Border.all(color: const Color(0xFFFF6B6B), width: 1.5) : null,
+          border: isSelected
+              ? Border.all(color: const Color(0xFFFF6B6B), width: 1.5)
+              : null,
         ),
         child: Row(
           children: [
@@ -579,12 +605,16 @@ class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: isPublic ? const Color(0xFFF5F5F7) : const Color(0xFFFFE5E5),
+                color: isPublic
+                    ? const Color(0xFFF5F5F7)
+                    : const Color(0xFFFFE5E5),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(
                 isPublic ? Icons.home_rounded : Icons.pets,
-                color: isPublic ? const Color(0xFF8E8E93) : const Color(0xFFFF6B6B),
+                color: isPublic
+                    ? const Color(0xFF8E8E93)
+                    : const Color(0xFFFF6B6B),
                 size: 20,
               ),
             ),
@@ -600,7 +630,8 @@ class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
               ),
             ),
             if (isSelected)
-              const Icon(Icons.check_circle, color: Color(0xFFFF6B6B), size: 22),
+              const Icon(Icons.check_circle,
+                  color: Color(0xFFFF6B6B), size: 22),
           ],
         ),
       ),
@@ -631,7 +662,7 @@ class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
 
   Widget _buildCategoryItem(UnifiedExpenseCategory cat) {
     final isSelected = _selectedCategory?.name == cat.name;
-    
+
     return GestureDetector(
       onTap: () {
         HapticFeedback.selectionClick();
@@ -649,10 +680,17 @@ class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
               width: 52,
               height: 52,
               decoration: BoxDecoration(
-                color: isSelected ? Color(cat.color) : Color(cat.color).withOpacity(0.12),
+                color: isSelected
+                    ? Color(cat.color)
+                    : Color(cat.color).withOpacity(0.12),
                 borderRadius: BorderRadius.circular(16),
                 boxShadow: isSelected
-                    ? [BoxShadow(color: Color(cat.color).withOpacity(0.4), blurRadius: 12, offset: const Offset(0, 4))]
+                    ? [
+                        BoxShadow(
+                            color: Color(cat.color).withOpacity(0.4),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4))
+                      ]
                     : null,
               ),
               child: Icon(
@@ -694,9 +732,13 @@ class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
               decoration: BoxDecoration(
                 color: const Color(0xFFF5F5F7),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFE5E5EA), width: 1.5, strokeAlign: BorderSide.strokeAlignInside),
+                border: Border.all(
+                    color: const Color(0xFFE5E5EA),
+                    width: 1.5,
+                    strokeAlign: BorderSide.strokeAlignInside),
               ),
-              child: const Icon(Icons.add_rounded, color: Color(0xFF8E8E93), size: 26),
+              child: const Icon(Icons.add_rounded,
+                  color: Color(0xFF8E8E93), size: 26),
             ),
             const SizedBox(height: 8),
             const Text(
@@ -715,14 +757,29 @@ class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
     int selectedIcon = Icons.category.codePoint;
 
     final colors = [
-      0xFFFF6B6B, 0xFFFF8A65, 0xFFFFB74D, 0xFFFFD54F,
-      0xFF81C784, 0xFF4FC3F7, 0xFF9575CD, 0xFFF06292,
+      0xFFFF6B6B,
+      0xFFFF8A65,
+      0xFFFFB74D,
+      0xFFFFD54F,
+      0xFF81C784,
+      0xFF4FC3F7,
+      0xFF9575CD,
+      0xFFF06292,
     ];
 
     final icons = [
-      Icons.category, Icons.pets, Icons.favorite, Icons.star,
-      Icons.home, Icons.shopping_cart, Icons.local_cafe, Icons.sports_esports,
-      Icons.restaurant, Icons.medical_services, Icons.spa, Icons.toys,
+      Icons.category,
+      Icons.pets,
+      Icons.favorite,
+      Icons.star,
+      Icons.home,
+      Icons.shopping_cart,
+      Icons.local_cafe,
+      Icons.sports_esports,
+      Icons.restaurant,
+      Icons.medical_services,
+      Icons.spa,
+      Icons.toys,
     ];
 
     showModalBottomSheet(
@@ -733,7 +790,8 @@ class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return Container(
-              padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+              padding: EdgeInsets.only(
+                  bottom: MediaQuery.of(context).viewInsets.bottom),
               decoration: const BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
@@ -752,7 +810,9 @@ class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
                   ),
                   const Padding(
                     padding: EdgeInsets.all(20),
-                    child: Text('添加分类', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    child: Text('添加分类',
+                        style: TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.bold)),
                   ),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -767,7 +827,8 @@ class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
                           borderRadius: BorderRadius.circular(14),
                           borderSide: BorderSide.none,
                         ),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 14),
                       ),
                     ),
                   ),
@@ -776,7 +837,9 @@ class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
                     padding: EdgeInsets.symmetric(horizontal: 20),
                     child: Align(
                       alignment: Alignment.centerLeft,
-                      child: Text('选择颜色', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                      child: Text('选择颜色',
+                          style: TextStyle(
+                              fontSize: 14, fontWeight: FontWeight.w600)),
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -788,7 +851,8 @@ class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
                       children: colors.map((color) {
                         final isSelected = selectedColor == color;
                         return GestureDetector(
-                          onTap: () => setDialogState(() => selectedColor = color),
+                          onTap: () =>
+                              setDialogState(() => selectedColor = color),
                           child: AnimatedContainer(
                             duration: const Duration(milliseconds: 150),
                             width: 40,
@@ -796,13 +860,20 @@ class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
                             decoration: BoxDecoration(
                               color: Color(color),
                               shape: BoxShape.circle,
-                              border: isSelected ? Border.all(color: Colors.white, width: 3) : null,
+                              border: isSelected
+                                  ? Border.all(color: Colors.white, width: 3)
+                                  : null,
                               boxShadow: isSelected
-                                  ? [BoxShadow(color: Color(color).withOpacity(0.5), blurRadius: 8)]
+                                  ? [
+                                      BoxShadow(
+                                          color: Color(color).withOpacity(0.5),
+                                          blurRadius: 8)
+                                    ]
                                   : null,
                             ),
                             child: isSelected
-                                ? const Icon(Icons.check, color: Colors.white, size: 20)
+                                ? const Icon(Icons.check,
+                                    color: Colors.white, size: 20)
                                 : null,
                           ),
                         );
@@ -814,7 +885,9 @@ class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
                     padding: EdgeInsets.symmetric(horizontal: 20),
                     child: Align(
                       alignment: Alignment.centerLeft,
-                      child: Text('选择图标', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                      child: Text('选择图标',
+                          style: TextStyle(
+                              fontSize: 14, fontWeight: FontWeight.w600)),
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -826,18 +899,23 @@ class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
                       children: icons.map((icon) {
                         final isSelected = selectedIcon == icon.codePoint;
                         return GestureDetector(
-                          onTap: () => setDialogState(() => selectedIcon = icon.codePoint),
+                          onTap: () => setDialogState(
+                              () => selectedIcon = icon.codePoint),
                           child: AnimatedContainer(
                             duration: const Duration(milliseconds: 150),
                             width: 48,
                             height: 48,
                             decoration: BoxDecoration(
-                              color: isSelected ? Color(selectedColor) : const Color(0xFFF5F5F7),
+                              color: isSelected
+                                  ? Color(selectedColor)
+                                  : const Color(0xFFF5F5F7),
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Icon(
                               icon,
-                              color: isSelected ? Colors.white : Color(selectedColor),
+                              color: isSelected
+                                  ? Colors.white
+                                  : Color(selectedColor),
                               size: 24,
                             ),
                           ),
@@ -860,7 +938,10 @@ class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
                                 borderRadius: BorderRadius.circular(14),
                               ),
                               child: const Center(
-                                child: Text('取消', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                                child: Text('取消',
+                                    style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600)),
                               ),
                             ),
                           ),
@@ -890,7 +971,11 @@ class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
                                 borderRadius: BorderRadius.circular(14),
                               ),
                               child: const Center(
-                                child: Text('确定', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white)),
+                                child: Text('确定',
+                                    style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w600,
+                                        color: Colors.white)),
                               ),
                             ),
                           ),
@@ -915,7 +1000,9 @@ class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
         children: [
           _buildMetaChip(
             Icons.calendar_today_rounded,
-            _isToday(_selectedDate) ? '今天' : DateFormat('MM/dd').format(_selectedDate),
+            _isToday(_selectedDate)
+                ? '今天'
+                : DateFormat('MM/dd').format(_selectedDate),
             onTap: _selectDate,
           ),
           const SizedBox(width: 10),
@@ -939,10 +1026,13 @@ class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
 
   bool _isToday(DateTime date) {
     final now = DateTime.now();
-    return date.year == now.year && date.month == now.month && date.day == now.day;
+    return date.year == now.year &&
+        date.month == now.month &&
+        date.day == now.day;
   }
 
-  Widget _buildMetaChip(IconData icon, String text, {VoidCallback? onTap, Color? color}) {
+  Widget _buildMetaChip(IconData icon, String text,
+      {VoidCallback? onTap, Color? color}) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -981,7 +1071,8 @@ class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
           hintStyle: const TextStyle(color: Color(0xFFC7C7CC)),
           border: InputBorder.none,
           isDense: true,
-          prefixIcon: const Icon(Icons.edit_note_rounded, color: Color(0xFFC7C7CC), size: 22),
+          prefixIcon: const Icon(Icons.edit_note_rounded,
+              color: Color(0xFFC7C7CC), size: 22),
           prefixIconConstraints: const BoxConstraints(minWidth: 36),
         ),
         style: const TextStyle(fontSize: 15),
@@ -1009,7 +1100,11 @@ class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
                 Row(children: [_buildKey('7'), _buildKey('8'), _buildKey('9')]),
                 Row(children: [_buildKey('4'), _buildKey('5'), _buildKey('6')]),
                 Row(children: [_buildKey('1'), _buildKey('2'), _buildKey('3')]),
-                Row(children: [_buildKey('.'), _buildKey('0'), _buildKey('DEL', icon: Icons.backspace_outlined)]),
+                Row(children: [
+                  _buildKey('.'),
+                  _buildKey('0'),
+                  _buildKey('DEL', icon: Icons.backspace_outlined)
+                ]),
               ],
             ),
           ),
