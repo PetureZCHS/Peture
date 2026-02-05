@@ -12,7 +12,12 @@ class PetDiaryResultPage extends StatefulWidget {
   final String? diaryContent; // 可选，用于查看已保存的日记
   final String style;
   final PetDiaryEdgeService? diaryService; // 可选，用于生成新日记
-  final String? initialContent; // 可选，初始内容（从生成页面传递）
+  final String? initialContent;
+  final String? nickname;
+  final String? petName;
+  final String? breed;
+  final String? gender;
+  final String? petType;
 
   const PetDiaryResultPage({
     super.key,
@@ -21,6 +26,11 @@ class PetDiaryResultPage extends StatefulWidget {
     this.style = '小红书',
     this.diaryService,
     this.initialContent,
+    this.nickname,
+    this.petName,
+    this.breed,
+    this.gender,
+    this.petType,
   });
 
   @override
@@ -117,9 +127,10 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
 
   /// 开始切换加载提示信息
   void _startLoadingMessages() {
+    final petName = widget.petName ?? '十六';
     final messages = [
       '正在连接 AI...',
-      '十六正在构思...',
+      '$petName正在构思...',
       '正在生成日记...',
       '马上就好...',
     ];
@@ -143,7 +154,11 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
       final stream = widget.diaryService!.generatePetDiary(
         query: widget.originalText,
         style: widget.style,
-        // nickname 和 breed 可以根据需要从用户数据中获取
+        nickname: widget.nickname,
+        petName: widget.petName,
+        breed: widget.breed,
+        gender: widget.gender,
+        petType: widget.petType,
       );
 
       await for (final event in stream) {
@@ -611,22 +626,22 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
                 // 标题部分
                 Row(
                   children: [
-                    const Column(
+                    Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          '十六正在写日记',
-                          style: TextStyle(
+                          '${widget.petName ?? "十六"}正在写日记',
+                          style: const TextStyle(
                             fontSize: 19,
                             fontWeight: FontWeight.w800,
                             color: Color(0xFF7B95FF),
                             letterSpacing: 0.5,
                           ),
                         ),
-                        SizedBox(height: 2),
+                        const SizedBox(height: 2),
                         Text(
-                          'Sixteen\'s Diary',
-                          style: TextStyle(
+                          '${widget.petName == null ? "Sixteen" : "Pet"}\'s Diary',
+                          style: const TextStyle(
                             fontSize: 11,
                             color: Color(0xFF9B7FFF),
                             fontWeight: FontWeight.w500,
@@ -635,6 +650,7 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
                         ),
                       ],
                     ),
+
                   ],
                 ),
 

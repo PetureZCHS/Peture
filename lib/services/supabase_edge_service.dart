@@ -309,6 +309,9 @@ class PetDiaryEdgeService {
     required String style,
     String? nickname,
     String? breed,
+    String? petName,
+    String? gender,
+    String? petType,
   }) async* {
     try {
       // ✅ 获取当前用户的 Session Token
@@ -324,8 +327,11 @@ class PetDiaryEdgeService {
       final inputs = {
         'query': query,
         'style': style,
-        if (nickname != null) 'nickname': nickname,
-        if (breed != null) 'breed': breed,
+        if (nickname != null) 'nickname': nickname, //主人昵称
+        if (breed != null) 'breed': breed, //宠物品种
+        if (petName != null) 'pet_name': petName, //宠物名字
+        if (gender != null) 'gender': gender, //宠物性别
+        if (petType != null) 'type': petType, //宠物类型，猫狗
       };
 
       final body = {
@@ -341,6 +347,9 @@ class PetDiaryEdgeService {
       print('   - inputs.style: $style');
       if (nickname != null) print('   - inputs.nickname: $nickname');
       if (breed != null) print('   - inputs.breed: $breed');
+      if (petName != null) print('   - inputs.pet_name: $petName');
+      if (gender != null) print('   - inputs.gender: $gender');
+      if (petType != null) print('   - inputs.type: $petType');
       print('   - response_mode: streaming');
 
       final url = Uri.parse(SupabaseConstants.diaryUrl);

@@ -9,6 +9,8 @@ class Pet {
   final String? birthDate; // 出生日期 (ISO 8601 格式)
   final String? neuterStatus; // 绝育状态: '已绝育' 或 '未绝育'
   final double? weight; // 体重 (kg)
+  final String? ownerNickname; // 宠物对主人的自定义称呼
+  final bool useCustomNickname; // 是否使用自定义称呼（false 时使用用户默认称呼）
 
   Pet({
     this.id,
@@ -21,6 +23,8 @@ class Pet {
     this.birthDate,
     this.neuterStatus,
     this.weight,
+    this.ownerNickname,
+    this.useCustomNickname = false,
   });
 
   Map<String, dynamic> toMap() {
@@ -35,6 +39,8 @@ class Pet {
       'birth_date': birthDate, // 数据库字段名使用下划线
       'neuter_status': neuterStatus, // 数据库字段名使用下划线
       'weight': weight,
+      'owner_nickname': ownerNickname,
+      'use_custom_nickname': useCustomNickname,
     };
   }
 
@@ -50,6 +56,8 @@ class Pet {
       birthDate: map['birth_date'], // 从数据库字段名映射
       neuterStatus: map['neuter_status'], // 从数据库字段名映射
       weight: map['weight'] != null ? (map['weight'] as num).toDouble() : null,
+      ownerNickname: map['owner_nickname'],
+      useCustomNickname: map['use_custom_nickname'] ?? false,
     );
   }
 }

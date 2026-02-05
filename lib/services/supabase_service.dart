@@ -119,23 +119,37 @@ class SupabaseService {
   }
 
   /// 创建或更新用户资料
-  Future<bool> upsertUserProfile({String? nickname, String? avatarUrl}) async {
+  Future<bool> upsertUserProfile({String? nickname, String? avatarUrl, String? ownerNickname}) async {
     final userId = await currentUserId;
     if (userId == null) return false;
 
     try {
-      await _client.from('users_profiles').upsert({
+      final data = {
         'id': userId,
-        'nickname': nickname,
-        'avatar_url': avatarUrl,
         'updated_at': DateTime.now().toIso8601String(),
-      });
+      };
+      if (nickname != null) data['nickname'] = nickname;
+      if (avatarUrl != null) data['avatar_url'] = avatarUrl;
+      if (ownerNickname != null) data['owner_nickname'] = ownerNickname;
+
+      await _client.from('users_profiles').upsert(data);
 
       return true;
     } catch (e) {
       print('更新用户资料失败: $e');
       return false;
     }
+  }
+
+  /// 获取用户默认的主人昵称（宠物对主人的称呼）
+  Future<String> getOwnerNickname() async {
+    final profile = await getUserProfile();
+    return profile?['owner_nickname'] as String? ?? '主人';
+  }
+
+  /// 更新用户默认的主人昵称
+  Future<bool> updateOwnerNickname(String nickname) async {
+    return await upsertUserProfile(ownerNickname: nickname);
   }
 
   // ============================================================

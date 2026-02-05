@@ -26,6 +26,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
   String? _userEmail;
   String? _userName;
   String? _avatarPath;
+  String _ownerNickname = '主人'; // 宠物对主人的称呼
 
   // 图片选择器
   final ImagePicker _picker = ImagePicker();
@@ -50,6 +51,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
         // 从 Supabase users_profiles 表加载昵称
         final profile = await _supabaseService.getUserProfile();
         final nickname = profile?['nickname'] as String?;
+        final ownerNickname = profile?['owner_nickname'] as String? ?? '主人';
 
         if (mounted) {
           setState(() {
@@ -57,6 +59,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
             // 优先使用数据库中的昵称，如果没有则使用 Auth 的元数据
             _userName = nickname ?? user.userMetadata?['name'] ?? '';
             _avatarPath = avatarPath;
+            _ownerNickname = ownerNickname;
           });
         }
       }
@@ -401,6 +404,97 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
     }
   }
 
+  // 修改主人昵称（宠物对主人的称呼）
+  Future<void> _changeOwnerNickname() async {
+    final nicknameController = TextEditingController(text: _ownerNickname);
+
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('宠物对你的称呼'),
+        content: TextField(
+          controller: nicknameController,
+          decoration: const InputDecoration(
+            labelText: '称呼',
+            hintText: '例如：主人、妈妈、姐姐',
+            prefixIcon: Icon(Icons.pets),
+            helperText: '这将作为宠物日记中对你的默认称呼',
+          ),
+          autofocus: true,
+          maxLength: 10,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('取消'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final nickname = nicknameController.text.trim();
+              if (nickname.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('称呼不能为空'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+                return;
+              }
+              Navigator.pop(context, nickname);
+            },
+            child: const Text('保存'),
+          ),
+        ],
+      ),
+    );
+
+    if (result != null && result.isNotEmpty && mounted) {
+      setState(() => _isLoading = true);
+
+      try {
+        final success = await _supabaseService.updateOwnerNickname(result.trim());
+
+        if (success) {
+          if (mounted) {
+            setState(() => _ownerNickname = result.trim());
+
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('✅ 称呼修改成功'),
+                backgroundColor: Colors.green,
+                duration: Duration(seconds: 2),
+              ),
+            );
+          }
+        } else {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('❌ 称呼修改失败，请检查网络连接'),
+                backgroundColor: Colors.red,
+                duration: Duration(seconds: 3),
+              ),
+            );
+          }
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(
+            content: Text('❌ 称呼修改失败: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ));
+        }
+      } finally {
+        if (mounted) {
+          setState(() => _isLoading = false);
+        }
+      }
+    }
+  }
+
   // 退出登录
   Future<void> _signOut() async {
     final confirm = await showDialog<bool>(
@@ -550,6 +644,12 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
                             ? _userName!
                             : '未设置',
                         onTap: _changeName,
+                      ),
+                      _buildListTile(
+                        icon: Icons.pets,
+                        title: '宠物对我的称呼',
+                        subtitle: _ownerNickname,
+                        onTap: _changeOwnerNickname,
                       ),
                       _buildListTile(
                         icon: Icons.email,

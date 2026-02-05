@@ -661,6 +661,9 @@ class _PetProfileSectionState extends State<PetProfileSection> {
                         weight: petData['weight'] != null
                             ? (petData['weight'] as num).toDouble()
                             : null, // 体重
+                        ownerNickname: petData['ownerNickname'],
+                        useCustomNickname:
+                            petData['useCustomNickname'] ?? false,
                       );
 
                       _addPet(newPet);
@@ -1022,7 +1025,8 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage> {
     _currentPet = widget.pet;
   }
 
-  Widget _buildInfoCard(String label, String value) {
+  Widget _buildInfoCard(String label, String value,
+      {bool isPlaceholder = false}) {
     return Container(
       decoration: BoxDecoration(
         color: AppColors.cardBackground,
@@ -1057,10 +1061,10 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage> {
             ),
             Text(
               value,
-              style: const TextStyle(
+              style: TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: 16,
-                color: AppColors.primaryText,
+                color: isPlaceholder ? Colors.grey : AppColors.primaryText,
               ),
             ),
           ],
@@ -1110,6 +1114,8 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage> {
                   'weight': _currentPet.weight,
                   'avatar': _currentPet.avatar,
                   'type': _currentPet.type,
+                  'ownerNickname': _currentPet.ownerNickname,
+                  'useCustomNickname': _currentPet.useCustomNickname,
                 };
 
                 final result = await Navigator.push(
@@ -1151,6 +1157,8 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage> {
                     weight: result['weight'],
                     avatar: result['avatar'],
                     age: age,
+                    ownerNickname: result['ownerNickname'],
+                    useCustomNickname: result['useCustomNickname'] ?? false,
                   );
 
                   try {
@@ -1237,9 +1245,13 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage> {
                   _buildInfoCard('绝育状态', _currentPet.neuterStatus!),
                 if (_currentPet.neuterStatus != null)
                   const SizedBox(height: 12),
-                if (_currentPet.weight != null)
-                  _buildInfoCard(
-                      '体重', '${_currentPet.weight!.toStringAsFixed(1)} kg'),
+                _buildInfoCard(
+                  '体重',
+                  _currentPet.weight != null
+                      ? '${_currentPet.weight!.toStringAsFixed(1)} kg'
+                      : '未填写',
+                  isPlaceholder: _currentPet.weight == null,
+                ),
                 const SizedBox(height: 50),
               ],
             ),
