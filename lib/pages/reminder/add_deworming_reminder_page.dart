@@ -279,9 +279,9 @@ class _AddDewormingReminderPageState extends State<AddDewormingReminderPage> {
       onChanged: (value) {
         setState(() {
           _selectedPetId = value;
-          _selectedPetName = _pets
-              .firstWhere((pet) => pet['id']?.toString() == value)['name']
-              as String;
+          _selectedPetName =
+              _pets.firstWhere((pet) => pet['id']?.toString() == value)['name']
+                  as String;
         });
       },
       validator: (value) => value == null ? '请选择宠物' : null,

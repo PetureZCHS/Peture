@@ -53,11 +53,11 @@ class _PublishPostPageState extends State<PublishPostPage> {
     super.dispose();
   }
 
-  bool get _hasInitialImage => !_initialImageRemoved &&
+  bool get _hasInitialImage =>
+      !_initialImageRemoved &&
       (widget.initialImageFile != null || widget.initialImageBytes != null);
 
-  int get _totalImageCount =>
-      (_hasInitialImage ? 1 : 0) + _pickedFiles.length;
+  int get _totalImageCount => (_hasInitialImage ? 1 : 0) + _pickedFiles.length;
 
   Future<void> _pickImages() async {
     final picker = ImagePicker();
@@ -121,8 +121,8 @@ class _PublishPostPageState extends State<PublishPostPage> {
         if (url != null) imageUrls.add(url);
       } else if (widget.initialImageFile != null) {
         final path = '$userId/${ts}_0.jpg';
-        final url = await _supabase.uploadPostImage(
-            widget.initialImageFile!, path);
+        final url =
+            await _supabase.uploadPostImage(widget.initialImageFile!, path);
         if (url != null) imageUrls.add(url);
       }
 
@@ -245,8 +245,8 @@ class _PublishPostPageState extends State<PublishPostPage> {
               builder: (context, constraints) {
                 const crossCount = 3;
                 const gap = 8.0;
-                final size =
-                    (constraints.maxWidth - (crossCount - 1) * gap) / crossCount;
+                final size = (constraints.maxWidth - (crossCount - 1) * gap) /
+                    crossCount;
                 final list = <Widget>[];
                 if (_hasInitialImage) {
                   list.add(_buildImagePreview(
@@ -330,8 +330,10 @@ class _PublishPostPageState extends State<PublishPostPage> {
                   selected: selected,
                   onSelected: (v) {
                     setState(() {
-                      if (v) _selectedTopics.add(t);
-                      else _selectedTopics.remove(t);
+                      if (v)
+                        _selectedTopics.add(t);
+                      else
+                        _selectedTopics.remove(t);
                     });
                   },
                   selectedColor: const Color(0xFFFF2442).withOpacity(0.2),

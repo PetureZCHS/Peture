@@ -18,10 +18,10 @@ class AppColors {
   static const Color textDark = Color(0xFF1D1D1F);
   static const Color textGrey = Color(0xFF8E8E93);
   static const Color textLight = Color(0xFFAEAEB2); // 更淡的文字颜色
-  
+
   // 添加按钮状态颜色 - 使用更美观的颜色
   static const Color favoriteActive = Color(0xFFFF5252); // 红色，用于收藏
-  static const Color likeActive = Color(0xFF2196F3);    // 蓝色，用于点赞
+  static const Color likeActive = Color(0xFF2196F3); // 蓝色，用于点赞
   static const Color dislikeActive = Color(0xFF9E9E9E); // 灰色，用于点踩
 
   static const Color orb1 = Color(0xFFC4E0E5);
@@ -59,7 +59,8 @@ class ResultPage extends StatefulWidget {
   final String? resultImageUrl; // 生成结果 URL（可选回退）
   final File? resultImageFile; // 本地下载的生成文件（优先）
 
-  const ResultPage({required this.originalImage, this.resultImageFile, this.resultImageUrl});
+  const ResultPage(
+      {required this.originalImage, this.resultImageFile, this.resultImageUrl});
 
   @override
   State<ResultPage> createState() => _ResultPageState();
@@ -68,7 +69,7 @@ class ResultPage extends StatefulWidget {
 class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
   // Orb动画控制器
   late AnimationController _orbController;
-  
+
   // 添加按钮状态变量
   bool _isFavorite = false;
   bool _isLiked = false;
@@ -89,7 +90,8 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
       try {
         final filePath = widget.resultImageFile!.path;
         final filename = filePath.split(Platform.pathSeparator).last;
-        if (filePath.contains(Directory.systemTemp.path) || filename.startsWith('ai_gen_')) {
+        if (filePath.contains(Directory.systemTemp.path) ||
+            filename.startsWith('ai_gen_')) {
           _shouldDeleteTempFile = true;
         }
       } catch (e) {
@@ -139,7 +141,9 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
               AnimatedBuilder(
                 animation: _orbController,
                 builder: (context, child) {
-                  final curvedValue = CurvedAnimation(parent: _orbController, curve: Curves.easeInOut).value;
+                  final curvedValue = CurvedAnimation(
+                          parent: _orbController, curve: Curves.easeInOut)
+                      .value;
                   return Positioned(
                     top: -100 + (curvedValue * 40),
                     left: -50 + (curvedValue * 20),
@@ -157,7 +161,9 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
               AnimatedBuilder(
                 animation: _orbController,
                 builder: (context, child) {
-                  final curvedValue = CurvedAnimation(parent: _orbController, curve: Curves.easeInOut).value;
+                  final curvedValue = CurvedAnimation(
+                          parent: _orbController, curve: Curves.easeInOut)
+                      .value;
                   return Positioned(
                     top: 300 + (math.sin(curvedValue * math.pi) * 60),
                     right: -100,
@@ -175,7 +181,9 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
               AnimatedBuilder(
                 animation: _orbController,
                 builder: (context, child) {
-                  final curvedValue = CurvedAnimation(parent: _orbController, curve: Curves.easeInOut).value;
+                  final curvedValue = CurvedAnimation(
+                          parent: _orbController, curve: Curves.easeInOut)
+                      .value;
                   return Positioned(
                     bottom: -150,
                     left: -80 + (curvedValue * 150),
@@ -192,7 +200,7 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
               ),
             ],
           ),
-          
+
           // 内容层
           SafeArea(
             child: Column(
@@ -211,62 +219,66 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
                     );
                   },
                   child: Container(
-                  height: 150,
-                  width: double.infinity,
-                  margin: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
-                        blurRadius: 15,
-                        offset: const Offset(0, 8),
-                      ),
-                    ],
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(16),
-                    child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: Colors.white.withOpacity(0.6),
-                            width: 1.2,
-                          ),
-                          gradient: RadialGradient(
-                            radius: 1.8,
-                            center: Alignment.topCenter,
-                            colors: [
-                              AppColors.surface.withOpacity(0.15), // 降低透明度
-                              AppColors.surface.withOpacity(0.3),
-                              AppColors.surface.withOpacity(0.45),
-                            ],
-                            stops: const [0.0, 0.6, 1.0],
-                          ),
+                    height: 150,
+                    width: double.infinity,
+                    margin: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.05),
+                          blurRadius: 15,
+                          offset: const Offset(0, 8),
                         ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text("原图", style: TextStyle(color: AppColors.textGrey)),
-                            const SizedBox(width: 10),
-                            Hero(
-                              tag: 'pet_photo_hero', // 与preparation_page.dart保持一致
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(8),
-                                child: Image.file(widget.originalImage,
-                                    height: 100, width: 100, fit: BoxFit.cover),
-                              ),
+                      ],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: BackdropFilter(
+                        filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: Colors.white.withOpacity(0.6),
+                              width: 1.2,
                             ),
-                          ],
+                            gradient: RadialGradient(
+                              radius: 1.8,
+                              center: Alignment.topCenter,
+                              colors: [
+                                AppColors.surface.withOpacity(0.15), // 降低透明度
+                                AppColors.surface.withOpacity(0.3),
+                                AppColors.surface.withOpacity(0.45),
+                              ],
+                              stops: const [0.0, 0.6, 1.0],
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text("原图",
+                                  style: TextStyle(color: AppColors.textGrey)),
+                              const SizedBox(width: 10),
+                              Hero(
+                                tag:
+                                    'pet_photo_hero', // 与preparation_page.dart保持一致
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Image.file(widget.originalImage,
+                                      height: 100,
+                                      width: 100,
+                                      fit: BoxFit.cover),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
                   ),
                 ),
-                ),
-                
+
                 // 下半部分：AI 大图
                 Expanded(
                   child: GestureDetector(
@@ -277,7 +289,10 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
                             imageFile: widget.resultImageFile ?? File(''),
                             heroTag: 'ai_result_hero',
                             isNetworkImage: widget.resultImageFile == null,
-                            networkImage: widget.resultImageFile == null && widget.resultImageUrl != null ? NetworkImage(widget.resultImageUrl!) : null,
+                            networkImage: widget.resultImageFile == null &&
+                                    widget.resultImageUrl != null
+                                ? NetworkImage(widget.resultImageUrl!)
+                                : null,
                           ),
                         ),
                       );
@@ -289,7 +304,8 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
                         borderRadius: BorderRadius.circular(20),
                         boxShadow: [
                           BoxShadow(
-                              color: Colors.black.withOpacity(0.1), blurRadius: 20)
+                              color: Colors.black.withOpacity(0.1),
+                              blurRadius: 20)
                         ],
                       ),
                       child: Stack(
@@ -313,12 +329,18 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
                                     fit: BoxFit.contain,
                                     width: double.infinity,
                                     height: double.infinity,
-                                    loadingBuilder: (context, child, loadingProgress) {
+                                    loadingBuilder:
+                                        (context, child, loadingProgress) {
                                       if (loadingProgress == null) return child;
                                       return Center(
                                         child: CircularProgressIndicator(
-                                          value: loadingProgress.expectedTotalBytes != null
-                                              ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                                          value: loadingProgress
+                                                      .expectedTotalBytes !=
+                                                  null
+                                              ? loadingProgress
+                                                      .cumulativeBytesLoaded /
+                                                  loadingProgress
+                                                      .expectedTotalBytes!
                                               : null,
                                           color: AppColors.primary,
                                         ),
@@ -327,18 +349,24 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
                                     errorBuilder: (context, error, stackTrace) {
                                       return Center(
                                         child: Column(
-                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
                                           children: [
-                                            Icon(Icons.error_outline, size: 50, color: Colors.red),
+                                            Icon(Icons.error_outline,
+                                                size: 50, color: Colors.red),
                                             const SizedBox(height: 16),
                                             Text(
                                               '图片加载失败',
-                                              style: TextStyle(fontSize: 16, color: AppColors.textDark),
+                                              style: TextStyle(
+                                                  fontSize: 16,
+                                                  color: AppColors.textDark),
                                             ),
                                             const SizedBox(height: 8),
                                             Text(
                                               '请检查网络连接后重试',
-                                              style: TextStyle(fontSize: 14, color: AppColors.textGrey),
+                                              style: TextStyle(
+                                                  fontSize: 14,
+                                                  color: AppColors.textGrey),
                                             ),
                                             const SizedBox(height: 16),
                                             ElevatedButton(
@@ -358,7 +386,8 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
                           // 浮动操作栏 (点赞/收藏) 使用毛玻璃效果
                           Container(
                             margin: const EdgeInsets.only(bottom: 20),
-                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 20, vertical: 10),
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(30),
                               border: Border.all(
@@ -386,17 +415,22 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(30),
                               child: BackdropFilter(
-                                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                                filter:
+                                    ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    _buildIconAction(Icons.favorite_border, _isFavorite, AppColors.favoriteActive, () {
+                                    _buildIconAction(
+                                        Icons.favorite_border,
+                                        _isFavorite,
+                                        AppColors.favoriteActive, () {
                                       setState(() {
                                         _isFavorite = !_isFavorite;
                                       });
                                     }),
                                     const SizedBox(width: 20),
-                                    _buildIconAction(Icons.thumb_up_outlined, _isLiked, AppColors.likeActive, () {
+                                    _buildIconAction(Icons.thumb_up_outlined,
+                                        _isLiked, AppColors.likeActive, () {
                                       setState(() {
                                         if (_isDisliked) {
                                           _isDisliked = false;
@@ -405,7 +439,10 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
                                       });
                                     }),
                                     const SizedBox(width: 20),
-                                    _buildIconAction(Icons.thumb_down_outlined, _isDisliked, AppColors.dislikeActive, () {
+                                    _buildIconAction(
+                                        Icons.thumb_down_outlined,
+                                        _isDisliked,
+                                        AppColors.dislikeActive, () {
                                       setState(() {
                                         if (_isLiked) {
                                           _isLiked = false;
@@ -459,7 +496,7 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
                           ),
                         ),
                       ),
-                      
+
                       // 渐变色前景按钮
                       AnimatedContainer(
                         duration: const Duration(milliseconds: 300),
@@ -495,22 +532,27 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
                                 late Uint8List bytes;
 
                                 if (widget.resultImageFile != null) {
-                                  bytes = await widget.resultImageFile!.readAsBytes();
-                                } else if (widget.resultImageUrl != null && widget.resultImageUrl!.isNotEmpty) {
-                                  final response = await http.get(Uri.parse(widget.resultImageUrl!));
+                                  bytes = await widget.resultImageFile!
+                                      .readAsBytes();
+                                } else if (widget.resultImageUrl != null &&
+                                    widget.resultImageUrl!.isNotEmpty) {
+                                  final response = await http
+                                      .get(Uri.parse(widget.resultImageUrl!));
                                   if (response.statusCode == 200) {
                                     bytes = response.bodyBytes;
                                   } else {
                                     if (context.mounted) {
                                       ScaffoldMessenger.of(context)
-                                          .showSnackBar(const SnackBar(content: Text("下载图片失败")));
+                                          .showSnackBar(const SnackBar(
+                                              content: Text("下载图片失败")));
                                     }
                                     return;
                                   }
                                 } else {
                                   if (context.mounted) {
-                                    ScaffoldMessenger.of(context)
-                                        .showSnackBar(const SnackBar(content: Text("未找到图片以保存")));
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(
+                                            content: Text("未找到图片以保存")));
                                   }
                                   return;
                                 }
@@ -520,13 +562,13 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
                                   album: 'Peture',
                                 );
                                 if (context.mounted) {
-                                  ScaffoldMessenger.of(context)
-                                      .showSnackBar(const SnackBar(content: Text("已保存到相册！")));
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(content: Text("已保存到相册！")));
                                 }
                               } catch (e) {
                                 if (context.mounted) {
-                                  ScaffoldMessenger.of(context)
-                                      .showSnackBar(SnackBar(content: Text("保存出错: $e")));
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text("保存出错: $e")));
                                 }
                               }
                             },
@@ -562,14 +604,12 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildIconAction(IconData icon, bool isActive, Color activeColor, VoidCallback onTap) {
+  Widget _buildIconAction(
+      IconData icon, bool isActive, Color activeColor, VoidCallback onTap) {
     return GestureDetector(
       onTap: onTap,
-      child: Icon(
-        icon, 
-        color: isActive ? activeColor : AppColors.textDark, 
-        size: 24
-      ),
+      child: Icon(icon,
+          color: isActive ? activeColor : AppColors.textDark, size: 24),
     );
   }
 
@@ -577,15 +617,17 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
   // ignore: unused_element
   Future<Uint8List?> _getAssetImageData(AssetImage image) async {
     final completer = Completer<ImageInfo>();
-    image.resolve(const ImageConfiguration()).addListener(ImageStreamListener((info, _) {
+    image
+        .resolve(const ImageConfiguration())
+        .addListener(ImageStreamListener((info, _) {
       completer.complete(info);
     }));
 
     final imageInfo = await completer.future;
-    final byteData = await imageInfo.image.toByteData(format: ImageByteFormat.png);
+    final byteData =
+        await imageInfo.image.toByteData(format: ImageByteFormat.png);
     return byteData?.buffer.asUint8List();
   }
-
 }
 
 /// 透明背景路由：让下层页面在预览时直接可见
@@ -711,16 +753,21 @@ class _FullscreenImagePageState extends State<FullscreenImagePage>
                   child: Center(
                     child: Hero(
                       tag: widget.heroTag,
-                      child: widget.isNetworkImage && widget.networkImage != null
+                      child: widget.isNetworkImage &&
+                              widget.networkImage != null
                           ? Image.network(
                               widget.networkImage!.url,
                               fit: BoxFit.contain,
-                              loadingBuilder: (context, child, loadingProgress) {
+                              loadingBuilder:
+                                  (context, child, loadingProgress) {
                                 if (loadingProgress == null) return child;
                                 return Center(
                                   child: CircularProgressIndicator(
-                                    value: loadingProgress.expectedTotalBytes != null
-                                        ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                                    value: loadingProgress.expectedTotalBytes !=
+                                            null
+                                        ? loadingProgress
+                                                .cumulativeBytesLoaded /
+                                            loadingProgress.expectedTotalBytes!
                                         : null,
                                     color: Colors.white,
                                   ),
@@ -730,16 +777,19 @@ class _FullscreenImagePageState extends State<FullscreenImagePage>
                                 return Column(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    Icon(Icons.error_outline, size: 50, color: Colors.white),
+                                    Icon(Icons.error_outline,
+                                        size: 50, color: Colors.white),
                                     const SizedBox(height: 16),
                                     Text(
                                       '图片加载失败',
-                                      style: TextStyle(fontSize: 16, color: Colors.white),
+                                      style: TextStyle(
+                                          fontSize: 16, color: Colors.white),
                                     ),
                                     const SizedBox(height: 8),
                                     Text(
                                       '请检查网络连接后重试',
-                                      style: TextStyle(fontSize: 14, color: Colors.white70),
+                                      style: TextStyle(
+                                          fontSize: 14, color: Colors.white70),
                                     ),
                                     const SizedBox(height: 16),
                                     ElevatedButton(

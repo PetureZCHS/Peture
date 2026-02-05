@@ -28,7 +28,7 @@ class _PetPassportPageState extends State<PetPassportPage>
   int _selectedPetIndex = 0;
   late AnimationController _flipController;
   bool _isFlipped = false;
-  
+
   // 用户头像路径
   String? _userAvatarPath;
   String? _userName;
@@ -43,7 +43,7 @@ class _PetPassportPageState extends State<PetPassportPage>
     _loadPets();
     _loadUserInfo();
   }
-  
+
   /// 加载用户信息（头像和昵称）
   Future<void> _loadUserInfo() async {
     try {
@@ -52,7 +52,7 @@ class _PetPassportPageState extends State<PetPassportPage>
       final profile = await supabaseService.getUserProfile();
       final nickname = profile?['nickname'] as String?;
       final user = Supabase.instance.client.auth.currentUser;
-      
+
       if (mounted) {
         setState(() {
           _userAvatarPath = avatarPath;
@@ -85,7 +85,7 @@ class _PetPassportPageState extends State<PetPassportPage>
           // 先尝试从数据库加载
           var passportData = await supabaseService.getPassportByPetId(pet.id!);
           PetPassport? passport;
-          
+
           if (passportData != null) {
             passport = PetPassport.fromMap(passportData);
           } else {
@@ -119,9 +119,8 @@ class _PetPassportPageState extends State<PetPassportPage>
     final achievements = List<Achievement>.from(
       PredefinedAchievements.achievements,
     )..shuffle(random);
-    final selectedAchievements = achievements
-        .take(2 + random.nextInt(3))
-        .toList();
+    final selectedAchievements =
+        achievements.take(2 + random.nextInt(3)).toList();
 
     return PetPassport(
       petId: pet.id!,
@@ -194,8 +193,8 @@ class _PetPassportPageState extends State<PetPassportPage>
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _pets.isEmpty
-          ? _buildEmptyState()
-          : _buildPassportView(),
+              ? _buildEmptyState()
+              : _buildPassportView(),
       // 添加底部安全区域，避免内容被液态导航栏遮挡
       bottomNavigationBar: const SizedBox(height: 20),
     );
@@ -268,10 +267,11 @@ class _PetPassportPageState extends State<PetPassportPage>
         // 体重趋势卡片
         if (_pets.isNotEmpty && _pets[_selectedPetIndex].id != null)
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
             child: WeightTrendCard(petId: _pets[_selectedPetIndex].id!),
           ),
-        
+
         // 提示文字
         Padding(
           padding: const EdgeInsets.all(16.0),
@@ -367,7 +367,7 @@ class _PetPassportPageState extends State<PetPassportPage>
         );
       }
     }
-    
+
     // 其次使用 pet.avatar（宠物档案头像，仅在电子档案没设置时使用）
     if (pet.avatar != null && pet.avatar!.isNotEmpty) {
       final file = File(pet.avatar!);
@@ -389,7 +389,7 @@ class _PetPassportPageState extends State<PetPassportPage>
     // 没有照片时显示默认图标
     return _buildDefaultPetSelectorIcon(isSelected);
   }
-  
+
   /// 构建默认宠物选择器图标
   Widget _buildDefaultPetSelectorIcon(bool isSelected) {
     return Icon(
@@ -402,10 +402,11 @@ class _PetPassportPageState extends State<PetPassportPage>
   Widget _buildPassportFront() {
     final pet = _pets[_selectedPetIndex];
     final passport = _passports[pet.id];
-    
+
     // 获取屏幕宽度，确保卡片不会超出屏幕
     final screenWidth = MediaQuery.of(context).size.width;
-    final cardWidth = (screenWidth - 48).clamp(300.0, 360.0); // 最小300，最大360，左右各留24边距
+    final cardWidth =
+        (screenWidth - 48).clamp(300.0, 360.0); // 最小300，最大360，左右各留24边距
     final cardHeight = cardWidth * 1.5; // 保持宽高比 2:3
 
     return Container(
@@ -660,10 +661,11 @@ class _PetPassportPageState extends State<PetPassportPage>
   Widget _buildPassportBack() {
     final pet = _pets[_selectedPetIndex];
     final passport = _passports[pet.id];
-    
+
     // 获取屏幕宽度，确保卡片不会超出屏幕
     final screenWidth = MediaQuery.of(context).size.width;
-    final cardWidth = (screenWidth - 48).clamp(300.0, 360.0); // 最小300，最大360，左右各留24边距
+    final cardWidth =
+        (screenWidth - 48).clamp(300.0, 360.0); // 最小300，最大360，左右各留24边距
     final cardHeight = cardWidth * 1.5; // 保持宽高比 2:3
 
     return Container(
@@ -740,11 +742,11 @@ class _PetPassportPageState extends State<PetPassportPage>
                     physics: const NeverScrollableScrollPhysics(),
                     gridDelegate:
                         const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 3,
-                          crossAxisSpacing: 12,
-                          mainAxisSpacing: 12,
-                          childAspectRatio: 0.85,
-                        ),
+                      crossAxisCount: 3,
+                      crossAxisSpacing: 12,
+                      mainAxisSpacing: 12,
+                      childAspectRatio: 0.85,
+                    ),
                     itemCount: (passport?.achievements.length ?? 0).clamp(0, 6),
                     itemBuilder: (context, index) {
                       final achievement = passport!.achievements[index];
@@ -815,7 +817,7 @@ class _PetPassportPageState extends State<PetPassportPage>
   /// 构建宠物照片显示
   Widget _buildPetPhoto(PetPassport? passport) {
     final pet = _pets[_selectedPetIndex];
-    
+
     // 优先使用 passport.photoPath（电子档案头像，以电子档案为准）
     if (passport?.photoPath != null && passport!.photoPath!.isNotEmpty) {
       final file = File(passport.photoPath!);
@@ -829,7 +831,7 @@ class _PetPassportPageState extends State<PetPassportPage>
         );
       }
     }
-    
+
     // 其次使用 pet.avatar（宠物档案头像，仅在电子档案没设置时使用）
     if (pet.avatar != null && pet.avatar!.isNotEmpty) {
       final file = File(pet.avatar!);

@@ -40,10 +40,10 @@ class _ExpenseHomePageState extends State<ExpenseHomePage> {
       // 优先从 Supabase 加载 (Develop 分支的逻辑)
       final expensesData = await _supabaseService.getAllExpenses();
       final expenses = expensesData.map((e) => Expense.fromMap(e)).toList();
-      
+
       final now = DateTime.now();
       double monthlyTotal = 0.0;
-      
+
       // 手动计算月度总支出 (替代 ExpenseHelper 的本地计算)
       for (final expense in expenses) {
         final expenseDate = DateTime.parse(expense.date);
@@ -132,14 +132,15 @@ class _ExpenseHomePageState extends State<ExpenseHomePage> {
           ),
         ),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: Color(0xFF1A1A1A), size: 20),
+          icon: const Icon(Icons.arrow_back_ios,
+              color: Color(0xFF1A1A1A), size: 20),
           onPressed: () => Navigator.pop(context),
         ),
         actions: [
           IconButton(
             icon: const Icon(Icons.search, color: Color(0xFF1A1A1A)),
             onPressed: () {
-               // 搜索功能预留
+              // 搜索功能预留
             },
           ),
           IconButton(
@@ -165,7 +166,8 @@ class _ExpenseHomePageState extends State<ExpenseHomePage> {
                   // 顶部摘要区域
                   SliverToBoxAdapter(
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 10.0),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 20.0, vertical: 10.0),
                       child: Column(
                         children: [
                           _buildFilterRow(),
@@ -219,26 +221,29 @@ class _ExpenseHomePageState extends State<ExpenseHomePage> {
                           sliver: SliverList(
                             delegate: SliverChildBuilderDelegate(
                               (context, index) {
-                                final sortedDates = _groupedExpenses.keys.toList()
+                                final sortedDates = _groupedExpenses.keys
+                                    .toList()
                                   ..sort((a, b) => b.compareTo(a));
                                 final date = sortedDates[index];
                                 final expensesForDate = _groupedExpenses[date]!;
-                                
+
                                 return Padding(
                                   padding: const EdgeInsets.only(bottom: 20.0),
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       // 日期头
                                       _buildDateHeader(date, expensesForDate),
                                       const SizedBox(height: 12),
                                       // 交易列表
-                                      ...expensesForDate.map((expense) => 
-                                        Padding(
-                                          padding: const EdgeInsets.only(bottom: 12.0),
-                                          child: _buildExpenseCard(expense),
-                                        )
-                                      ),
+                                      ...expensesForDate
+                                          .map((expense) => Padding(
+                                                padding: const EdgeInsets.only(
+                                                    bottom: 12.0),
+                                                child:
+                                                    _buildExpenseCard(expense),
+                                              )),
                                     ],
                                   ),
                                 );
@@ -247,8 +252,8 @@ class _ExpenseHomePageState extends State<ExpenseHomePage> {
                             ),
                           ),
                         ),
-                  
-                   const SliverToBoxAdapter(child: SizedBox(height: 80)),
+
+                  const SliverToBoxAdapter(child: SizedBox(height: 80)),
                 ],
               ),
             ),
@@ -303,36 +308,37 @@ class _ExpenseHomePageState extends State<ExpenseHomePage> {
                 ),
               ),
               const SizedBox(width: 4),
-              const Icon(Icons.keyboard_arrow_down, size: 16, color: Color(0xFF1A1A1A)),
+              const Icon(Icons.keyboard_arrow_down,
+                  size: 16, color: Color(0xFF1A1A1A)),
             ],
           ),
         ),
         Row(
-           children: [
-             IconButton(
-               icon: const Icon(Icons.chevron_left, color: Color(0xFF8E8E93)),
-               onPressed: () {},
-               padding: EdgeInsets.zero,
-               constraints: const BoxConstraints(),
-             ),
-             Padding(
-               padding: const EdgeInsets.symmetric(horizontal: 8.0),
-               child: Text(
-                 _currentDateRange,
-                 style: const TextStyle(
-                   fontSize: 14,
-                   color: Color(0xFF1A1A1A),
-                   fontWeight: FontWeight.w500,
-                 ),
-               ),
-             ),
-             IconButton(
-               icon: const Icon(Icons.chevron_right, color: Color(0xFF8E8E93)),
-               onPressed: () {},
-               padding: EdgeInsets.zero,
-               constraints: const BoxConstraints(),
-             ),
-           ],
+          children: [
+            IconButton(
+              icon: const Icon(Icons.chevron_left, color: Color(0xFF8E8E93)),
+              onPressed: () {},
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8.0),
+              child: Text(
+                _currentDateRange,
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: Color(0xFF1A1A1A),
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+            IconButton(
+              icon: const Icon(Icons.chevron_right, color: Color(0xFF8E8E93)),
+              onPressed: () {},
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+            ),
+          ],
         ),
       ],
     );
@@ -368,7 +374,8 @@ class _ExpenseHomePageState extends State<ExpenseHomePage> {
                     color: Color(0xFF8E8E93),
                   ),
                 ),
-                Icon(Icons.remove_red_eye_outlined, color: Colors.grey[400], size: 18),
+                Icon(Icons.remove_red_eye_outlined,
+                    color: Colors.grey[400], size: 18),
               ],
             ),
             const SizedBox(height: 12),
@@ -386,7 +393,8 @@ class _ExpenseHomePageState extends State<ExpenseHomePage> {
               children: [
                 _buildSummaryItem(
                   icon: Icons.south_west,
-                  iconColor: const Color(0xFF4cd964), // Green for income (placeholder)
+                  iconColor:
+                      const Color(0xFF4cd964), // Green for income (placeholder)
                   label: '预算剩余',
                   amount: '¥0.00', // 示例数据
                 ),
@@ -395,7 +403,8 @@ class _ExpenseHomePageState extends State<ExpenseHomePage> {
                   icon: Icons.north_east,
                   iconColor: const Color(0xFFFF3B30),
                   label: '日均支出',
-                  amount: '¥${(_monthlyTotal / DateTime.now().day).toStringAsFixed(2)}',
+                  amount:
+                      '¥${(_monthlyTotal / DateTime.now().day).toStringAsFixed(2)}',
                 ),
               ],
             ),
@@ -458,25 +467,43 @@ class _ExpenseHomePageState extends State<ExpenseHomePage> {
 
   Widget _buildDateHeader(String dateStr, List<Expense> expenses) {
     if (expenses.isEmpty) return const SizedBox.shrink();
-    
+
     final date = DateTime.parse(dateStr);
     final now = DateTime.now();
-    
+
     String weekday = '';
     switch (date.weekday) {
-      case 1: weekday = '周一'; break;
-      case 2: weekday = '周二'; break;
-      case 3: weekday = '周三'; break;
-      case 4: weekday = '周四'; break;
-      case 5: weekday = '周五'; break;
-      case 6: weekday = '周六'; break;
-      case 7: weekday = '周日'; break;
+      case 1:
+        weekday = '周一';
+        break;
+      case 2:
+        weekday = '周二';
+        break;
+      case 3:
+        weekday = '周三';
+        break;
+      case 4:
+        weekday = '周四';
+        break;
+      case 5:
+        weekday = '周五';
+        break;
+      case 6:
+        weekday = '周六';
+        break;
+      case 7:
+        weekday = '周日';
+        break;
     }
 
     String formattedDate;
-    if (date.year == now.year && date.month == now.month && date.day == now.day) {
+    if (date.year == now.year &&
+        date.month == now.month &&
+        date.day == now.day) {
       formattedDate = '今天';
-    } else if (date.year == now.year && date.month == now.month && date.day == now.day - 1) {
+    } else if (date.year == now.year &&
+        date.month == now.month &&
+        date.day == now.day - 1) {
       formattedDate = '昨天';
     } else {
       formattedDate = DateFormat('M月d日').format(date);
@@ -526,7 +553,7 @@ class _ExpenseHomePageState extends State<ExpenseHomePage> {
     final iconData = category != null
         ? IconData(category.icon, fontFamily: 'MaterialIcons')
         : Icons.more_horiz;
-    
+
     // 如果找不到分类（可能是旧数据），使用默认颜色
     final color = category != null ? Color(category.color) : Colors.grey;
 
@@ -577,12 +604,13 @@ class _ExpenseHomePageState extends State<ExpenseHomePage> {
                     color: const Color(0xFFF7F8FA), // 浅灰色背景
                     borderRadius: BorderRadius.circular(16), // 圆角方形
                   ),
-                  child: Center( // 确保图标居中
+                  child: Center(
+                    // 确保图标居中
                     child: Icon(iconData, color: color, size: 26),
                   ),
                 ),
                 const SizedBox(width: 16),
-                
+
                 // 详情
                 Expanded(
                   child: Column(
@@ -609,7 +637,7 @@ class _ExpenseHomePageState extends State<ExpenseHomePage> {
                           overflow: TextOverflow.ellipsis,
                         )
                       else if (expense.petName != null)
-                         Text(
+                        Text(
                           expense.petName!,
                           style: const TextStyle(
                             fontSize: 13,
@@ -619,7 +647,7 @@ class _ExpenseHomePageState extends State<ExpenseHomePage> {
                           overflow: TextOverflow.ellipsis,
                         )
                       else
-                         const SizedBox.shrink(),
+                        const SizedBox.shrink(),
                     ],
                   ),
                 ),

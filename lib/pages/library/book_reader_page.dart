@@ -62,7 +62,7 @@ class _BookReaderPageState extends State<BookReaderPage> {
         children: [
           // Cover Page (Optional, or just start with first entry)
           _buildCoverPage(),
-          
+
           // Diary Pages
           ...widget.entries.asMap().entries.map((entry) {
             return _buildDiaryPage(entry.value, entry.key + 1);
@@ -126,11 +126,12 @@ class _BookReaderPageState extends State<BookReaderPage> {
             ),
           ),
           const SizedBox(height: 40),
-          
+
           // Title
           Text(
             "${entry.style}日记",
-            style: GoogleFonts.notoSerif( // Changed to notoSerif which supports many scripts or fallback
+            style: GoogleFonts.notoSerif(
+              // Changed to notoSerif which supports many scripts or fallback
               fontSize: 20,
               fontWeight: FontWeight.bold,
               color: Colors.black87,
@@ -138,7 +139,7 @@ class _BookReaderPageState extends State<BookReaderPage> {
             ),
           ),
           const SizedBox(height: 32),
-          
+
           // Content
           Expanded(
             child: Text(
@@ -152,7 +153,7 @@ class _BookReaderPageState extends State<BookReaderPage> {
               textAlign: TextAlign.justify,
             ),
           ),
-          
+
           // Page Number
           Center(
             child: Text(

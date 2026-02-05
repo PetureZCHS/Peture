@@ -81,7 +81,7 @@ class FullDiagnosticReportPage extends StatelessWidget {
                       ),
                       const SizedBox(height: 24),
                       const Divider(thickness: 1.5, color: Colors.black87),
-                      
+
                       // 病人信息栏
                       Padding(
                         padding: const EdgeInsets.symmetric(vertical: 12.0),
@@ -90,7 +90,8 @@ class FullDiagnosticReportPage extends StatelessWidget {
                           children: [
                             _buildInfoItem("姓名", "您的爱宠"),
                             _buildInfoItem("科室", "全科"),
-                            _buildInfoItem("日期", DateFormat('yyyy-MM-dd').format(now)),
+                            _buildInfoItem(
+                                "日期", DateFormat('yyyy-MM-dd').format(now)),
                           ],
                         ),
                       ),
@@ -101,18 +102,24 @@ class FullDiagnosticReportPage extends StatelessWidget {
                       _buildSectionHeader("检查所见 / 症状分析"),
                       const SizedBox(height: 8),
                       if (possibleCauses.isEmpty)
-                        const Text("未提供详细症状分析。", style: TextStyle(fontSize: 15, height: 1.6))
+                        const Text("未提供详细症状分析。",
+                            style: TextStyle(fontSize: 15, height: 1.6))
                       else
                         ...possibleCauses.map((cause) => Padding(
                               padding: const EdgeInsets.only(bottom: 4.0),
                               child: Row(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  const Text("• ", style: TextStyle(fontSize: 15, height: 1.6)),
+                                  const Text("• ",
+                                      style:
+                                          TextStyle(fontSize: 15, height: 1.6)),
                                   Expanded(
                                     child: Text(
                                       cause,
-                                      style: const TextStyle(fontSize: 15, height: 1.6, color: Colors.black87),
+                                      style: const TextStyle(
+                                          fontSize: 15,
+                                          height: 1.6,
+                                          color: Colors.black87),
                                     ),
                                   ),
                                 ],
@@ -145,9 +152,9 @@ class FullDiagnosticReportPage extends StatelessWidget {
                           color: Colors.black87,
                         ),
                       ),
-                      
+
                       const SizedBox(height: 60),
-                      
+
                       // 底部签名区
                       Row(
                         mainAxisAlignment: MainAxisAlignment.end,

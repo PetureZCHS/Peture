@@ -81,12 +81,11 @@ class FitnessCourse {
       caloriesEstimate: (json['caloriesEstimate'] as num?)?.toInt() ?? 0,
       petCaloriesEstimate: (json['petCaloriesEstimate'] as num?)?.toInt() ?? 0,
       iconEmoji: json['iconEmoji'] as String? ?? '🏃',
-      tags: json['tags'] != null 
-          ? List<String>.from(json['tags'] as List)
-          : [],
+      tags: json['tags'] != null ? List<String>.from(json['tags'] as List) : [],
       actions: json['actions'] != null
           ? (json['actions'] as List)
-              .map((action) => FitnessAction.fromJson(action as Map<String, dynamic>))
+              .map((action) =>
+                  FitnessAction.fromJson(action as Map<String, dynamic>))
               .toList()
           : [],
     );
@@ -102,13 +101,13 @@ class FitnessCourse {
       intensity: json['intensity'] as String? ?? 'medium',
       petType: json['pet_type'] as String? ?? 'dog',
       caloriesEstimate: (json['calories_estimate'] as num?)?.toInt() ?? 0,
-      petCaloriesEstimate: (json['pet_calories_estimate'] as num?)?.toInt() ?? 0,
+      petCaloriesEstimate:
+          (json['pet_calories_estimate'] as num?)?.toInt() ?? 0,
       iconEmoji: json['icon_emoji'] as String? ?? '🏃',
-      tags: json['tags'] != null 
-          ? List<String>.from(json['tags'] as List)
-          : [],
+      tags: json['tags'] != null ? List<String>.from(json['tags'] as List) : [],
       actions: (json['actions'] as List<dynamic>? ?? [])
-          .map((action) => FitnessAction.fromSupabaseJson(action as Map<String, dynamic>))
+          .map((action) =>
+              FitnessAction.fromSupabaseJson(action as Map<String, dynamic>))
           .toList(),
     );
   }

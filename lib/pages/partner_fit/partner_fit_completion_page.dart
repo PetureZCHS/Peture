@@ -97,9 +97,9 @@ class _PartnerFitCompletionPageState extends State<PartnerFitCompletionPage>
                   style: TextStyle(fontSize: 18, color: Colors.grey[700]),
                   textAlign: TextAlign.center,
                 ),
-                
+
                 const SizedBox(height: 4),
-                
+
                 const SizedBox(height: 40),
 
                 // 成就卡片
@@ -131,14 +131,15 @@ class _PartnerFitCompletionPageState extends State<PartnerFitCompletionPage>
                       ),
                       const SizedBox(height: 24),
                       Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        _buildStatItem(
-                          icon: Icons.timer,
-                          value: _formatDuration(widget.record.durationMinutes),
-                          unit: 'mm:ss',
-                          label: '训练时长',
-                        ),
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          _buildStatItem(
+                            icon: Icons.timer,
+                            value:
+                                _formatDuration(widget.record.durationMinutes),
+                            unit: 'mm:ss',
+                            label: '训练时长',
+                          ),
                           _buildStatItem(
                             icon: Icons.local_fire_department,
                             value: '${widget.record.caloriesBurned}',
@@ -294,8 +295,7 @@ class _PartnerFitCompletionPageState extends State<PartnerFitCompletionPage>
   }
 
   void _shareAchievement() {
-    final text =
-        '''
+    final text = '''
 🎉 我刚刚完成了「${widget.course.name}」！
 
 ⏱️ 训练时长：${widget.record.durationMinutes}分钟

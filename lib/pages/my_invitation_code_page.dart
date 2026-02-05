@@ -27,10 +27,17 @@ class _MyInvitationCodePageState extends State<MyInvitationCodePage> {
   }
 
   Future<void> _loadCode() async {
-    setState(() { _loading = true; _error = null; });
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     final result = await _supabase.getOrCreateMyInvitationCode();
     if (!mounted) return;
-    setState(() { _loading = false; _code = result.code; _error = result.error; });
+    setState(() {
+      _loading = false;
+      _code = result.code;
+      _error = result.error;
+    });
   }
 
   Future<void> _copyCode() async {
@@ -38,7 +45,10 @@ class _MyInvitationCodePageState extends State<MyInvitationCodePage> {
     await Clipboard.setData(ClipboardData(text: _code!));
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: const Text('邀请码已复制'), backgroundColor: _pinkDark, behavior: SnackBarBehavior.floating),
+        SnackBar(
+            content: const Text('邀请码已复制'),
+            backgroundColor: _pinkDark,
+            behavior: SnackBarBehavior.floating),
       );
     }
   }
@@ -51,10 +61,15 @@ class _MyInvitationCodePageState extends State<MyInvitationCodePage> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Color(0xFF666666)),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded,
+              color: Color(0xFF666666)),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        title: const Text('我的邀请码', style: TextStyle(color: Color(0xFF333333), fontSize: 18, fontWeight: FontWeight.w600)),
+        title: const Text('我的邀请码',
+            style: TextStyle(
+                color: Color(0xFF333333),
+                fontSize: 18,
+                fontWeight: FontWeight.w600)),
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -73,8 +88,12 @@ class _MyInvitationCodePageState extends State<MyInvitationCodePage> {
                       width: double.infinity,
                       errorBuilder: (_, __, ___) => Container(
                         height: 280,
-                        decoration: BoxDecoration(color: _pinkBorder, borderRadius: BorderRadius.circular(20)),
-                        child: const Center(child: Text('图片加载失败', style: TextStyle(color: Colors.grey))),
+                        decoration: BoxDecoration(
+                            color: _pinkBorder,
+                            borderRadius: BorderRadius.circular(20)),
+                        child: const Center(
+                            child: Text('图片加载失败',
+                                style: TextStyle(color: Colors.grey))),
                       ),
                     ),
                     Positioned.fill(
@@ -86,21 +105,29 @@ class _MyInvitationCodePageState extends State<MyInvitationCodePage> {
                               ? const SizedBox(
                                   height: 44,
                                   width: 44,
-                                  child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFE8919E)),
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2, color: Color(0xFFE8919E)),
                                 )
                               : _error != null
                                   ? Padding(
-                                      padding: const EdgeInsets.symmetric(horizontal: 24),
-                                      child: Text(_error!, style: TextStyle(color: Colors.red.shade700, fontSize: 14), textAlign: TextAlign.center),
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 24),
+                                      child: Text(_error!,
+                                          style: TextStyle(
+                                              color: Colors.red.shade700,
+                                              fontSize: 14),
+                                          textAlign: TextAlign.center),
                                     )
                                   : _code != null
                                       ? GestureDetector(
                                           onTap: _copyCode,
                                           child: Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 10, vertical: 5),
                                             decoration: BoxDecoration(
                                               color: Colors.transparent,
-                                              borderRadius: BorderRadius.circular(10),
+                                              borderRadius:
+                                                  BorderRadius.circular(10),
                                             ),
                                             child: Text(
                                               _code!,
@@ -126,19 +153,25 @@ class _MyInvitationCodePageState extends State<MyInvitationCodePage> {
                   width: double.infinity,
                   child: OutlinedButton.icon(
                     onPressed: _copyCode,
-                    icon: const Icon(Icons.copy_rounded, size: 20, color: _pinkDark),
-                    label: const Text('复制邀请码', style: TextStyle(color: _pinkDark, fontWeight: FontWeight.w500)),
+                    icon: const Icon(Icons.copy_rounded,
+                        size: 20, color: _pinkDark),
+                    label: const Text('复制邀请码',
+                        style: TextStyle(
+                            color: _pinkDark, fontWeight: FontWeight.w500)),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: _pinkDark,
                       side: const BorderSide(color: _pinkBorder, width: 2),
                       padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14)),
                     ),
                   ),
                 ),
               ],
               const SizedBox(height: 24),
-              Text('一人一码，分享给好友兑换终身会员', style: TextStyle(fontSize: 13, color: Colors.grey[600]), textAlign: TextAlign.center),
+              Text('一人一码，分享给好友兑换终身会员',
+                  style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                  textAlign: TextAlign.center),
             ],
           ),
         ),

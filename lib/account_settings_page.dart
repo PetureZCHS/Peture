@@ -47,7 +47,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
       if (user != null) {
         // 从本地存储加载头像路径
         final avatarPath = await UserAvatarHelper.getCurrentUserAvatarPath();
-        
+
         // 从 Supabase users_profiles 表加载昵称
         final profile = await _supabaseService.getUserProfile();
         final nickname = profile?['nickname'] as String?;
@@ -565,20 +565,18 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
                           backgroundColor: Theme.of(
                             context,
                           ).primaryColor.withOpacity(0.1),
-                          backgroundImage:
-                              _avatarPath != null &&
+                          backgroundImage: _avatarPath != null &&
                                   File(_avatarPath!).existsSync()
                               ? FileImage(File(_avatarPath!))
                               : null,
-                          child:
-                              _avatarPath == null ||
+                          child: _avatarPath == null ||
                                   !File(_avatarPath!).existsSync()
                               ? Text(
                                   _userName?.isNotEmpty == true
                                       ? _userName![0].toUpperCase()
                                       : (_userEmail?.isNotEmpty == true
-                                            ? _userEmail![0].toUpperCase()
-                                            : '?'),
+                                          ? _userEmail![0].toUpperCase()
+                                          : '?'),
                                   style: TextStyle(
                                     fontSize: 32,
                                     fontWeight: FontWeight.bold,
@@ -640,9 +638,8 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
                       _buildListTile(
                         icon: Icons.person,
                         title: '修改昵称',
-                        subtitle: _userName?.isNotEmpty == true
-                            ? _userName!
-                            : '未设置',
+                        subtitle:
+                            _userName?.isNotEmpty == true ? _userName! : '未设置',
                         onTap: _changeName,
                       ),
                       _buildListTile(
@@ -765,8 +762,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
               style: TextStyle(fontSize: 13, color: Colors.grey[600]),
             )
           : null,
-      trailing:
-          trailing ??
+      trailing: trailing ??
           (onTap != null
               ? const Icon(Icons.arrow_forward_ios, size: 16)
               : null),

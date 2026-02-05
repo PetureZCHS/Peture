@@ -18,26 +18,33 @@ class DogClickerScreen extends StatefulWidget {
 
 class _DogClickerScreenState extends State<DogClickerScreen>
     with TickerProviderStateMixin {
+  // 预设音效列表
+  static const List<Map<String, String>> presetSounds = [
+    {'name': '音效 1', 'path': 'mp3/1.mp3', 'emoji': '🔊'},
+    {'name': '音效 2', 'path': 'mp3/2.mp3', 'emoji': '🎵'},
+    {'name': '音效 3', 'path': 'mp3/3.mp3', 'emoji': '🎶'},
+    {'name': '音效 4', 'path': 'mp3/4.mp3', 'emoji': '🔔'},
+    {'name': '音效 5', 'path': 'mp3/5.mp3', 'emoji': '✨'},
+    {'name': '音效 6', 'path': 'mp3/6.mp3', 'emoji': '🎺'},
+  ];
+
   late AnimationController _orbController;
   late AudioPlayer _audioPlayer;
+  AudioPlayer? _previewPlayer; // 音效预览播放器
   int _clickCount = 0;
   int _failCount = 0; // 失败记录次数
   int _unconfirmedCount = 0; // 未确认的点击次数
   bool _isCoolingDown = false; // 点击防抖标志
   bool _pendingConfirmation = false; // 是否处于待确认状态
   int _selectedFilterIndex = 0; // 选中的筛选标签索引
-  List<String> _filterOptions = ['喂食', '握手', '坐下']; // 筛选选项（改为可变列表，默认不包含"全部"）
+  List<String> _filterOptions = []; // 用户自定义的训练项目列表
 
   // 本地存储的键名
   static const String _keyPrefix = 'dog_clicker_';
   static const String _customProjectsKey = 'dog_clicker_custom_projects';
 
   // 各训练项目的音效映射（项目名 -> 音效文件名）
-  Map<String, String> _projectSounds = {
-    '喂食': 'mp3/喂食.mp3',
-    '握手': 'mp3/握手.mp3',
-    '坐下': 'mp3/坐下.mp3',
-  };
+  Map<String, String> _projectSounds = {};
   static const String _projectSoundsKey = 'dog_clicker_project_sounds';
 
   // 各训练项目的统计数据
@@ -61,6 +68,11 @@ class _DogClickerScreenState extends State<DogClickerScreen>
     _audioPlayer = AudioPlayer();
     // 设置为低延迟模式，确保快速响应
     _audioPlayer.setReleaseMode(ReleaseMode.stop);
+
+    // 初始化预览播放器
+    _previewPlayer = AudioPlayer();
+    _previewPlayer?.setReleaseMode(ReleaseMode.stop);
+
     // 加载本地数据
     _loadTrainingData();
   }
@@ -70,6 +82,7 @@ class _DogClickerScreenState extends State<DogClickerScreen>
     _orbController.dispose();
     // 释放音频播放器资源
     _audioPlayer.dispose();
+    _previewPlayer?.dispose();
     super.dispose();
   }
 
@@ -78,7 +91,7 @@ class _DogClickerScreenState extends State<DogClickerScreen>
     try {
       final prefs = await SharedPreferences.getInstance();
 
-      // 加载自定义项目
+      // 加载用户自定义项目
       final customProjects = prefs.getStringList(_customProjectsKey) ?? [];
 
       // 加载项目音效映射
@@ -93,20 +106,21 @@ class _DogClickerScreenState extends State<DogClickerScreen>
       }
 
       setState(() {
-        // 重建筛选选项：默认项目 + 自定义项目（去掉"全部"）
-        _filterOptions = ['喂食', '握手', '坐下', ...customProjects];
+        // 只使用用户自定义的项目
+        _filterOptions = [...customProjects];
 
-        // 为自定义项目添加默认音效路径（如果还没有）
-        for (var project in customProjects) {
+        // 为项目添加默认音效（如果还没有）
+        for (var project in _filterOptions) {
           if (!_projectSounds.containsKey(project)) {
-            _projectSounds[project] = 'mp3/$project.mp3';
+            _projectSounds[project] = 'mp3/1.mp3';
           }
         }
 
         // 加载总计数
         _totalSuccessCount = prefs.getInt('${_keyPrefix}total_success') ?? 0;
         _totalFailureCount = prefs.getInt('${_keyPrefix}total_failure') ?? 0;
-        _totalUnconfirmedCount = prefs.getInt('${_keyPrefix}total_unconfirmed') ?? 0;
+        _totalUnconfirmedCount =
+            prefs.getInt('${_keyPrefix}total_unconfirmed') ?? 0;
 
         // 加载各项目的成功、失败和未确认次数
         for (var option in _filterOptions) {
@@ -242,7 +256,8 @@ class _DogClickerScreenState extends State<DogClickerScreen>
   }
 
   /// 添加自定义训练项目
-  Future<void> _addCustomProject(String projectName) async {
+  Future<void> _addCustomProject(String projectName,
+      {String? soundPath}) async {
     try {
       if (projectName.trim().isEmpty) {
         return;
@@ -274,8 +289,8 @@ class _DogClickerScreenState extends State<DogClickerScreen>
       // 保存自定义项目
       await prefs.setStringList(_customProjectsKey, customProjects);
 
-      // 为新项目添加默认音效路径
-      _projectSounds[projectName] = 'mp3/$projectName.mp3';
+      // 为新项目设置音效（使用传入的或默认第一个预设音效）
+      _projectSounds[projectName] = soundPath ?? 'mp3/1.mp3';
       await _saveProjectSounds();
 
       // 更新状态
@@ -283,20 +298,30 @@ class _DogClickerScreenState extends State<DogClickerScreen>
         _filterOptions.add(projectName);
         _successCounts[projectName] = 0;
         _failureCounts[projectName] = 0;
+        _unconfirmedCounts[projectName] = 0;
+        // 如果是第一个项目，自动选中
+        if (_filterOptions.length == 1) {
+          _selectedFilterIndex = 0;
+          _updateCurrentCounts();
+        }
       });
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              '已添加训练项目「$projectName」\n请在 assets/mp3/ 目录下添加 $projectName.mp3 音效文件',
-            ),
+            content: Text('已添加训练项目「$projectName」'),
             backgroundColor: Colors.green[700],
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
             ),
-            duration: const Duration(seconds: 4),
+            action: SnackBarAction(
+              label: '选择音效',
+              textColor: Colors.white,
+              onPressed: () {
+                _showSoundPickerDialog(projectName);
+              },
+            ),
           ),
         );
       }
@@ -357,7 +382,590 @@ class _DogClickerScreenState extends State<DogClickerScreen>
   /// 显示添加自定义项目对话框
   void _showAddProjectDialog() {
     final TextEditingController controller = TextEditingController();
+    String? selectedSound = 'mp3/1.mp3'; // 默认选择第一个音效
+    String? errorText;
+    bool isAdding = false;
 
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => Dialog(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          child: Container(
+            constraints: const BoxConstraints(maxHeight: 700),
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // 标题栏
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF5A8EFA), Color(0xFF8B77FF)],
+                        ),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(
+                        Icons.add_circle_outline,
+                        color: Colors.white,
+                        size: 24,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    const Expanded(
+                      child: Text(
+                        '添加训练项目',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF1E1E1E),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+
+                // 输入框
+                TextField(
+                  controller: controller,
+                  autofocus: true,
+                  maxLength: 10,
+                  onChanged: (value) {
+                    setDialogState(() {
+                      if (errorText != null) errorText = null;
+                    });
+                  },
+                  decoration: InputDecoration(
+                    hintText: '例如：趴下、转圈、握爪...',
+                    hintStyle: TextStyle(color: Colors.grey[400]),
+                    errorText: errorText,
+                    filled: true,
+                    fillColor: const Color(0xFFF8F8F8),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(
+                        color: Color(0xFF5A8EFA),
+                        width: 2,
+                      ),
+                    ),
+                    errorBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(
+                        color: Colors.red,
+                        width: 1.5,
+                      ),
+                    ),
+                    focusedErrorBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(
+                        color: Colors.red,
+                        width: 2,
+                      ),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 16,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                // 音效选择标题
+                const Text(
+                  '选择音效',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF1E1E1E),
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // 音效选择网格
+                SizedBox(
+                  height: 200,
+                  child: GridView.builder(
+                    shrinkWrap: true,
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 3,
+                      childAspectRatio: 1.1,
+                      crossAxisSpacing: 8,
+                      mainAxisSpacing: 8,
+                    ),
+                    itemCount: presetSounds.length,
+                    itemBuilder: (context, index) {
+                      final sound = presetSounds[index];
+                      final isSelected = selectedSound == sound['path'];
+
+                      return GestureDetector(
+                        onTap: () {
+                          setDialogState(() {
+                            selectedSound = sound['path'];
+                          });
+                          _previewSound(sound['path']!);
+                        },
+                        child: Container(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: isSelected
+                                  ? [
+                                      const Color(0xFF5A8EFA),
+                                      const Color(0xFF8B77FF)
+                                    ]
+                                  : [
+                                      const Color(0xFFF0F0F0),
+                                      const Color(0xFFE8E8E8)
+                                    ],
+                            ),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: isSelected
+                                  ? const Color(0xFF5A8EFA)
+                                  : Colors.transparent,
+                              width: 2,
+                            ),
+                          ),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                sound['emoji']!,
+                                style: const TextStyle(fontSize: 28),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                sound['name']!,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: isSelected
+                                      ? FontWeight.bold
+                                      : FontWeight.w500,
+                                  color: isSelected
+                                      ? Colors.white
+                                      : const Color(0xFF666666),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                // 按钮
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: isAdding
+                          ? null
+                          : () {
+                              _previewPlayer?.stop();
+                              Navigator.pop(context);
+                            },
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 12,
+                        ),
+                      ),
+                      child: Text(
+                        '取消',
+                        style: TextStyle(
+                          color: isAdding ? Colors.grey[400] : Colors.grey[600],
+                          fontSize: 16,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    ElevatedButton(
+                      onPressed: isAdding
+                          ? null
+                          : () async {
+                              final projectName = controller.text.trim();
+
+                              // 输入验证
+                              if (projectName.isEmpty) {
+                                setDialogState(() {
+                                  errorText = '请输入训练项目名称';
+                                });
+                                HapticFeedback.lightImpact();
+                                return;
+                              }
+
+                              if (_filterOptions.contains(projectName)) {
+                                setDialogState(() {
+                                  errorText = '该项目已存在，请使用其他名称';
+                                });
+                                HapticFeedback.lightImpact();
+                                return;
+                              }
+
+                              // 显示加载状态
+                              setDialogState(() => isAdding = true);
+
+                              HapticFeedback.mediumImpact();
+                              _previewPlayer?.stop();
+                              await _addCustomProject(projectName,
+                                  soundPath: selectedSound);
+
+                              if (context.mounted) {
+                                Navigator.pop(context);
+                              }
+                            },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF5A8EFA),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 12,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        elevation: 2,
+                        disabledBackgroundColor: Colors.grey[400],
+                      ),
+                      child: isAdding
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  Colors.white,
+                                ),
+                              ),
+                            )
+                          : const Text(
+                              '添加',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 预览音效
+  Future<void> _previewSound(String soundPath) async {
+    try {
+      await _previewPlayer?.stop();
+      await _previewPlayer?.play(AssetSource(soundPath));
+      await HapticFeedback.lightImpact();
+    } catch (e) {
+      debugPrint('预览音效失败: $e');
+    }
+  }
+
+  /// 显示音效选择器
+  void _showSoundPickerDialog(String projectName) {
+    final currentSound = _projectSounds[projectName] ?? 'mp3/1.mp3';
+    String? selectedSound = currentSound;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => Dialog(
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          child: Container(
+            constraints: const BoxConstraints(maxHeight: 600),
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFF2A2A2A), Color(0xFF1A1A1A)],
+              ),
+              borderRadius: BorderRadius.circular(24),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // 标题栏
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF5A8EFA), Color(0xFF8B77FF)],
+                        ),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(
+                        Icons.music_note_rounded,
+                        color: Colors.white,
+                        size: 24,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '选择音效 - $projectName',
+                            style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          const Text(
+                            '点击试听，选择喜欢的音效',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.white54,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 24),
+
+                // 音效列表
+                Flexible(
+                  child: GridView.builder(
+                    shrinkWrap: true,
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      childAspectRatio: 1.3,
+                      crossAxisSpacing: 12,
+                      mainAxisSpacing: 12,
+                    ),
+                    itemCount: presetSounds.length,
+                    itemBuilder: (context, index) {
+                      final sound = presetSounds[index];
+                      final isSelected = selectedSound == sound['path'];
+
+                      return GestureDetector(
+                        onTap: () {
+                          setDialogState(() {
+                            selectedSound = sound['path'];
+                          });
+                          _previewSound(sound['path']!);
+                        },
+                        child: Container(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: isSelected
+                                  ? [
+                                      const Color(0xFF5A8EFA),
+                                      const Color(0xFF8B77FF)
+                                    ]
+                                  : [
+                                      const Color(0xFF3A3A3A),
+                                      const Color(0xFF2D2D2D)
+                                    ],
+                            ),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: isSelected
+                                  ? Colors.white.withOpacity(0.3)
+                                  : Colors.transparent,
+                              width: 2,
+                            ),
+                          ),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                sound['emoji']!,
+                                style: const TextStyle(fontSize: 40),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                sound['name']!,
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: isSelected
+                                      ? FontWeight.bold
+                                      : FontWeight.w500,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              if (isSelected) ...[
+                                const SizedBox(height: 4),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 2,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withOpacity(0.2),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: const Text(
+                                    '已选择',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                // 按钮
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () {
+                        _previewPlayer?.stop();
+                        Navigator.pop(context);
+                      },
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 12,
+                        ),
+                      ),
+                      child: const Text(
+                        '取消',
+                        style: TextStyle(color: Colors.white54, fontSize: 16),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    ElevatedButton(
+                      onPressed: () async {
+                        if (selectedSound != null) {
+                          setState(() {
+                            _projectSounds[projectName] = selectedSound!;
+                          });
+                          await _saveProjectSounds();
+                          _previewPlayer?.stop();
+                          if (mounted) {
+                            Navigator.pop(context);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('已为「$projectName」设置新音效'),
+                                backgroundColor: Colors.green[700],
+                                behavior: SnackBarBehavior.floating,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                            );
+                          }
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF5A8EFA),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 12,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        elevation: 2,
+                      ),
+                      child: const Text(
+                        '确定',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// 显示滑动删除确认
+  Future<bool?> _showDeleteConfirmation(String projectName) async {
+    return await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Icon(Icons.warning_amber_rounded,
+                color: Colors.orange[700], size: 28),
+            const SizedBox(width: 12),
+            const Text('确认删除'),
+          ],
+        ),
+        content: Text(
+          '确定要删除「$projectName」吗？\n所有训练记录将被永久删除。',
+          style: const TextStyle(height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('取消'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              await _deleteCustomProject(projectName);
+              if (context.mounted) {
+                Navigator.pop(context, true);
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 显示删除训练项目确认对话框
+  void _showDeleteProjectDialog(String projectName) {
     showDialog(
       context: context,
       builder: (context) => Dialog(
@@ -365,117 +973,99 @@ class _DogClickerScreenState extends State<DogClickerScreen>
         child: Container(
           padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
-            color: Colors.white,
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFF2A2A2A), Color(0xFF1A1A1A)],
+            ),
             borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: const Color(0xFF3A3A3A)),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 标题栏
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF5A8EFA), Color(0xFF8B77FF)],
-                      ),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Icon(
-                      Icons.add_circle_outline,
-                      color: Colors.white,
-                      size: 24,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  const Expanded(
-                    child: Text(
-                      '添加训练项目',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF1E1E1E),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
-
-              // 输入框
-              TextField(
-                controller: controller,
-                autofocus: true,
-                maxLength: 10,
-                decoration: InputDecoration(
-                  hintText: '例如：趴下、转圈、握爪...',
-                  hintStyle: TextStyle(color: Colors.grey[400]),
-                  filled: true,
-                  fillColor: const Color(0xFFF8F8F8),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none,
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(
-                      color: Color(0xFF5A8EFA),
-                      width: 2,
-                    ),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 16,
-                  ),
+              // 警告图标
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.red.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.delete_forever_rounded,
+                  size: 48,
+                  color: Colors.red,
                 ),
               ),
               const SizedBox(height: 20),
-
+              // 标题
+              const Text(
+                '删除训练项目',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(height: 12),
+              // 提示文字
+              Text(
+                '确定要删除「$projectName」吗？\n所有训练记录将被永久删除。',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: Colors.white70,
+                  height: 1.5,
+                ),
+              ),
+              const SizedBox(height: 24),
               // 按钮
               Row(
-                mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    style: TextButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 12,
+                  Expanded(
+                    child: TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          side: BorderSide(
+                            color: Colors.white.withOpacity(0.1),
+                          ),
+                        ),
                       ),
-                    ),
-                    child: Text(
-                      '取消',
-                      style: TextStyle(color: Colors.grey[600], fontSize: 16),
+                      child: const Text(
+                        '取消',
+                        style: TextStyle(
+                          color: Colors.white70,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
                     ),
                   ),
                   const SizedBox(width: 12),
-                  ElevatedButton(
-                    onPressed: () {
-                      final projectName = controller.text.trim();
-                      if (projectName.isNotEmpty) {
-                        _addCustomProject(projectName);
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () async {
                         Navigator.pop(context);
-                      }
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF5A8EFA),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 24,
-                        vertical: 12,
+                        await _deleteCustomProject(projectName);
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        elevation: 2,
                       ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      elevation: 2,
-                    ),
-                    child: const Text(
-                      '添加',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
+                      child: const Text(
+                        '删除',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
                   ),
@@ -721,133 +1311,191 @@ class _DogClickerScreenState extends State<DogClickerScreen>
                     final rate = total > 0 ? (success / total * 100) : 0.0;
                     final isSelected = index == _selectedFilterIndex;
 
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: isSelected
-                              ? [
-                                  const Color(0xFF3A3A3A),
-                                  const Color(0xFF2D2D2D)
-                                ]
-                              : [
-                                  const Color(0xFF2D2D2D),
-                                  const Color(0xFF252525)
-                                ],
+                    return Dismissible(
+                      key: Key(project),
+                      direction: DismissDirection.endToStart,
+                      confirmDismiss: (direction) async {
+                        HapticFeedback.mediumImpact();
+                        return await _showDeleteConfirmation(project);
+                      },
+                      background: Container(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        decoration: BoxDecoration(
+                          color: Colors.red,
+                          borderRadius: BorderRadius.circular(16),
                         ),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: isSelected
-                              ? const Color(0xFF4CAF50).withOpacity(0.5)
-                              : Colors.transparent,
-                          width: 1.5,
+                        alignment: Alignment.centerRight,
+                        child: const Icon(
+                          Icons.delete_rounded,
+                          color: Colors.white,
+                          size: 28,
                         ),
                       ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              // 项目名称
-                              Expanded(
-                                child: Row(
-                                  children: [
-                                    Text(
-                                      project,
-                                      style: TextStyle(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.bold,
-                                        color: isSelected
-                                            ? const Color(0xFF4CAF50)
-                                            : Colors.white,
-                                      ),
-                                    ),
-                                    if (isSelected) ...[
-                                      const SizedBox(width: 8),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 8,
-                                          vertical: 2,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFF4CAF50)
-                                              .withOpacity(0.2),
-                                          borderRadius:
-                                              BorderRadius.circular(8),
-                                        ),
-                                        child: const Text(
-                                          '当前',
-                                          style: TextStyle(
-                                            fontSize: 10,
-                                            color: Color(0xFF4CAF50),
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                      ),
+                      child: InkWell(
+                        onTap: () {
+                          HapticFeedback.lightImpact();
+                          setState(() {
+                            _selectedFilterIndex = index;
+                          });
+                          Navigator.pop(context);
+                        },
+                        borderRadius: BorderRadius.circular(16),
+                        child: Container(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: isSelected
+                                  ? [
+                                      const Color(0xFF3A3A3A),
+                                      const Color(0xFF2D2D2D)
+                                    ]
+                                  : [
+                                      const Color(0xFF2D2D2D),
+                                      const Color(0xFF252525)
                                     ],
-                                  ],
-                                ),
-                              ),
-                              // 成功率
-                              Text(
-                                '${rate.toStringAsFixed(0)}%',
-                                style: TextStyle(
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.bold,
-                                  color: rate >= 70
-                                      ? const Color(0xFF4CAF50)
-                                      : rate >= 40
-                                          ? const Color(0xFFFFC107)
-                                          : const Color(0xFFFF5722),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          // 进度条
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(4),
-                            child: LinearProgressIndicator(
-                              value: rate / 100,
-                              backgroundColor: Colors.white.withOpacity(0.1),
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                rate >= 70
-                                    ? const Color(0xFF4CAF50)
-                                    : rate >= 40
-                                        ? const Color(0xFFFFC107)
-                                        : const Color(0xFFFF5722),
-                              ),
-                              minHeight: 6,
+                            ),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: isSelected
+                                  ? const Color(0xFF4CAF50).withOpacity(0.5)
+                                  : Colors.transparent,
+                              width: 1.5,
                             ),
                           ),
-                          const SizedBox(height: 12),
-                          // 详细数据
-                          Row(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              _buildStatItem(
-                                icon: Icons.check_circle_outline,
-                                label: '成功',
-                                value: success.toString(),
-                                color: const Color(0xFF4CAF50),
+                              Row(
+                                children: [
+                                  // 项目名称
+                                  Expanded(
+                                    child: Row(
+                                      children: [
+                                        Text(
+                                          project,
+                                          style: TextStyle(
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.bold,
+                                            color: isSelected
+                                                ? const Color(0xFF4CAF50)
+                                                : Colors.white,
+                                          ),
+                                        ),
+                                        if (isSelected) ...[
+                                          const SizedBox(width: 8),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 8,
+                                              vertical: 2,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFF4CAF50)
+                                                  .withOpacity(0.2),
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                            ),
+                                            child: const Text(
+                                              '当前',
+                                              style: TextStyle(
+                                                fontSize: 10,
+                                                color: Color(0xFF4CAF50),
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                  ),
+                                  // 音效选择按钮
+                                  IconButton(
+                                    icon: const Icon(Icons.music_note_rounded),
+                                    color: Colors.white70,
+                                    iconSize: 20,
+                                    onPressed: () {
+                                      HapticFeedback.lightImpact();
+                                      Navigator.pop(context);
+                                      _showSoundPickerDialog(project);
+                                    },
+                                    tooltip: '选择音效',
+                                  ),
+                                  // 删除按钮
+                                  IconButton(
+                                    icon: const Icon(
+                                        Icons.delete_outline_rounded),
+                                    color: Colors.red.withOpacity(0.7),
+                                    iconSize: 20,
+                                    onPressed: () {
+                                      HapticFeedback.mediumImpact();
+                                      Navigator.pop(context);
+                                      _showDeleteProjectDialog(project);
+                                    },
+                                    tooltip: '删除训练项目',
+                                  ),
+                                  // 成功率
+                                  Text(
+                                    '${rate.toStringAsFixed(0)}%',
+                                    style: TextStyle(
+                                      fontSize: 24,
+                                      fontWeight: FontWeight.bold,
+                                      color: rate >= 70
+                                          ? const Color(0xFF4CAF50)
+                                          : rate >= 40
+                                              ? const Color(0xFFFFC107)
+                                              : const Color(0xFFFF5722),
+                                    ),
+                                  ),
+                                ],
                               ),
-                              const SizedBox(width: 20),
-                              _buildStatItem(
-                                icon: Icons.replay,
-                                label: '重试',
-                                value: failure.toString(),
-                                color: const Color(0xFFFF9800),
+                              const SizedBox(height: 12),
+                              // 进度条
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(4),
+                                child: LinearProgressIndicator(
+                                  value: rate / 100,
+                                  backgroundColor:
+                                      Colors.white.withOpacity(0.1),
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    rate >= 70
+                                        ? const Color(0xFF4CAF50)
+                                        : rate >= 40
+                                            ? const Color(0xFFFFC107)
+                                            : const Color(0xFFFF5722),
+                                  ),
+                                  minHeight: 6,
+                                ),
                               ),
-                              const SizedBox(width: 20),
-                              _buildStatItem(
-                                icon: Icons.touch_app,
-                                label: '总次数',
-                                value: total.toString(),
-                                color: const Color(0xFF2196F3),
+                              const SizedBox(height: 12),
+                              // 详细数据
+                              Row(
+                                children: [
+                                  _buildStatItem(
+                                    icon: Icons.check_circle_outline,
+                                    label: '成功',
+                                    value: success.toString(),
+                                    color: const Color(0xFF4CAF50),
+                                  ),
+                                  const SizedBox(width: 20),
+                                  _buildStatItem(
+                                    icon: Icons.replay,
+                                    label: '重试',
+                                    value: failure.toString(),
+                                    color: const Color(0xFFFF9800),
+                                  ),
+                                  const SizedBox(width: 20),
+                                  _buildStatItem(
+                                    icon: Icons.touch_app,
+                                    label: '总次数',
+                                    value: total.toString(),
+                                    color: const Color(0xFF2196F3),
+                                  ),
+                                ],
                               ),
                             ],
                           ),
-                        ],
+                        ),
                       ),
                     );
                   },
@@ -994,7 +1642,7 @@ class _DogClickerScreenState extends State<DogClickerScreen>
         _isCoolingDown = true;
         _pendingConfirmation = true; // 进入待确认状态
       });
-      
+
       // 250ms 后解除冷却
       Future.delayed(const Duration(milliseconds: 250), () {
         if (mounted) {
@@ -1017,7 +1665,7 @@ class _DogClickerScreenState extends State<DogClickerScreen>
 
       // 添加强力触感反馈 - 模拟真实机械响片的手感
       await HapticFeedback.heavyImpact();
-      
+
       // 不立即计数，等待用户确认
     } catch (e) {
       debugPrint('播放音效失败: $e');
@@ -1029,13 +1677,13 @@ class _DogClickerScreenState extends State<DogClickerScreen>
   /// 确认成功
   Future<void> _handleConfirmSuccess() async {
     if (!_pendingConfirmation) return;
-    
+
     setState(() {
       _clickCount++;
       _pendingConfirmation = false;
     });
     await _saveSuccessCount();
-    
+
     // 轻微的成功触觉反馈
     await HapticFeedback.lightImpact();
   }
@@ -1043,16 +1691,16 @@ class _DogClickerScreenState extends State<DogClickerScreen>
   /// 确认失败
   Future<void> _handleConfirmFail() async {
     if (!_pendingConfirmation) return;
-    
+
     setState(() {
       _failCount++;
       _pendingConfirmation = false;
     });
     await _saveFailureCount();
-    
+
     // 触觉反馈
     await HapticFeedback.mediumImpact();
-    
+
     if (mounted) {
       _showFailureTip(context);
     }
@@ -1061,13 +1709,13 @@ class _DogClickerScreenState extends State<DogClickerScreen>
   /// 跳过确认（记为未确认）
   Future<void> _handleSkipConfirm() async {
     if (!_pendingConfirmation) return;
-    
+
     setState(() {
       _unconfirmedCount++;
       _pendingConfirmation = false;
     });
     await _saveUnconfirmedCount();
-    
+
     await HapticFeedback.lightImpact();
   }
 
@@ -1079,10 +1727,12 @@ class _DogClickerScreenState extends State<DogClickerScreen>
 
       // 更新总计数
       _totalUnconfirmedCount++;
-      await prefs.setInt('${_keyPrefix}total_unconfirmed', _totalUnconfirmedCount);
+      await prefs.setInt(
+          '${_keyPrefix}total_unconfirmed', _totalUnconfirmedCount);
 
       // 更新具体项目的计数
-      _unconfirmedCounts[currentOption] = (_unconfirmedCounts[currentOption] ?? 0) + 1;
+      _unconfirmedCounts[currentOption] =
+          (_unconfirmedCounts[currentOption] ?? 0) + 1;
       await prefs.setInt(
         '$_keyPrefix${currentOption}_unconfirmed',
         _unconfirmedCounts[currentOption]!,
@@ -1236,54 +1886,59 @@ class _DogClickerScreenState extends State<DogClickerScreen>
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    // 新手提示（呼吸感文字）
-                    if (!_pendingConfirmation) _buildTrainingTip(),
-                    // 待确认状态提示
-                    if (_pendingConfirmation) _buildConfirmationTip(),
-                    const SizedBox(height: 12),
-                    // 拟物化响片设备（包含项目选择和统计）
-                    SkeuomorphicClickerDevice(
-                      successCount: _clickCount,
-                      failCount: _failCount,
-                      unconfirmedCount: _unconfirmedCount,
-                      totalSuccessCount: _totalSuccessCount,
-                      totalFailCount: _totalFailureCount,
-                      currentProject: _filterOptions[_selectedFilterIndex],
-                      projects: _filterOptions,
-                      selectedIndex: _selectedFilterIndex,
-                      // 新流程的回调
-                      onClick: _handleClickerClick,
-                      onConfirmSuccess: _handleConfirmSuccess,
-                      onConfirmFail: _handleConfirmFail,
-                      onSkipConfirm: _handleSkipConfirm,
-                      pendingConfirmation: _pendingConfirmation,
-                      // 保留旧的回调用于兼容
-                      onSuccess: _playClickSound,
-                      onFail: () async {
-                        setState(() => _failCount++);
-                        await HapticFeedback.lightImpact();
-                        await _saveFailureCount();
-                        if (mounted) {
-                          _showFailureTip(context);
-                        }
-                      },
-                      onProjectChanged: (index) {
-                        // 如果正在待确认状态，先取消
-                        if (_pendingConfirmation) {
-                          _handleSkipConfirm();
-                        }
-                        setState(() {
-                          _selectedFilterIndex = index;
-                          _updateCurrentCounts();
-                        });
-                      },
-                      onAddProject: _showAddProjectDialog,
-                      onDeleteProject: _deleteCustomProject,
-                      onReset: _showResetConfirmDialog,
-                      onShowStats: _showDetailedStatistics,
-                      isCoolingDown: _isCoolingDown,
-                    ),
-                    const SizedBox(height: 16),
+                    // 如果没有项目，显示空状态引导
+                    if (_filterOptions.isEmpty) ...[
+                      _buildEmptyState(),
+                    ] else ...[
+                      // 新手提示（呼吸感文字）
+                      if (!_pendingConfirmation) _buildTrainingTip(),
+                      // 待确认状态提示
+                      if (_pendingConfirmation) _buildConfirmationTip(),
+                      const SizedBox(height: 12),
+                      // 拟物化响片设备（包含项目选择和统计）
+                      SkeuomorphicClickerDevice(
+                        successCount: _clickCount,
+                        failCount: _failCount,
+                        unconfirmedCount: _unconfirmedCount,
+                        totalSuccessCount: _totalSuccessCount,
+                        totalFailCount: _totalFailureCount,
+                        currentProject: _filterOptions[_selectedFilterIndex],
+                        projects: _filterOptions,
+                        selectedIndex: _selectedFilterIndex,
+                        // 新流程的回调
+                        onClick: _handleClickerClick,
+                        onConfirmSuccess: _handleConfirmSuccess,
+                        onConfirmFail: _handleConfirmFail,
+                        onSkipConfirm: _handleSkipConfirm,
+                        pendingConfirmation: _pendingConfirmation,
+                        // 保留旧的回调用于兼容
+                        onSuccess: _playClickSound,
+                        onFail: () async {
+                          setState(() => _failCount++);
+                          await HapticFeedback.lightImpact();
+                          await _saveFailureCount();
+                          if (mounted) {
+                            _showFailureTip(context);
+                          }
+                        },
+                        onProjectChanged: (index) {
+                          // 如果正在待确认状态，先取消
+                          if (_pendingConfirmation) {
+                            _handleSkipConfirm();
+                          }
+                          setState(() {
+                            _selectedFilterIndex = index;
+                            _updateCurrentCounts();
+                          });
+                        },
+                        onAddProject: _showAddProjectDialog,
+                        onDeleteProject: _deleteCustomProject,
+                        onReset: _showResetConfirmDialog,
+                        onShowStats: _showDetailedStatistics,
+                        isCoolingDown: _isCoolingDown,
+                      ),
+                      const SizedBox(height: 16),
+                    ],
                   ],
                 ),
               ),
@@ -1300,7 +1955,8 @@ class _DogClickerScreenState extends State<DogClickerScreen>
       animation: _orbController,
       builder: (context, child) {
         // 使用 sin 函数创建平滑的呼吸效果
-        final breathValue = 0.5 + 0.5 * math.sin(_orbController.value * math.pi * 2);
+        final breathValue =
+            0.5 + 0.5 * math.sin(_orbController.value * math.pi * 2);
         return Opacity(
           opacity: 0.5 + breathValue * 0.5,
           child: Container(
@@ -1341,7 +1997,8 @@ class _DogClickerScreenState extends State<DogClickerScreen>
       animation: _orbController,
       builder: (context, child) {
         // 脉冲效果
-        final pulseValue = 0.5 + 0.5 * math.sin(_orbController.value * math.pi * 6);
+        final pulseValue =
+            0.5 + 0.5 * math.sin(_orbController.value * math.pi * 6);
         return Container(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
           decoration: BoxDecoration(
@@ -1366,10 +2023,12 @@ class _DogClickerScreenState extends State<DogClickerScreen>
                 height: 8,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: const Color(0xFF4CAF50).withOpacity(0.5 + pulseValue * 0.5),
+                  color: const Color(0xFF4CAF50)
+                      .withOpacity(0.5 + pulseValue * 0.5),
                   boxShadow: [
                     BoxShadow(
-                      color: const Color(0xFF4CAF50).withOpacity(pulseValue * 0.5),
+                      color:
+                          const Color(0xFF4CAF50).withOpacity(pulseValue * 0.5),
                       blurRadius: 8,
                       spreadRadius: 2,
                     ),
@@ -2077,6 +2736,124 @@ class _DogClickerScreenState extends State<DogClickerScreen>
                   style: TextStyle(
                     fontSize: 13,
                     color: Colors.white70,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 空状态引导页面
+  Widget _buildEmptyState() {
+    return Container(
+      padding: const EdgeInsets.all(32),
+      margin: const EdgeInsets.symmetric(horizontal: 20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF2A2A2A), Color(0xFF1A1A1A)],
+        ),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.white.withOpacity(0.1)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // 图标
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                colors: [
+                  const Color(0xFF5A8EFA).withOpacity(0.3),
+                  const Color(0xFF8B77FF).withOpacity(0.3),
+                ],
+              ),
+            ),
+            child: const Icon(
+              Icons.pets_rounded,
+              size: 60,
+              color: Color(0xFF5A8EFA),
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // 标题
+          const Text(
+            '开始训练之旅',
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // 描述
+          Text(
+            '创建你的第一个训练项目\n为每个动作选择独特的音效',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 15,
+              color: Colors.white.withOpacity(0.7),
+              height: 1.6,
+            ),
+          ),
+          const SizedBox(height: 32),
+
+          // 添加按钮
+          ElevatedButton.icon(
+            onPressed: _showAddProjectDialog,
+            icon: const Icon(Icons.add_circle_outline, size: 24),
+            label: const Text(
+              '添加训练项目',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF5A8EFA),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(
+                horizontal: 32,
+                vertical: 16,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              elevation: 4,
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // 示例提示
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.05),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.lightbulb_outline,
+                  color: Color(0xFFFFC107),
+                  size: 20,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    '例如：坐下、趴下、握手、转圈...',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.white.withOpacity(0.6),
+                    ),
                   ),
                 ),
               ],

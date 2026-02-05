@@ -283,7 +283,6 @@ class _PhoneLoginPageState extends State<PhoneLoginPage> {
               ),
 
               const SizedBox(height: 16),
-
             ],
           ),
         ),

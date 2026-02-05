@@ -47,8 +47,7 @@ class UserAvatarHelper {
       child: !hasAvatar
           ? Text(
               fallbackText ?? '?',
-              style:
-                  textStyle ??
+              style: textStyle ??
                   TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.bold,

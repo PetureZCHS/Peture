@@ -81,7 +81,8 @@ class SupabaseService {
     final userId = await currentUserId;
     if (userId == null) return (code: null, error: '请先登录');
     try {
-      final res = await _client.functions.invoke('get-or-create-invitation-code');
+      final res =
+          await _client.functions.invoke('get-or-create-invitation-code');
       final data = res.data as Map<String, dynamic>?;
       final err = data?['error'] as String?;
       final codeVal = data?['code'];
@@ -99,13 +100,15 @@ class SupabaseService {
   }
 
   /// 兑换邀请码，成功则当前用户获得终身会员
-  Future<({bool success, String? error})> redeemInvitationCode(String code) async {
+  Future<({bool success, String? error})> redeemInvitationCode(
+      String code) async {
     final userId = await currentUserId;
     if (userId == null) return (success: false, error: '请先登录');
     final trimmed = code.trim();
     if (trimmed.length < 4) return (success: false, error: '请输入有效邀请码');
     try {
-      final res = await _client.functions.invoke('redeem-invitation', body: {'code': trimmed});
+      final res = await _client.functions
+          .invoke('redeem-invitation', body: {'code': trimmed});
       final data = res.data as Map<String, dynamic>?;
       final err = data?['error'] as String?;
       if (res.status == 200 && data != null && data['success'] == true) {
@@ -2691,13 +2694,17 @@ class SupabaseService {
     final userId = await currentUserId;
     if (userId == null) return null;
     try {
-      final res = await _client.from('community_posts').insert({
-        'author_id': userId,
-        'content': content,
-        'image_urls': imageUrls,
-        'topic_ids': topicIds,
-        'source_type': sourceType,
-      }).select().single();
+      final res = await _client
+          .from('community_posts')
+          .insert({
+            'author_id': userId,
+            'content': content,
+            'image_urls': imageUrls,
+            'topic_ids': topicIds,
+            'source_type': sourceType,
+          })
+          .select()
+          .single();
       return res as Map<String, dynamic>?;
     } catch (e) {
       print('创建社区帖子失败: $e');
@@ -2712,13 +2719,14 @@ class SupabaseService {
     String? sourceType,
   }) async {
     try {
-      var query = _client
-          .from('community_posts')
-          .select('id, content, image_urls, topic_ids, source_type, like_count, comment_count, created_at, author_id');
+      var query = _client.from('community_posts').select(
+          'id, content, image_urls, topic_ids, source_type, like_count, comment_count, created_at, author_id');
       if (sourceType != null && sourceType.isNotEmpty) {
         query = query.eq('source_type', sourceType);
       }
-      final list = await query.order('created_at', ascending: false).range(offset, offset + limit - 1);
+      final list = await query
+          .order('created_at', ascending: false)
+          .range(offset, offset + limit - 1);
       if (list.isEmpty) return [];
       final posts = List<Map<String, dynamic>>.from(list as List);
       final authorIds = posts
@@ -2740,10 +2748,14 @@ class SupabaseService {
   }
 
   /// 按 id 列表批量拉取 users_profiles
-  Future<Map<String, Map<String, dynamic>>> _getProfilesByIds(List<String> ids) async {
+  Future<Map<String, Map<String, dynamic>>> _getProfilesByIds(
+      List<String> ids) async {
     if (ids.isEmpty) return {};
     try {
-      final list = await _client.from('users_profiles').select('id, nickname, avatar_url').inFilter('id', ids);
+      final list = await _client
+          .from('users_profiles')
+          .select('id, nickname, avatar_url')
+          .inFilter('id', ids);
       final map = <String, Map<String, dynamic>>{};
       for (final row in list as List) {
         final r = Map<String, dynamic>.from(row as Map);
@@ -2762,7 +2774,8 @@ class SupabaseService {
     try {
       final res = await _client
           .from('community_posts')
-          .select('id, content, image_urls, topic_ids, source_type, like_count, comment_count, created_at, author_id')
+          .select(
+              'id, content, image_urls, topic_ids, source_type, like_count, comment_count, created_at, author_id')
           .eq('id', postId)
           .single();
       final data = res as Map<String, dynamic>?;
@@ -2792,12 +2805,16 @@ class SupabaseService {
     final userId = await currentUserId;
     if (userId == null) return null;
     try {
-      final res = await _client.from('community_post_comments').insert({
-        'post_id': postId,
-        'user_id': userId,
-        'parent_id': parentId,
-        'content': content,
-      }).select().single();
+      final res = await _client
+          .from('community_post_comments')
+          .insert({
+            'post_id': postId,
+            'user_id': userId,
+            'parent_id': parentId,
+            'content': content,
+          })
+          .select()
+          .single();
       return res as Map<String, dynamic>?;
     } catch (e) {
       print('发表评论失败: $e');
@@ -2815,7 +2832,11 @@ class SupabaseService {
           .order('created_at', ascending: true);
       if (list.isEmpty) return [];
       final comments = List<Map<String, dynamic>>.from(list as List);
-      final userIds = comments.map<String>((c) => c['user_id']?.toString() ?? '').where((id) => id.isNotEmpty).toSet().toList();
+      final userIds = comments
+          .map<String>((c) => c['user_id']?.toString() ?? '')
+          .where((id) => id.isNotEmpty)
+          .toSet()
+          .toList();
       if (userIds.isEmpty) return comments;
       final profiles = await _getProfilesByIds(userIds);
       for (final c in comments) {
@@ -3028,7 +3049,8 @@ class SupabaseService {
       // 2. 查询这些人的帖子
       final list = await _client
           .from('community_posts')
-          .select('id, content, image_urls, topic_ids, source_type, like_count, comment_count, created_at, author_id')
+          .select(
+              'id, content, image_urls, topic_ids, source_type, like_count, comment_count, created_at, author_id')
           .inFilter('author_id', followingIds)
           .order('created_at', ascending: false)
           .range(offset, offset + limit - 1);

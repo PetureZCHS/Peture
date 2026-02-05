@@ -185,8 +185,7 @@ class PetPassportHelper {
           : null,
       mbtiType: passportData['mbti_type'] as String?,
       mbtiDescription: passportData['mbti_description'] as String?,
-      interestTags:
-          passportData['interest_tags'] != null &&
+      interestTags: passportData['interest_tags'] != null &&
               (passportData['interest_tags'] as String).isNotEmpty
           ? (passportData['interest_tags'] as String).split(',')
           : [],
@@ -237,8 +236,7 @@ class PetPassportHelper {
               : null,
           mbtiType: passportData['mbti_type'] as String?,
           mbtiDescription: passportData['mbti_description'] as String?,
-          interestTags:
-              passportData['interest_tags'] != null &&
+          interestTags: passportData['interest_tags'] != null &&
                   (passportData['interest_tags'] as String).isNotEmpty
               ? (passportData['interest_tags'] as String).split(',')
               : [],

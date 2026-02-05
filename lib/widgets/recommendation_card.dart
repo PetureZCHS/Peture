@@ -36,7 +36,7 @@ class RecommendationCard extends StatefulWidget {
 class _RecommendationCardState extends State<RecommendationCard>
     with SingleTickerProviderStateMixin {
   bool _isExpanded = false;
-  
+
   // 动画相关
   final List<String> _visibleSteps = [];
   Timer? _stepTimer;

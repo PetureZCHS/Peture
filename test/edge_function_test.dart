@@ -50,8 +50,7 @@ class _EdgeFunctionTestPageState extends State<EdgeFunctionTestPage> {
       );
 
       setState(() {
-        _result =
-            '阻塞模式测试结果:\n\n'
+        _result = '阻塞模式测试结果:\n\n'
             '状态码: ${response.statusCode}\n'
             '响应头: ${response.headers}\n\n'
             '响应体:\n${response.body}\n\n';
@@ -111,10 +110,9 @@ class _EdgeFunctionTestPageState extends State<EdgeFunctionTestPage> {
         int chunkCount = 0;
         String fullAnswer = '';
 
-        await for (final chunk
-            in streamedResponse.stream
-                .transform(utf8.decoder)
-                .transform(const LineSplitter())) {
+        await for (final chunk in streamedResponse.stream
+            .transform(utf8.decoder)
+            .transform(const LineSplitter())) {
           if (chunk.startsWith('data: ')) {
             final data = chunk.substring(6).trim();
             if (data.isNotEmpty && data != '[DONE]') {

@@ -34,7 +34,7 @@ class _ExpenseStatisticsPageState extends State<ExpenseStatisticsPage> {
       // 优先从 Supabase 加载
       final expensesData = await _supabaseService.getAllExpenses();
       final expenses = expensesData.map((e) => Expense.fromMap(e)).toList();
-      
+
       final now = DateTime.now();
       DateTime startDate, endDate;
 
@@ -49,12 +49,12 @@ class _ExpenseStatisticsPageState extends State<ExpenseStatisticsPage> {
       // 前端计算分类统计
       Map<String, double> statistics = {};
       double total = 0.0;
-      
+
       for (final expense in expenses) {
         final expenseDate = DateTime.parse(expense.date);
         if (expenseDate.isAfter(startDate.subtract(const Duration(days: 1))) &&
             expenseDate.isBefore(endDate.add(const Duration(days: 1)))) {
-          statistics[expense.category] = 
+          statistics[expense.category] =
               (statistics[expense.category] ?? 0.0) + expense.amount;
           total += expense.amount;
         }
@@ -236,9 +236,8 @@ class _ExpenseStatisticsPageState extends State<ExpenseStatisticsPage> {
   /// 总支出卡片
   Widget _buildTotalCard() {
     final now = DateTime.now();
-    final title = _selectedPeriod == 'month'
-        ? '${now.month}月总支出'
-        : '${now.year}年总支出';
+    final title =
+        _selectedPeriod == 'month' ? '${now.month}月总支出' : '${now.year}年总支出';
 
     return Container(
       decoration: BoxDecoration(
@@ -335,9 +334,8 @@ class _ExpenseStatisticsPageState extends State<ExpenseStatisticsPage> {
               runSpacing: 12,
               children: sortedEntries.map((entry) {
                 final category = ExpenseCategory.getCategoryByName(entry.key);
-                final color = category != null
-                    ? Color(category.color)
-                    : Colors.grey;
+                final color =
+                    category != null ? Color(category.color) : Colors.grey;
                 final percentage = (_totalAmount > 0)
                     ? (entry.value / _totalAmount * 100)
                     : 0.0;
@@ -433,9 +431,8 @@ class _ExpenseStatisticsPageState extends State<ExpenseStatisticsPage> {
               final iconData = category != null
                   ? IconData(category.icon, fontFamily: 'MaterialIcons')
                   : Icons.more_horiz;
-              final color = category != null
-                  ? Color(category.color)
-                  : Colors.grey;
+              final color =
+                  category != null ? Color(category.color) : Colors.grey;
               final percentage = (_totalAmount > 0)
                   ? (categoryEntry.value / _totalAmount * 100)
                   : 0.0;

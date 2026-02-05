@@ -76,7 +76,7 @@ class _PartnerFitGymPageState extends State<PartnerFitGymPage> {
           _isLoading = false;
           _isLoadingMore = false;
         });
-        
+
         // 改进错误处理：提供友好的用户提示和重试选项
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -139,8 +139,8 @@ class _PartnerFitGymPageState extends State<PartnerFitGymPage> {
             (c) =>
                 c.name.toLowerCase().contains(_searchKeyword.toLowerCase()) ||
                 c.description.toLowerCase().contains(
-                  _searchKeyword.toLowerCase(),
-                ),
+                      _searchKeyword.toLowerCase(),
+                    ),
           )
           .toList();
     }
@@ -299,11 +299,11 @@ class _PartnerFitGymPageState extends State<PartnerFitGymPage> {
                               padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                               gridDelegate:
                                   const SliverGridDelegateWithFixedCrossAxisCount(
-                                    crossAxisCount: 2,
-                                    crossAxisSpacing: 16,
-                                    mainAxisSpacing: 16,
-                                    childAspectRatio: 1.0,
-                                  ),
+                                crossAxisCount: 2,
+                                crossAxisSpacing: 16,
+                                mainAxisSpacing: 16,
+                                childAspectRatio: 1.0,
+                              ),
                               itemCount: filteredCourses.length,
                               itemBuilder: (context, index) {
                                 return _buildGridCard(filteredCourses[index]);
@@ -339,7 +339,8 @@ class _PartnerFitGymPageState extends State<PartnerFitGymPage> {
                                       height: 14,
                                       child: CircularProgressIndicator(
                                         strokeWidth: 2,
-                                        valueColor: AlwaysStoppedAnimation<Color>(
+                                        valueColor:
+                                            AlwaysStoppedAnimation<Color>(
                                           const Color(0xFF5A8EFA),
                                         ),
                                       ),
@@ -481,7 +482,8 @@ class _PartnerFitGymPageState extends State<PartnerFitGymPage> {
                     alignment: WrapAlignment.center,
                     spacing: 2,
                     children: [
-                      Icon(Icons.access_time, size: 11, color: Colors.grey[600]),
+                      Icon(Icons.access_time,
+                          size: 11, color: Colors.grey[600]),
                       Text(
                         '${course.durationMinutes}分钟',
                         style: TextStyle(
@@ -509,7 +511,8 @@ class _PartnerFitGymPageState extends State<PartnerFitGymPage> {
                 top: 8,
                 right: 8,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
                     color: Colors.green.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(12),

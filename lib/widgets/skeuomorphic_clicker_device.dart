@@ -6,7 +6,7 @@ import 'package:sensors_plus/sensors_plus.dart';
 
 /// 高级专业训宠响片设备
 /// 采用现代专业训犬设备风格：哑光深灰机身、RGB氛围灯、高端触控旋钮
-/// 
+///
 /// 交互流程：
 /// 1. 待命状态：显示提示语
 /// 2. 点击响片 (onClick)：播放声音 + 触觉反馈 + 进入待确认状态
@@ -22,11 +22,11 @@ class SkeuomorphicClickerDevice extends StatefulWidget {
   final List<String> projects;
   final int selectedIndex;
   final VoidCallback onSuccess; // 保留兼容旧逻辑（直接成功）
-  final VoidCallback onFail;    // 保留兼容旧逻辑
-  final VoidCallback? onClick;  // 新：响片点击（只播放声音，不计数）
+  final VoidCallback onFail; // 保留兼容旧逻辑
+  final VoidCallback? onClick; // 新：响片点击（只播放声音，不计数）
   final VoidCallback? onConfirmSuccess; // 新：确认成功
-  final VoidCallback? onConfirmFail;    // 新：确认失败
-  final VoidCallback? onSkipConfirm;    // 新：跳过确认（记为未确认）
+  final VoidCallback? onConfirmFail; // 新：确认失败
+  final VoidCallback? onSkipConfirm; // 新：跳过确认（记为未确认）
   final Function(int) onProjectChanged;
   final VoidCallback onAddProject;
   final Function(String) onDeleteProject; // 删除训练项目
@@ -89,7 +89,7 @@ class _SkeuomorphicClickerDeviceState extends State<SkeuomorphicClickerDevice>
 
   // 成功闪烁动画
   late AnimationController _successFlashController;
-  
+
   // 摔碎闪白动画
   late AnimationController _breakFlashController;
 
@@ -104,17 +104,17 @@ class _SkeuomorphicClickerDeviceState extends State<SkeuomorphicClickerDevice>
 
   // 砸设备 - 连续长按蓄力系统
   late AnimationController _smashChargeController; // 蓄力进度
-  late AnimationController _smashDropController;   // 掉落动画
-  double _smashProgress = 0.0;  // 0.0~1.0 破坏程度
-  bool _isLongPressing = false;  // 是否正在长按
-  bool _isDropping = false;      // 是否正在掉落
-  bool _isDestroyed = false;     // 是否已完全破坏
+  late AnimationController _smashDropController; // 掉落动画
+  double _smashProgress = 0.0; // 0.0~1.0 破坏程度
+  bool _isLongPressing = false; // 是否正在长按
+  bool _isDropping = false; // 是否正在掉落
+  bool _isDestroyed = false; // 是否已完全破坏
   List<_ComponentPart> _fallenParts = []; // 掉落的零部件
   List<_CrackLine> _crackLines = [];
   int _lastCrackUpdate = -1; // 防止重复更新裂纹
   bool _isRepairing = false; // 是否正在修复中
   late AnimationController _repairController; // 修复动画控制器
-  
+
   // 摇晃检测相关
   StreamSubscription<AccelerometerEvent>? _accelerometerSubscription;
   double _lastShakeTime = 0; // 上次检测到摇晃的时间
@@ -198,7 +198,7 @@ class _SkeuomorphicClickerDeviceState extends State<SkeuomorphicClickerDevice>
       vsync: this,
       duration: const Duration(milliseconds: 300),
     );
-    
+
     // 摔碎闪白动画
     _breakFlashController = AnimationController(
       vsync: this,
@@ -267,7 +267,7 @@ class _SkeuomorphicClickerDeviceState extends State<SkeuomorphicClickerDevice>
         });
       }
     });
-    
+
     // 修复动画控制器
     _repairController = AnimationController(
       vsync: this,
@@ -279,53 +279,52 @@ class _SkeuomorphicClickerDeviceState extends State<SkeuomorphicClickerDevice>
         _finishRepair();
       }
     });
-    
+
     // 启动摇晃检测
     _startShakeDetection();
   }
-  
+
   /// 启动摇晃检测
   void _startShakeDetection() {
     _accelerometerSubscription = accelerometerEventStream().listen((event) {
       if (_isDestroyed || _isRepairing) return;
-      
+
       // 计算加速度的变化幅度（排除重力）
-      final double acceleration = math.sqrt(
-        event.x * event.x + event.y * event.y + event.z * event.z
-      );
-      
+      final double acceleration =
+          math.sqrt(event.x * event.x + event.y * event.y + event.z * event.z);
+
       final now = DateTime.now().millisecondsSinceEpoch.toDouble();
-      
+
       // 检测是否有剧烈晃动
       if (acceleration > _shakeThreshold) {
         // 距离上次摇晃的时间间隔
         final timeDelta = now - _lastShakeTime;
         _lastShakeTime = now;
-        
+
         // 只有在短时间内连续摇晃才累积
         if (timeDelta < 500) {
           _shakeAccumulator += (acceleration - _shakeThreshold) * 0.01;
           _shakeAccumulator = _shakeAccumulator.clamp(0.0, 1.0);
-          
+
           if (!_isShaking && _shakeAccumulator > 0.05) {
             _isShaking = true;
             HapticFeedback.lightImpact();
           }
-          
+
           // 更新蓄力进度
           if (_shakeAccumulator > 0) {
             setState(() {
               _smashProgress = _shakeAccumulator;
             });
             _updateCracks();
-            
+
             // 震动反馈
             if (_smashProgress >= 0.3 && _smashProgress < 0.6) {
               HapticFeedback.mediumImpact();
             } else if (_smashProgress >= 0.6) {
               HapticFeedback.heavyImpact();
             }
-            
+
             // 蓄力满触发破碎
             if (_smashProgress >= 1.0) {
               _triggerDrop();
@@ -358,7 +357,7 @@ class _SkeuomorphicClickerDeviceState extends State<SkeuomorphicClickerDevice>
   void _updateCracks() {
     final random = math.Random();
     final crackCount = (_smashProgress * 15).toInt();
-    
+
     if (_crackLines.length < crackCount) {
       for (int i = _crackLines.length; i < crackCount; i++) {
         _crackLines.add(_CrackLine(
@@ -403,7 +402,7 @@ class _SkeuomorphicClickerDeviceState extends State<SkeuomorphicClickerDevice>
   /// 长按开始 - 开始蓄力砸设备
   void _onSmashStart(LongPressStartDetails details) {
     if (_isDestroyed || _isDropping) return;
-    
+
     HapticFeedback.mediumImpact();
     setState(() {
       _isLongPressing = true;
@@ -425,19 +424,19 @@ class _SkeuomorphicClickerDeviceState extends State<SkeuomorphicClickerDevice>
   /// 长按结束 - 如果没有破碎则逐渐恢复
   void _onSmashEnd(LongPressEndDetails details) {
     if (!_isLongPressing) return;
-    
+
     _smashChargeController.stop();
     setState(() {
       _isLongPressing = false;
     });
-    
+
     // 如果已经破碎了，不做处理
     if (_isDestroyed) return;
-    
+
     // 未破碎时，松手后逐渐恢复
     _startRecovery();
   }
-  
+
   /// 松手后逐渐恢复设备状态
   void _startRecovery() {
     // 使用动画平滑恢复
@@ -457,24 +456,24 @@ class _SkeuomorphicClickerDeviceState extends State<SkeuomorphicClickerDevice>
   void _onPartTapped(_ComponentPart part) {
     if (_isRepairing) return;
     HapticFeedback.mediumImpact();
-    
+
     setState(() {
       _fallenParts.remove(part);
     });
-    
+
     // 所有零件都被拼装回去后，修复设备
     if (_fallenParts.isEmpty) {
       _startRepairAnimation();
     }
   }
-  
+
   /// 一键修复 - 零件飞回去组装
   void _onRepairAll() {
     if (_isRepairing || _fallenParts.isEmpty) return;
     HapticFeedback.heavyImpact();
     _startRepairAnimation();
   }
-  
+
   /// 开始修复动画
   void _startRepairAnimation() {
     setState(() {
@@ -482,7 +481,7 @@ class _SkeuomorphicClickerDeviceState extends State<SkeuomorphicClickerDevice>
     });
     _repairController.forward(from: 0);
   }
-  
+
   /// 完成修复
   void _finishRepair() {
     _repairDevice();
@@ -493,105 +492,113 @@ class _SkeuomorphicClickerDeviceState extends State<SkeuomorphicClickerDevice>
     // 先停止蓄力并锁定状态，防止重复触发
     _smashChargeController.stop();
     _isLongPressing = false;
-    
+
     HapticFeedback.heavyImpact();
-    
+
     // 闪白动画
-    _breakFlashController.forward(from: 0).then((_) => _breakFlashController.reverse());
-    
+    _breakFlashController
+        .forward(from: 0)
+        .then((_) => _breakFlashController.reverse());
+
     // 先生成零部件（在setState外部计算）
     final parts = _generateFallenParts();
-    
+
     setState(() {
       _isDropping = true;
       _isDestroyed = true;
       _fallenParts = parts;
     });
-    
+
     // 延迟震动，模拟零件落地的声音
-    Future.delayed(const Duration(milliseconds: 50), () => HapticFeedback.heavyImpact());
-    Future.delayed(const Duration(milliseconds: 150), () => HapticFeedback.mediumImpact());
-    Future.delayed(const Duration(milliseconds: 300), () => HapticFeedback.lightImpact());
-    
+    Future.delayed(
+        const Duration(milliseconds: 50), () => HapticFeedback.heavyImpact());
+    Future.delayed(
+        const Duration(milliseconds: 150), () => HapticFeedback.mediumImpact());
+    Future.delayed(
+        const Duration(milliseconds: 300), () => HapticFeedback.lightImpact());
+
     _smashDropController.forward(from: 0);
   }
-  
+
   /// 预生成掉落零部件 - 强化版
   List<_ComponentPart> _generateFallenParts() {
     final random = math.Random();
     // 精简零件数量，确保都在屏幕可见区域内
     // 限制速度范围，避免飞出屏幕
-    
+
     return [
-        // 电池（绿色大块）
-        _ComponentPart(
-          type: ComponentType.battery,
-          x: 180 + (random.nextDouble() - 0.5) * 30,
-          y: 280,
-          rotation: random.nextDouble() * 0.3 - 0.15,
-          velocityX: (random.nextBool() ? 1 : -1) * (20 + random.nextDouble() * 40),
-          velocityY: -180 - random.nextDouble() * 60,
-          rotationSpeed: (random.nextDouble() - 0.5) * 8,
-          width: 55,
-          height: 28,
-          color: const Color(0xFF4CAF50),
-        ),
-        // LCD屏幕（深蓝色矩形）
-        _ComponentPart(
-          type: ComponentType.screen,
-          x: 180,
-          y: 200,
-          rotation: random.nextDouble() * 0.2 - 0.1,
-          velocityX: (random.nextDouble() - 0.5) * 60,
-          velocityY: -200 - random.nextDouble() * 50,
-          rotationSpeed: (random.nextDouble() - 0.5) * 6,
-          width: 90,
-          height: 45,
-          color: const Color(0xFF1A237E),
-        ),
-        // 电路板（绿色带金色线路）
-        _ComponentPart(
-          type: ComponentType.circuitBoard,
-          x: 180 + (random.nextDouble() - 0.5) * 20,
-          y: 320,
-          rotation: random.nextDouble() * 0.4 - 0.2,
-          velocityX: (random.nextDouble() - 0.5) * 50,
-          velocityY: -150 - random.nextDouble() * 50,
-          rotationSpeed: (random.nextDouble() - 0.5) * 7,
-          width: 70,
-          height: 35,
-          color: const Color(0xFF2E7D32),
-        ),
-        // 按钮（红色圆形）
-        _ComponentPart(
-          type: ComponentType.button,
-          x: 180,
-          y: 350,
-          rotation: 0,
-          velocityX: (random.nextBool() ? 1 : -1) * (30 + random.nextDouble() * 30),
-          velocityY: -200 - random.nextDouble() * 50,
-          rotationSpeed: (random.nextDouble() - 0.5) * 12,
-          width: 32,
-          height: 32,
-          color: const Color(0xFFE53935),
-        ),
-        // 外壳碎片 - 3块
-        ...List.generate(3, (i) {
-          final offsetX = (i - 1) * 50.0; // -50, 0, 50
-          return _ComponentPart(
-            type: ComponentType.casing,
-            x: 180 + offsetX,
-            y: 280 + (random.nextDouble() - 0.5) * 40,
-            rotation: random.nextDouble() * math.pi,
-            velocityX: offsetX * 1.5 + (random.nextDouble() - 0.5) * 30,
-            velocityY: -120 - random.nextDouble() * 80,
-            rotationSpeed: (random.nextDouble() - 0.5) * 10,
-            width: 35 + random.nextDouble() * 10,
-            height: 25 + random.nextDouble() * 10,
-            color: Color.lerp(const Color(0xFF3A3A3A), const Color(0xFF5A5A5A), random.nextDouble())!,
-          );
-        }),
-      ];
+      // 电池（绿色大块）
+      _ComponentPart(
+        type: ComponentType.battery,
+        x: 180 + (random.nextDouble() - 0.5) * 30,
+        y: 280,
+        rotation: random.nextDouble() * 0.3 - 0.15,
+        velocityX:
+            (random.nextBool() ? 1 : -1) * (20 + random.nextDouble() * 40),
+        velocityY: -180 - random.nextDouble() * 60,
+        rotationSpeed: (random.nextDouble() - 0.5) * 8,
+        width: 55,
+        height: 28,
+        color: const Color(0xFF4CAF50),
+      ),
+      // LCD屏幕（深蓝色矩形）
+      _ComponentPart(
+        type: ComponentType.screen,
+        x: 180,
+        y: 200,
+        rotation: random.nextDouble() * 0.2 - 0.1,
+        velocityX: (random.nextDouble() - 0.5) * 60,
+        velocityY: -200 - random.nextDouble() * 50,
+        rotationSpeed: (random.nextDouble() - 0.5) * 6,
+        width: 90,
+        height: 45,
+        color: const Color(0xFF1A237E),
+      ),
+      // 电路板（绿色带金色线路）
+      _ComponentPart(
+        type: ComponentType.circuitBoard,
+        x: 180 + (random.nextDouble() - 0.5) * 20,
+        y: 320,
+        rotation: random.nextDouble() * 0.4 - 0.2,
+        velocityX: (random.nextDouble() - 0.5) * 50,
+        velocityY: -150 - random.nextDouble() * 50,
+        rotationSpeed: (random.nextDouble() - 0.5) * 7,
+        width: 70,
+        height: 35,
+        color: const Color(0xFF2E7D32),
+      ),
+      // 按钮（红色圆形）
+      _ComponentPart(
+        type: ComponentType.button,
+        x: 180,
+        y: 350,
+        rotation: 0,
+        velocityX:
+            (random.nextBool() ? 1 : -1) * (30 + random.nextDouble() * 30),
+        velocityY: -200 - random.nextDouble() * 50,
+        rotationSpeed: (random.nextDouble() - 0.5) * 12,
+        width: 32,
+        height: 32,
+        color: const Color(0xFFE53935),
+      ),
+      // 外壳碎片 - 3块
+      ...List.generate(3, (i) {
+        final offsetX = (i - 1) * 50.0; // -50, 0, 50
+        return _ComponentPart(
+          type: ComponentType.casing,
+          x: 180 + offsetX,
+          y: 280 + (random.nextDouble() - 0.5) * 40,
+          rotation: random.nextDouble() * math.pi,
+          velocityX: offsetX * 1.5 + (random.nextDouble() - 0.5) * 30,
+          velocityY: -120 - random.nextDouble() * 80,
+          rotationSpeed: (random.nextDouble() - 0.5) * 10,
+          width: 35 + random.nextDouble() * 10,
+          height: 25 + random.nextDouble() * 10,
+          color: Color.lerp(const Color(0xFF3A3A3A), const Color(0xFF5A5A5A),
+              random.nextDouble())!,
+        );
+      }),
+    ];
   }
 
   /// 修复设备
@@ -629,7 +636,7 @@ class _SkeuomorphicClickerDeviceState extends State<SkeuomorphicClickerDevice>
 
     // 预构建设备主体，以便在动画中复用，避免每帧重绘整个UI
     final deviceBody = _buildDeviceBody();
-    
+
     // 判断是否显示蓄力状态：正在长按 或 有蓄力进度
     final showDamageState = _isLongPressing || _smashProgress > 0;
 
@@ -637,9 +644,11 @@ class _SkeuomorphicClickerDeviceState extends State<SkeuomorphicClickerDevice>
       scale: scale,
       child: SizedBox(
         width: baseWidth,
-        child: _isDestroyed 
+        child: _isDestroyed
             ? _buildDroppedParts()
-            : (showDamageState ? _buildDamagedDevice(childDeviceBody: deviceBody) : deviceBody),
+            : (showDamageState
+                ? _buildDamagedDevice(childDeviceBody: deviceBody)
+                : deviceBody),
       ),
     );
   }
@@ -659,11 +668,11 @@ class _SkeuomorphicClickerDeviceState extends State<SkeuomorphicClickerDevice>
                 math.cos(time * 0.03) * shakeIntensity * 0.5,
               )
             : Offset.zero;
-        
+
         // 倾斜角度（只有超过30%才开始倾斜）
         final tiltProgress = (_smashProgress - 0.3).clamp(0.0, 1.0);
         final tiltAngle = tiltProgress * 0.06;
-        
+
         // 变形程度（只有超过50%才开始变形）
         final deformProgress = (_smashProgress - 0.5).clamp(0.0, 1.0);
         final deformAmount = deformProgress * 0.12;
@@ -827,8 +836,8 @@ class _SkeuomorphicClickerDeviceState extends State<SkeuomorphicClickerDevice>
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: _smashProgress > 0.7 
-                        ? Colors.red.withValues(alpha: 0.6) 
+                    color: _smashProgress > 0.7
+                        ? Colors.red.withValues(alpha: 0.6)
                         : Colors.orange.withValues(alpha: 0.4),
                     blurRadius: 8,
                     spreadRadius: 2,
@@ -840,13 +849,12 @@ class _SkeuomorphicClickerDeviceState extends State<SkeuomorphicClickerDevice>
         ),
         const SizedBox(height: 4),
         Text(
-          _smashProgress < 0.8 
-              ? '继续按住...' 
-              : '松手释放!',
+          _smashProgress < 0.8 ? '继续按住...' : '松手释放!',
           style: TextStyle(
             fontSize: 10,
             color: _smashProgress < 0.8 ? Colors.grey : Colors.red,
-            fontWeight: _smashProgress >= 0.8 ? FontWeight.bold : FontWeight.normal,
+            fontWeight:
+                _smashProgress >= 0.8 ? FontWeight.bold : FontWeight.normal,
           ),
         ),
       ],
@@ -858,12 +866,13 @@ class _SkeuomorphicClickerDeviceState extends State<SkeuomorphicClickerDevice>
     return AnimatedBuilder(
       animation: Listenable.merge([_smashDropController, _repairController]),
       builder: (context, child) {
-        final dropProgress = Curves.easeIn.transform(_smashDropController.value);
+        final dropProgress =
+            Curves.easeIn.transform(_smashDropController.value);
         final bounceProgress = Curves.bounceOut.transform(
           (_smashDropController.value * 1.5).clamp(0.0, 1.0),
         );
         final repairProgress = _repairController.value;
-        
+
         return SizedBox(
           height: 560,
           child: Stack(
@@ -905,7 +914,8 @@ class _SkeuomorphicClickerDeviceState extends State<SkeuomorphicClickerDevice>
                   ),
                 ),
               // 零部件（可点击拼装）
-              ..._fallenParts.map((part) => _buildFallingPart(part, dropProgress, bounceProgress, repairProgress)),
+              ..._fallenParts.map((part) => _buildFallingPart(
+                  part, dropProgress, bounceProgress, repairProgress)),
               // 拼装提示和一键修复按钮
               if (!_isDropping && !_isRepairing)
                 Positioned(
@@ -919,7 +929,8 @@ class _SkeuomorphicClickerDeviceState extends State<SkeuomorphicClickerDevice>
                       GestureDetector(
                         onTap: _onRepairAll,
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 24, vertical: 12),
                           decoration: BoxDecoration(
                             gradient: const LinearGradient(
                               colors: [Color(0xFF4CAF50), Color(0xFF8BC34A)],
@@ -936,7 +947,8 @@ class _SkeuomorphicClickerDeviceState extends State<SkeuomorphicClickerDevice>
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: const [
-                              Icon(Icons.build_rounded, color: Colors.white, size: 18),
+                              Icon(Icons.build_rounded,
+                                  color: Colors.white, size: 18),
                               SizedBox(width: 8),
                               Text(
                                 '修复设备',
@@ -986,40 +998,45 @@ class _SkeuomorphicClickerDeviceState extends State<SkeuomorphicClickerDevice>
   }
 
   /// 构建单个掉落零部件
-  Widget _buildFallingPart(_ComponentPart part, double dropProgress, double bounceProgress, double repairProgress) {
+  Widget _buildFallingPart(_ComponentPart part, double dropProgress,
+      double bounceProgress, double repairProgress) {
     // 物理模拟
     final gravity = 600.0;
     final time = dropProgress * 1.0;
-    
+
     // 计算掉落位置
     final rawX = part.x + part.velocityX * time;
     final rawY = part.y + part.velocityY * time + 0.5 * gravity * time * time;
-    
+
     // 限制 X 在屏幕内 (20 ~ 340)
     final droppedX = rawX.clamp(20.0, 340.0);
-    
+
     // 限制在地面
     final groundY = 450.0;
     final droppedY = rawY.clamp(-50.0, groundY);
-    
+
     // 修复动画：零件飞回中心
     final targetX = 180.0;
     final targetY = 280.0;
-    final x = droppedX + (targetX - droppedX) * Curves.easeInOut.transform(repairProgress);
-    final finalY = droppedY + (targetY - droppedY) * Curves.easeInOut.transform(repairProgress);
-    
+    final x = droppedX +
+        (targetX - droppedX) * Curves.easeInOut.transform(repairProgress);
+    final finalY = droppedY +
+        (targetY - droppedY) * Curves.easeInOut.transform(repairProgress);
+
     // 旋转（修复时逐渐回正）
-    final droppedRotation = part.rotation + part.rotationSpeed * dropProgress * 2;
+    final droppedRotation =
+        part.rotation + part.rotationSpeed * dropProgress * 2;
     final rotation = droppedRotation * (1 - repairProgress);
-    
+
     // 落地后的弹跳效果
     final hasLanded = rawY >= groundY;
-    final landedScale = hasLanded ? 1.0 - (bounceProgress - dropProgress).abs() * 0.1 : 1.0;
-    
+    final landedScale =
+        hasLanded ? 1.0 - (bounceProgress - dropProgress).abs() * 0.1 : 1.0;
+
     // 修复时缩小并淡出
     final scale = landedScale * (1 - repairProgress * 0.5);
     final opacity = 1.0 - repairProgress;
-    
+
     // 掉落动画完成后可以点击
     final canTap = !_isDropping && !_isRepairing;
 
@@ -1089,7 +1106,8 @@ class _SkeuomorphicClickerDeviceState extends State<SkeuomorphicClickerDevice>
                   ],
                 ),
                 border: Border.all(
-                  color: Color.lerp(Colors.black26, Colors.orange, progress * 0.5)!, 
+                  color: Color.lerp(
+                      Colors.black26, Colors.orange, progress * 0.5)!,
                   width: 1,
                 ),
                 boxShadow: [
@@ -1131,7 +1149,7 @@ class _SkeuomorphicClickerDeviceState extends State<SkeuomorphicClickerDevice>
               ),
           ],
         );
-      
+
       case ComponentType.screen:
         // LCD屏幕 - 带漏液效果
         return Container(
@@ -1153,7 +1171,7 @@ class _SkeuomorphicClickerDeviceState extends State<SkeuomorphicClickerDevice>
             painter: _LCDLeakPainter(progress: progress),
           ),
         );
-      
+
       case ComponentType.circuitBoard:
         return Container(
           width: part.width,
@@ -1173,7 +1191,7 @@ class _SkeuomorphicClickerDeviceState extends State<SkeuomorphicClickerDevice>
             painter: _CircuitBoardPainter(),
           ),
         );
-      
+
       case ComponentType.speaker:
         return Container(
           width: part.width,
@@ -1200,7 +1218,7 @@ class _SkeuomorphicClickerDeviceState extends State<SkeuomorphicClickerDevice>
             ),
           ),
         );
-      
+
       case ComponentType.button:
         return Container(
           width: part.width,
@@ -1225,7 +1243,7 @@ class _SkeuomorphicClickerDeviceState extends State<SkeuomorphicClickerDevice>
             ],
           ),
         );
-      
+
       case ComponentType.screw:
         return Container(
           width: part.width,
@@ -1243,7 +1261,7 @@ class _SkeuomorphicClickerDeviceState extends State<SkeuomorphicClickerDevice>
             ),
           ),
         );
-      
+
       case ComponentType.casing:
         return Container(
           width: part.width,
@@ -1268,7 +1286,7 @@ class _SkeuomorphicClickerDeviceState extends State<SkeuomorphicClickerDevice>
             ],
           ),
         );
-      
+
       case ComponentType.glassShard:
         // 玻璃碎片 - 锐利的三角形
         return SizedBox(
@@ -2241,11 +2259,12 @@ class _SkeuomorphicClickerDeviceState extends State<SkeuomorphicClickerDevice>
               const SizedBox(height: 2),
               // 数字滚动动画
               AnimatedBuilder(
-                animation: Listenable.merge([_successFlashController, _numberRollAnimation]),
+                animation: Listenable.merge(
+                    [_successFlashController, _numberRollAnimation]),
                 builder: (context, child) {
                   final flash = _successFlashController.value;
                   final roll = _numberRollAnimation.value;
-                  
+
                   return ClipRect(
                     child: SizedBox(
                       height: 64,
@@ -2258,7 +2277,9 @@ class _SkeuomorphicClickerDeviceState extends State<SkeuomorphicClickerDevice>
                               child: Opacity(
                                 opacity: (1.0 - roll).clamp(0.0, 1.0),
                                 child: _buildNumberText(
-                                  _previousSuccessCount.toString().padLeft(3, '0'),
+                                  _previousSuccessCount
+                                      .toString()
+                                      .padLeft(3, '0'),
                                   flash,
                                 ),
                               ),
@@ -2271,7 +2292,9 @@ class _SkeuomorphicClickerDeviceState extends State<SkeuomorphicClickerDevice>
                               child: Opacity(
                                 opacity: roll.clamp(0.0, 1.0),
                                 child: _buildNumberText(
-                                  widget.successCount.toString().padLeft(3, '0'),
+                                  widget.successCount
+                                      .toString()
+                                      .padLeft(3, '0'),
                                   flash,
                                 ),
                               ),
@@ -2475,7 +2498,7 @@ class _SkeuomorphicClickerDeviceState extends State<SkeuomorphicClickerDevice>
   /// 高级触控旋钮
   Widget _buildPremiumKnob() {
     final isCooling = widget.isCoolingDown;
-    
+
     return GestureDetector(
       // 按下时的视觉反馈
       onTapDown: (_) {
@@ -2640,7 +2663,7 @@ class _SkeuomorphicClickerDeviceState extends State<SkeuomorphicClickerDevice>
                     ),
                   ),
                   // 冷却状态遮罩和进度环
-                  if (isCooling || _cooldownAnimation.value < 1.0) 
+                  if (isCooling || _cooldownAnimation.value < 1.0)
                     _buildCooldownOverlay(),
                 ],
               ),
@@ -2655,9 +2678,9 @@ class _SkeuomorphicClickerDeviceState extends State<SkeuomorphicClickerDevice>
   Widget _buildCooldownOverlay() {
     final progress = _cooldownAnimation.value;
     final showOverlay = progress < 1.0;
-    
+
     if (!showOverlay) return const SizedBox.shrink();
-    
+
     return SizedBox(
       width: 175,
       height: 175,
@@ -2791,7 +2814,7 @@ class _SkeuomorphicClickerDeviceState extends State<SkeuomorphicClickerDevice>
     if (widget.pendingConfirmation) {
       return _buildConfirmationButtons();
     }
-    
+
     // 默认状态：只显示重置和统计按钮（无标记失败）
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
@@ -3397,7 +3420,7 @@ class CrackPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final random = math.Random(42); // 固定种子保证一致性
-    
+
     for (final crack in cracks) {
       _drawCrackLine(
         canvas,
@@ -3447,7 +3470,8 @@ class CrackPainter extends CustomPainter {
     int segmentCount = 0;
 
     while (remainingLength > 0 && segmentCount < 20) {
-      final segmentLength = math.min(remainingLength, random.nextDouble() * 15 + 8);
+      final segmentLength =
+          math.min(remainingLength, random.nextDouble() * 15 + 8);
       final angleVariation = (random.nextDouble() - 0.5) * 0.6;
       currentAngle += angleVariation;
 
@@ -3457,7 +3481,8 @@ class CrackPainter extends CustomPainter {
 
       // 随机分支
       if (branches > 0 && random.nextDouble() < 0.3 && remainingLength > 20) {
-        final branchAngle = currentAngle + (random.nextBool() ? 1 : -1) * (random.nextDouble() * 0.8 + 0.4);
+        final branchAngle = currentAngle +
+            (random.nextBool() ? 1 : -1) * (random.nextDouble() * 0.8 + 0.4);
         _drawCrackLine(
           canvas,
           currentX,
@@ -3521,7 +3546,8 @@ class TriangleDebrisPainter extends CustomPainter {
       ..color = Colors.white.withOpacity(0.2)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1;
-    canvas.drawLine(Offset(size.width / 2, 0), Offset(0, size.height), highlightPaint);
+    canvas.drawLine(
+        Offset(size.width / 2, 0), Offset(0, size.height), highlightPaint);
   }
 
   @override
@@ -3531,14 +3557,14 @@ class TriangleDebrisPainter extends CustomPainter {
 
 /// 零部件类型
 enum ComponentType {
-  battery,      // 电池
-  screen,       // LCD屏幕
+  battery, // 电池
+  screen, // LCD屏幕
   circuitBoard, // 电路板
-  speaker,      // 扬声器
-  button,       // 按钮
-  screw,        // 螺丝
-  casing,       // 外壳碎片
-  glassShard,   // 玻璃碎片
+  speaker, // 扬声器
+  button, // 按钮
+  screw, // 螺丝
+  casing, // 外壳碎片
+  glassShard, // 玻璃碎片
 }
 
 /// 掉落零部件数据类
@@ -3578,13 +3604,13 @@ class _ScreenGlitchPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final random = math.Random(time ~/ 50);
-    
+
     // 故障条纹
     for (int i = 0; i < (intensity * 10).toInt(); i++) {
       final y = random.nextDouble() * size.height;
       final height = random.nextDouble() * 8 + 2;
       final offset = (random.nextDouble() - 0.5) * 20 * intensity;
-      
+
       final paint = Paint()
         ..color = [
           Colors.cyan.withValues(alpha: 0.4),
@@ -3592,29 +3618,29 @@ class _ScreenGlitchPainter extends CustomPainter {
           Colors.yellow.withValues(alpha: 0.3),
           Colors.white.withValues(alpha: 0.5),
         ][random.nextInt(4)];
-      
+
       canvas.drawRect(
         Rect.fromLTWH(offset, y, size.width, height),
         paint,
       );
     }
-    
+
     // 雪花噪点
     if (intensity > 0.5) {
       for (int i = 0; i < (intensity * 50).toInt(); i++) {
         final x = random.nextDouble() * size.width;
         final y = random.nextDouble() * size.height;
         final dotSize = random.nextDouble() * 3 + 1;
-        
+
         final paint = Paint()
-          ..color = random.nextBool() 
-              ? Colors.white.withValues(alpha: 0.8) 
+          ..color = random.nextBool()
+              ? Colors.white.withValues(alpha: 0.8)
               : Colors.black.withValues(alpha: 0.8);
-        
+
         canvas.drawCircle(Offset(x, y), dotSize, paint);
       }
     }
-    
+
     // RGB偏移效果
     if (intensity > 0.3) {
       final rgbOffset = intensity * 5;
@@ -3624,7 +3650,7 @@ class _ScreenGlitchPainter extends CustomPainter {
       final bluePaint = Paint()
         ..color = Colors.blue.withValues(alpha: 0.2)
         ..blendMode = BlendMode.screen;
-      
+
       canvas.drawRect(
         Rect.fromLTWH(-rgbOffset, 0, size.width, size.height),
         redPaint,
@@ -3651,18 +3677,18 @@ class _SmokePainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final random = math.Random(time ~/ 100);
     final t = (time % 1000) / 1000.0;
-    
+
     for (int i = 0; i < (intensity * 8).toInt(); i++) {
       final baseX = size.width / 2 + (random.nextDouble() - 0.5) * 30;
       final drift = (random.nextDouble() - 0.5) * 40 * t;
       final rise = t * 50 * (0.5 + random.nextDouble() * 0.5);
       final scale = 0.5 + t * 0.8;
       final opacity = (1 - t) * 0.4 * intensity;
-      
+
       final paint = Paint()
         ..color = Colors.grey.shade600.withValues(alpha: opacity)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
-      
+
       canvas.drawCircle(
         Offset(baseX + drift, size.height - rise),
         10 * scale,
@@ -3684,14 +3710,14 @@ class _CrackedScreenPainter extends CustomPainter {
       ..color = Colors.white.withValues(alpha: 0.6)
       ..strokeWidth = 1
       ..style = PaintingStyle.stroke;
-    
+
     // 绘制裂纹
     for (int i = 0; i < 5; i++) {
       final startX = random.nextDouble() * size.width;
       final startY = random.nextDouble() * size.height;
       final endX = random.nextDouble() * size.width;
       final endY = random.nextDouble() * size.height;
-      
+
       canvas.drawLine(Offset(startX, startY), Offset(endX, endY), paint);
     }
   }
@@ -3705,47 +3731,51 @@ class _CircuitBoardPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final random = math.Random(42);
-    
+
     // 金色线路
     final tracePaint = Paint()
       ..color = const Color(0xFFFFD700).withValues(alpha: 0.8)
       ..strokeWidth = 1
       ..style = PaintingStyle.stroke;
-    
+
     // 绘制电路线路
     for (int i = 0; i < 8; i++) {
       final path = Path();
-      path.moveTo(random.nextDouble() * size.width, random.nextDouble() * size.height);
-      
+      path.moveTo(
+          random.nextDouble() * size.width, random.nextDouble() * size.height);
+
       for (int j = 0; j < 3; j++) {
         if (random.nextBool()) {
-          path.lineTo(path.getBounds().right + random.nextDouble() * 15, path.getBounds().bottom);
+          path.lineTo(path.getBounds().right + random.nextDouble() * 15,
+              path.getBounds().bottom);
         } else {
-          path.lineTo(path.getBounds().right, path.getBounds().bottom + random.nextDouble() * 10);
+          path.lineTo(path.getBounds().right,
+              path.getBounds().bottom + random.nextDouble() * 10);
         }
       }
-      
+
       canvas.drawPath(path, tracePaint);
     }
-    
+
     // 小焊点
     final dotPaint = Paint()
       ..color = const Color(0xFFC0C0C0)
       ..style = PaintingStyle.fill;
-    
+
     for (int i = 0; i < 6; i++) {
       canvas.drawCircle(
-        Offset(random.nextDouble() * size.width, random.nextDouble() * size.height),
+        Offset(random.nextDouble() * size.width,
+            random.nextDouble() * size.height),
         2,
         dotPaint,
       );
     }
-    
+
     // 芯片
     final chipPaint = Paint()
       ..color = Colors.black87
       ..style = PaintingStyle.fill;
-    
+
     canvas.drawRect(
       Rect.fromCenter(
         center: Offset(size.width * 0.6, size.height * 0.5),
@@ -3770,57 +3800,57 @@ class _ElectricSparkPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     if (intensity <= 0) return;
-    
+
     final random = math.Random(time ~/ 30);
     final sparkCount = (intensity * 12).toInt();
-    
+
     // 电弧主线
     final arcPaint = Paint()
       ..color = Colors.cyan.withValues(alpha: 0.9)
       ..strokeWidth = 2
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
-    
+
     final glowPaint = Paint()
       ..color = Colors.white.withValues(alpha: 0.6)
       ..strokeWidth = 4
       ..style = PaintingStyle.stroke
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
-    
+
     for (int i = 0; i < sparkCount; i++) {
       final startX = random.nextDouble() * size.width;
       final startY = random.nextDouble() * size.height * 0.5;
-      
+
       final path = Path();
       path.moveTo(startX, startY);
-      
+
       double x = startX;
       double y = startY;
-      
+
       // 锯齿状电弧
       for (int j = 0; j < 5; j++) {
         x += (random.nextDouble() - 0.5) * 30;
         y += random.nextDouble() * 15 + 5;
         path.lineTo(x, y);
       }
-      
+
       // 发光效果
       canvas.drawPath(path, glowPaint);
       canvas.drawPath(path, arcPaint);
     }
-    
+
     // 火花点
     final sparkPaint = Paint()
       ..color = Colors.yellow
       ..style = PaintingStyle.fill;
-    
+
     for (int i = 0; i < (intensity * 20).toInt(); i++) {
       final x = random.nextDouble() * size.width;
       final y = random.nextDouble() * size.height;
       final sparkSize = random.nextDouble() * 3 + 1;
-      
+
       canvas.drawCircle(Offset(x, y), sparkSize, sparkPaint);
-      
+
       // 发光
       final glowSparkPaint = Paint()
         ..color = Colors.orange.withValues(alpha: 0.5)
@@ -3843,41 +3873,42 @@ class _BlackSmokePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     if (intensity <= 0) return;
-    
+
     final random = math.Random(42);
     final smokeCount = (intensity * 15).toInt();
     final t = (time % 2000) / 2000.0;
-    
+
     for (int i = 0; i < smokeCount; i++) {
       final seed = random.nextDouble();
       final phase = (t + seed) % 1.0;
-      
+
       // 烟雾起始位置随机
       final baseX = size.width * 0.3 + random.nextDouble() * size.width * 0.4;
       final drift = (random.nextDouble() - 0.5) * 60 * phase;
       final rise = phase * size.height * 0.8;
-      
+
       // 烟雾大小随上升增大
       final smokeSize = (10 + phase * 40) * intensity;
-      
+
       // 烟雾透明度随上升减小
       final opacity = (0.7 - phase * 0.6) * intensity;
-      
+
       // 深色烟雾 - 模拟燃烧产生的黑烟
       final smokePaint = Paint()
         ..color = Color.lerp(
-          const Color(0xFF2D2D2D), 
-          const Color(0xFF1A1A1A), 
+          const Color(0xFF2D2D2D),
+          const Color(0xFF1A1A1A),
           random.nextDouble(),
-        )!.withValues(alpha: opacity)
+        )!
+            .withValues(alpha: opacity)
         ..maskFilter = MaskFilter.blur(BlurStyle.normal, 8 + phase * 12);
-      
+
       canvas.drawCircle(
         Offset(baseX + drift, size.height - rise),
         smokeSize,
         smokePaint,
       );
-      
+
       // 内层更黑的核心
       if (phase < 0.5) {
         final corePaint = Paint()
@@ -3890,13 +3921,13 @@ class _BlackSmokePainter extends CustomPainter {
         );
       }
     }
-    
+
     // 偶尔的火星
     if (random.nextDouble() < intensity * 0.3) {
       final emberPaint = Paint()
         ..color = Colors.orange.withValues(alpha: 0.8)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
-      
+
       for (int i = 0; i < 3; i++) {
         final x = size.width * 0.3 + random.nextDouble() * size.width * 0.4;
         final y = size.height * 0.7 + random.nextDouble() * size.height * 0.2;
@@ -3912,9 +3943,9 @@ class _BlackSmokePainter extends CustomPainter {
 /// 电池冒白烟组件（锂电池热失控）
 class _BatterySmoke extends StatelessWidget {
   final double intensity;
-  
+
   const _BatterySmoke({required this.intensity});
-  
+
   @override
   Widget build(BuildContext context) {
     return SizedBox(
@@ -3930,35 +3961,36 @@ class _BatterySmoke extends StatelessWidget {
 /// 电池白烟绘制器
 class _BatterySmokePainter extends CustomPainter {
   final double intensity;
-  
+
   _BatterySmokePainter({required this.intensity});
-  
+
   @override
   void paint(Canvas canvas, Size size) {
     final random = math.Random(42);
     final time = DateTime.now().millisecondsSinceEpoch;
     final t = (time % 1500) / 1500.0;
-    
+
     // 白色/灰白色烟雾 - 锂电池热失控特征
     for (int i = 0; i < (intensity * 8).toInt(); i++) {
       final seed = random.nextDouble();
       final phase = (t + seed * 0.5) % 1.0;
-      
+
       final baseX = size.width * 0.5 + (random.nextDouble() - 0.5) * 15;
       final drift = (random.nextDouble() - 0.5) * 30 * phase;
       final rise = phase * 45;
       final smokeSize = (5 + phase * 15) * intensity;
       final opacity = (0.8 - phase * 0.7) * intensity;
-      
+
       // 白烟
       final smokePaint = Paint()
         ..color = Color.lerp(
-          Colors.white, 
-          Colors.grey.shade300, 
+          Colors.white,
+          Colors.grey.shade300,
           random.nextDouble() * 0.3,
-        )!.withValues(alpha: opacity)
+        )!
+            .withValues(alpha: opacity)
         ..maskFilter = MaskFilter.blur(BlurStyle.normal, 6 + phase * 8);
-      
+
       canvas.drawCircle(
         Offset(baseX + drift, size.height - rise),
         smokeSize,
@@ -3966,7 +3998,7 @@ class _BatterySmokePainter extends CustomPainter {
       );
     }
   }
-  
+
   @override
   bool shouldRepaint(covariant _BatterySmokePainter oldDelegate) => true;
 }
@@ -3974,19 +4006,19 @@ class _BatterySmokePainter extends CustomPainter {
 /// LCD漏液绘制器 - 真实的液晶屏损坏效果
 class _LCDLeakPainter extends CustomPainter {
   final double progress;
-  
+
   _LCDLeakPainter({required this.progress});
-  
+
   @override
   void paint(Canvas canvas, Size size) {
     final random = math.Random(42);
-    
+
     // 裂纹
     final crackPaint = Paint()
       ..color = Colors.white.withValues(alpha: 0.6)
       ..strokeWidth = 1
       ..style = PaintingStyle.stroke;
-    
+
     for (int i = 0; i < 4; i++) {
       final startX = random.nextDouble() * size.width;
       final startY = random.nextDouble() * size.height;
@@ -3994,20 +4026,20 @@ class _LCDLeakPainter extends CustomPainter {
       final endY = random.nextDouble() * size.height;
       canvas.drawLine(Offset(startX, startY), Offset(endX, endY), crackPaint);
     }
-    
+
     // 漏液黑斑 - 液晶泄漏的特征
     final leakCount = (progress * 6).toInt();
     for (int i = 0; i < leakCount; i++) {
       final cx = random.nextDouble() * size.width;
       final cy = random.nextDouble() * size.height;
       final radius = (5 + random.nextDouble() * 15) * progress;
-      
+
       // 深色墨水状扩散
       final leakPaint = Paint()
         ..color = Colors.black.withValues(alpha: 0.85)
         ..maskFilter = MaskFilter.blur(BlurStyle.normal, 2);
       canvas.drawCircle(Offset(cx, cy), radius, leakPaint);
-      
+
       // 边缘的蓝紫色（液晶的颜色）
       final edgePaint = Paint()
         ..color = const Color(0xFF1A237E).withValues(alpha: 0.5)
@@ -4016,7 +4048,7 @@ class _LCDLeakPainter extends CustomPainter {
         ..maskFilter = MaskFilter.blur(BlurStyle.normal, 3);
       canvas.drawCircle(Offset(cx, cy), radius * 1.2, edgePaint);
     }
-    
+
     // 显示乱码/缺墨效果 - 部分区域显示异常
     if (progress > 0.3) {
       for (int i = 0; i < 3; i++) {
@@ -4031,8 +4063,8 @@ class _LCDLeakPainter extends CustomPainter {
       }
     }
   }
-  
+
   @override
-  bool shouldRepaint(covariant _LCDLeakPainter oldDelegate) => 
+  bool shouldRepaint(covariant _LCDLeakPainter oldDelegate) =>
       oldDelegate.progress != progress;
 }

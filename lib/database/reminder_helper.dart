@@ -237,29 +237,24 @@ class ReminderHelper {
         {
           'dose_type': 'first',
           'injection_date': firstDoseDate.toIso8601String(),
-          'next_due_date': firstDoseDate
-              .add(const Duration(days: 21))
-              .toIso8601String(),
+          'next_due_date':
+              firstDoseDate.add(const Duration(days: 21)).toIso8601String(),
           'notes': '第一针',
         },
         {
           'dose_type': 'second',
-          'injection_date': firstDoseDate
-              .add(const Duration(days: 21))
-              .toIso8601String(),
-          'next_due_date': firstDoseDate
-              .add(const Duration(days: 42))
-              .toIso8601String(),
+          'injection_date':
+              firstDoseDate.add(const Duration(days: 21)).toIso8601String(),
+          'next_due_date':
+              firstDoseDate.add(const Duration(days: 42)).toIso8601String(),
           'notes': '第二针',
         },
         {
           'dose_type': 'third',
-          'injection_date': firstDoseDate
-              .add(const Duration(days: 42))
-              .toIso8601String(),
-          'next_due_date': firstDoseDate
-              .add(const Duration(days: 365))
-              .toIso8601String(),
+          'injection_date':
+              firstDoseDate.add(const Duration(days: 42)).toIso8601String(),
+          'next_due_date':
+              firstDoseDate.add(const Duration(days: 365)).toIso8601String(),
           'notes': '第三针',
         },
       ]);

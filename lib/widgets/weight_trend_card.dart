@@ -137,7 +137,8 @@ class _WeightTrendCardState extends State<WeightTrendCard> {
       final Map<String, List<double>> monthlyData = {};
       for (var record in filteredRecords) {
         final date = DateTime.parse(record['date'] as String);
-        final monthKey = '${date.year}-${date.month.toString().padLeft(2, '0')}';
+        final monthKey =
+            '${date.year}-${date.month.toString().padLeft(2, '0')}';
         final weight = (record['weight'] as num?)?.toDouble() ?? 0.0;
         monthlyData.putIfAbsent(monthKey, () => []).add(weight);
       }
@@ -182,15 +183,19 @@ class _WeightTrendCardState extends State<WeightTrendCard> {
     if (filteredRecords.isNotEmpty) {
       final firstDate = DateTime.parse(filteredRecords.first['date'] as String);
       final lastDate = DateTime.parse(filteredRecords.last['date'] as String);
-      tempDateRange = '${DateFormat('yyyy年M月d日', 'zh_CN').format(firstDate)}至${DateFormat('M月d日', 'zh_CN').format(lastDate)}';
+      tempDateRange =
+          '${DateFormat('yyyy年M月d日', 'zh_CN').format(firstDate)}至${DateFormat('M月d日', 'zh_CN').format(lastDate)}';
     }
 
     String tempTrend = '';
     // 计算趋势
     if (tempData.length >= 2) {
-      final firstHalf = tempData.take(tempData.length ~/ 2).reduce((a, b) => a + b) / (tempData.length ~/ 2);
+      final firstHalf =
+          tempData.take(tempData.length ~/ 2).reduce((a, b) => a + b) /
+              (tempData.length ~/ 2);
       final secondHalf =
-          tempData.skip(tempData.length ~/ 2).reduce((a, b) => a + b) / (tempData.length - tempData.length ~/ 2);
+          tempData.skip(tempData.length ~/ 2).reduce((a, b) => a + b) /
+              (tempData.length - tempData.length ~/ 2);
       if (secondHalf > firstHalf * 1.05) {
         tempTrend = '过去${_timeRanges[_selectedTimeRangeIndex]}的体重有所上升。';
       } else if (secondHalf < firstHalf * 0.95) {
@@ -237,7 +242,8 @@ class _WeightTrendCardState extends State<WeightTrendCard> {
             decoration: BoxDecoration(
               color: Colors.white.withOpacity(0.65),
               borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: Colors.white.withOpacity(0.6), width: 1),
+              border:
+                  Border.all(color: Colors.white.withOpacity(0.6), width: 1),
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
@@ -338,12 +344,15 @@ class _WeightTrendCardState extends State<WeightTrendCard> {
                                 child: Container(
                                   margin: const EdgeInsets.all(2),
                                   decoration: BoxDecoration(
-                                    color: isSelected ? Colors.white : Colors.transparent,
+                                    color: isSelected
+                                        ? Colors.white
+                                        : Colors.transparent,
                                     borderRadius: BorderRadius.circular(6),
                                     boxShadow: isSelected
                                         ? [
                                             BoxShadow(
-                                              color: Colors.black.withOpacity(0.1),
+                                              color:
+                                                  Colors.black.withOpacity(0.1),
                                               blurRadius: 4,
                                               offset: const Offset(0, 2),
                                             )
@@ -355,8 +364,12 @@ class _WeightTrendCardState extends State<WeightTrendCard> {
                                     _timeRanges[index],
                                     style: TextStyle(
                                       fontSize: 12,
-                                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
-                                      color: isSelected ? Colors.black : Colors.grey,
+                                      fontWeight: isSelected
+                                          ? FontWeight.w600
+                                          : FontWeight.w400,
+                                      color: isSelected
+                                          ? Colors.black
+                                          : Colors.grey,
                                     ),
                                   ),
                                 ),
@@ -426,8 +439,10 @@ class _WeightTrendCardState extends State<WeightTrendCard> {
                               barTouchData: BarTouchData(
                                 touchTooltipData: BarTouchTooltipData(
                                   getTooltipColor: (group) => Colors.black87,
-                                  getTooltipItem: (group, groupIndex, rod, rodIndex) {
-                                    if (group.x.toInt() >= 0 && group.x.toInt() < _chartLabels.length) {
+                                  getTooltipItem:
+                                      (group, groupIndex, rod, rodIndex) {
+                                    if (group.x.toInt() >= 0 &&
+                                        group.x.toInt() < _chartLabels.length) {
                                       return BarTooltipItem(
                                         '${rod.toY.toStringAsFixed(1)} kg\n${_chartLabels[group.x.toInt()]}',
                                         const TextStyle(
@@ -440,7 +455,8 @@ class _WeightTrendCardState extends State<WeightTrendCard> {
                                     return null;
                                   },
                                 ),
-                                touchCallback: (FlTouchEvent event, barTouchResponse) {
+                                touchCallback:
+                                    (FlTouchEvent event, barTouchResponse) {
                                   setState(() {
                                     if (!event.isInterestedForInteractions ||
                                         barTouchResponse == null ||
@@ -448,7 +464,8 @@ class _WeightTrendCardState extends State<WeightTrendCard> {
                                       _touchedIndex = -1;
                                       return;
                                     }
-                                    _touchedIndex = barTouchResponse.spot!.touchedBarGroupIndex;
+                                    _touchedIndex = barTouchResponse
+                                        .spot!.touchedBarGroupIndex;
                                   });
                                 },
                               ),
@@ -457,10 +474,13 @@ class _WeightTrendCardState extends State<WeightTrendCard> {
                                 bottomTitles: AxisTitles(
                                   sideTitles: SideTitles(
                                     showTitles: true,
-                                    getTitlesWidget: (double value, TitleMeta meta) {
-                                      if (value.toInt() >= 0 && value.toInt() < _chartLabels.length) {
+                                    getTitlesWidget:
+                                        (double value, TitleMeta meta) {
+                                      if (value.toInt() >= 0 &&
+                                          value.toInt() < _chartLabels.length) {
                                         return Padding(
-                                          padding: const EdgeInsets.only(top: 8.0),
+                                          padding:
+                                              const EdgeInsets.only(top: 8.0),
                                           child: Text(
                                             _chartLabels[value.toInt()],
                                             style: const TextStyle(
@@ -522,7 +542,8 @@ class _WeightTrendCardState extends State<WeightTrendCard> {
                                     label: HorizontalLineLabel(
                                       show: true,
                                       alignment: Alignment.topRight,
-                                      padding: const EdgeInsets.only(right: 5, bottom: 5),
+                                      padding: const EdgeInsets.only(
+                                          right: 5, bottom: 5),
                                       style: const TextStyle(
                                         color: Color(0xFF8E8E93),
                                         fontSize: 10,
@@ -534,7 +555,8 @@ class _WeightTrendCardState extends State<WeightTrendCard> {
                                 ],
                               ),
                               borderData: FlBorderData(show: false),
-                              barGroups: List.generate(_chartData.length, (index) {
+                              barGroups:
+                                  List.generate(_chartData.length, (index) {
                                 return BarChartGroupData(
                                   x: index,
                                   barRods: [
@@ -542,10 +564,13 @@ class _WeightTrendCardState extends State<WeightTrendCard> {
                                       toY: _chartData[index],
                                       color: _touchedIndex == index
                                           ? const Color(0xFFFF5E62)
-                                          : const Color(0xFFFF5E62).withOpacity(0.3),
+                                          : const Color(0xFFFF5E62)
+                                              .withOpacity(0.3),
                                       width: 16,
-                                      borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
-                                      backDrawRodData: BackgroundBarChartRodData(
+                                      borderRadius: const BorderRadius.vertical(
+                                          top: Radius.circular(4)),
+                                      backDrawRodData:
+                                          BackgroundBarChartRodData(
                                         show: true,
                                         toY: _chartData.reduce(math.max) * 1.2,
                                         color: const Color(0xFFF2F2F7),
@@ -593,7 +618,8 @@ class _WeightTrendCardState extends State<WeightTrendCard> {
                                       _trendText,
                                       style: TextStyle(
                                         fontSize: 13,
-                                        color: const Color(0xFF1D1D1F).withOpacity(0.8),
+                                        color: const Color(0xFF1D1D1F)
+                                            .withOpacity(0.8),
                                       ),
                                     ),
                                   ],
@@ -605,7 +631,9 @@ class _WeightTrendCardState extends State<WeightTrendCard> {
                     ],
                   ),
                   secondChild: const SizedBox(width: double.infinity),
-                  crossFadeState: _isExpanded ? CrossFadeState.showFirst : CrossFadeState.showSecond,
+                  crossFadeState: _isExpanded
+                      ? CrossFadeState.showFirst
+                      : CrossFadeState.showSecond,
                   duration: const Duration(milliseconds: 300),
                 ),
               ],

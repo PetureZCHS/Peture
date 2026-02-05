@@ -34,7 +34,8 @@ class EmailLoginPage extends StatefulWidget {
 class _EmailLoginPageState extends State<EmailLoginPage> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
-  final TextEditingController _codeController = TextEditingController(); // 验证码输入
+  final TextEditingController _codeController =
+      TextEditingController(); // 验证码输入
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   final SupabaseClient _supabase = Supabase.instance.client;
   bool _isLoading = false;
@@ -138,8 +139,8 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
                   const MyApp(),
               transitionsBuilder:
                   (context, animation, secondaryAnimation, child) {
-                    return FadeTransition(opacity: animation, child: child);
-                  },
+                return FadeTransition(opacity: animation, child: child);
+              },
               transitionDuration: const Duration(milliseconds: 400),
             ),
           );
@@ -163,8 +164,7 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
           e.message.contains('rate limit')) {
         errorMsg = '尝试次数过多，请稍后再试';
       } else {
-        errorMsg =
-            '登录失败，服务器返回错误代码 ${e.statusCode ?? '未知'}，请稍后重试或联系管理员';
+        errorMsg = '登录失败，服务器返回错误代码 ${e.statusCode ?? '未知'}，请稍后重试或联系管理员';
       }
       _showMessage(errorMsg);
     } catch (e) {
@@ -225,8 +225,7 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
       } else if (e.statusCode == 500) {
         errorMsg = '验证码服务暂时不可用（代码 500），请稍后重试或联系管理员';
       } else {
-        errorMsg =
-            '发送验证码失败，服务器返回错误代码 ${e.statusCode ?? '未知'}，请稍后重试或联系管理员';
+        errorMsg = '发送验证码失败，服务器返回错误代码 ${e.statusCode ?? '未知'}，请稍后重试或联系管理员';
       }
       _showMessage(errorMsg);
     } catch (e) {
@@ -305,8 +304,7 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
           e.message.contains('rate limit')) {
         errorMsg = '验证码尝试次数过多，请稍后再试';
       } else {
-        errorMsg =
-            '登录失败，服务器返回错误代码 ${e.statusCode ?? '未知'}，请稍后重试或联系管理员';
+        errorMsg = '登录失败，服务器返回错误代码 ${e.statusCode ?? '未知'}，请稍后重试或联系管理员';
       }
       _showMessage(errorMsg);
     } catch (e) {
@@ -377,9 +375,7 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  _useOtpLogin
-                      ? '请输入邮箱并获取验证码登录'
-                      : '请输入您的邮箱地址和密码',
+                  _useOtpLogin ? '请输入邮箱并获取验证码登录' : '请输入您的邮箱地址和密码',
                   style: TextStyle(fontSize: 16, color: Colors.grey[600]),
                 ),
                 const SizedBox(height: 40),
@@ -542,8 +538,9 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
                               borderRadius: BorderRadius.circular(16.0),
                             ),
                           ),
-                          onPressed:
-                              _isLoading || _countdown > 0 ? null : _sendLoginCode,
+                          onPressed: _isLoading || _countdown > 0
+                              ? null
+                              : _sendLoginCode,
                           child: Text(
                             _countdown > 0 ? '重发(${_countdown}s)' : '发送验证码',
                             style: const TextStyle(

@@ -38,14 +38,14 @@ class _EditPetPassportPageState extends State<EditPetPassportPage> {
     _selectedMbti = widget.passport?.mbtiType;
     _adoptionDate = widget.passport?.adoptionDate;
     _selectedTags = List.from(widget.passport?.interestTags ?? []);
-    
+
     // 优先使用电子档案头像，如果没有则使用宠物档案头像（仅在电子档案没设置前保存）
     _photoPath = widget.passport?.photoPath;
     if (_photoPath == null || _photoPath!.isEmpty) {
       // 电子档案没有头像时，使用宠物档案的头像作为初始值
       _photoPath = widget.pet.avatar;
     }
-    
+
     // 如果有照片路径，加载照片
     if (_photoPath != null && _photoPath!.isNotEmpty) {
       _photoFile = File(_photoPath!);
@@ -590,9 +590,8 @@ class _EditPetPassportPageState extends State<EditPetPassportPage> {
                     vertical: 6,
                   ),
                   decoration: BoxDecoration(
-                    color: isSelected
-                        ? const Color(0xFF5A8EFA)
-                        : Colors.grey[100],
+                    color:
+                        isSelected ? const Color(0xFF5A8EFA) : Colors.grey[100],
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(
                       color: isSelected
@@ -606,9 +605,8 @@ class _EditPetPassportPageState extends State<EditPetPassportPage> {
                     style: TextStyle(
                       color: isSelected ? Colors.white : Colors.grey[700],
                       fontSize: 12,
-                      fontWeight: isSelected
-                          ? FontWeight.w600
-                          : FontWeight.normal,
+                      fontWeight:
+                          isSelected ? FontWeight.w600 : FontWeight.normal,
                     ),
                   ),
                 ),
@@ -828,7 +826,8 @@ class _EditPetPassportPageState extends State<EditPetPassportPage> {
 
         // 保存到数据库
         final supabaseService = SupabaseService();
-        final result = await supabaseService.upsertPetPassport(updatedPassport.toMap());
+        final result =
+            await supabaseService.upsertPetPassport(updatedPassport.toMap());
 
         if (result == null) {
           if (mounted) {
@@ -843,7 +842,9 @@ class _EditPetPassportPageState extends State<EditPetPassportPage> {
         }
 
         // 同步头像到宠物表：以电子档案中的头像为准
-        if (_photoPath != null && _photoPath!.isNotEmpty && widget.pet.id != null) {
+        if (_photoPath != null &&
+            _photoPath!.isNotEmpty &&
+            widget.pet.id != null) {
           try {
             final petData = widget.pet.toMap();
             petData['avatar'] = _photoPath; // 使用电子档案的头像路径

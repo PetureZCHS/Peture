@@ -177,7 +177,7 @@ class MedicalRecord extends HealthEvent {
     if (map['id'] != null) {
       id = map['id'].toString();
     }
-    
+
     return MedicalRecord(
       id: id,
       date: map['date']?.toString() ?? '',
@@ -207,7 +207,7 @@ class DailyReminder {
     if (map['id'] != null) {
       id = map['id'].toString();
     }
-    
+
     return DailyReminder(
       id: id,
       time: map['time']?.toString() ?? '',
@@ -242,7 +242,7 @@ class WeightRecord extends HealthEvent {
     if (map['id'] != null) {
       id = map['id'].toString();
     }
-    
+
     // 处理 weight：支持 int 和 double
     double weightValue;
     if (map['weight'] is double) {
@@ -252,7 +252,7 @@ class WeightRecord extends HealthEvent {
     } else {
       weightValue = double.tryParse(map['weight']?.toString() ?? '0') ?? 0.0;
     }
-    
+
     return WeightRecord(
       id: id,
       date: map['date']?.toString() ?? '',
@@ -304,14 +304,15 @@ class VaccineRecord extends HealthEvent {
     if (map['id'] != null) {
       id = map['id'].toString();
     }
-    
+
     // 处理字段名：支持 camelCase 和 snake_case
     final date = map['date']?.toString() ?? '';
     final type = map['type']?.toString() ?? '';
     final name = map['name']?.toString() ?? '';
-    final nextDueDate = map['nextDueDate']?.toString() ?? 
-                       map['next_due_date']?.toString() ?? '';
-    
+    final nextDueDate = map['nextDueDate']?.toString() ??
+        map['next_due_date']?.toString() ??
+        '';
+
     return VaccineRecord(
       id: id,
       date: date,
@@ -383,7 +384,8 @@ class MedicalRecordScreen extends StatefulWidget {
   State<MedicalRecordScreen> createState() => _MedicalRecordScreenState();
 }
 
-class _MedicalRecordScreenState extends State<MedicalRecordScreen> with SingleTickerProviderStateMixin {
+class _MedicalRecordScreenState extends State<MedicalRecordScreen>
+    with SingleTickerProviderStateMixin {
   // --- State variables ---
   List<Pet> _allPets = [];
   Pet? _selectedPet;
@@ -420,7 +422,7 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> with SingleTi
 
     // ❌ 移除启动时的同步数据加载，改为延迟加载（避免启动卡顿）
     // 数据将在首次切换到该 tab 时加载（通过 refreshNotifier 触发）
-    
+
     // 监听刷新通知
     widget.refreshNotifier?.addListener(_onRefreshRequested);
   }
@@ -491,19 +493,20 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> with SingleTi
     // ❌ 移除 print 语句，减少日志输出导致的性能开销
     setState(() {
       _allPets = pets.map((p) => Pet.fromMap(p)).toList();
-      
+
       // 设置默认选中的宠物
       if (_allPets.isNotEmpty) {
         // 如果当前没有选中的宠物，或者当前选中的宠物不在列表中，则选择第一个
-        if (_selectedPet == null || 
-            !_allPets.any((pet) => pet.id?.toString() == _selectedPet?.id?.toString())) {
+        if (_selectedPet == null ||
+            !_allPets.any(
+                (pet) => pet.id?.toString() == _selectedPet?.id?.toString())) {
           _selectedPet = _allPets.first;
         }
       } else {
         _selectedPet = null;
       }
     });
-    
+
     // 加载选中宠物的数据
     if (_selectedPet != null) {
       await _loadDataForSelectedPet();
@@ -539,7 +542,8 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> with SingleTi
       // 加载体重记录
       final weightRecords =
           await _supabaseService.getWeightRecordsForPet(petId.toString());
-      _weightRecords = weightRecords.map((r) => WeightRecord.fromMap(r)).toList();
+      _weightRecords =
+          weightRecords.map((r) => WeightRecord.fromMap(r)).toList();
 
       // 加载疫苗记录
       final vaccineRecords = await _supabaseService.getVaccineRecordsForPet(
@@ -549,7 +553,7 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> with SingleTi
           vaccineRecords.map((r) => VaccineRecord.fromMap(r)).toList();
 
       _compileAndSortHealthLog();
-      
+
       // 更新UI
       if (mounted) {
         setState(() {});
@@ -658,10 +662,10 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> with SingleTi
         _weightRecords.add(recordWithPetId);
       });
       _compileAndSortHealthLog();
-      
+
       // 同步更新宠物档案中的体重
       await _syncPetWeight();
-      
+
       if (mounted) _showSuccessSnackBar('体重记录成功!');
     } else {
       if (mounted) _showSuccessSnackBar('体重记录失败，请检查网络连接');
@@ -671,10 +675,10 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> with SingleTi
   /// 同步更新宠物档案中的体重（使用最新的体重记录）
   Future<void> _syncPetWeight() async {
     if (_selectedPet == null || _selectedPet!.id == null) return;
-    
+
     try {
       double? latestWeight;
-      
+
       // 获取最新的体重记录
       if (_weightRecords.isNotEmpty) {
         final sortedWeights = [..._weightRecords];
@@ -684,13 +688,13 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> with SingleTi
         // 如果没有体重记录，设置为 null
         latestWeight = null;
       }
-      
+
       // 更新宠物档案中的体重
       final petMap = _selectedPet!.toMap();
       petMap['weight'] = latestWeight;
-      
+
       print('同步宠物体重: ${_selectedPet!.name} -> $latestWeight kg');
-      
+
       final success = await _supabaseService.updatePet(petMap);
       if (success) {
         print('宠物体重同步成功');
@@ -699,13 +703,14 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> with SingleTi
           setState(() {
             _selectedPet = Pet.fromMap({...petMap, 'id': _selectedPet!.id});
             // 同时更新 _allPets 列表中的对应宠物
-            final petIndex = _allPets.indexWhere((p) => p.id == _selectedPet!.id);
+            final petIndex =
+                _allPets.indexWhere((p) => p.id == _selectedPet!.id);
             if (petIndex != -1) {
               _allPets[petIndex] = _selectedPet!;
             }
           });
         }
-        
+
         // 通知全局数据变更
         DataChangeNotifier.markPetDataChanged();
       } else {
@@ -762,10 +767,10 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> with SingleTi
           _weightRecords.remove(record);
         });
         _compileAndSortHealthLog();
-        
+
         // 同步更新宠物档案中的体重（删除后使用最新的体重记录）
         await _syncPetWeight();
-        
+
         if (mounted) _showSuccessSnackBar('体重记录已删除!');
       } else {
         if (mounted) _showSuccessSnackBar('体重记录删除失败，请检查网络连接');
@@ -830,7 +835,7 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> with SingleTi
     // 过滤出除当前选中宠物外的其他宠物
     // 使用 toString() 确保正确比较，并处理 null 值
     final selectedPetId = _selectedPet?.id?.toString();
-    
+
     // ❌ 移除所有 print 语句，避免频繁重建时产生大量日志导致卡顿
     final availablePets = _allPets.where((pet) {
       final petId = pet.id?.toString();
@@ -944,7 +949,8 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> with SingleTi
         elevation: 0,
         title: const Text(''),
         systemOverlayStyle: SystemUiOverlayStyle.dark,
-        toolbarHeight: 0, // Hide AppBar but keep status bar handling if needed, or just remove it.
+        toolbarHeight:
+            0, // Hide AppBar but keep status bar handling if needed, or just remove it.
       ),
       body: _allPets.isEmpty
           ? _buildEmptyState()
@@ -955,7 +961,8 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> with SingleTi
                     AppTheme.horizontalPadding,
                     60, // Increased top padding to account for status bar/header space since AppBar is gone
                     AppTheme.horizontalPadding,
-                    AppTheme.horizontalPadding + 80, // Add bottom padding for nav bar
+                    AppTheme.horizontalPadding +
+                        80, // Add bottom padding for nav bar
                   ),
                   sliver: SliverList(
                     delegate: SliverChildListDelegate([
@@ -1039,7 +1046,8 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> with SingleTi
                 child: Material(
                   color: Colors.transparent,
                   child: InkWell(
-                    onTap: _allPets.length > 1 ? _toggleSelectorExpansion : null,
+                    onTap:
+                        _allPets.length > 1 ? _toggleSelectorExpansion : null,
                     borderRadius: BorderRadius.circular(AppTheme.borderRadius),
                     child: Padding(
                       padding: const EdgeInsets.all(AppTheme.cardPadding),
@@ -1096,8 +1104,8 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> with SingleTi
                                                 AppColors.petTypeColors['其他'],
                                             child: Icon(
                                               Icons.pets,
-                                              color: Colors.white
-                                                  .withOpacity(0.8),
+                                              color:
+                                                  Colors.white.withOpacity(0.8),
                                               size: 30,
                                             ),
                                           ),
@@ -1223,7 +1231,7 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> with SingleTi
 
         // 体重趋势卡片
         if (_selectedPet != null && _selectedPet!.id != null)
-           Padding(
+          Padding(
             padding: const EdgeInsets.only(top: 24.0),
             child: WeightTrendCard(petId: _selectedPet!.id!),
           ),
@@ -1255,9 +1263,7 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen> with SingleTi
     );
   }
 
-
-
-Widget _buildRecordsAndRemindersSection() {
+  Widget _buildRecordsAndRemindersSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1275,19 +1281,21 @@ Widget _buildRecordsAndRemindersSection() {
             return GestureDetector(
               behavior: HitTestBehavior.opaque,
               onTapUp: (details) {
-                final int index = (details.localPosition.dx / itemWidth).floor().clamp(0, 1);
+                final int index =
+                    (details.localPosition.dx / itemWidth).floor().clamp(0, 1);
                 _onTabTapped(index);
               },
               onHorizontalDragStart: (details) {
                 _tabController.stop();
               },
               onHorizontalDragUpdate: (details) {
-                double newPosition = (details.localPosition.dx / itemWidth) - 0.5;
+                double newPosition =
+                    (details.localPosition.dx / itemWidth) - 0.5;
                 setState(() {
                   _currentPosition = newPosition.clamp(0.0, 1.0);
                   _tabController.value = _currentPosition;
                 });
-                
+
                 int potentialIndex = _currentPosition.round();
                 if (potentialIndex != _lastHapticIndex) {
                   HapticFeedback.selectionClick();
@@ -1295,9 +1303,10 @@ Widget _buildRecordsAndRemindersSection() {
                 }
               },
               onHorizontalDragEnd: (details) {
-                final double velocity = details.velocity.pixelsPerSecond.dx / itemWidth;
+                final double velocity =
+                    details.velocity.pixelsPerSecond.dx / itemWidth;
                 int targetIndex = _currentPosition.round();
-                
+
                 if (velocity.abs() > 0.3) {
                   if (velocity > 0) {
                     targetIndex = 1;
@@ -1346,25 +1355,29 @@ Widget _buildRecordsAndRemindersSection() {
                             ),
                           ),
                         ),
-                        
+
                         // Sliding Indicator
                         AnimatedBuilder(
                           animation: _tabController,
                           builder: (context, child) {
                             double velocity = 0.0;
                             if (_tabController.isAnimating) {
-                               velocity = _tabController.velocity;
+                              velocity = _tabController.velocity;
                             }
                             double absVelocity = velocity.abs();
-                            double stretchFactor = (absVelocity * 0.08).clamp(0.0, 0.4);
-                            
+                            double stretchFactor =
+                                (absVelocity * 0.08).clamp(0.0, 0.4);
+
                             // Indicator width is slightly less than item width for padding
-                            double baseIndicatorWidth = itemWidth - 8; 
-                            double currentWidth = baseIndicatorWidth * (1 + stretchFactor);
-                            double currentHeight = indicatorHeight * (1 - stretchFactor * 0.2);
+                            double baseIndicatorWidth = itemWidth - 8;
+                            double currentWidth =
+                                baseIndicatorWidth * (1 + stretchFactor);
+                            double currentHeight =
+                                indicatorHeight * (1 - stretchFactor * 0.2);
 
                             // Center position calculation
-                            double centerPos = (_currentPosition * itemWidth) + (itemWidth / 2);
+                            double centerPos = (_currentPosition * itemWidth) +
+                                (itemWidth / 2);
                             double leftPos = centerPos - (currentWidth / 2);
 
                             return Positioned(
@@ -1373,11 +1386,13 @@ Widget _buildRecordsAndRemindersSection() {
                                 width: currentWidth,
                                 height: currentHeight,
                                 decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(currentHeight / 2),
+                                  borderRadius:
+                                      BorderRadius.circular(currentHeight / 2),
                                   gradient: currentGradient,
                                   boxShadow: [
                                     BoxShadow(
-                                      color: AppTheme.primary.withOpacity(0.3 + (stretchFactor * 0.2)),
+                                      color: AppTheme.primary.withOpacity(
+                                          0.3 + (stretchFactor * 0.2)),
                                       blurRadius: 12 + (stretchFactor * 10),
                                       offset: const Offset(0, 4),
                                     ),
@@ -1470,7 +1485,7 @@ Widget _buildRecordsAndRemindersSection() {
     );
   }
 
-Widget _buildLiquidTabItem(int index, String title, double width) {
+  Widget _buildLiquidTabItem(int index, String title, double width) {
     return SizedBox(
       width: width,
       child: Center(
@@ -1481,17 +1496,14 @@ Widget _buildLiquidTabItem(int index, String title, double width) {
             double distance = (_currentPosition - index).abs();
             // 0 means selected, 1 means unselected
             double selectedness = (1.0 - distance).clamp(0.0, 1.0);
-            
+
             return Text(
               title,
               style: TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w600,
                 color: Color.lerp(
-                  AppTheme.textSecondary, 
-                  Colors.white, 
-                  selectedness
-                ),
+                    AppTheme.textSecondary, Colors.white, selectedness),
               ),
             );
           },
@@ -2399,15 +2411,15 @@ Widget _buildLiquidTabItem(int index, String title, double width) {
                         _weightRecords[index] = updatedRecord;
                       });
                       _compileAndSortHealthLog();
-                      
+
                       // 同步更新宠物档案中的体重
                       await _syncPetWeight();
-                      
+
                       // 强制刷新UI，确保顶部体重显示更新
                       if (mounted) {
                         setState(() {});
                       }
-                      
+
                       if (mounted) _showSuccessSnackBar('体重记录更新成功!');
                     }
                   } catch (e) {

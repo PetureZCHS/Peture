@@ -64,9 +64,8 @@ class _MedicationCheckmarkPageState extends State<MedicationCheckmarkPage> {
 
   @override
   Widget build(BuildContext context) {
-    final completedCount = _checkmarks
-        .where((c) => c['is_completed'] == 1)
-        .length;
+    final completedCount =
+        _checkmarks.where((c) => c['is_completed'] == 1).length;
     final totalCount = _checkmarks.length;
 
     return Scaffold(
@@ -260,34 +259,34 @@ class _MedicationCheckmarkPageState extends State<MedicationCheckmarkPage> {
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : _checkmarks.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.event_busy,
-                          size: 64,
-                          color: Colors.grey[400],
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.event_busy,
+                              size: 64,
+                              color: Colors.grey[400],
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              '该日期无用药任务',
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: Colors.grey[600],
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 16),
-                        Text(
-                          '该日期无用药任务',
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: Colors.grey[600],
-                          ),
-                        ),
-                      ],
-                    ),
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.all(20),
-                    itemCount: _checkmarks.length,
-                    itemBuilder: (context, index) {
-                      final checkmark = _checkmarks[index];
-                      return _buildCheckmarkItem(checkmark, index);
-                    },
-                  ),
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.all(20),
+                        itemCount: _checkmarks.length,
+                        itemBuilder: (context, index) {
+                          final checkmark = _checkmarks[index];
+                          return _buildCheckmarkItem(checkmark, index);
+                        },
+                      ),
           ),
         ],
       ),
@@ -415,9 +414,8 @@ class _MedicationCheckmarkPageState extends State<MedicationCheckmarkPage> {
                 // 状态指示器
                 Icon(
                   isCompleted ? Icons.check_circle : Icons.circle_outlined,
-                  color: isCompleted
-                      ? const Color(0xFF4CAF50)
-                      : Colors.grey[400],
+                  color:
+                      isCompleted ? const Color(0xFF4CAF50) : Colors.grey[400],
                   size: 24,
                 ),
               ],

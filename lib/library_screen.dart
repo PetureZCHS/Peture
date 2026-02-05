@@ -57,12 +57,13 @@ class _LibraryScreenState extends State<LibraryScreen> {
     // Create a single book containing all fetched diaries
     // In a real app, you might group these by Pet, Year, or Month.
     final List<Book> books = [];
-    
+
     if (_diaries.isNotEmpty) {
       books.add(
         Book(
           title: "我的宠物日记",
-          coverUrl: "https://images.unsplash.com/photo-1517849845537-4d257902454a?w=500&auto=format&fit=crop&q=60",
+          coverUrl:
+              "https://images.unsplash.com/photo-1517849845537-4d257902454a?w=500&auto=format&fit=crop&q=60",
           entryCount: _diaries.length,
           color: Colors.amber.shade800,
           entries: _diaries,
@@ -98,12 +99,13 @@ class _LibraryScreenState extends State<LibraryScreen> {
               child: Center(child: CircularProgressIndicator()),
             )
           else if (books.isEmpty)
-             SliverFillRemaining(
+            SliverFillRemaining(
               child: Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.book_outlined, size: 64, color: Colors.grey[400]),
+                    Icon(Icons.book_outlined,
+                        size: 64, color: Colors.grey[400]),
                     const SizedBox(height: 16),
                     Text(
                       "暂无日记",
@@ -192,7 +194,8 @@ class _BookItem extends StatelessWidget {
           const SizedBox(height: 4),
           Text(
             '${book.entryCount} 篇日记',
-            style: GoogleFonts.lato( // Or system font
+            style: GoogleFonts.lato(
+              // Or system font
               fontSize: 12,
               color: Colors.grey[600],
             ),

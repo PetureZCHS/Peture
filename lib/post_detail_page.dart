@@ -14,7 +14,7 @@ class PostDetailPage extends StatefulWidget {
 class _PostDetailPageState extends State<PostDetailPage> {
   final SupabaseService _supabase = SupabaseService();
   final TextEditingController _commentController = TextEditingController();
-  
+
   bool _isLiked = false;
   bool _isFavorited = false;
   bool _isFollowing = false;
@@ -77,7 +77,8 @@ class _PostDetailPageState extends State<PostDetailPage> {
   }
 
   /// 构建评论层级结构
-  List<Map<String, dynamic>> _buildCommentTree(List<Map<String, dynamic>> flatComments) {
+  List<Map<String, dynamic>> _buildCommentTree(
+      List<Map<String, dynamic>> flatComments) {
     // 先收集所有评论的 ID
     final allIds = <String>{};
     for (final comment in flatComments) {
@@ -86,15 +87,18 @@ class _PostDetailPageState extends State<PostDetailPage> {
         allIds.add(id);
       }
     }
-    
+
     // 分离主评论和回复
     final mainComments = <Map<String, dynamic>>[];
     final repliesMap = <String, List<Map<String, dynamic>>>{};
-    
+
     for (final comment in flatComments) {
       final parentId = comment['parent_id']?.toString();
       // 如果没有 parent_id，或者 parent_id 对应的评论不存在，则作为主评论
-      if (parentId == null || parentId.isEmpty || parentId == 'null' || !allIds.contains(parentId)) {
+      if (parentId == null ||
+          parentId.isEmpty ||
+          parentId == 'null' ||
+          !allIds.contains(parentId)) {
         // 主评论（或孤儿回复提升为主评论）
         mainComments.add(Map<String, dynamic>.from(comment));
       } else {
@@ -103,13 +107,13 @@ class _PostDetailPageState extends State<PostDetailPage> {
         repliesMap[parentId]!.add(comment);
       }
     }
-    
+
     // 将回复挂载到主评论
     for (final comment in mainComments) {
       final commentId = comment['id']?.toString() ?? '';
       comment['replies'] = repliesMap[commentId] ?? [];
     }
-    
+
     return mainComments;
   }
 
@@ -201,7 +205,8 @@ class _PostDetailPageState extends State<PostDetailPage> {
                     }
                     return TextButton(
                       onPressed: () async {
-                        print('点击关注按钮，当前状态: $_isFollowing, authorId: $authorId');
+                        print(
+                            '点击关注按钮，当前状态: $_isFollowing, authorId: $authorId');
                         final result = await _supabase.toggleFollow(authorId);
                         print('关注操作结果: $result');
                         if (!mounted) return;
@@ -212,7 +217,9 @@ class _PostDetailPageState extends State<PostDetailPage> {
                         });
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
-                            content: Text(result ? '已关注 ${widget.post.username}' : '已取消关注'),
+                            content: Text(result
+                                ? '已关注 ${widget.post.username}'
+                                : '已取消关注'),
                             duration: const Duration(seconds: 1),
                             behavior: SnackBarBehavior.floating,
                           ),
@@ -223,7 +230,9 @@ class _PostDetailPageState extends State<PostDetailPage> {
                           horizontal: 16,
                           vertical: 6,
                         ),
-                        backgroundColor: _isFollowing ? Colors.grey[300] : const Color(0xFF5A8EFA),
+                        backgroundColor: _isFollowing
+                            ? Colors.grey[300]
+                            : const Color(0xFF5A8EFA),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(20),
                         ),
@@ -279,7 +288,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
                             child: CircularProgressIndicator(
                               value: loadingProgress.expectedTotalBytes != null
                                   ? loadingProgress.cumulativeBytesLoaded /
-                                        loadingProgress.expectedTotalBytes!
+                                      loadingProgress.expectedTotalBytes!
                                   : null,
                               strokeWidth: 2,
                               color: const Color(0xFF5A8EFA),
@@ -309,7 +318,8 @@ class _PostDetailPageState extends State<PostDetailPage> {
                       runSpacing: 8,
                       children: widget.post.topicIds.map((topic) {
                         return Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 6),
                           decoration: BoxDecoration(
                             color: const Color(0xFF5A8EFA).withOpacity(0.1),
                             borderRadius: BorderRadius.circular(16),
@@ -361,7 +371,8 @@ class _PostDetailPageState extends State<PostDetailPage> {
                         style: TextStyle(fontSize: 14, color: Colors.grey[700]),
                       ),
                       const SizedBox(width: 20),
-                      Icon(Icons.chat_bubble_outline, size: 18, color: Colors.grey[600]),
+                      Icon(Icons.chat_bubble_outline,
+                          size: 18, color: Colors.grey[600]),
                       const SizedBox(width: 6),
                       Text(
                         '$_currentCommentCount 条评论',
@@ -489,7 +500,8 @@ class _PostDetailPageState extends State<PostDetailPage> {
                 icon: _isFavorited ? Icons.star : Icons.star_border,
                 color: _isFavorited ? Colors.amber : Colors.grey[700]!,
                 onTap: () async {
-                  final result = await _supabase.toggleCollection(widget.post.id);
+                  final result =
+                      await _supabase.toggleCollection(widget.post.id);
                   if (!mounted) return;
                   setState(() => _isFavorited = result);
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -547,7 +559,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
     if (widget.post.createdAt != null) {
       final now = DateTime.now();
       final difference = now.difference(widget.post.createdAt!);
-      
+
       if (difference.inDays > 0) {
         return '${difference.inDays}天前';
       } else if (difference.inHours > 0) {
@@ -558,7 +570,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
         return '刚刚';
       }
     }
-    
+
     // 备用方案：mock 数据使用 id 模拟时间
     final now = DateTime.now();
     int hoursAgo = 1;
@@ -590,7 +602,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
     // 匹配 #话题 格式（支持中英文、数字、下划线）
     final regex = RegExp(r'#[\w\u4e00-\u9fa5]+');
     final matches = regex.allMatches(content);
-    
+
     if (matches.isEmpty) {
       return Text(
         content,
@@ -669,7 +681,8 @@ class _PostDetailPageState extends State<PostDetailPage> {
   }
 
   // 显示评论输入框
-  void _showCommentInput(BuildContext context, {String? parentId, String? replyToName}) {
+  void _showCommentInput(BuildContext context,
+      {String? parentId, String? replyToName}) {
     _commentController.clear();
     showModalBottomSheet(
       context: context,
@@ -693,7 +706,8 @@ class _PostDetailPageState extends State<PostDetailPage> {
                   controller: _commentController,
                   autofocus: true,
                   decoration: InputDecoration(
-                    hintText: replyToName != null ? '回复 $replyToName' : '说点什么...',
+                    hintText:
+                        replyToName != null ? '回复 $replyToName' : '说点什么...',
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                       borderSide: const BorderSide(color: Color(0xFFE0E0E0)),
@@ -772,7 +786,7 @@ class _PostDetailPageState extends State<PostDetailPage> {
     final createdAt = comment['created_at'];
     final replies = comment['replies'] as List<dynamic>? ?? [];
     final commentId = comment['id']?.toString();
-    
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 24),
       child: Column(
@@ -793,14 +807,19 @@ class _PostDetailPageState extends State<PostDetailPage> {
           ),
           // 回复列表（扁平显示在主评论下方，左侧缩进）
           if (replies.isNotEmpty) ...[
-            ...replies.take(_expandedComments.contains(commentId) ? replies.length : 3).map((reply) {
+            ...replies
+                .take(
+                    _expandedComments.contains(commentId) ? replies.length : 3)
+                .map((reply) {
               final replyMap = reply as Map<String, dynamic>;
-              final replyAuthor = replyMap['author_nickname']?.toString() ?? '用户';
-              final replyAvatarUrl = replyMap['author_avatar_url']?.toString() ?? '';
+              final replyAuthor =
+                  replyMap['author_nickname']?.toString() ?? '用户';
+              final replyAvatarUrl =
+                  replyMap['author_avatar_url']?.toString() ?? '';
               final replyContent = replyMap['content']?.toString() ?? '';
               final replyTime = replyMap['created_at'];
               final replyToNickname = null; // 暂时不支持回复昵称显示
-              
+
               return Padding(
                 padding: const EdgeInsets.only(left: 48, top: 16),
                 child: _buildSingleComment(
@@ -874,7 +893,8 @@ class _PostDetailPageState extends State<PostDetailPage> {
         CircleAvatar(
           radius: 16,
           backgroundColor: const Color(0xFFF5F7FA),
-          backgroundImage: avatarUrl.isNotEmpty ? NetworkImage(avatarUrl) : null,
+          backgroundImage:
+              avatarUrl.isNotEmpty ? NetworkImage(avatarUrl) : null,
           child: avatarUrl.isEmpty
               ? Text(
                   authorName.isNotEmpty ? authorName[0] : 'U',
@@ -905,7 +925,8 @@ class _PostDetailPageState extends State<PostDetailPage> {
               if (replyToName != null && replyToName.isNotEmpty)
                 RichText(
                   text: TextSpan(
-                    style: const TextStyle(fontSize: 15, height: 1.5, color: Color(0xFF1E1E1E)),
+                    style: const TextStyle(
+                        fontSize: 15, height: 1.5, color: Color(0xFF1E1E1E)),
                     children: [
                       const TextSpan(text: '回复 '),
                       TextSpan(
@@ -932,7 +953,8 @@ class _PostDetailPageState extends State<PostDetailPage> {
                 children: [
                   Text(
                     _formatCommentTime(createdAt),
-                    style: const TextStyle(fontSize: 12, color: Color(0xFF999999)),
+                    style:
+                        const TextStyle(fontSize: 12, color: Color(0xFF999999)),
                   ),
                   const SizedBox(width: 20),
                   GestureDetector(
@@ -947,7 +969,8 @@ class _PostDetailPageState extends State<PostDetailPage> {
                   ),
                   const Spacer(),
                   // 点赞
-                  Icon(Icons.favorite_border, size: 16, color: Colors.grey[400]),
+                  Icon(Icons.favorite_border,
+                      size: 16, color: Colors.grey[400]),
                 ],
               ),
             ],
@@ -1083,9 +1106,12 @@ class _FullscreenImageViewerState extends State<_FullscreenImageViewer>
                           return const Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(Icons.error_outline, size: 50, color: Colors.white),
+                              Icon(Icons.error_outline,
+                                  size: 50, color: Colors.white),
                               SizedBox(height: 16),
-                              Text('图片加载失败', style: TextStyle(fontSize: 16, color: Colors.white)),
+                              Text('图片加载失败',
+                                  style: TextStyle(
+                                      fontSize: 16, color: Colors.white)),
                             ],
                           );
                         },

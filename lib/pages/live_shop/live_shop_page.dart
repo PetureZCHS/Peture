@@ -10,7 +10,8 @@ class LiveShopPage extends StatelessWidget {
       anchor: anchors[index % anchors.length],
       viewers: '${(3.5 + index * 0.6).toStringAsFixed(1)} 万观看',
       description: index % 2 == 0 ? '今日新品 • 限时福利' : '秒杀 5 折 • 抢到赚到',
-      imageUrl: 'https://dummyimage.com/600x800/f7f7f7/e0e0e0&text=Live+${index + 1}',
+      imageUrl:
+          'https://dummyimage.com/600x800/f7f7f7/e0e0e0&text=Live+${index + 1}',
     );
   });
 
@@ -56,7 +57,8 @@ class _LiveRoomCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             ClipRRect(
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(18)),
               child: FadeInImage.assetNetwork(
                 height: 220,
                 width: double.infinity,
@@ -66,7 +68,8 @@ class _LiveRoomCard extends StatelessWidget {
                 imageErrorBuilder: (_, __, ___) => Container(
                   height: 220,
                   color: Colors.grey[200],
-                  child: const Icon(Icons.live_tv, size: 48, color: Colors.black26),
+                  child: const Icon(Icons.live_tv,
+                      size: 48, color: Colors.black26),
                 ),
               ),
             ),
@@ -78,7 +81,8 @@ class _LiveRoomCard extends StatelessWidget {
                   Row(
                     children: [
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
                           color: Colors.redAccent,
                           borderRadius: BorderRadius.circular(12),
@@ -91,14 +95,16 @@ class _LiveRoomCard extends StatelessWidget {
                       const SizedBox(width: 8),
                       Text(
                         room.viewers,
-                        style: const TextStyle(color: Colors.black54, fontSize: 12),
+                        style: const TextStyle(
+                            color: Colors.black54, fontSize: 12),
                       ),
                     ],
                   ),
                   const SizedBox(height: 10),
                   Text(
                     room.title,
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                        fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 6),
                   Text(
@@ -130,5 +136,3 @@ class _LiveRoom {
     required this.imageUrl,
   });
 }
-
-

@@ -581,9 +581,8 @@ class _AddExpensePageState extends State<AddExpensePage> {
                           color: isSelected
                               ? const Color(0xFF5D5FEF)
                               : const Color(0xFF8E8E93),
-                          fontWeight: isSelected
-                              ? FontWeight.w600
-                              : FontWeight.normal,
+                          fontWeight:
+                              isSelected ? FontWeight.w600 : FontWeight.normal,
                         ),
                       ),
                     ),

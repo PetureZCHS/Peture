@@ -89,7 +89,7 @@ class DiaryDetailPage extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 24),
-            
+
             // Content
             Container(
               width: double.infinity,
@@ -150,26 +150,43 @@ class DiaryDetailPage extends StatelessWidget {
 
   Color _getTagColor(String style) {
     switch (style) {
-      case '哲学': return Colors.purple;
-      case '搞笑': return Colors.orange;
-      case '治愈': return Colors.green;
-      case '中二': return Colors.red;
-      case '小红书': return Colors.pink;
-      default: return Colors.blue;
+      case '哲学':
+        return Colors.purple;
+      case '搞笑':
+        return Colors.orange;
+      case '治愈':
+        return Colors.green;
+      case '中二':
+        return Colors.red;
+      case '小红书':
+        return Colors.pink;
+      default:
+        return Colors.blue;
     }
   }
 
   Widget _getTagIcon(String style) {
     IconData icon;
     Color color = _getTagColor(style);
-    
+
     switch (style) {
-      case '哲学': icon = Icons.lightbulb_outline; break;
-      case '搞笑': icon = Icons.sentiment_very_satisfied; break;
-      case '治愈': icon = Icons.spa_outlined; break;
-      case '中二': icon = Icons.flash_on; break;
-      case '小红书': icon = Icons.favorite_border; break;
-      default: icon = Icons.article_outlined;
+      case '哲学':
+        icon = Icons.lightbulb_outline;
+        break;
+      case '搞笑':
+        icon = Icons.sentiment_very_satisfied;
+        break;
+      case '治愈':
+        icon = Icons.spa_outlined;
+        break;
+      case '中二':
+        icon = Icons.flash_on;
+        break;
+      case '小红书':
+        icon = Icons.favorite_border;
+        break;
+      default:
+        icon = Icons.article_outlined;
     }
 
     return Icon(icon, size: 20, color: color);

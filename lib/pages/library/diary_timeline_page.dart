@@ -159,7 +159,9 @@ class _DiaryTimelinePageState extends State<DiaryTimelinePage> {
           ),
           IconButton(
             icon: Icon(
-              _selectedTag == null ? Icons.filter_alt_outlined : Icons.filter_alt,
+              _selectedTag == null
+                  ? Icons.filter_alt_outlined
+                  : Icons.filter_alt,
               color: _selectedTag == null ? Colors.black87 : Colors.blue,
             ),
             onPressed: _showFilterDialog,
@@ -203,7 +205,7 @@ class _DiaryTimelinePageState extends State<DiaryTimelinePage> {
         final diary = _filteredDiaries[index];
         final isFirst = index == 0;
         final isLast = index == _filteredDiaries.length - 1;
-        
+
         // Check if we need to show date header (Group by Date)
         bool showDate = true;
         if (index > 0) {
@@ -222,7 +224,8 @@ class _DiaryTimelinePageState extends State<DiaryTimelinePage> {
     return a.year == b.year && a.month == b.month && a.day == b.day;
   }
 
-  Widget _buildTimelineItem(PetDiary diary, bool showDate, bool isFirst, bool isLast) {
+  Widget _buildTimelineItem(
+      PetDiary diary, bool showDate, bool isFirst, bool isLast) {
     return IntrinsicHeight(
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -254,7 +257,7 @@ class _DiaryTimelinePageState extends State<DiaryTimelinePage> {
               ],
             ),
           ),
-          
+
           // Middle: Line & Node
           SizedBox(
             width: 40,
@@ -269,13 +272,15 @@ class _DiaryTimelinePageState extends State<DiaryTimelinePage> {
                 ),
                 // Node
                 Container(
-                  margin: const EdgeInsets.only(top: 2), // Align with text roughly
+                  margin:
+                      const EdgeInsets.only(top: 2), // Align with text roughly
                   width: 12,
                   height: 12,
                   decoration: BoxDecoration(
                     color: Colors.white,
                     shape: BoxShape.circle,
-                    border: Border.all(color: _getTagColor(diary.style), width: 3),
+                    border:
+                        Border.all(color: _getTagColor(diary.style), width: 3),
                   ),
                 ),
               ],
@@ -309,38 +314,38 @@ class _DiaryTimelinePageState extends State<DiaryTimelinePage> {
                     ],
                   ),
                   child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        _getTagIcon(diary.style),
-                        const SizedBox(width: 8),
-                        Text(
-                          diary.style,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey[600],
-                            fontWeight: FontWeight.w500,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          _getTagIcon(diary.style),
+                          const SizedBox(width: 8),
+                          Text(
+                            diary.style,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[600],
+                              fontWeight: FontWeight.w500,
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      diary.content,
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        height: 1.5,
-                        color: Colors.black87,
+                        ],
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 8),
+                      Text(
+                        diary.content,
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          height: 1.5,
+                          color: Colors.black87,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
-          ),
           ),
         ],
       ),
@@ -349,26 +354,43 @@ class _DiaryTimelinePageState extends State<DiaryTimelinePage> {
 
   Color _getTagColor(String style) {
     switch (style) {
-      case '哲学': return Colors.purple;
-      case '搞笑': return Colors.orange;
-      case '治愈': return Colors.green;
-      case '中二': return Colors.red;
-      case '小红书': return Colors.pink;
-      default: return Colors.blue;
+      case '哲学':
+        return Colors.purple;
+      case '搞笑':
+        return Colors.orange;
+      case '治愈':
+        return Colors.green;
+      case '中二':
+        return Colors.red;
+      case '小红书':
+        return Colors.pink;
+      default:
+        return Colors.blue;
     }
   }
 
   Widget _getTagIcon(String style) {
     IconData icon;
     Color color = _getTagColor(style);
-    
+
     switch (style) {
-      case '哲学': icon = Icons.lightbulb_outline; break;
-      case '搞笑': icon = Icons.sentiment_very_satisfied; break;
-      case '治愈': icon = Icons.spa_outlined; break;
-      case '中二': icon = Icons.flash_on; break;
-      case '小红书': icon = Icons.favorite_border; break;
-      default: icon = Icons.article_outlined;
+      case '哲学':
+        icon = Icons.lightbulb_outline;
+        break;
+      case '搞笑':
+        icon = Icons.sentiment_very_satisfied;
+        break;
+      case '治愈':
+        icon = Icons.spa_outlined;
+        break;
+      case '中二':
+        icon = Icons.flash_on;
+        break;
+      case '小红书':
+        icon = Icons.favorite_border;
+        break;
+      default:
+        icon = Icons.article_outlined;
     }
 
     return Icon(icon, size: 16, color: color);

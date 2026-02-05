@@ -8,9 +8,6 @@ import 'package:sentry_flutter/sentry_flutter.dart'; // ✅ 添加 Sentry
 import 'login_page.dart'; // <-- 这是新添加的导入
 import 'home_screen.dart';
 
-
-
-
 void main() async {
   // 确保 Flutter 框架初始化
   WidgetsFlutterBinding.ensureInitialized();
@@ -21,17 +18,20 @@ void main() async {
       // 从环境变量读取 DSN（避免写死在代码里）
       options.dsn = const String.fromEnvironment(
         'SENTRY_DSN',
-        defaultValue: 'https://22a24ea50f240fc0ed9535537561e164@o4510786970845184.ingest.de.sentry.io/4510786972745808',
+        defaultValue:
+            'https://22a24ea50f240fc0ed9535537561e164@o4510786970845184.ingest.de.sentry.io/4510786972745808',
       );
-      
+
       // 性能监控采样率：10% 的请求会采集性能数据（避免数据量过大）
       options.tracesSampleRate = 0.1;
-      
+
       // 设置环境标识（开发/生产）
-      options.environment = const String.fromEnvironment('ENV', defaultValue: 'development');
-      
+      options.environment =
+          const String.fromEnvironment('ENV', defaultValue: 'development');
+
       // 设置 Release 版本（用于关联代码版本）
-      options.release = const String.fromEnvironment('RELEASE', defaultValue: '1.0.0');
+      options.release =
+          const String.fromEnvironment('RELEASE', defaultValue: '1.0.0');
     },
     appRunner: () async {
       // 初始化日期格式化的本地化数据 (中文)

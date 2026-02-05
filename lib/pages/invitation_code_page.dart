@@ -33,10 +33,16 @@ class _InvitationCodePageState extends State<InvitationCodePage> {
   Future<void> _redeem() async {
     final code = _codeController.text.trim();
     if (code.isEmpty) {
-      setState(() { _message = '请输入邀请码'; _isSuccess = false; });
+      setState(() {
+        _message = '请输入邀请码';
+        _isSuccess = false;
+      });
       return;
     }
-    setState(() { _isLoading = true; _message = null; });
+    setState(() {
+      _isLoading = true;
+      _message = null;
+    });
     final result = await _supabase.redeemInvitationCode(code);
     if (!mounted) return;
     setState(() {
@@ -47,7 +53,10 @@ class _InvitationCodePageState extends State<InvitationCodePage> {
     });
     if (result.success && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('已开通终身会员，享受全部权益'), backgroundColor: Colors.green, behavior: SnackBarBehavior.floating),
+        const SnackBar(
+            content: Text('已开通终身会员，享受全部权益'),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating),
       );
       if (mounted) InvitationWelcomeDialog.showOnce(context);
     }
@@ -61,10 +70,15 @@ class _InvitationCodePageState extends State<InvitationCodePage> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Color(0xFF666666)),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded,
+              color: Color(0xFF666666)),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        title: const Text('输入邀请码', style: TextStyle(color: Color(0xFF333333), fontSize: 18, fontWeight: FontWeight.w600)),
+        title: const Text('输入邀请码',
+            style: TextStyle(
+                color: Color(0xFF333333),
+                fontSize: 18,
+                fontWeight: FontWeight.w600)),
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -74,36 +88,62 @@ class _InvitationCodePageState extends State<InvitationCodePage> {
               const SizedBox(height: 24),
               Icon(Icons.card_giftcard_rounded, size: 48, color: _pinkDark),
               const SizedBox(height: 12),
-              const Text('Peture', style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: _pinkDark, letterSpacing: 1)),
+              const Text('Peture',
+                  style: TextStyle(
+                      fontSize: 32,
+                      fontWeight: FontWeight.bold,
+                      color: _pinkDark,
+                      letterSpacing: 1)),
               const SizedBox(height: 8),
-              const Text('邀请码', style: TextStyle(fontSize: 16, color: Color(0xFF666666), fontWeight: FontWeight.w500)),
+              const Text('邀请码',
+                  style: TextStyle(
+                      fontSize: 16,
+                      color: Color(0xFF666666),
+                      fontWeight: FontWeight.w500)),
               const SizedBox(height: 20),
               Container(
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(color: _pinkBorder, width: 2),
-                  boxShadow: [BoxShadow(color: _pink.withOpacity(0.2), blurRadius: 8, offset: const Offset(0, 4))],
+                  boxShadow: [
+                    BoxShadow(
+                        color: _pink.withOpacity(0.2),
+                        blurRadius: 8,
+                        offset: const Offset(0, 4))
+                  ],
                 ),
                 child: TextField(
                   controller: _codeController,
                   enabled: !_isLoading,
                   textCapitalization: TextCapitalization.characters,
-                  inputFormatters: [FilteringTextInputFormatter.deny(RegExp(r'\s')), LengthLimitingTextInputFormatter(32)],
+                  inputFormatters: [
+                    FilteringTextInputFormatter.deny(RegExp(r'\s')),
+                    LengthLimitingTextInputFormatter(32)
+                  ],
                   decoration: InputDecoration(
                     hintText: '请输入邀请码',
                     hintStyle: TextStyle(color: Colors.grey[400], fontSize: 15),
-                    prefixIcon: Icon(Icons.confirmation_number_rounded, color: _pinkDark, size: 22),
+                    prefixIcon: Icon(Icons.confirmation_number_rounded,
+                        color: _pinkDark, size: 22),
                     border: InputBorder.none,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 16),
                   ),
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                  style: const TextStyle(
+                      fontSize: 16, fontWeight: FontWeight.w500),
                   onSubmitted: (_) => _redeem(),
                 ),
               ),
               if (_message != null) ...[
                 const SizedBox(height: 12),
-                Text(_message!, style: TextStyle(fontSize: 14, color: _isSuccess ? Colors.green.shade700 : Colors.red.shade700), textAlign: TextAlign.center),
+                Text(_message!,
+                    style: TextStyle(
+                        fontSize: 14,
+                        color: _isSuccess
+                            ? Colors.green.shade700
+                            : Colors.red.shade700),
+                    textAlign: TextAlign.center),
               ],
               const SizedBox(height: 28),
               SizedBox(
@@ -114,17 +154,27 @@ class _InvitationCodePageState extends State<InvitationCodePage> {
                     backgroundColor: _pinkDark,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16)),
                     elevation: 2,
                     shadowColor: _pinkDark.withOpacity(0.4),
                   ),
                   child: _isLoading
-                      ? const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                      : const Text('兑换', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
+                      ? const SizedBox(
+                          height: 24,
+                          width: 24,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white))
+                      : const Text('兑换',
+                          style: TextStyle(
+                              fontSize: 17, fontWeight: FontWeight.w600)),
                 ),
               ),
               const SizedBox(height: 32),
-              Text('一起为宠物宝宝打造属于它们的未来', style: TextStyle(fontSize: 14, color: Colors.grey[600], height: 1.4), textAlign: TextAlign.center),
+              Text('一起为宠物宝宝打造属于它们的未来',
+                  style: TextStyle(
+                      fontSize: 14, color: Colors.grey[600], height: 1.4),
+                  textAlign: TextAlign.center),
             ],
           ),
         ),
@@ -143,7 +193,10 @@ class InvitationWelcomeDialog extends StatelessWidget {
     final prefs = await SharedPreferences.getInstance();
     if (prefs.getBool(_shownKey) == true) return;
     if (!context.mounted) return;
-    await showDialog(context: context, barrierDismissible: false, builder: (_) => const InvitationWelcomeDialog());
+    await showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const InvitationWelcomeDialog());
     if (!context.mounted) return;
     await prefs.setBool(_shownKey, true);
   }
@@ -156,11 +209,20 @@ class InvitationWelcomeDialog extends StatelessWidget {
     final userId = supabase.auth.currentUser?.id;
     if (userId == null) return;
     try {
-      final profile = await supabase.from('users_profiles').select('membership_type').eq('id', userId).maybeSingle();
+      final profile = await supabase
+          .from('users_profiles')
+          .select('membership_type')
+          .eq('id', userId)
+          .maybeSingle();
       if (profile?['membership_type'] != 'lifetime') return;
-    } catch (_) { return; }
+    } catch (_) {
+      return;
+    }
     if (!context.mounted) return;
-    await showDialog(context: context, barrierDismissible: false, builder: (_) => const InvitationWelcomeDialog());
+    await showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const InvitationWelcomeDialog());
     if (!context.mounted) return;
     await prefs.setBool(_shownKey, true);
   }
@@ -180,16 +242,28 @@ class InvitationWelcomeDialog extends StatelessWidget {
           color: yellow,
           borderRadius: BorderRadius.circular(24),
           border: Border.all(color: pinkBorder, width: 2),
-          boxShadow: [BoxShadow(color: pink.withOpacity(0.3), blurRadius: 20, offset: const Offset(0, 8))],
+          boxShadow: [
+            BoxShadow(
+                color: pink.withOpacity(0.3),
+                blurRadius: 20,
+                offset: const Offset(0, 8))
+          ],
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(Icons.favorite_rounded, size: 56, color: pinkDark),
             const SizedBox(height: 20),
-            const Text('欢迎您，内测官！', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF8B4545))),
+            const Text('欢迎您，内测官！',
+                style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF8B4545))),
             const SizedBox(height: 12),
-            Text('感谢您加入 Peture，一起为宠物宝宝打造属于它们的未来', style: TextStyle(fontSize: 14, color: Colors.grey[700], height: 1.4), textAlign: TextAlign.center),
+            Text('感谢您加入 Peture，一起为宠物宝宝打造属于它们的未来',
+                style: TextStyle(
+                    fontSize: 14, color: Colors.grey[700], height: 1.4),
+                textAlign: TextAlign.center),
             const SizedBox(height: 28),
             SizedBox(
               width: double.infinity,
@@ -199,7 +273,8 @@ class InvitationWelcomeDialog extends StatelessWidget {
                   backgroundColor: pinkDark,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14)),
                   elevation: 0,
                 ),
                 child: const Text('好的'),

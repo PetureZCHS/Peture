@@ -36,8 +36,9 @@ class Post {
   /// 从 Supabase 查询结果构造（用于信息流）
   static Post fromSupabase(Map<String, dynamic> row) {
     final imageUrls = row['image_urls'] as List<dynamic>? ?? [];
-    final firstUrl = imageUrls.isNotEmpty ? (imageUrls.first as String?) ?? '' : '';
-    
+    final firstUrl =
+        imageUrls.isNotEmpty ? (imageUrls.first as String?) ?? '' : '';
+
     // 安全解析 like_count（可能是 int 或 String）
     int likeCount = 0;
     try {
@@ -52,7 +53,7 @@ class Post {
     } catch (e) {
       likeCount = 0;
     }
-    
+
     // 解析创建时间
     DateTime? createdAt;
     try {
@@ -63,7 +64,7 @@ class Post {
     } catch (e) {
       createdAt = null;
     }
-    
+
     // 解析话题标签
     List<String> topicIds = [];
     try {
@@ -74,7 +75,7 @@ class Post {
     } catch (e) {
       topicIds = [];
     }
-    
+
     return Post(
       id: row['id']?.toString() ?? '',
       imageUrl: firstUrl,
@@ -413,7 +414,8 @@ class _CommunityScreenState extends State<CommunityScreen>
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.add_circle_outline, color: Color(0xFFFF2442), size: 26),
+            icon: const Icon(Icons.add_circle_outline,
+                color: Color(0xFFFF2442), size: 26),
             tooltip: '发布动态',
             onPressed: () async {
               final result = await Navigator.of(context).push<bool>(
@@ -447,8 +449,6 @@ class _CommunityScreenState extends State<CommunityScreen>
     );
   }
 
-
-
   // 推荐标签页 - 小红书风格双栏瀑布流（优先 Supabase，无数据时用 mock）
   Widget _buildRecommendTab() {
     final displayPosts =
@@ -458,7 +458,8 @@ class _CommunityScreenState extends State<CommunityScreen>
       child: Container(
         color: const Color(0xFFF5F5F5),
         child: _postsLoading && _posts.isEmpty
-            ? const Center(child: CircularProgressIndicator(color: Color(0xFFFF2442)))
+            ? const Center(
+                child: CircularProgressIndicator(color: Color(0xFFFF2442)))
             : MasonryGridView.count(
                 crossAxisCount: 2,
                 mainAxisSpacing: 8,
@@ -513,46 +514,46 @@ class _CommunityScreenState extends State<CommunityScreen>
                     )
                   : Image.network(
                       post.imageUrl,
-                height: post.imageHeight,
-                width: double.infinity,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) {
-                  return Container(
-                    height: post.imageHeight,
-                    width: double.infinity,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF5F5F5),
-                      border: Border.all(
-                        color: const Color(0xFFEEEEEE),
-                        width: 1,
-                      ),
+                      height: post.imageHeight,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Container(
+                          height: post.imageHeight,
+                          width: double.infinity,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF5F5F5),
+                            border: Border.all(
+                              color: const Color(0xFFEEEEEE),
+                              width: 1,
+                            ),
+                          ),
+                          child: const Icon(
+                            Icons.image_outlined,
+                            color: Color(0xFFCCCCCC),
+                            size: 40,
+                          ),
+                        );
+                      },
+                      loadingBuilder: (context, child, loadingProgress) {
+                        if (loadingProgress == null) return child;
+                        return Container(
+                          height: post.imageHeight,
+                          width: double.infinity,
+                          color: const Color(0xFFF5F5F5),
+                          child: Center(
+                            child: CircularProgressIndicator(
+                              value: loadingProgress.expectedTotalBytes != null
+                                  ? loadingProgress.cumulativeBytesLoaded /
+                                      loadingProgress.expectedTotalBytes!
+                                  : null,
+                              strokeWidth: 2,
+                              color: const Color(0xFFFF2442),
+                            ),
+                          ),
+                        );
+                      },
                     ),
-                    child: const Icon(
-                      Icons.image_outlined,
-                      color: Color(0xFFCCCCCC),
-                      size: 40,
-                    ),
-                  );
-                },
-                loadingBuilder: (context, child, loadingProgress) {
-                  if (loadingProgress == null) return child;
-                  return Container(
-                    height: post.imageHeight,
-                    width: double.infinity,
-                    color: const Color(0xFFF5F5F5),
-                    child: Center(
-                      child: CircularProgressIndicator(
-                        value: loadingProgress.expectedTotalBytes != null
-                            ? loadingProgress.cumulativeBytesLoaded /
-                                  loadingProgress.expectedTotalBytes!
-                            : null,
-                        strokeWidth: 2,
-                        color: const Color(0xFFFF2442),
-                      ),
-                    ),
-                  );
-                },
-              ),
             ),
 
             // 中部：标题/正文（最多2行）
@@ -1261,7 +1262,9 @@ class _CommunityScreenState extends State<CommunityScreen>
                             : null,
                         child: (post.userAvatarUrl.isEmpty)
                             ? Text(
-                                post.username.isNotEmpty ? post.username[0] : '宠',
+                                post.username.isNotEmpty
+                                    ? post.username[0]
+                                    : '宠',
                                 style: const TextStyle(
                                   fontSize: 9,
                                   color: Color(0xFF999999),
