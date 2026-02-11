@@ -28,7 +28,7 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
   String? _userAvatarPath; // 用户头像路径
 
   // 主人昵称相关
-  bool _useCustomNickname = false; // 是否为该宠物使用自定义称呼
+
   String? _ownerNickname; // 该宠物对主人的自定义称呼
   String _defaultOwnerNickname = '主人'; // 用户默认称呼
 
@@ -242,7 +242,7 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
       }
 
       // 加载昵称相关字段
-      _useCustomNickname = data['useCustomNickname'] as bool? ?? false;
+
       _ownerNickname = data['ownerNickname'] as String?;
     });
   }
@@ -1857,8 +1857,8 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
       'gender': _gender,
       'neuter_status': _neuterStatus,
       'weight': _weight,
-      'useCustomNickname': _useCustomNickname,
-      'ownerNickname': _useCustomNickname ? _ownerNickname : null,
+      'useCustomNickname': _ownerNickname != null && _ownerNickname!.isNotEmpty,
+      'ownerNickname': _ownerNickname,
     };
 
     Navigator.pop(context, result);
@@ -2042,51 +2042,16 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
                         ),
                         // 昵称设置
                         _FormRow(
-                          label: '对你的称呼',
-                          onTap:
-                              _useCustomNickname ? _showNicknameEditor : null,
+                          label: '我的称呼',
+                          onTap: _showNicknameEditor,
                           isLast: true,
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  _useCustomNickname && _ownerNickname != null
-                                      ? _ownerNickname!
-                                      : _defaultOwnerNickname,
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    color: _useCustomNickname
-                                        ? Colors.black87
-                                        : Colors.grey[600],
-                                  ),
-                                ),
-                              ),
-                              if (!_useCustomNickname)
-                                Padding(
-                                  padding: const EdgeInsets.only(right: 8.0),
-                                  child: Text(
-                                    '开启后设定专用称呼',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: Colors.grey[400],
-                                    ),
-                                  ),
-                                ),
-                              Switch(
-                                value: _useCustomNickname,
-                                onChanged: (value) {
-                                  setState(() {
-                                    _useCustomNickname = value;
-                                    if (!value) {
-                                      _ownerNickname = null;
-                                    }
-                                  });
-                                  if (value) {
-                                    _showNicknameEditor();
-                                  }
-                                },
-                              ),
-                            ],
+                          child: Text(
+                            _ownerNickname ?? _defaultOwnerNickname,
+                            textAlign: TextAlign.right,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              color: Colors.black87,
+                            ),
                           ),
                         ),
                       ],

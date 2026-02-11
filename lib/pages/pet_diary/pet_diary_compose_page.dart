@@ -106,7 +106,9 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
 
     // 获取昵称：优先使用宠物的自定义昵称，否则使用用户默认昵称
     String? nickname;
-    if (_selectedPet != null && _selectedPet!.useCustomNickname && _selectedPet!.ownerNickname != null) {
+    if (_selectedPet != null &&
+        _selectedPet!.ownerNickname != null &&
+        _selectedPet!.ownerNickname!.isNotEmpty) {
       nickname = _selectedPet!.ownerNickname;
     } else {
       nickname = await _supabaseService.getOwnerNickname();
@@ -449,40 +451,58 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
   Widget _buildPetSelector() {
     if (_isLoadingPets) {
       return const SizedBox(
-        height: 48,
+        height: 52,
         child: Center(
-            child: SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2))),
+          child: SizedBox(
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        ),
       );
     }
 
     return Container(
-      height: 48, // Match the height of nickname input
-      padding: const EdgeInsets.symmetric(horizontal: 12),
+      height: 52,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
-        color: Colors.grey.shade50,
+        color: const Color(0xFFF7F8FA),
         borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.shade100),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<Pet>(
           value: _selectedPet,
-          hint: Text('选择主角',
-              style: TextStyle(color: Colors.grey.shade400, fontSize: 13)),
+          hint: Row(
+            children: [
+              Icon(Icons.pets_outlined, size: 20, color: Colors.grey.shade400),
+              const SizedBox(width: 10),
+              Text(
+                '选择主角',
+                style: TextStyle(color: Colors.grey.shade400, fontSize: 15),
+              ),
+            ],
+          ),
           isExpanded: true,
-          icon: Icon(Icons.arrow_drop_down, color: Colors.grey.shade400),
+          icon: Icon(Icons.keyboard_arrow_down_rounded,
+              color: Colors.grey.shade400),
+          borderRadius: BorderRadius.circular(16),
+          dropdownColor: Colors.white,
           items: _pets.map((pet) {
             return DropdownMenuItem<Pet>(
               value: pet,
               child: Row(
                 children: [
-                  _buildPetAvatar(pet.avatar, size: 24),
-                  const SizedBox(width: 8),
-                  Flexible(
+                  _buildPetAvatar(pet.avatar, size: 28),
+                  const SizedBox(width: 12),
+                  Expanded(
                     child: Text(
                       pet.name,
-                      style: const TextStyle(fontSize: 14),
+                      style: const TextStyle(
+                        fontSize: 15,
+                        color: Color(0xFF1A1A1A),
+                        fontWeight: FontWeight.w500,
+                      ),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
