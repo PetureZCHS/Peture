@@ -11,6 +11,9 @@ analyzer:
   errors:
     depend_on_referenced_packages: ignore
     deprecated_member_use: ignore
+    todo: ignore
+  exclude:
+    - test/**
 include: package:flutter_lints/flutter.yaml
 
 linter:

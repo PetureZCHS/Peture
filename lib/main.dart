@@ -5,8 +5,8 @@ import 'package:intl/date_symbol_data_local.dart'; // 添加 intl 包
 import 'package:flutter_localizations/flutter_localizations.dart'; // 添加本地化支持
 import 'package:supabase_flutter/supabase_flutter.dart'; // ✅ 添加 Supabase
 import 'package:sentry_flutter/sentry_flutter.dart'; // ✅ 添加 Sentry
-import 'login_page.dart'; // <-- 这是新添加的导入
-import 'home_screen.dart';
+import 'features/auth/presentation/login_page.dart';
+import 'features/home/presentation/home_screen.dart';
 
 void main() async {
   // 确保 Flutter 框架初始化
@@ -38,7 +38,7 @@ void main() async {
       await initializeDateFormatting('zh_CN', null);
 
       // ✅ 初始化 Supabase（在 Sentry 之后，这样 Supabase 的错误也能被捕获）
-      print('🔧 开始初始化 Supabase...');
+      debugPrint('🔧 开始初始化 Supabase...');
       await Supabase.initialize(
         url: 'https://tcftpcvcldfudzxgemdh.supabase.co',
         anonKey:
@@ -48,7 +48,7 @@ void main() async {
           autoRefreshToken: true,
         ),
       );
-      print('✅ Supabase 初始化成功');
+      debugPrint('✅ Supabase 初始化成功');
 
       // 启动根路由，根据登录状态自动切换
       runApp(const RootRouter());
