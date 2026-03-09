@@ -1,7 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
-import '../utils/supabase_constants.dart';
+import '../shared/utils/supabase_constants.dart';
 
 // ============================================================================
 // chat 事件类
@@ -62,14 +63,14 @@ class SupabaseEdgeFunctionService {
         if (conversationId != null) 'conversation_id': conversationId,
       };
 
-      print('📤 调用 Edge Function: ${SupabaseConstants.difyChatFunction}');
-      print('📦 必填参数:');
-      print('   - query: ${query.substring(0, 50.clamp(0, query.length))}...');
-      print('   - user: $user');
-      print('   - response_mode: streaming');
-      print('   - inputs: {}');
+      debugPrint('📤 调用 Edge Function: ${SupabaseConstants.difyChatFunction}');
+      debugPrint('📦 必填参数:');
+      debugPrint('   - query: ${query.substring(0, 50.clamp(0, query.length))}...');
+      debugPrint('   - user: $user');
+      debugPrint('   - response_mode: streaming');
+      debugPrint('   - inputs: {}');
       if (conversationId != null) {
-        print('📎 可选参数: conversation_id=$conversationId');
+        debugPrint('📎 可选参数: conversation_id=$conversationId');
       }
 
       final url = Uri.parse(SupabaseConstants.difyChatUrl);
@@ -84,11 +85,11 @@ class SupabaseEdgeFunctionService {
         ..body = jsonEncode(body);
 
       final response = await request.send();
-      print('📥 响应状态: ${response.statusCode}');
+      debugPrint('📥 响应状态: ${response.statusCode}');
 
       if (response.statusCode != 200) {
         final errorBody = await response.stream.bytesToString();
-        print('❌ Edge Function 错误: $errorBody');
+        debugPrint('❌ Edge Function 错误: $errorBody');
         yield ErrorEvent('请求失败 (${response.statusCode}): $errorBody');
         return;
       }
@@ -103,7 +104,7 @@ class SupabaseEdgeFunctionService {
       String? finalMessageId;
       String buffer = '';
 
-      print('✅ 开始接收流式数据...\n');
+      debugPrint('✅ 开始接收流式数据...\n');
 
       await for (final chunk in response.stream.transform(utf8.decoder)) {
         buffer += chunk;
@@ -137,7 +138,7 @@ class SupabaseEdgeFunctionService {
                 // 每次发送答案的一部分
                 final answer = json['answer'] as String?;
                 if (answer != null && answer.isNotEmpty) {
-                  print('📨 message 事件: ${answer.length} 字符');
+                  debugPrint('📨 message 事件: ${answer.length} 字符');
                   yield ContentEvent(answer);
                 }
 
@@ -154,13 +155,13 @@ class SupabaseEdgeFunctionService {
                 final msgId = json['id'] as String?;
                 if (convId != null) finalConversationId = convId;
                 if (msgId != null) finalMessageId = msgId;
-                print('📨 message_end 事件: ✅ 消息完成');
+                debugPrint('📨 message_end 事件: ✅ 消息完成');
                 break;
 
               case 'error':
                 // 错误事件
                 final message = json['message'] as String? ?? '未知错误';
-                print('📨 error 事件: $message');
+                debugPrint('📨 error 事件: $message');
                 yield ErrorEvent(message);
                 return;
 
@@ -171,27 +172,27 @@ class SupabaseEdgeFunctionService {
               case 'tts_message':
               case 'tts_message_end':
                 // 工作流事件和其他事件（暂不处理）
-                print('📨 $event 事件（跳过）');
+                debugPrint('📨 $event 事件（跳过）');
                 break;
 
               default:
                 // 其他未知事件
-                print('📨 未知事件: $event');
+                debugPrint('📨 未知事件: $event');
             }
           } catch (e) {
-            print('⚠️ 解析失败: $e');
-            print('   行内容: ${line.substring(0, 100.clamp(0, line.length))}...');
+            debugPrint('⚠️ 解析失败: $e');
+            debugPrint('   行内容: ${line.substring(0, 100.clamp(0, line.length))}...');
           }
         }
       }
 
       // 流结束，发送 DoneEvent
-      print('\n✅ 流式响应完成');
+      debugPrint('\n✅ 流式响应完成');
       if (finalConversationId != null) {
-        print('   📎 conversation_id: $finalConversationId');
+        debugPrint('   📎 conversation_id: $finalConversationId');
       }
       if (finalMessageId != null) {
-        print('   📎 message_id: $finalMessageId');
+        debugPrint('   📎 message_id: $finalMessageId');
       }
 
       yield DoneEvent(
@@ -199,8 +200,8 @@ class SupabaseEdgeFunctionService {
         messageId: finalMessageId,
       );
     } catch (e, stackTrace) {
-      print('❌ Edge Function 调用异常: $e');
-      print('Stack trace: $stackTrace');
+      debugPrint('❌ Edge Function 调用异常: $e');
+      debugPrint('Stack trace: $stackTrace');
       yield ErrorEvent('调用失败: $e');
     }
   }
@@ -221,8 +222,8 @@ class SupabaseEdgeFunctionService {
         if (conversationId != null) 'conversation_id': conversationId,
       };
 
-      print('📤 阻塞模式调用 Edge Function');
-      print('📦 请求体: ${jsonEncode(body)}');
+      debugPrint('📤 阻塞模式调用 Edge Function');
+      debugPrint('📦 请求体: ${jsonEncode(body)}');
 
       final url = Uri.parse(SupabaseConstants.difyChatUrl);
       final response = await http.post(
@@ -235,25 +236,25 @@ class SupabaseEdgeFunctionService {
         body: jsonEncode(body),
       );
 
-      print('📥 响应状态: ${response.statusCode}');
+      debugPrint('📥 响应状态: ${response.statusCode}');
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
-        print('✅ 响应成功');
+        debugPrint('✅ 响应成功');
         final answer = data['answer']?.toString() ?? '';
         if (answer.isNotEmpty) {
           final preview =
               answer.length > 50 ? '${answer.substring(0, 50)}...' : answer;
-          print('   answer: $preview');
+          debugPrint('   answer: $preview');
         }
-        print('   conversation_id: ${data['conversation_id']}');
+        debugPrint('   conversation_id: ${data['conversation_id']}');
         return data;
       } else {
-        print('❌ 请求失败: ${response.body}');
+        debugPrint('❌ 请求失败: ${response.body}');
         return null;
       }
     } catch (e) {
-      print('❌ 异常: $e');
+      debugPrint('❌ 异常: $e');
       return null;
     }
   }
@@ -339,18 +340,18 @@ class PetDiaryEdgeService {
         'response_mode': 'streaming',
       };
 
-      print('📝 调用 Diary-v3 Edge Function');
-      print('📦 参数:');
-      print(
+      debugPrint('📝 调用 Diary-v3 Edge Function');
+      debugPrint('📦 参数:');
+      debugPrint(
         '   - inputs.query: ${query.substring(0, 30.clamp(0, query.length))}...',
       );
-      print('   - inputs.style: $style');
-      if (nickname != null) print('   - inputs.nickname: $nickname');
-      if (breed != null) print('   - inputs.breed: $breed');
-      if (petName != null) print('   - inputs.pet_name: $petName');
-      if (gender != null) print('   - inputs.gender: $gender');
-      if (petType != null) print('   - inputs.type: $petType');
-      print('   - response_mode: streaming');
+      debugPrint('   - inputs.style: $style');
+      if (nickname != null) debugPrint('   - inputs.nickname: $nickname');
+      if (breed != null) debugPrint('   - inputs.breed: $breed');
+      if (petName != null) debugPrint('   - inputs.pet_name: $petName');
+      if (gender != null) debugPrint('   - inputs.gender: $gender');
+      if (petType != null) debugPrint('   - inputs.type: $petType');
+      debugPrint('   - response_mode: streaming');
 
       final url = Uri.parse(SupabaseConstants.diaryUrl);
 
@@ -363,11 +364,11 @@ class PetDiaryEdgeService {
         ..body = jsonEncode(body);
 
       final response = await request.send();
-      print('📥 Diary 响应状态: ${response.statusCode}');
+      debugPrint('📥 Diary 响应状态: ${response.statusCode}');
 
       if (response.statusCode != 200) {
         final errorBody = await response.stream.bytesToString();
-        print('❌ Diary Edge Function 错误: $errorBody');
+        debugPrint('❌ Diary Edge Function 错误: $errorBody');
         yield DiaryErrorEvent('请求失败 (${response.statusCode}): $errorBody');
         return;
       }
@@ -376,7 +377,7 @@ class PetDiaryEdgeService {
       String buffer = '';
       String accumulatedText = ''; // 累积的完整文本
 
-      print('✅ 开始接收 Diary 流式数据...\n');
+      debugPrint('✅ 开始接收 Diary 流式数据...\n');
 
       await for (final chunk in response.stream.transform(utf8.decoder)) {
         buffer += chunk;
@@ -391,7 +392,7 @@ class PetDiaryEdgeService {
             final dataString = message.substring(5).trim();
 
             if (dataString.isEmpty || dataString == '[DONE]') {
-              print('📨 Diary [DONE] 事件');
+              debugPrint('📨 Diary [DONE] 事件');
               yield DiaryDoneEvent(accumulatedText);
               continue;
             }
@@ -400,7 +401,7 @@ class PetDiaryEdgeService {
               final json = jsonDecode(dataString) as Map<String, dynamic>;
               final event = json['event'] as String?;
 
-              print('📨 Diary 事件: $event');
+              debugPrint('📨 Diary 事件: $event');
 
               switch (event) {
                 case 'text_chunk':
@@ -410,7 +411,7 @@ class PetDiaryEdgeService {
                     final delta = data['text'] as String;
                     if (delta.isNotEmpty) {
                       accumulatedText += delta;
-                      print('   ✍️ text_chunk: ${delta.length} 字符');
+                      debugPrint('   ✍️ text_chunk: ${delta.length} 字符');
                       yield DiaryContentEvent(
                         delta: delta,
                         fullText: accumulatedText,
@@ -430,7 +431,7 @@ class PetDiaryEdgeService {
                       if (text != accumulatedText) {
                         final delta = text.substring(accumulatedText.length);
                         accumulatedText = text;
-                        print('   ✍️ 完整文本: ${text.length} 字符');
+                        debugPrint('   ✍️ 完整文本: ${text.length} 字符');
                         yield DiaryContentEvent(
                           delta: delta,
                           fullText: accumulatedText,
@@ -455,7 +456,7 @@ class PetDiaryEdgeService {
                       if (text.length > accumulatedText.length) {
                         final delta = text.substring(accumulatedText.length);
                         accumulatedText = text;
-                        print('   ✍️ 增量文本: ${delta.length} 字符');
+                        debugPrint('   ✍️ 增量文本: ${delta.length} 字符');
                         yield DiaryContentEvent(
                           delta: delta,
                           fullText: accumulatedText,
@@ -467,22 +468,22 @@ class PetDiaryEdgeService {
 
                 case 'error':
                   final message = json['message'] as String? ?? '未知错误';
-                  print('   ❌ Dify 错误: $message');
+                  debugPrint('   ❌ Dify 错误: $message');
                   yield DiaryErrorEvent(message);
                   return;
 
                 case 'workflow_started':
                 case 'node_started':
                   // 工作流/节点启动事件（跳过）
-                  print('   ℹ️ $event（跳过）');
+                  debugPrint('   ℹ️ $event（跳过）');
                   break;
 
                 default:
-                  print('   ℹ️ 未知事件: $event');
+                  debugPrint('   ℹ️ 未知事件: $event');
               }
             } catch (e) {
-              print('⚠️ 解析 Diary JSON 失败: $e');
-              print(
+              debugPrint('⚠️ 解析 Diary JSON 失败: $e');
+              debugPrint(
                 '   原始内容: ${dataString.substring(0, 100.clamp(0, dataString.length))}...',
               );
             }
@@ -491,15 +492,15 @@ class PetDiaryEdgeService {
       }
 
       // 流结束
-      print('\n✅ Diary 流式响应完成');
-      print('   最终文本长度: ${accumulatedText.length} 字符');
+      debugPrint('\n✅ Diary 流式响应完成');
+      debugPrint('   最终文本长度: ${accumulatedText.length} 字符');
 
       if (accumulatedText.isNotEmpty) {
         yield DiaryDoneEvent(accumulatedText);
       }
     } catch (e, stackTrace) {
-      print('❌ Diary Edge Function 调用异常: $e');
-      print('Stack trace: $stackTrace');
+      debugPrint('❌ Diary Edge Function 调用异常: $e');
+      debugPrint('Stack trace: $stackTrace');
       yield DiaryErrorEvent('生成日记失败: $e');
     }
   }
@@ -516,7 +517,7 @@ class PetDiaryEdgeService {
       // ✅ 获取当前用户的 Session Token
       final session = supabase.auth.currentSession;
       if (session == null) {
-        print('❌ 用户未登录');
+        debugPrint('❌ 用户未登录');
         return null;
       }
 
@@ -535,8 +536,8 @@ class PetDiaryEdgeService {
         'response_mode': 'blocking',
       };
 
-      print('📝 阻塞模式调用 Diary-v3 Edge Function');
-      print('📦 请求体: ${jsonEncode(body)}');
+      debugPrint('📝 阻塞模式调用 Diary-v3 Edge Function');
+      debugPrint('📦 请求体: ${jsonEncode(body)}');
 
       final url = Uri.parse(SupabaseConstants.diaryUrl);
       final response = await http.post(
@@ -548,11 +549,11 @@ class PetDiaryEdgeService {
         body: jsonEncode(body),
       );
 
-      print('📥 响应状态: ${response.statusCode}');
+      debugPrint('📥 响应状态: ${response.statusCode}');
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
-        print('✅ Diary 响应成功');
+        debugPrint('✅ Diary 响应成功');
 
         // 从 Dify Workflow 响应中提取文本
         String? text;
@@ -563,18 +564,18 @@ class PetDiaryEdgeService {
         if (text != null && text.isNotEmpty) {
           final preview =
               text.length > 50 ? '${text.substring(0, 50)}...' : text;
-          print('   生成文本: $preview');
+          debugPrint('   生成文本: $preview');
           return text;
         } else {
-          print('   ⚠️ 响应中未找到文本内容');
+          debugPrint('   ⚠️ 响应中未找到文本内容');
           return null;
         }
       } else {
-        print('❌ 请求失败: ${response.body}');
+        debugPrint('❌ 请求失败: ${response.body}');
         return null;
       }
     } catch (e) {
-      print('❌ 异常: $e');
+      debugPrint('❌ 异常: $e');
       return null;
     }
   }
