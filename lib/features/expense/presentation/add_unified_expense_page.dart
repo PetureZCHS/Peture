@@ -801,7 +801,7 @@ class _AddUnifiedExpensePageState extends State<AddUnifiedExpensePage> {
             flex: 1,
             child: Column(
               children: [
-                Expanded(child: _kBtn('DATE', icon: Icons.calendar_month)),
+                _kBtn('DATE', icon: Icons.calendar_month),
                 Expanded(
                   flex: 3,
                   child: GestureDetector(
