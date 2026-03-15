@@ -4,7 +4,6 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
-import 'dart:math';
 import 'package:fl_chart/fl_chart.dart';
 import '../../../shared/models/unified_expense.dart';
 import '../../../services/supabase_service.dart';
@@ -54,6 +53,20 @@ class ExpenseStyles {
       ],
     );
   }
+}
+
+/// 支出构成图例单项（类别名、占比、图标、颜色）
+class _LegendEntry {
+  final String label;
+  final double percent;
+  final int iconCodePoint;
+  final Color color;
+  _LegendEntry({
+    required this.label,
+    required this.percent,
+    required this.iconCodePoint,
+    required this.color,
+  });
 }
 
 /// Ledger Model
@@ -134,6 +147,7 @@ class _UnifiedExpenseHomePageState extends State<UnifiedExpenseHomePage>
   // Ledger State
   bool _isBalanceVisible = true;
   bool _isAnalysisVisible = true; // Control Pie Chart Visibility
+  int _touchedIndex = -1; // Track touched section for interaction
   List<UnifiedLedger> _ledgers = [];
   late UnifiedLedger _currentLedger;
 
@@ -143,7 +157,7 @@ class _UnifiedExpenseHomePageState extends State<UnifiedExpenseHomePage>
     // Default Init
     _currentLedger = UnifiedLedger(
         id: 'default',
-        name: '默认账本',
+        name: '我的账本',
         colorValue: ExpenseStyles.mainGradient.colors.first.value,
         iconPoint: Icons.book.codePoint);
     _tabController = TabController(length: 2, vsync: this);
@@ -171,7 +185,7 @@ class _UnifiedExpenseHomePageState extends State<UnifiedExpenseHomePage>
       _ledgers = [
         UnifiedLedger(
           id: 'default',
-          name: '默认账本',
+          name: '我的账本',
           colorValue: ExpenseStyles.mainGradient.colors.first.value,
           iconPoint: Icons.book.codePoint,
           isSystemDefault: true,
@@ -187,45 +201,6 @@ class _UnifiedExpenseHomePageState extends State<UnifiedExpenseHomePage>
     }
 
     if (mounted) setState(() {});
-  }
-
-  Future<void> _saveLedgers() async {
-    final prefs = await SharedPreferences.getInstance();
-    final String encoded = jsonEncode(_ledgers.map((e) => e.toMap()).toList());
-    await prefs.setString('unified_ledgers', encoded);
-  }
-
-  void _addNewLedger(String name) {
-    if (name.isEmpty) return;
-
-    final random = Random();
-    final colors = [
-      0xFFFF9F0A, // Orange
-      0xFF5E5CE6, // Indigo
-      0xFF30B0C7, // Teal
-      0xFF32D74B, // Green
-      0xFFFF375F, // Pink
-    ];
-    final icons = [
-      Icons.pets_rounded,
-      Icons.flight_rounded,
-      Icons.home_rounded,
-      Icons.shopping_bag_rounded,
-      Icons.favorite_rounded
-    ];
-
-    final newLedger = UnifiedLedger(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      name: name,
-      colorValue: colors[random.nextInt(colors.length)],
-      iconPoint: icons[random.nextInt(icons.length)].codePoint,
-      isSystemDefault: false,
-    );
-
-    setState(() {
-      _ledgers.add(newLedger);
-    });
-    _saveLedgers();
   }
 
   // --- Date Logic ---
@@ -383,123 +358,6 @@ class _UnifiedExpenseHomePageState extends State<UnifiedExpenseHomePage>
   }
 
   // --- Dialogs ---
-  void _showLedgerPicker() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            return Container(
-              height: MediaQuery.of(context).size.height * 0.7,
-              decoration: const BoxDecoration(
-                color: Color(0xFFF2F2F7),
-                borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
-              ),
-              child: Column(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text('切换账本',
-                            style: TextStyle(
-                                fontSize: 18, fontWeight: FontWeight.bold)),
-                        GestureDetector(
-                          onTap: () {
-                            showDialog(
-                                context: context,
-                                builder: (ctx) {
-                                  String newName = '';
-                                  return AlertDialog(
-                                    title: const Text('新建账本'),
-                                    content: TextField(
-                                      autofocus: true,
-                                      decoration: const InputDecoration(
-                                          hintText: '输入名称'),
-                                      onChanged: (v) => newName = v,
-                                    ),
-                                    actions: [
-                                      TextButton(
-                                          onPressed: () => Navigator.pop(ctx),
-                                          child: const Text('取消')),
-                                      TextButton(
-                                          onPressed: () {
-                                            if (newName.isNotEmpty) {
-                                              _addNewLedger(newName);
-                                              setModalState(() {});
-                                              Navigator.pop(ctx);
-                                            }
-                                          },
-                                          child: const Text('确定')),
-                                    ],
-                                  );
-                                });
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: const BoxDecoration(
-                                color: Colors.white, shape: BoxShape.circle),
-                            child: const Icon(Icons.add_rounded,
-                                size: 24, color: Colors.blueAccent),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Expanded(
-                    child: ListView.separated(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      itemCount: _ledgers.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 12),
-                      itemBuilder: (context, index) {
-                        final ledger = _ledgers[index];
-                        final isSelected = ledger.id == _currentLedger.id;
-                        return GestureDetector(
-                          onTap: () {
-                            setState(() => _currentLedger = ledger);
-                            Navigator.pop(context);
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(20),
-                                border: isSelected
-                                    ? Border.all(
-                                        color: Colors.blueAccent, width: 2)
-                                    : Border.all(
-                                        color: Colors.transparent, width: 2)),
-                            child: Row(
-                              children: [
-                                Icon(
-                                    IconData(ledger.iconPoint,
-                                        fontFamily: 'MaterialIcons'),
-                                    color: Color(ledger.colorValue),
-                                    size: 28),
-                                const SizedBox(width: 16),
-                                Text(ledger.name,
-                                    style: const TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w600)),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
   void _showScopePicker() {
     showModalBottomSheet(
         context: context,
@@ -811,30 +669,25 @@ class _UnifiedExpenseHomePageState extends State<UnifiedExpenseHomePage>
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          // Ledger Selector
-          GestureDetector(
-            onTap: _showLedgerPicker,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: headerDeco,
-              child: Row(
-                children: [
-                  Icon(
-                      IconData(_currentLedger.iconPoint,
-                          fontFamily: 'MaterialIcons'),
-                      color: Color(_currentLedger.colorValue),
-                      size: 16),
-                  const SizedBox(width: 8),
-                  Text(_currentLedger.name,
-                      style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          color: ExpenseStyles.textDark)),
-                  const SizedBox(width: 4),
-                  const Icon(Icons.keyboard_arrow_down_rounded,
-                      size: 16, color: ExpenseStyles.textGrey),
-                ],
-              ),
+          // 账本展示（当前仅支持单一账本「我的账本」，切换账本功能暂未开放）
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: headerDeco,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                    IconData(_currentLedger.iconPoint,
+                        fontFamily: 'MaterialIcons'),
+                    color: Color(_currentLedger.colorValue),
+                    size: 16),
+                const SizedBox(width: 8),
+                Text(_currentLedger.name,
+                    style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: ExpenseStyles.textDark)),
+              ],
             ),
           ),
 
@@ -902,7 +755,7 @@ class _UnifiedExpenseHomePageState extends State<UnifiedExpenseHomePage>
             const SliverFillRemaining(
               child: CuteEmptyState(
                 emoji: '🐱',
-                message: '最近没有花钱哦，喵～',
+                message: '本月还没有给主子花钱哦，喵～',
               ),
             )
           else
@@ -1001,8 +854,33 @@ class _UnifiedExpenseHomePageState extends State<UnifiedExpenseHomePage>
     final sortedEntries = categoryTotals.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
 
+    // 1. 阈值逻辑优化：合并占比 <= 2% 的长尾项为“其他”
+    final List<MapEntry<String, double>> processedEntries = [];
+    double otherTotal = 0.0;
+
+    for (var entry in sortedEntries) {
+      final percent = (entry.value / total) * 100;
+      if (percent > 2) {
+        processedEntries.add(entry);
+      } else {
+        otherTotal += entry.value;
+      }
+    }
+
+    if (otherTotal > 0) {
+      // 检查是否已经有“其他”项，如果有则累加
+      int otherIdx = processedEntries.indexWhere((e) => e.key == '其他');
+      if (otherIdx != -1) {
+        processedEntries[otherIdx] = MapEntry('其他', processedEntries[otherIdx].value + otherTotal);
+      } else {
+        processedEntries.add(MapEntry('其他', otherTotal));
+      }
+      // 重新按金额排序，确保“其他”项在合适位置（通常是最后，但也可能很大）
+      processedEntries.sort((a, b) => b.value.compareTo(a.value));
+    }
+
     final List<PieChartSectionData> sections = [];
-    int index = 0;
+    Color? touchedColor;
     // Fallback palette
     final List<Color> palette = [
       const Color(0xFF6E85B2),
@@ -1013,30 +891,52 @@ class _UnifiedExpenseHomePageState extends State<UnifiedExpenseHomePage>
       const Color(0xFF4A4E69),
     ];
 
-    for (var entry in sortedEntries) {
+    for (int i = 0; i < processedEntries.length; i++) {
+      final entry = processedEntries[i];
       final categoryName = entry.key;
       final amount = entry.value;
       final category = UnifiedExpenseCategory.getCategoryByName(categoryName);
       final color = category != null
           ? Color(category.color)
-          : palette[index % palette.length];
+          : palette[i % palette.length];
       final percent = (amount / total) * 100;
+      final isTouched = i == _touchedIndex;
+      final anyTouched = _touchedIndex != -1;
+      
+      if (isTouched) touchedColor = color;
 
-      // Only show section if percent > 3% to avoid clutter
-      if (percent > 2) {
-        sections.add(PieChartSectionData(
-          color: color,
-          value: amount,
-          title: '${percent.toStringAsFixed(0)}%',
-          radius: 45,
-          titleStyle: const TextStyle(
-              fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white),
-          badgeWidget: _buildBadge(
-              category?.icon ?? Icons.more_horiz.codePoint, color),
-          badgePositionPercentageOffset: .98,
-        ));
+      // 动态计算半径：选中项放大，非选中项在有选中时缩小
+      double radius;
+      if (isTouched) {
+        radius = 86; // 进一步放大
+      } else if (anyTouched) {
+        radius = 64; // 其他项缩小
+      } else {
+        radius = 72; // 默认状态
       }
-      index++;
+
+      sections.add(PieChartSectionData(
+        color: isTouched ? color : color.withOpacity(anyTouched ? 0.6 : 1.0),
+        value: amount,
+        title: isTouched ? '${percent.toStringAsFixed(1)}%' : (anyTouched ? '' : '${percent.toStringAsFixed(0)}%'),
+        radius: radius,
+        titleStyle: TextStyle(
+            fontSize: isTouched ? 14 : 12,
+            fontWeight: FontWeight.bold,
+            color: Colors.white),
+        // 玻璃风格边缘：通过多层 borderSide 模拟发光/模糊感
+        borderSide: isTouched 
+            ? BorderSide(
+                color: color.withOpacity(0.8), // 提高透明度使边缘更明显
+                width: 6, // 增加宽度
+              ) 
+            : const BorderSide(color: Colors.transparent, width: 0),
+        badgeWidget: _buildBadge(
+            category?.icon ?? Icons.more_horiz.codePoint, 
+            isTouched ? color : color.withOpacity(anyTouched ? 0.5 : 1.0),
+            size: isTouched ? 24 : 18),
+        badgePositionPercentageOffset: .98,
+      ));
     }
 
     return _buildGlassCard(
@@ -1087,44 +987,103 @@ class _UnifiedExpenseHomePageState extends State<UnifiedExpenseHomePage>
               children: [
                 const SizedBox(height: 24),
                 SizedBox(
-                  height: 200,
-                  child: PieChart(
-                    PieChartData(
-                      sections: sections,
-                      centerSpaceRadius: 40,
-                      sectionsSpace: 2,
-                      borderData: FlBorderData(show: false),
-                      pieTouchData: PieTouchData(enabled: false),
-                    ),
+                  height: 320,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      PieChart(
+                        PieChartData(
+                          pieTouchData: PieTouchData(
+                            touchCallback: (FlTouchEvent event, pieTouchResponse) {
+                              final touchedSection = pieTouchResponse?.touchedSection;
+
+                              // 命中扇形
+                              if (touchedSection != null) {
+                                final newIndex = touchedSection.touchedSectionIndex;
+                                
+                                // 只有在按下瞬间（TapDown）处理切换逻辑，避免滑动过程中频繁切换
+                                if (event is FlTapDownEvent) {
+                                  setState(() {
+                                    if (_touchedIndex == newIndex) {
+                                      // 再次点击当前已放大的扇形 -> 取消选中
+                                      _touchedIndex = -1;
+                                    } else {
+                                      // 点击新的扇形 -> 切换到新扇形
+                                      _touchedIndex = newIndex;
+                                    }
+                                  });
+                                } else if (event is FlPanUpdateEvent || event is FlPanStartEvent) {
+                                  // 滑动过程中，如果进入了新的扇形，则更新选中（增强钻取感）
+                                  if (newIndex != _touchedIndex) {
+                                    setState(() {
+                                      _touchedIndex = newIndex;
+                                    });
+                                  }
+                                }
+                                return;
+                              }
+
+                              // 仅在“按下空白区域”时恢复默认
+                              if (event is FlTapDownEvent) {
+                                if (_touchedIndex != -1) {
+                                  setState(() {
+                                    _touchedIndex = -1;
+                                  });
+                                }
+                              }
+                            },
+                          ),
+                          borderData: FlBorderData(show: false),
+                          sectionsSpace: 2,
+                          centerSpaceRadius: 64,
+                          sections: sections,
+                        ),
+                        duration: const Duration(milliseconds: 250),
+                        curve: Curves.easeInOutBack,
+                      ),
+                      // 2. 环形图中心区域增强
+                      Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          AnimatedDefaultTextStyle(
+                            duration: const Duration(milliseconds: 50), // 极短时间，实现近乎即时的变色
+                            curve: Curves.linear,
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: touchedColor ?? ExpenseStyles.textDark,
+                            ),
+                            child: Text(
+                              _touchedIndex != -1 
+                                  ? '¥${processedEntries[_touchedIndex].value.toStringAsFixed(2)}'
+                                  : '¥${total.toStringAsFixed(2)}',
+                            ),
+                          ),
+                          AnimatedDefaultTextStyle(
+                            duration: const Duration(milliseconds: 50),
+                            curve: Curves.linear,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: _touchedIndex != -1 ? FontWeight.bold : FontWeight.normal,
+                              color: touchedColor?.withOpacity(0.8) ?? ExpenseStyles.textGrey,
+                            ),
+                            child: Text(
+                              _touchedIndex != -1 
+                                  ? processedEntries[_touchedIndex].key
+                                  : '总支出',
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 16),
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 8,
-                  alignment: WrapAlignment.center,
-                  children: sortedEntries.map((e) {
-                    final category = UnifiedExpenseCategory.getCategoryByName(e.key);
-                    final color = category != null
-                        ? Color(category.color)
-                        : palette[sortedEntries.indexOf(e) % palette.length];
-                    return Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                            width: 8,
-                            height: 8,
-                            decoration: BoxDecoration(
-                                color: color, shape: BoxShape.circle)),
-                        const SizedBox(width: 4),
-                        Text(
-                            '${e.key} ${((e.value / total) * 100).toStringAsFixed(0)}%',
-                            style: const TextStyle(
-                                fontSize: 10, color: ExpenseStyles.textGrey)),
-                      ],
-                    );
-                  }).toList(),
-                )
+                const SizedBox(height: 20),
+                _buildExpenseLegendTwoColumn(
+                  sortedEntries: processedEntries,
+                  total: total,
+                  palette: palette,
+                ),
               ],
             ),
             crossFadeState: _isAnalysisVisible
@@ -1137,7 +1096,7 @@ class _UnifiedExpenseHomePageState extends State<UnifiedExpenseHomePage>
     ));
   }
 
-  Widget _buildBadge(int iconCodePoint, Color bg) {
+  Widget _buildBadge(int iconCodePoint, Color bg, {double size = 14}) {
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
@@ -1148,7 +1107,94 @@ class _UnifiedExpenseHomePageState extends State<UnifiedExpenseHomePage>
         ],
       ),
       child: Icon(IconData(iconCodePoint, fontFamily: 'MaterialIcons'),
-          size: 14, color: bg),
+          size: size, color: bg),
+    );
+  }
+
+  /// 支出构成图例：双列规整布局，展示所有处理后的类别
+  Widget _buildExpenseLegendTwoColumn({
+    required List<MapEntry<String, double>> sortedEntries,
+    required double total,
+    required List<Color> palette,
+  }) {
+    final legendEntries = <_LegendEntry>[];
+    for (var i = 0; i < sortedEntries.length; i++) {
+      final e = sortedEntries[i];
+      final percent = (e.value / total) * 100;
+      // 不再过滤，因为 sortedEntries 已经是处理过的（合并了其他项）
+      final category = UnifiedExpenseCategory.getCategoryByName(e.key);
+      final color = category != null
+          ? Color(category.color)
+          : palette[i % palette.length];
+      final iconCodePoint =
+          category?.icon ?? Icons.more_horiz.codePoint;
+      legendEntries.add(_LegendEntry(
+        label: e.key,
+        percent: percent,
+        iconCodePoint: iconCodePoint,
+        color: color,
+      ));
+    }
+    if (legendEntries.isEmpty) return const SizedBox.shrink();
+
+    final half = (legendEntries.length / 2).ceil();
+    final leftColumn = legendEntries.take(half).toList();
+    final rightColumn = legendEntries.skip(half).toList();
+
+    const itemHeight = 28.0;
+    const iconSize = 20.0;
+
+    Widget buildLegendItem(_LegendEntry entry) {
+      return SizedBox(
+        height: itemHeight,
+        child: Row(
+          children: [
+            Icon(
+              IconData(entry.iconCodePoint, fontFamily: 'MaterialIcons'),
+              size: iconSize,
+              color: entry.color,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                entry.label,
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: ExpenseStyles.textDark,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            Text(
+              '${entry.percent.toStringAsFixed(1)}%',
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: ExpenseStyles.textDark,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: leftColumn.map((e) => buildLegendItem(e)).toList(),
+          ),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: rightColumn.map((e) => buildLegendItem(e)).toList(),
+          ),
+        ),
+      ],
     );
   }
 
@@ -1435,53 +1481,66 @@ class _UnifiedExpenseHomePageState extends State<UnifiedExpenseHomePage>
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            Row(
-              children: [
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                      color: color.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(14)),
-                  child: Icon(iconData, color: color, size: 24),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+            InkWell(
+              onTap: () async {
+                final result = await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (context) =>
+                            AddUnifiedExpensePage(expense: expense)));
+                if (result == true) {
+                  _loadData();
+                }
+              },
+              borderRadius: BorderRadius.circular(14),
+              child: Row(
+                children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                        color: color.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(14)),
+                    child: Icon(iconData, color: color, size: 24),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(expense.itemName ?? expense.category,
+                            style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: ExpenseStyles.textDark)),
+                        const SizedBox(height: 4),
+                        Text('日均: ¥${expense.dailyCost.toStringAsFixed(2)}',
+                            style: const TextStyle(
+                                fontSize: 12, color: ExpenseStyles.textGrey)),
+                      ],
+                    ),
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      Text(expense.itemName ?? expense.category,
+                      Text('¥${expense.amount.toStringAsFixed(0)}',
                           style: const TextStyle(
-                              fontSize: 16,
+                              fontSize: 18,
                               fontWeight: FontWeight.bold,
                               color: ExpenseStyles.textDark)),
-                      const SizedBox(height: 4),
-                      Text('日均: ¥${expense.dailyCost.toStringAsFixed(2)}',
-                          style: const TextStyle(
-                              fontSize: 12, color: ExpenseStyles.textGrey)),
+                      if (!isInUse)
+                        const Padding(
+                          padding: EdgeInsets.only(top: 4),
+                          child: Text('已用完',
+                              style: TextStyle(
+                                  fontSize: 10,
+                                  color: Colors.orange,
+                                  fontWeight: FontWeight.bold)),
+                        )
                     ],
-                  ),
-                ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text('¥${expense.amount.toStringAsFixed(0)}',
-                        style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: ExpenseStyles.textDark)),
-                    if (!isInUse)
-                      const Padding(
-                        padding: EdgeInsets.only(top: 4),
-                        child: Text('已用完',
-                            style: TextStyle(
-                                fontSize: 10,
-                                color: Colors.orange,
-                                fontWeight: FontWeight.bold)),
-                      )
-                  ],
-                )
-              ],
+                  )
+                ],
+              ),
             ),
             if (isInUse) ...[
               const SizedBox(height: 12),
@@ -1526,9 +1585,11 @@ class _UnifiedExpenseHomePageState extends State<UnifiedExpenseHomePage>
 // Extension to help with blur
 extension _WidgetExt on Widget {
   Widget blurred({double sigmaX = 10, double sigmaY = 10}) {
-    return BackdropFilter(
-      filter: ImageFilter.blur(sigmaX: sigmaX, sigmaY: sigmaY),
-      child: this,
+    return ClipRRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: sigmaX, sigmaY: sigmaY),
+        child: this,
+      ),
     );
   }
 }

@@ -203,43 +203,43 @@ class UnifiedExpenseCategory {
     UnifiedExpenseCategory(
       name: '医疗/兽医',
       icon: Icons.local_hospital.codePoint,
-      color: 0xFF4FC3F7,
+      color: 0xFFE57373, // 深红 - 医疗刚需
       expenseType: ExpenseTypeEnum.oneOff,
     ),
     UnifiedExpenseCategory(
       name: '美容/洗护',
       icon: Icons.bathtub.codePoint,
-      color: 0xFFF06292,
+      color: 0xFF4FC3F7, // 深蓝 - 生活品质
       expenseType: ExpenseTypeEnum.oneOff,
     ),
     UnifiedExpenseCategory(
       name: '寄养/服务',
       icon: Icons.store.codePoint,
-      color: 0xFFBA68C8,
+      color: 0xFF9575CD, // 深紫 - 专业服务
       expenseType: ExpenseTypeEnum.oneOff,
     ),
     UnifiedExpenseCategory(
       name: '宠物食品',
       icon: Icons.restaurant.codePoint,
-      color: 0xFFFF8A65,
+      color: 0xFFFFB74D, // 橙色 - 生存刚需
       expenseType: ExpenseTypeEnum.oneOff,
     ),
     UnifiedExpenseCategory(
       name: '玩具/娱乐',
       icon: Icons.toys.codePoint,
-      color: 0xFFFFD54F,
+      color: 0xFFFFD54F, // 明黄 - 情感连接
       expenseType: ExpenseTypeEnum.oneOff,
     ),
     UnifiedExpenseCategory(
       name: '用品/配件',
       icon: Icons.shopping_bag.codePoint,
-      color: 0xFFE57373,
+      color: 0xFF81C784, // 草绿 - 户外/生活
       expenseType: ExpenseTypeEnum.oneOff,
     ),
     UnifiedExpenseCategory(
       name: '其他',
       icon: Icons.more_horiz.codePoint,
-      color: 0xFF90A4AE,
+      color: 0xFF90A4AE, // 灰色 - 其他
       expenseType: ExpenseTypeEnum.oneOff,
     ),
   ];
@@ -249,31 +249,31 @@ class UnifiedExpenseCategory {
     UnifiedExpenseCategory(
       name: '宠物食品',
       icon: Icons.restaurant.codePoint,
-      color: 0xFFFF8A65,
+      color: 0xFFFFCC80, // 浅橙 - 食品大类（与一次性食品区分明度）
       expenseType: ExpenseTypeEnum.recurring,
     ),
     UnifiedExpenseCategory(
       name: '健康保健',
       icon: Icons.medication.codePoint,
-      color: 0xFF4FC3F7,
+      color: 0xFFEF9A9A, // 浅红 - 医疗大类（与一次性医疗区分明度）
       expenseType: ExpenseTypeEnum.recurring,
     ),
     UnifiedExpenseCategory(
       name: '清洁用品',
       icon: Icons.cleaning_services.codePoint,
-      color: 0xFF9575CD,
+      color: 0xFF81D4FA, // 天蓝 - 洗护大类（与一次性洗护区分明度）
       expenseType: ExpenseTypeEnum.recurring,
     ),
     UnifiedExpenseCategory(
       name: '其他消耗品',
       icon: Icons.inventory_2.codePoint,
-      color: 0xFFA1887F,
+      color: 0xFFB0BEC5, // 浅灰 - 其他大类
       expenseType: ExpenseTypeEnum.recurring,
     ),
     UnifiedExpenseCategory(
       name: '耐用品/设备',
       icon: Icons.chair.codePoint,
-      color: 0xFFFFD54F,
+      color: 0xFFAED581, // 浅绿 - 用品大类
       expenseType: ExpenseTypeEnum.recurring,
     ),
   ];
