@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui';
@@ -7,6 +8,7 @@ import 'package:path/path.dart' as path;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
@@ -15,21 +17,19 @@ import 'package:path_provider/path_provider.dart';
 import '../../../shared/utils/ui_helpers.dart';
 import 'loading_page.dart';
 
-// 添加颜色常量定义，与chat_page.dart保持一致
 class AppColors {
   static const Color background = Color(0xFFF2F2F7);
-  static const Color surface = Color(0xFFFFFFFF); // 卡片表面颜色
+  static const Color surface = Color(0xFFFFFFFF);
   static const Color primary = Color(0xFF5D5FEF);
   static const Color textDark = Color(0xFF1D1D1F);
   static const Color textGrey = Color(0xFF8E8E93);
-  static const Color textLight = Color(0xFFAEAEB2); // 更淡的文字颜色
+  static const Color textLight = Color(0xFFAEAEB2);
 
   static const Color orb1 = Color(0xFFC4E0E5);
   static const Color orb2 = Color(0xFFE2D1F9);
   static const Color orb3 = Color(0xFFFFDFC4);
 }
 
-// 添加自定义PageRoute以实现更好的过渡效果
 class FadePageRoute extends PageRouteBuilder {
   final Widget page;
 
@@ -66,7 +66,6 @@ class PreparationPage extends StatefulWidget {
   State<PreparationPage> createState() => _PreparationPageState();
 }
 
-// 上传状态枚举
 enum UploadStatus {
   idle,
   uploading,
@@ -74,37 +73,95 @@ enum UploadStatus {
   failed,
 }
 
+class AiStylePreset {
+  final String id;
+  final String name;
+  final String aspectRatio;
+  final DateTime createdAt;
+  final String? localImagePath;
+
+  const AiStylePreset({
+    required this.id,
+    required this.name,
+    required this.aspectRatio,
+    required this.createdAt,
+    this.localImagePath,
+  });
+
+  factory AiStylePreset.fromDb(Map<String, dynamic> json) {
+    return AiStylePreset(
+      id: (json['id'] as String? ?? '').trim(),
+      name: (json['name'] as String? ?? '').trim(),
+      aspectRatio: (json['aspect_ratio'] as String? ?? '1:1').trim(),
+      createdAt: DateTime.tryParse(json['created_at']?.toString() ?? '') ??
+          DateTime.fromMillisecondsSinceEpoch(0),
+    );
+  }
+
+  factory AiStylePreset.fromCache(Map<String, dynamic> json) {
+    return AiStylePreset(
+      id: (json['id'] as String? ?? '').trim(),
+      name: (json['name'] as String? ?? '').trim(),
+      aspectRatio: (json['aspect_ratio'] as String? ?? '1:1').trim(),
+      createdAt: DateTime.tryParse(json['created_at']?.toString() ?? '') ??
+          DateTime.fromMillisecondsSinceEpoch(0),
+      localImagePath: (json['local_image_path'] as String?)?.trim(),
+    );
+  }
+
+  Map<String, dynamic> toCacheJson() {
+    return {
+      'id': id,
+      'name': name,
+      'aspect_ratio': aspectRatio,
+      'created_at': createdAt.toIso8601String(),
+      'local_image_path': localImagePath,
+    };
+  }
+
+  AiStylePreset copyWith({
+    String? localImagePath,
+  }) {
+    return AiStylePreset(
+      id: id,
+      name: name,
+      aspectRatio: aspectRatio,
+      createdAt: createdAt,
+      localImagePath: localImagePath,
+    );
+  }
+}
+
 class _PreparationPageState extends State<PreparationPage>
-    with TickerProviderStateMixin /*, AutomaticKeepAliveClientMixin*/ {
+    with TickerProviderStateMixin {
+  static const String _presetView = 'vw_ai_image_presets';
+  static const String _presetBucket = 'assets';
+  static const String _defaultAspectRatio = '1:1';
+  static const String _cacheVersion = 'v1_1_4';
+  static const String _lastSelectedIndexKeyPrefix =
+      'img_gen_last_selected_index_v1_1_4';
+
   File? _selectedImage;
   int _selectedStyleIndex = 0;
 
-  // 控制风格列表的滚动，以便恢复时滚动到已选项
   late final ScrollController _styleScrollController;
 
-  // 上传状态管理
   UploadStatus _uploadStatus = UploadStatus.idle;
   double _uploadProgress = 0.0;
   String _uploadError = '';
 
-  // 是否正在向后端发起 AI 生图任务（用于按钮内提示）
   bool _isStartingTask = false;
-
-  // 标记是否成功启动了任务并导航到LoadingPage（用于区分返回场景）
   bool _hasNavigatedToLoadingPage = false;
+  bool _isLoadingStyles = true;
+  String _selectedAspectRatio = _defaultAspectRatio;
+  int _styleLoadEpoch = 0;
+  final Map<String, int> _lastSelectedIndexByAspectRatio = {
+    _defaultAspectRatio: 0,
+  };
 
-  // Orb动画控制器
   late AnimationController _orbController;
 
-  // 风格数据源
-  final List<Map<String, String>> _styles = [
-    {'name': '奔向你', 'img': 'assets/image_styles/style_run.jpg'},
-    {'name': '自信探险家', 'img': 'assets/image_styles/style_explorer.jpg'},
-    {'name': '时尚杂志', 'img': 'assets/image_styles/style_bazaar.jpg'},
-    {'name': '复古牛仔', 'img': 'assets/image_styles/style_cowboy.jpg'},
-    {'name': '多宫格', 'img': 'assets/image_styles/style_grid.jpg'},
-    {'name': '秋叶', 'img': 'assets/image_styles/style_autumn.jpg'},
-  ];
+  List<AiStylePreset> _styles = const [];
 
   @override
   void initState() {
@@ -114,31 +171,317 @@ class _PreparationPageState extends State<PreparationPage>
       duration: const Duration(seconds: 12),
     )..repeat(reverse: true);
 
-    // 初始化风格滚动控制器
     _styleScrollController = ScrollController();
 
-    // 如果有来自上一次的选择（由 LoadingPage 在失败时传回），则恢复图片和风格索引
+    unawaited(_initializeStyleSelectionAndLoad());
+
     if (widget.initialSelectedImage != null) {
       _selectedImage = widget.initialSelectedImage;
+      _selectedStyleIndex = widget.initialStyleIndex;
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scrollToSelectedStyle(animated: false);
+      });
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_isStartingTask) {
+          setState(() {
+            _isStartingTask = false;
+          });
+        }
+      });
+
+      _hasNavigatedToLoadingPage = false;
     }
-    _selectedStyleIndex = widget.initialStyleIndex;
+  }
 
-    // 在首帧后滚动到选中的风格，确保可见
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _scrollToSelectedStyle(animated: false);
-    });
+  String _normalizedAspectRatio(String aspectRatio) {
+    return aspectRatio.replaceAll(':', '_');
+  }
 
-    // 重置按钮状态，确保不在"正在发起 AI 生图任务..."状态
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_isStartingTask) {
+  String _cacheStylesKey(String aspectRatio) =>
+      'img_gen_preset_cache_${_cacheVersion}_${_normalizedAspectRatio(aspectRatio)}';
+
+  String _cacheLastSyncKey(String aspectRatio) =>
+      'img_gen_preset_last_sync_${_cacheVersion}_${_normalizedAspectRatio(aspectRatio)}';
+
+  String _cacheLatestCreatedAtKey(String aspectRatio) =>
+      'img_gen_preset_latest_created_at_${_cacheVersion}_${_normalizedAspectRatio(aspectRatio)}';
+
+  String _cacheCountKey(String aspectRatio) =>
+      'img_gen_preset_count_${_cacheVersion}_${_normalizedAspectRatio(aspectRatio)}';
+
+  String _lastSelectedIndexKey(String aspectRatio) =>
+      '${_lastSelectedIndexKeyPrefix}_${_normalizedAspectRatio(aspectRatio)}';
+
+  Future<void> _initializeStyleSelectionAndLoad() async {
+    await _restoreLastSelectedIndices();
+    if (!mounted) return;
+    await _loadAndSyncStylePresets(aspectRatio: _selectedAspectRatio);
+  }
+
+  Future<void> _restoreLastSelectedIndices() async {
+    final prefs = await SharedPreferences.getInstance();
+    for (final aspectRatio in const ['1:1', '9:16']) {
+      final stored = prefs.getInt(_lastSelectedIndexKey(aspectRatio));
+      if (stored != null && stored >= 0) {
+        _lastSelectedIndexByAspectRatio[aspectRatio] = stored;
+      }
+    }
+    _selectedStyleIndex = _getRememberedStyleIndex(_selectedAspectRatio);
+  }
+
+  int _getRememberedStyleIndex(String aspectRatio) {
+    return _lastSelectedIndexByAspectRatio[aspectRatio] ?? 0;
+  }
+
+  int _clampedRememberedStyleIndex(String aspectRatio, int maxLength) {
+    if (maxLength <= 0) return 0;
+    final remembered = _getRememberedStyleIndex(aspectRatio);
+    return remembered.clamp(0, maxLength - 1);
+  }
+
+  void _rememberSelectedStyleIndex(String aspectRatio, int index) {
+    _lastSelectedIndexByAspectRatio[aspectRatio] = index;
+    unawaited(_persistLastSelectedIndex(aspectRatio, index));
+  }
+
+  Future<void> _persistLastSelectedIndex(String aspectRatio, int index) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_lastSelectedIndexKey(aspectRatio), index);
+  }
+
+  Future<void> _loadAndSyncStylePresets({required String aspectRatio}) async {
+    await _loadStylesFromCache(aspectRatio: aspectRatio);
+    await _syncStylePresetsIncrementally(aspectRatio: aspectRatio);
+  }
+
+  Future<void> _loadStylesFromCache({required String aspectRatio}) async {
+    final int epoch = _styleLoadEpoch;
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_cacheStylesKey(aspectRatio));
+    if (raw == null || raw.isEmpty) {
+      if (mounted && epoch == _styleLoadEpoch) {
         setState(() {
-          _isStartingTask = false;
+          _isLoadingStyles = true;
         });
       }
-    });
+      return;
+    }
 
-    // 重置导航标记，确保初始状态正确
-    _hasNavigatedToLoadingPage = false;
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) return;
+
+      final cached = <AiStylePreset>[];
+      for (final item in decoded) {
+        if (item is Map<String, dynamic>) {
+          final preset = AiStylePreset.fromCache(item);
+          if (preset.id.isNotEmpty && preset.name.isNotEmpty) {
+            final localPath = preset.localImagePath;
+            if (localPath != null && localPath.isNotEmpty) {
+              final localFile = File(localPath);
+              if (await localFile.exists()) {
+                cached.add(preset);
+                continue;
+              }
+            }
+            cached.add(preset.copyWith(localImagePath: null));
+          }
+        }
+      }
+
+      if (!mounted || epoch != _styleLoadEpoch) return;
+      setState(() {
+        _styles = cached;
+        _selectedStyleIndex =
+            _clampedRememberedStyleIndex(aspectRatio, cached.length);
+        _isLoadingStyles = false;
+      });
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scrollToSelectedStyle(animated: false);
+      });
+    } catch (e) {
+      debugPrint('加载风格缓存失败: $e');
+      if (mounted) {
+        setState(() {
+          _isLoadingStyles = true;
+        });
+      }
+    }
+  }
+
+  Future<void> _syncStylePresetsIncrementally({
+    required String aspectRatio,
+  }) async {
+    try {
+      final int epoch = _styleLoadEpoch;
+      final prefs = await SharedPreferences.getInstance();
+      final supabase = Supabase.instance.client;
+
+      final latestRow = await supabase
+          .from(_presetView)
+          .select('created_at')
+          .eq('aspect_ratio', aspectRatio)
+          .order('created_at', ascending: false)
+          .limit(1);
+
+      final currentLatestCreatedAt =
+          latestRow.isNotEmpty ? latestRow.first['created_at']?.toString() : '';
+
+      final countRows = await supabase
+          .from(_presetView)
+          .select('id')
+          .eq('aspect_ratio', aspectRatio);
+      final currentCount = countRows.length;
+
+        final cachedLatestCreatedAt =
+          prefs.getString(_cacheLatestCreatedAtKey(aspectRatio));
+        final cachedCount = prefs.getInt(_cacheCountKey(aspectRatio));
+
+      if (_styles.isNotEmpty &&
+          cachedLatestCreatedAt == currentLatestCreatedAt &&
+          cachedCount == currentCount) {
+        if (mounted) {
+          setState(() {
+            _isLoadingStyles = false;
+          });
+        }
+        return;
+      }
+
+        final String? lastSyncAt = prefs.getString(_cacheLastSyncKey(aspectRatio));
+      final bool shouldFullRefresh =
+          _styles.isEmpty || cachedCount == null || currentCount < cachedCount;
+
+      List<Map<String, dynamic>> rows;
+      if (shouldFullRefresh || lastSyncAt == null || lastSyncAt.isEmpty) {
+        final data = await supabase
+            .from(_presetView)
+            .select('id,name,aspect_ratio,created_at')
+            .eq('aspect_ratio', aspectRatio)
+            .order('created_at', ascending: true);
+        rows = List<Map<String, dynamic>>.from(data);
+      } else {
+        final data = await supabase
+            .from(_presetView)
+            .select('id,name,aspect_ratio,created_at')
+            .eq('aspect_ratio', aspectRatio)
+            .gt('created_at', lastSyncAt)
+            .order('created_at', ascending: true);
+        rows = List<Map<String, dynamic>>.from(data);
+      }
+
+      final Map<String, AiStylePreset> mergedMap = {
+        for (final preset in _styles) preset.id: preset,
+      };
+
+      if (shouldFullRefresh) {
+        mergedMap.clear();
+      }
+
+      for (final row in rows) {
+        final remotePreset = AiStylePreset.fromDb(row);
+        if (remotePreset.id.isEmpty || remotePreset.name.isEmpty) continue;
+        final withImage =
+            await _ensurePresetImageCached(remotePreset, keepOldPath: true);
+        mergedMap[withImage.id] = withImage;
+      }
+
+      final merged = mergedMap.values.toList()
+        ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+
+      final nowIso = DateTime.now().toIso8601String();
+      await prefs.setString(_cacheStylesKey(aspectRatio),
+          jsonEncode(merged.map((e) => e.toCacheJson()).toList()));
+      await prefs.setString(_cacheLastSyncKey(aspectRatio), nowIso);
+      await prefs.setString(
+          _cacheLatestCreatedAtKey(aspectRatio), currentLatestCreatedAt ?? '');
+      await prefs.setInt(_cacheCountKey(aspectRatio), currentCount);
+
+      if (!mounted || epoch != _styleLoadEpoch) return;
+      setState(() {
+        _styles = merged;
+        _selectedStyleIndex =
+            _clampedRememberedStyleIndex(aspectRatio, merged.length);
+        _isLoadingStyles = false;
+      });
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scrollToSelectedStyle(animated: false);
+      });
+    } catch (e, st) {
+      debugPrint('同步风格预设失败: $e\n$st');
+      if (mounted) {
+        setState(() {
+          _isLoadingStyles = false;
+        });
+      }
+    }
+  }
+
+  Future<AiStylePreset> _ensurePresetImageCached(
+    AiStylePreset preset, {
+    required bool keepOldPath,
+  }) async {
+    final existingPreset = keepOldPath
+        ? _styles.cast<AiStylePreset?>().firstWhere(
+              (item) => item?.id == preset.id,
+              orElse: () => null,
+            )
+        : null;
+    final existingPath = existingPreset?.localImagePath;
+
+    if (existingPath != null && existingPath.isNotEmpty) {
+      final existingFile = File(existingPath);
+      if (await existingFile.exists()) {
+        return preset.copyWith(localImagePath: existingPath);
+      }
+    }
+
+    try {
+      final baseDir = await getApplicationDocumentsDirectory();
+      final ratioFolder = _normalizedAspectRatio(preset.aspectRatio);
+      final cacheDir =
+          Directory(path.join(baseDir.path, 'ai_style_cache', ratioFolder));
+      if (!await cacheDir.exists()) {
+        await cacheDir.create(recursive: true);
+      }
+
+      final fileName = '${preset.id}.jpg';
+      final localPath = path.join(cacheDir.path, fileName);
+      final localFile = File(localPath);
+
+      if (!await localFile.exists()) {
+        final storagePath = 'ai_image_presets/$ratioFolder/${preset.id}.jpg';
+        final bytes = await Supabase.instance.client.storage
+            .from(_presetBucket)
+            .download(storagePath);
+        await localFile.writeAsBytes(bytes, flush: true);
+      }
+
+      return preset.copyWith(localImagePath: localPath);
+    } catch (e) {
+      debugPrint('缓存风格示例图失败(${preset.id}): $e');
+      return preset;
+    }
+  }
+
+  void _onAspectRatioChanged(String aspectRatio) {
+    if (_selectedAspectRatio == aspectRatio) return;
+    _rememberSelectedStyleIndex(_selectedAspectRatio, _selectedStyleIndex);
+
+    final nextIndex = _getRememberedStyleIndex(aspectRatio);
+    setState(() {
+      _selectedAspectRatio = aspectRatio;
+      _styles = const [];
+      _selectedStyleIndex = nextIndex;
+      _isLoadingStyles = true;
+      _uploadError = '';
+      _styleLoadEpoch += 1;
+    });
+    unawaited(_loadAndSyncStylePresets(aspectRatio: aspectRatio));
   }
 
   @override
@@ -175,7 +518,6 @@ class _PreparationPageState extends State<PreparationPage>
     final supabase = Supabase.instance.client;
     final user = supabase.auth.currentUser;
 
-    // 1. 🔍 优先检查登录状态 (Fail Fast 原则)
     if (user == null) {
       debugPrint('❌ 用户未认证，无法上传文件');
       if (mounted) {
@@ -188,7 +530,6 @@ class _PreparationPageState extends State<PreparationPage>
     }
 
     try {
-      // 重置上传状态
       setState(() {
         _uploadStatus = UploadStatus.uploading;
         _uploadProgress = 0.0;
@@ -197,26 +538,17 @@ class _PreparationPageState extends State<PreparationPage>
 
       final userId = user.id;
 
-      // 2. 🗜️ 压缩图片并统一格式为 JPG
-      // 这一步会显著减少上传时间和流量
       final File fileToUpload =
           await _compressAndConvertImage(originalFile) ?? originalFile;
 
-      // 3. 📝 生成路径
-      // 统一使用 .jpg 后缀，因为我们在压缩步骤已经转换了格式
       final fileExtension = '.jpg';
       final timestamp = DateTime.now().millisecondsSinceEpoch.toString();
       final uniqueId = const Uuid().v4();
 
-      // 路径格式: userId/original/timestamp_uuid.jpg
       final fileName = '${timestamp}_$uniqueId$fileExtension';
       final filePath = '$userId/original/$fileName';
       debugPrint('准备上传到: $filePath');
 
-      // 4. 🚀 上传到 Supabase Storage
-      // 注意：当前Supabase Flutter SDK版本可能不支持onProgress参数
-      // 这里使用模拟进度来提供用户反馈（上限到 0.95），并在 finally 中确保定时器被取消
-      // 记录是否使用了压缩生成的临时文件，以便上传完成后清理它（避免临时目录膨胀）
       final bool usedCompressedTempFile =
           fileToUpload.path != originalFile.path;
 
@@ -229,37 +561,29 @@ class _PreparationPageState extends State<PreparationPage>
             ),
           );
 
-      // 使用定时器模拟进度更新（上限 0.95）
       final progressTimer =
           Timer.periodic(const Duration(milliseconds: 200), (timer) {
         if (!mounted) return;
         setState(() {
-          // 模拟进度逐步提升，但不超过 0.95
           _uploadProgress = (_uploadProgress + 0.05).clamp(0.1, 0.95);
         });
       });
 
       try {
-        // 等待上传完成
         await uploadFuture;
 
-        // 上传成功：跳到 1.0 并设置状态
         if (mounted) {
           setState(() {
             _uploadProgress = 1.0;
             _uploadStatus = UploadStatus.success;
           });
         }
-
         debugPrint('✅ 图片上传成功: $filePath');
         return fileName;
       } finally {
-        // 无论成功或失败都取消定时器，防止泄露或假进度继续运行
         if (progressTimer.isActive) {
           progressTimer.cancel();
         }
-
-        // 如果我们使用了压缩生成的临时文件，尝试删除它以释放临时目录空间
         if (usedCompressedTempFile) {
           try {
             if (await fileToUpload.exists()) {
@@ -272,75 +596,44 @@ class _PreparationPageState extends State<PreparationPage>
         }
       }
     } on StorageException catch (e) {
-      // Supabase 存储特定错误
       debugPrint('❌ StorageException: ${e.message}, Status: ${e.statusCode}');
       final errorMessage =
           e.statusCode == '403' ? '权限不足，无法上传图片' : '存储服务错误: ${e.message}';
-      setState(() {
-        _uploadStatus = UploadStatus.failed;
-        _uploadProgress = 0.0;
-        _uploadError = errorMessage;
-      });
       _showErrorSnackBar(errorMessage);
       return null;
     } on SocketException catch (e) {
       debugPrint('❌ 网络错误 (SocketException): $e');
       final errorMessage = '网络连接失败：请检查您的网络后重试';
-      setState(() {
-        _uploadStatus = UploadStatus.failed;
-        _uploadProgress = 0.0;
-        _uploadError = errorMessage;
-      });
       _showErrorSnackBar(errorMessage);
       return null;
     } on TimeoutException catch (e) {
       debugPrint('❌ 请求超时: $e');
       final errorMessage = '请求超时：请稍后重试';
-      setState(() {
-        _uploadStatus = UploadStatus.failed;
-        _uploadProgress = 0.0;
-        _uploadError = errorMessage;
-      });
       _showErrorSnackBar(errorMessage);
       return null;
     } on HttpException catch (e) {
       debugPrint('❌ HTTP 错误: $e');
       final errorMessage = '网络错误：${e.message}';
-      setState(() {
-        _uploadStatus = UploadStatus.failed;
-        _uploadProgress = 0.0;
-        _uploadError = errorMessage;
-      });
       _showErrorSnackBar(errorMessage);
       return null;
     } catch (e, st) {
-      // 通用错误 - 捕获堆栈以便调试
       debugPrint('❌ 图片上传异常: $e\n$st');
       final errorMessage = '上传失败：发生未知错误（${e.runtimeType}）';
-      setState(() {
-        _uploadStatus = UploadStatus.failed;
-        _uploadProgress = 0.0;
-        _uploadError = errorMessage;
-      });
       _showErrorSnackBar(errorMessage);
       return null;
     }
   }
 
-  /// 辅助方法：压缩并转换图片格式
   Future<File?> _compressAndConvertImage(File file) async {
     try {
       final dir = await getTemporaryDirectory();
-      // 生成一个临时的目标路径，确保后缀是 .jpg
       final targetPath = path.join(dir.path, '${const Uuid().v4()}.jpg');
 
-      // 执行压缩
       final XFile? result = await FlutterImageCompress.compressAndGetFile(
         file.absolute.path,
         targetPath,
-        quality: 80, // 压缩质量 0-100，80 是很好的平衡点
-        format: CompressFormat.jpeg, // 强制转为 JPEG
-        // 如果原图特别大，可以限制宽高，例如：
+        quality: 80,
+        format: CompressFormat.jpeg,
         minWidth: 1024,
         minHeight: 1024,
       );
@@ -356,11 +649,10 @@ class _PreparationPageState extends State<PreparationPage>
       return File(result.path);
     } catch (e) {
       debugPrint('⚠️ 压缩过程出错: $e');
-      return null; // 出错时返回 null，上层逻辑会回退使用原图
+      return null;
     }
   }
 
-  /// 将错误消息挂载到页面状态，以便在页面内显示（不使用 SnackBar）
   void _showErrorSnackBar(String message) {
     if (mounted) {
       setState(() {
@@ -372,21 +664,11 @@ class _PreparationPageState extends State<PreparationPage>
 
   @override
   Widget build(BuildContext context) {
-    // 检测页面是否是刚刚从其他页面返回（例如从LoadingPage返回）
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && _hasNavigatedToLoadingPage) {
-        // 如果之前已成功导航到LoadingPage，但现在页面又可见了，
-        // 说明用户从LoadingPage返回，此时应重置导航标记
         _hasNavigatedToLoadingPage = false;
       }
     });
-
-    // 当从LoadingPage返回时，如果之前任务启动失败（即没有成功导航到LoadingPage但_isStartingTask仍为true），
-    // 需要重置按钮状态
-    // 注意：不要在每次构建时自动重置 `_isStartingTask`，
-    // 这会在图片上传完成后且在调用 img-gen-start 之前意外清除提示，
-    // 导致“正在发起 AI 生图任务...”从未正确显示。
-    // `_isStartingTask` 应由任务启动流程的成功/失败专门控制。
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -398,7 +680,6 @@ class _PreparationPageState extends State<PreparationPage>
       ),
       body: Stack(
         children: [
-          // 背景层 - 添加orb动画效果
           Stack(
             children: [
               Container(color: AppColors.background),
@@ -464,13 +745,10 @@ class _PreparationPageState extends State<PreparationPage>
               ),
             ],
           ),
-
-          // 内容层
           SafeArea(
             child: Column(
               children: [
                 const SizedBox(height: 20),
-                // 1. 图片上传 / 预览区域
                 GestureDetector(
                   onTap: _onImageAreaTap,
                   child: Container(
@@ -502,7 +780,7 @@ class _PreparationPageState extends State<PreparationPage>
                               radius: 1.8,
                               center: Alignment.topCenter,
                               colors: [
-                                AppColors.surface.withOpacity(0.15), // 降低透明度
+                                AppColors.surface.withOpacity(0.15),
                                 AppColors.surface.withOpacity(0.3),
                                 AppColors.surface.withOpacity(0.45),
                               ],
@@ -514,7 +792,7 @@ class _PreparationPageState extends State<PreparationPage>
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
                                     Container(
-                                      padding: EdgeInsets.all(16),
+                                      padding: const EdgeInsets.all(16),
                                       decoration: BoxDecoration(
                                         color:
                                             AppColors.primary.withOpacity(0.1),
@@ -538,19 +816,18 @@ class _PreparationPageState extends State<PreparationPage>
                                       ),
                                     ),
                                     const SizedBox(height: 8),
-                                    // 使用分点说明型提示
-                                    Text(
+                                    const Text(
                                       "尽量包含宠物全身",
                                       style: TextStyle(
-                                        color: const Color(0xFFAEAEB2),
+                                        color: Color(0xFFAEAEB2),
                                         fontSize: 12,
                                       ),
                                     ),
                                     const SizedBox(height: 2),
-                                    Text(
+                                    const Text(
                                       "确保面部清晰可见",
                                       style: TextStyle(
-                                        color: const Color(0xFFAEAEB2),
+                                        color: Color(0xFFAEAEB2),
                                         fontSize: 12,
                                       ),
                                     ),
@@ -563,11 +840,10 @@ class _PreparationPageState extends State<PreparationPage>
                                         tag: 'pet_photo_hero',
                                         child: Image.file(
                                           _selectedImage!,
-                                          fit: BoxFit.contain, // 列表页完整展示
+                                          fit: BoxFit.contain,
                                         ),
                                       ),
                                     ),
-                                    // 右下角「重新选择」
                                     Positioned(
                                       right: 8,
                                       bottom: 8,
@@ -610,47 +886,89 @@ class _PreparationPageState extends State<PreparationPage>
                     ),
                   ),
                 ),
-
-                // 2. 风格选择区标题
                 const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 16.0),
                   child: Align(
                     alignment: Alignment.centerLeft,
                     child: Text(
-                      "选择风格",
+                      "选择样式",
                       style: TextStyle(
                         fontSize: 20,
-                        fontWeight: FontWeight.w800, // 更粗的字重
+                        fontWeight: FontWeight.w800,
                         color: Color(0xFF1D1D1F),
-                        height: 1.2, // 行高控制
+                        height: 1.2,
                       ),
                     ),
                   ),
                 ),
-                const SizedBox(height: 20),
-
-                // 3. 风格选择区
-                SizedBox(
-                  height: 160,
-                  child: ListView.separated(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    scrollDirection: Axis.horizontal,
-                    itemCount: _styles.length,
-                    separatorBuilder: (_, __) => const SizedBox(width: 12),
-                    itemBuilder: (ctx, index) {
-                      final isSelected = _selectedStyleIndex == index;
-                      return _buildTechStyleCard(index, isSelected);
-                    },
-                    controller: _styleScrollController,
+                const SizedBox(height: 12),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: _buildAspectRatioButton(
+                          label: '头像 1:1',
+                          value: '1:1',
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _buildAspectRatioButton(
+                          label: '封面 / 壁纸 9:16',
+                          value: '9:16',
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-
+                const SizedBox(height: 20),
+                SizedBox(
+                  height: 160,
+                  child: _isLoadingStyles && _styles.isEmpty
+                      ? const Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              CircularProgressIndicator(),
+                              SizedBox(height: 10),
+                              Text(
+                                '正在从云端载入样式，请等待',
+                                style: TextStyle(
+                                  color: AppColors.textGrey,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      : _styles.isEmpty
+                          ? const Center(
+                              child: Text(
+                                '暂无可用风格',
+                                style: TextStyle(
+                                  color: AppColors.textGrey,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            )
+                          : ListView.separated(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 8),
+                              scrollDirection: Axis.horizontal,
+                              itemCount: _styles.length,
+                              separatorBuilder: (_, __) =>
+                                  const SizedBox(width: 12),
+                              itemBuilder: (ctx, index) {
+                                final isSelected = _selectedStyleIndex == index;
+                                return _buildTechStyleCard(index, isSelected);
+                              },
+                              controller: _styleScrollController,
+                            ),
+                ),
                 const Spacer(),
-
-                // 上传进度提示已移除（按钮内展示上传状态），以减少视觉冗余。
-
-                // 内联错误提示（替代 SnackBar）
                 if (_uploadError.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.symmetric(
@@ -661,7 +979,8 @@ class _PreparationPageState extends State<PreparationPage>
                         Expanded(
                           child: Text(
                             _uploadError,
-                            style: TextStyle(color: Colors.red, fontSize: 14),
+                            style: const TextStyle(
+                                color: Colors.red, fontSize: 14),
                           ),
                         ),
                         TextButton(
@@ -680,15 +999,12 @@ class _PreparationPageState extends State<PreparationPage>
                       ],
                     ),
                   ),
-
-                // 5. 开始生成按钮 - 使用毛玻璃效果
                 Container(
                   height: 80,
                   padding: const EdgeInsets.all(20.0),
                   child: Stack(
                     alignment: Alignment.center,
                     children: [
-                      // 毛玻璃背景效果
                       ClipRRect(
                         borderRadius: BorderRadius.circular(25),
                         child: BackdropFilter(
@@ -716,8 +1032,6 @@ class _PreparationPageState extends State<PreparationPage>
                           ),
                         ),
                       ),
-
-                      // 渐变色前景按钮
                       AnimatedContainer(
                         duration: const Duration(milliseconds: 300),
                         width: double.infinity,
@@ -725,6 +1039,7 @@ class _PreparationPageState extends State<PreparationPage>
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(25),
                           gradient: (_selectedImage != null &&
+                                  _styles.isNotEmpty &&
                                   !_isStartingTask &&
                                   _uploadStatus != UploadStatus.uploading)
                               ? const LinearGradient(
@@ -764,178 +1079,101 @@ class _PreparationPageState extends State<PreparationPage>
                           color: Colors.transparent,
                           child: InkWell(
                             onTap: (_selectedImage != null &&
+                                    _styles.isNotEmpty &&
                                     _uploadStatus != UploadStatus.uploading &&
                                     !_isStartingTask)
                                 ? () async {
-                                    // 上传图片到Supabase Storage（先执行上传，成功后再进入任务启动阶段显示提示）
                                     final uploadedFileName =
                                         await _uploadImageToSupabaseStorage(
                                             _selectedImage!);
 
-                                    // 如果上传成功，则导航到LoadingPage
                                     if (uploadedFileName != null && mounted) {
-                                      // 上传成功，准备发起生成任务
-
-                                      // 在调用 img-gen-start 之前，设置按钮状态为“正在发起...”，并保持禁用
                                       setState(() {
                                         _isStartingTask = true;
                                       });
 
-                                      // 立即跳转到 LoadingPage（Uploading 已完成），由 LoadingPage 发起 img-gen-start 并轮询状态
                                       if (uploadedFileName.isNotEmpty) {
-                                        // 根据_selectedStyleIndex确定style值
-                                        final styleMap = {
-                                          0: 'run',
-                                          1: 'explorer',
-                                          2: 'bazaar',
-                                          3: 'cowboy',
-                                          4: 'grid',
-                                          5: 'autumn',
-                                        };
-                                        final style =
-                                            styleMap[_selectedStyleIndex] ??
-                                                'run';
-
-                                        // 注意：_isStartingTask 已经在上传前设置为 true
-
-                                        // 调用 img-gen-start，等待返回 taskId，然后再导航到 LoadingPage
-                                        try {
-                                          final supabase =
-                                              Supabase.instance.client;
-
-                                          final res =
-                                              await supabase.functions.invoke(
-                                            'img-gen-start',
-                                            body: {
-                                              'file_name': uploadedFileName,
-                                              'style': style,
-                                            },
-                                          );
-
-                                          // supabase invoke 可能返回 error 字段，先检查
-                                          final data = res.data;
-                                          if (data is Map<String, dynamic> &&
-                                              data.containsKey('error')) {
-                                            throw Exception(
-                                                '服务端错误: ${data['error'].toString()}');
-                                          }
-
-                                          if (data is Map<String, dynamic>) {
-                                            final taskId =
-                                                data['task_id'] as String?;
-
-                                            // 输出 task_id 到终端，方便调试
-                                            if (taskId != null &&
-                                                taskId.isNotEmpty) {
-                                              debugPrint('task_id: $taskId');
-                                              // 标记已成功导航到LoadingPage
-                                              _hasNavigatedToLoadingPage = true;
-                                              // 成功导航到 LoadingPage，等待用户返回后立即重置按钮状态
-                                              if (!context.mounted) return;
-                                              await Navigator.push(
-                                                context,
-                                                FadePageRoute(
-                                                  page: LoadingPage(
-                                                    originalImage:
-                                                        _selectedImage!,
-                                                    uploadedFileName:
-                                                        uploadedFileName,
-                                                    taskId: taskId, // 传递任务ID
-                                                    style: style,
-                                                  ),
-                                                ),
-                                              );
-
-                                              if (mounted) {
-                                                setState(() {
-                                                  // 返回时恢复按钮为可点击状态
-                                                  _isStartingTask = false;
-                                                  _hasNavigatedToLoadingPage =
-                                                      false;
-                                                  // 同步重置上传状态为 idle，允许再次选择或上传
-                                                  _uploadStatus =
-                                                      UploadStatus.idle;
-                                                  _uploadProgress = 0.0;
-                                                });
-                                              }
-                                              return;
-                                            } else {
-                                              throw Exception('未能获取有效的任务ID');
-                                            }
-                                          } else {
-                                            throw Exception('服务器返回格式错误');
-                                          }
-                                        } on SocketException catch (e) {
-                                          final msg = '网络错误：无法连接到服务端，请检查网络';
-                                          debugPrint(
-                                              '❌ SocketException on img-gen-start: $e');
-                                          if (mounted) {
-                                            setState(() {
-                                              _isStartingTask = false;
-                                              _uploadStatus =
-                                                  UploadStatus.failed;
-                                              _uploadError = msg;
-                                            });
-                                          }
-                                          _hasNavigatedToLoadingPage = false;
-                                          return;
-                                        } on TimeoutException catch (e) {
-                                          final msg = '请求超时：AI 生图服务响应缓慢，请稍后重试';
-                                          debugPrint(
-                                              '❌ TimeoutException on img-gen-start: $e');
-                                          if (mounted) {
-                                            setState(() {
-                                              _isStartingTask = false;
-                                              _uploadStatus =
-                                                  UploadStatus.failed;
-                                              _uploadError = msg;
-                                            });
-                                          }
-                                          _hasNavigatedToLoadingPage = false;
-                                          return;
-                                        } catch (e, st) {
-                                          final msg =
-                                              'AI生图任务启动失败：${e.toString()}';
-                                          debugPrint(
-                                              '❌ Exception on img-gen-start: $e\n$st');
-                                          if (mounted) {
-                                            setState(() {
-                                              _isStartingTask = false;
-                                              _uploadStatus =
-                                                  UploadStatus.failed;
-                                              _uploadError = msg;
-                                            });
-                                          }
-                                          _hasNavigatedToLoadingPage = false;
+                                        if (_selectedStyleIndex < 0 ||
+                                            _selectedStyleIndex >=
+                                                _styles.length) {
+                                          setState(() {
+                                            _isStartingTask = false;
+                                            _uploadStatus = UploadStatus.failed;
+                                            _uploadError = '风格索引异常，请重试';
+                                          });
                                           return;
                                         }
-                                      } else {
-                                        // 如果上传失败，显示错误提示（不使用 SnackBar）
+
+                                        final style =
+                                            _styles[_selectedStyleIndex].id;
+
+                                        final supabase =
+                                            Supabase.instance.client;
+                                        final token = supabase
+                                            .auth.currentSession?.accessToken;
+
+                                        if (token == null) {
+                                          setState(() {
+                                            _isStartingTask = false;
+                                            _uploadStatus = UploadStatus.failed;
+                                            _uploadError = '未登录或会话已过期';
+                                          });
+                                          return;
+                                        }
+
+                                        // 核心变更：立刻创建生图请求的 Future
+                                        final generationFuture =
+                                            supabase.functions.invoke(
+                                          'img-gen',
+                                          body: {
+                                            'file_name': uploadedFileName,
+                                            'style': style,
+                                          },
+                                          headers: {
+                                            'Authorization': 'Bearer $token',
+                                            'Content-Type': 'application/json',
+                                          },
+                                        );
+
+                                        setState(() {
+                                          _hasNavigatedToLoadingPage = true;
+                                        });
+
+                                        if (!context.mounted) return;
+                                        // 核心变更：将 Future 传给 LoadingPage
+                                        await Navigator.push(
+                                          context,
+                                          FadePageRoute(
+                                            page: LoadingPage(
+                                              originalImage: _selectedImage!,
+                                              uploadedFileName:
+                                                  uploadedFileName,
+                                              style: style,
+                                              generationFuture:
+                                                  generationFuture,
+                                            ),
+                                          ),
+                                        );
+
                                         if (mounted) {
                                           setState(() {
-                                            _uploadStatus = UploadStatus.failed;
-                                            _uploadError = '图片上传失败，请重试';
-                                            // 上传失败时确保任务启动提示关闭
                                             _isStartingTask = false;
+                                            _hasNavigatedToLoadingPage = false;
+                                            _uploadStatus = UploadStatus.idle;
+                                            _uploadProgress = 0.0;
                                           });
                                         }
-                                        // 重置导航标记，以便页面重建时能正确处理状态
-                                        _hasNavigatedToLoadingPage = false;
-                                        return;
                                       }
-                                    } else if (mounted &&
-                                        _uploadStatus == UploadStatus.failed) {
-                                      // 上传失败：页面内显示错误并提供重试（通过下方的错误提示区）
                                     }
                                   }
                                 : null,
                             borderRadius: BorderRadius.circular(25),
                             child: Center(
                               child: _uploadStatus == UploadStatus.uploading
-                                  ? Row(
+                                  ? const Row(
                                       mainAxisAlignment:
                                           MainAxisAlignment.center,
-                                      children: const [
+                                      children: [
                                         SizedBox(
                                           height: 16,
                                           width: 16,
@@ -946,7 +1184,7 @@ class _PreparationPageState extends State<PreparationPage>
                                         ),
                                         SizedBox(width: 8),
                                         Text(
-                                          "上传中...",
+                                          '上传中...',
                                           style: TextStyle(
                                             fontWeight: FontWeight.bold,
                                             color: Colors.white,
@@ -963,10 +1201,10 @@ class _PreparationPageState extends State<PreparationPage>
                                       ],
                                     )
                                   : _isStartingTask
-                                      ? Row(
+                                      ? const Row(
                                           mainAxisAlignment:
                                               MainAxisAlignment.center,
-                                          children: const [
+                                          children: [
                                             SizedBox(
                                               height: 16,
                                               width: 16,
@@ -977,7 +1215,7 @@ class _PreparationPageState extends State<PreparationPage>
                                             ),
                                             SizedBox(width: 8),
                                             Text(
-                                              "正在发起 AI 生图任务...",
+                                              '正在进入生成流程...',
                                               style: TextStyle(
                                                 fontWeight: FontWeight.bold,
                                                 color: Colors.white,
@@ -993,8 +1231,8 @@ class _PreparationPageState extends State<PreparationPage>
                                             ),
                                           ],
                                         )
-                                      : Text(
-                                          "开始生成",
+                                      : const Text(
+                                          '开始生成',
                                           style: TextStyle(
                                             fontWeight: FontWeight.bold,
                                             color: Colors.white,
@@ -1024,14 +1262,15 @@ class _PreparationPageState extends State<PreparationPage>
   }
 
   Widget _buildTechStyleCard(int index, bool isSelected) {
+    final preset = _styles[index];
+
     return GestureDetector(
       onTap: () => setState(() => _onStyleSelected(index)),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         width: 100,
-        transform: isSelected
-            ? (Matrix4.identity()..scale(1.05)) // 选中时轻微放大
-            : Matrix4.identity(),
+        transform:
+            isSelected ? (Matrix4.identity()..scale(1.05)) : Matrix4.identity(),
         transformAlignment: Alignment.center,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
@@ -1078,16 +1317,12 @@ class _PreparationPageState extends State<PreparationPage>
                     child: ClipRRect(
                       borderRadius:
                           const BorderRadius.vertical(top: Radius.circular(10)),
-                      child: Image.asset(
-                        _styles[index]['img']!,
-                        fit: BoxFit.cover,
-                      ),
+                      child: _buildPresetImage(preset),
                     ),
                   ),
                   Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.symmetric(
-                        vertical: 6), // 增加垂直内边距，从4增加到6
+                    padding: const EdgeInsets.symmetric(vertical: 6),
                     decoration: BoxDecoration(
                       color: isSelected
                           ? const Color(0xFF5D5FEF)
@@ -1096,7 +1331,7 @@ class _PreparationPageState extends State<PreparationPage>
                           bottom: Radius.circular(12)),
                     ),
                     child: Text(
-                      _styles[index]['name']!,
+                      preset.name,
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color:
@@ -1115,17 +1350,118 @@ class _PreparationPageState extends State<PreparationPage>
     );
   }
 
+  Widget _buildAspectRatioButton({
+    required String label,
+    required String value,
+  }) {
+    final isSelected = _selectedAspectRatio == value;
+    return GestureDetector(
+      onTap: () => _onAspectRatioChanged(value),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        height: 38,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          color: isSelected
+              ? const Color(0xFF5D5FEF)
+              : Colors.white.withOpacity(0.65),
+          border: Border.all(
+            color: isSelected
+                ? const Color(0xFF5D5FEF)
+                : Colors.white.withOpacity(0.9),
+            width: 1.2,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: isSelected
+                  ? const Color(0xFF5D5FEF).withOpacity(0.22)
+                  : Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected ? Colors.white : const Color(0xFF1D1D1F),
+            fontWeight: FontWeight.w700,
+            fontSize: 13,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPresetImage(AiStylePreset preset) {
+    final localPath = preset.localImagePath;
+    if (localPath != null && localPath.isNotEmpty) {
+      final localFile = File(localPath);
+      if (localFile.existsSync()) {
+        return Image.file(
+          localFile,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => _buildPresetImageFallback(preset),
+        );
+      }
+    }
+
+    return _buildPresetImageFallback(preset);
+  }
+
+  Widget _buildPresetImageFallback(AiStylePreset preset) {
+    return Container(
+      color: const Color(0xFFE5E5EA),
+      alignment: Alignment.center,
+      padding: const EdgeInsets.symmetric(horizontal: 6),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(
+            Icons.image_not_supported_outlined,
+            color: Color(0xFF8E8E93),
+            size: 20,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            preset.name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: Color(0xFF636366),
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 2),
+          const Text(
+            '示例图待上传',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: Color(0xFF8E8E93),
+              fontSize: 9,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _onStyleSelected(int index) {
     setState(() {
       _selectedStyleIndex = index;
     });
+    _rememberSelectedStyleIndex(_selectedAspectRatio, index);
     _scrollToSelectedStyle();
   }
 
   void _scrollToSelectedStyle({bool animated = true}) {
     if (!_styleScrollController.hasClients) return;
 
-    // 每个卡片宽度 100 + 间距 12
     const double itemExtent = 112.0;
     final target = (_selectedStyleIndex * itemExtent) -
         (MediaQuery.of(context).size.width / 2) +
@@ -1142,7 +1478,6 @@ class _PreparationPageState extends State<PreparationPage>
   }
 }
 
-/// 透明背景路由：让下层页面在预览时直接可见
 class TransparentImageRoute extends PageRouteBuilder {
   TransparentImageRoute({required WidgetBuilder builder})
       : super(
@@ -1155,12 +1490,6 @@ class TransparentImageRoute extends PageRouteBuilder {
         );
 }
 
-/// 全屏图片页
-/// 特性：
-/// 1. 独立全屏黑色背景，只负责暗化，不参与缩放。
-/// 2. 图片层铺满全屏，InteractiveViewer 负责双指缩放，放大时覆盖全屏无死角。
-/// 3. 支持下滑整体缩小 + 背景渐显。
-/// 4. 隐藏状态栏。
 class FullscreenImagePage extends StatefulWidget {
   final File imageFile;
   final String heroTag;
@@ -1215,20 +1544,15 @@ class _FullscreenImagePageState extends State<FullscreenImagePage>
   Widget build(BuildContext context) {
     final screenHeight = MediaQuery.of(context).size.height;
     final dragPercent = (dragOffsetY / screenHeight).clamp(0.0, 1.0);
-    // 缩放比例
     final scale = 1.0 - dragPercent * 0.4;
-    // 背景透明度
     final bgOpacity = (1.0 - dragPercent).clamp(0.0, 1.0);
 
     return Stack(
       children: [
-        // 1. 全屏黑色背景：固定不动，只变透明度
         Opacity(
           opacity: bgOpacity,
           child: Container(color: Colors.black),
         ),
-
-        // 2. 交互层：铺满全屏，确保放大时不会被裁剪
         Positioned.fill(
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
@@ -1253,13 +1577,12 @@ class _FullscreenImagePageState extends State<FullscreenImagePage>
                 child: InteractiveViewer(
                   minScale: 1.0,
                   maxScale: 4.0,
-                  // 让 child 居中，但 InteractiveViewer 本身是占满全屏的
                   child: Center(
                     child: Hero(
                       tag: widget.heroTag,
                       child: Image.file(
                         widget.imageFile,
-                        fit: BoxFit.contain, // 初始完整显示
+                        fit: BoxFit.contain,
                       ),
                     ),
                   ),
