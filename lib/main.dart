@@ -5,8 +5,10 @@ import 'package:intl/date_symbol_data_local.dart'; // 添加 intl 包
 import 'package:flutter_localizations/flutter_localizations.dart'; // 添加本地化支持
 import 'package:supabase_flutter/supabase_flutter.dart'; // ✅ 添加 Supabase
 import 'package:sentry_flutter/sentry_flutter.dart'; // ✅ 添加 Sentry
-import 'login_page.dart'; // <-- 这是新添加的导入
+import 'login_page.dart';
 import 'home_screen.dart';
+import 'config/supabase_config.dart';
+
 
 void main() async {
   // 确保 Flutter 框架初始化
@@ -40,9 +42,8 @@ void main() async {
       // ✅ 初始化 Supabase（在 Sentry 之后，这样 Supabase 的错误也能被捕获）
       print('🔧 开始初始化 Supabase...');
       await Supabase.initialize(
-        url: 'https://tcftpcvcldfudzxgemdh.supabase.co',
-        anonKey:
-            'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRjZnRwY3ZjbGRmdWR6eGdlbWRoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA2NjMzMTQsImV4cCI6MjA3NjIzOTMxNH0.uiusEWfuAw37fL6neZfK3q9NV4HZF7k-kX6hFIJQ83s',
+        url: SupabaseConfig.projectUrl,
+        anonKey: SupabaseConfig.anonKey,
         // 持久化会话并自动刷新 token，保证重开 App 后仍保持登录
         authOptions: const FlutterAuthClientOptions(
           autoRefreshToken: true,

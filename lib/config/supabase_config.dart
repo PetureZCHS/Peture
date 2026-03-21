@@ -1,10 +1,15 @@
-// lib/config/supabase_config.dart
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 // Supabase 配置文件
 //
 // 使用说明:
 // 1. 从 Supabase Dashboard 获取您的项目配置
 // 2. 将下面的值替换为您的实际配置
 // 3. 不要将此文件提交到公开的 Git 仓库（如果包含敏感信息）
+
+/// Supabase client - 全局单例
+/// 方便在 Service 中直接调用，无需重复初始化
+final supabase = Supabase.instance.client;
 
 class SupabaseConfig {
   // Supabase 项目 URL
@@ -21,20 +26,15 @@ class SupabaseConfig {
   // Edge Function 名称
   // 这是您在 Supabase 中创建的 Edge Function 的名称
   static const String difyChatFunctionName = 'chat';
-  static const String diaryFunctionName = 'diary';
+  static const String diaryFunctionName = 'diary-v3'; // 使用 v3 版本
+  static const String rechargeFunctionName = 'recharge-test'; // 充值测试函数
 
   // Edge Function 完整 URL
   static String get difyChatUrl =>
       '$projectUrl/functions/v1/$difyChatFunctionName';
 
   static String get diaryUrl => '$projectUrl/functions/v1/$diaryFunctionName';
-}
 
-// 使用示例：
-//
-// import 'config/supabase_config.dart';
-//
-// await Supabase.initialize(
-//   url: SupabaseConfig.projectUrl,
-//   anonKey: SupabaseConfig.anonKey,
-// );
+  static String get rechargeUrl =>
+      '$projectUrl/functions/v1/$rechargeFunctionName';
+}

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:ui';
+import 'dart:async';
+
 import 'dart:math' as math;
 import 'package:audioplayers/audioplayers.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -36,6 +38,8 @@ class _DogClickerScreenState extends State<DogClickerScreen>
   int _unconfirmedCount = 0; // 未确认的点击次数
   bool _isCoolingDown = false; // 点击防抖标志
   bool _pendingConfirmation = false; // 是否处于待确认状态
+  bool _showFailureMessage = false; // 是否显示失败提示信息
+  Timer? _failureMessageTimer; // 失败信息倒计时
   int _selectedFilterIndex = 0; // 选中的筛选标签索引
   List<String> _filterOptions = []; // 用户自定义的训练项目列表
 
@@ -83,6 +87,7 @@ class _DogClickerScreenState extends State<DogClickerScreen>
     // 释放音频播放器资源
     _audioPlayer.dispose();
     _previewPlayer?.dispose();
+    _failureMessageTimer?.cancel();
     super.dispose();
   }
 
@@ -1641,6 +1646,7 @@ class _DogClickerScreenState extends State<DogClickerScreen>
       setState(() {
         _isCoolingDown = true;
         _pendingConfirmation = true; // 进入待确认状态
+        _showFailureMessage = false; // 点击新响片时清除之前的失败提示
       });
 
       // 250ms 后解除冷却
@@ -1681,6 +1687,7 @@ class _DogClickerScreenState extends State<DogClickerScreen>
     setState(() {
       _clickCount++;
       _pendingConfirmation = false;
+      _showFailureMessage = false; // 成功则清除可能的失败提示
     });
     await _saveSuccessCount();
 
@@ -1695,15 +1702,24 @@ class _DogClickerScreenState extends State<DogClickerScreen>
     setState(() {
       _failCount++;
       _pendingConfirmation = false;
+      // 显示失败提示
+      _showFailureMessage = true;
     });
+    
+    // 重置倒计时
+    _failureMessageTimer?.cancel();
+    _failureMessageTimer = Timer(const Duration(seconds: 4), () {
+      if (mounted) {
+        setState(() {
+          _showFailureMessage = false;
+        });
+      }
+    });
+
     await _saveFailureCount();
 
     // 触觉反馈
     await HapticFeedback.mediumImpact();
-
-    if (mounted) {
-      _showFailureTip(context);
-    }
   }
 
   /// 跳过确认（记为未确认）
@@ -1891,9 +1907,16 @@ class _DogClickerScreenState extends State<DogClickerScreen>
                       _buildEmptyState(),
                     ] else ...[
                       // 新手提示（呼吸感文字）
-                      if (!_pendingConfirmation) _buildTrainingTip(),
+                      if (!_pendingConfirmation && !_showFailureMessage)
+                        _buildTrainingTip(),
                       // 待确认状态提示
                       if (_pendingConfirmation) _buildConfirmationTip(),
+                      // 失败提示
+                      if (_showFailureMessage)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          child: _buildFailureTip(),
+                        ),
                       const SizedBox(height: 12),
                       // 拟物化响片设备（包含项目选择和统计）
                       SkeuomorphicClickerDevice(
@@ -1917,16 +1940,24 @@ class _DogClickerScreenState extends State<DogClickerScreen>
                           setState(() => _failCount++);
                           await HapticFeedback.lightImpact();
                           await _saveFailureCount();
-                          if (mounted) {
-                            _showFailureTip(context);
-                          }
+                          // 更新显示失败提示
+                          setState(() => _showFailureMessage = true);
+                          _failureMessageTimer?.cancel();
+                          _failureMessageTimer = Timer(const Duration(seconds: 4), () {
+                            if (mounted) {
+                              setState(() => _showFailureMessage = false);
+                            }
+                          });
+
                         },
                         onProjectChanged: (index) {
                           // 如果正在待确认状态，先取消
                           if (_pendingConfirmation) {
                             _handleSkipConfirm();
                           }
+                          // 切换项目也清除失败提示
                           setState(() {
+                            _showFailureMessage = false;
                             _selectedFilterIndex = index;
                             _updateCurrentCounts();
                           });
@@ -1958,28 +1989,42 @@ class _DogClickerScreenState extends State<DogClickerScreen>
         final breathValue =
             0.5 + 0.5 * math.sin(_orbController.value * math.pi * 2);
         return Opacity(
-          opacity: 0.5 + breathValue * 0.5,
+          opacity: 0.8 + breathValue * 0.2, // 提高透明度基数，更清晰
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.08),
-              borderRadius: BorderRadius.circular(20),
+              color: const Color(0xFF252525).withOpacity(0.95), // 统一深色背景
+              borderRadius: BorderRadius.circular(50),
+              border: Border.all(
+                color: Colors.white.withOpacity(0.1), // 极淡的边框
+                width: 1.5,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.3),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(
                   Icons.tips_and_updates_outlined,
-                  color: Colors.white.withOpacity(0.5),
-                  size: 16,
+                  color: Colors.white.withOpacity(0.8), // 浅色图标
+                  size: 18,
+
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 12),
                 Text(
                   '在它做对的那一秒，按下快门（响片）',
                   style: TextStyle(
-                    color: Colors.white.withOpacity(0.6),
-                    fontSize: 13,
-                    fontWeight: FontWeight.w400,
+                    color: Colors.white.withOpacity(0.9), // 浅色文字
+                    fontSize: 14, // 统一字号
+                    fontWeight: FontWeight.w500,
+
                     letterSpacing: 0.5,
                   ),
                 ),
@@ -1988,6 +2033,61 @@ class _DogClickerScreenState extends State<DogClickerScreen>
           ),
         );
       },
+    );
+  }
+
+  /// 失败提示
+  Widget _buildFailureTip() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF252525).withOpacity(0.95), // 统一深色背景
+        borderRadius: BorderRadius.circular(50),
+        border: Border.all(
+          color: const Color(0xFFFF5722).withOpacity(0.5), // 橙色边框
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.4),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 10,
+            height: 10,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: const Color(0xFFFF5722),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFFFF5722).withOpacity(0.8),
+                  blurRadius: 10,
+                  spreadRadius: 2,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          const Flexible(
+            child: Text(
+              '不要气馁！试试分解步骤，再次引导',
+              style: TextStyle(
+                color: Color(0xFFFFAB91), // 浅橙色文字
+                fontSize: 15,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 0.5,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -2000,48 +2100,49 @@ class _DogClickerScreenState extends State<DogClickerScreen>
         final pulseValue =
             0.5 + 0.5 * math.sin(_orbController.value * math.pi * 6);
         return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                const Color(0xFF4CAF50).withOpacity(0.15),
-                const Color(0xFFFF9800).withOpacity(0.15),
-              ],
-            ),
-            borderRadius: BorderRadius.circular(20),
+            color: const Color(0xFF252525).withOpacity(0.95),
+            borderRadius: BorderRadius.circular(50),
             border: Border.all(
-              color: Colors.white.withOpacity(0.1),
-              width: 1,
+              color: const Color(0xFF4CAF50).withOpacity(0.5),
+              width: 1.5,
             ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.4),
+                blurRadius: 12,
+                offset: const Offset(0, 6),
+              ),
+            ],
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               // 脉冲指示器
               Container(
-                width: 8,
-                height: 8,
+                width: 10,
+                height: 10,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: const Color(0xFF4CAF50)
-                      .withOpacity(0.5 + pulseValue * 0.5),
+                  color: const Color(0xFF4CAF50),
                   boxShadow: [
                     BoxShadow(
                       color:
-                          const Color(0xFF4CAF50).withOpacity(pulseValue * 0.5),
-                      blurRadius: 8,
+                          const Color(0xFF4CAF50).withOpacity(pulseValue * 0.8),
+                      blurRadius: 10,
                       spreadRadius: 2,
                     ),
                   ],
                 ),
               ),
-              const SizedBox(width: 10),
-              Text(
+              const SizedBox(width: 12),
+              const Text(
                 '它做到了吗？请确认结果',
                 style: TextStyle(
-                  color: Colors.white.withOpacity(0.85),
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
+                  color: Colors.white,
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
                   letterSpacing: 0.5,
                 ),
               ),
