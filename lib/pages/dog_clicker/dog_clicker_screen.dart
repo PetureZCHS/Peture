@@ -1948,8 +1948,8 @@ class _DogClickerScreenState extends State<DogClickerScreen>
                               setState(() => _showFailureMessage = false);
                             }
                           });
-
                         },
+
                         onProjectChanged: (index) {
                           // 如果正在待确认状态，先取消
                           if (_pendingConfirmation) {
@@ -2006,8 +2006,8 @@ class _DogClickerScreenState extends State<DogClickerScreen>
                   offset: const Offset(0, 4),
                 ),
               ],
-
             ),
+
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -2015,8 +2015,8 @@ class _DogClickerScreenState extends State<DogClickerScreen>
                   Icons.tips_and_updates_outlined,
                   color: Colors.white.withOpacity(0.8), // 浅色图标
                   size: 18,
-
                 ),
+
                 const SizedBox(width: 12),
                 Text(
                   '在它做对的那一秒，按下快门（响片）',
@@ -2024,8 +2024,8 @@ class _DogClickerScreenState extends State<DogClickerScreen>
                     color: Colors.white.withOpacity(0.9), // 浅色文字
                     fontSize: 14, // 统一字号
                     fontWeight: FontWeight.w500,
-
                     letterSpacing: 0.5,
+
                   ),
                 ),
               ],
