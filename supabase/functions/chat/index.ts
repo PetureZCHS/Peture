@@ -1,68 +1,212 @@
-// Setup type definitions for built-in Supabase Runtime APIs
-// 设置 Supabase Runtime API 的类型定义
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-// Dify API configuration / Dify API 配置
-const DIFY_API_KEY = Deno.env.get('DIFY_API_KEY');
+const DIFY_CHAT_API_KEY = Deno.env.get('DIFY_CHAT_API_KEY');
 const DIFY_BASE_URL = 'https://api.dify.ai/v1';
-Deno.serve(async (req)=>{
-  // CORS headers 配置
+const EFFECTIVE_DIFY_KEY = DIFY_CHAT_API_KEY;
+
+const DOCTOR_PROMPT = `
+# System Prompt for Peture AI (Doctor Mode)
+你现在是 Peture AI 的首席兽医专家。通过多轮对话收集信息后，再给出结构化结论。
+核心规则：
+1. 第一次描述时不要直接下结论；
+2. 每次只追问 1 个关键问题；
+3. 使用温暖、专业中文；
+4. 信息充分或情况危急时，输出诊断 JSON。
+输出状态：
+- 问诊中：输出普通文本。
+- 诊断完成：仅输出 JSON：
+{
+  "type": "report",
+  "data": {
+    "diagnosis": "xxx",
+    "urgency_level": 1-5,
+    "urgency_color": "green|yellow|red",
+    "possible_causes": ["..."],
+    "advice_summary": "..."
+  }
+}`.trim();
+
+const AGENT_PROMPT = `
+# System Prompt for Peture AI (Agent Mode)
+你是 Peture AI 的购物决策 Agent，给出明确的最佳推荐，不给模糊选项。
+要求：
+1. 展示清晰推理步骤；
+2. 输出专业、简洁结论；
+3. 若信息不足，先追问关键项。
+推荐完成时输出 JSON：
+{
+  "type": "recommendation",
+  "data": {
+    "reason": "...",
+    "productName": "...",
+    "price": "...",
+    "rating": "...",
+    "safetyCheck": "...",
+    "reasoningSteps": ["..."]
+  }
+}`.trim();
+
+function toDifyFiles(images: Array<Record<string, unknown>>) {
+  return images.map((img) => {
+    const uploadFileId = String(img['upload_file_id'] ?? '');
+    return {
+      type: 'image',
+      transfer_method: 'local_file',
+      upload_file_id: uploadFileId,
+    };
+  });
+}
+
+async function uploadImageToDify(params: {
+  user: string;
+  fileName: string;
+  mimeType: string;
+  base64: string;
+}) {
+  const { user, fileName, mimeType, base64 } = params;
+  const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+  const blob = new Blob([bytes], { type: mimeType });
+
+  const formData = new FormData();
+  formData.append('user', user);
+  formData.append('file', blob, fileName);
+
+  const res = await fetch(`${DIFY_BASE_URL}/files/upload`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${EFFECTIVE_DIFY_KEY}`,
+    },
+    body: formData,
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`上传图片失败(${res.status}): ${text}`);
+  }
+
+  const data = await res.json();
+  const id = data?.id as string | undefined;
+  if (!id) {
+    throw new Error('上传图片成功但未返回文件 ID');
+  }
+  return id;
+}
+
+Deno.serve(async (req) => {
   const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type'
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   };
-  // Handle CORS preflight requests / 处理 CORS 预检请求
+
   if (req.method === 'OPTIONS') {
-    return new Response('ok', {
-      headers: corsHeaders
-    });
+    return new Response('ok', { headers: corsHeaders });
   }
+
   try {
-    // Parse request body / 解析请求体
+    if (!EFFECTIVE_DIFY_KEY) {
+      return new Response(JSON.stringify({
+        error: '缺少 Dify API Key（DIFY_CHAT_API_KEY）',
+      }), {
+        status: 500,
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'application/json',
+        },
+      });
+    }
+
     const requestBody = await req.json();
-    // Validate required fields / 验证必填字段
     if (!requestBody.query || !requestBody.user) {
       return new Response(JSON.stringify({
-        error: 'Missing required fields: query and user are required'
+        error: 'Missing required fields: query and user are required',
       }), {
         status: 400,
         headers: {
           ...corsHeaders,
-          'Content-Type': 'application/json'
-        }
+          'Content-Type': 'application/json',
+        },
       });
     }
-    // Default to streaming mode / 默认使用流式模式
+
     const responseMode = requestBody.response_mode || 'streaming';
-    // Prepare request to Dify API / 准备发送到 Dify API 的请求
+    const query = String(requestBody.query);
+    const user = String(requestBody.user);
+    const doctorMode = Boolean(requestBody.doctor_mode);
+    const agentMode = Boolean(requestBody.agent_mode);
+    const petContext = String(requestBody.pet_context ?? '').trim();
+    const hasConversation = Boolean(requestBody.conversation_id);
+
+    let finalQuery = query;
+    if (!hasConversation) {
+      if (agentMode) {
+        finalQuery = `${AGENT_PROMPT}\n\n用户问题：${finalQuery}`;
+      } else if (doctorMode) {
+        finalQuery = `${DOCTOR_PROMPT}\n\n用户问题：${finalQuery}`;
+      }
+    }
+    if (petContext.length > 0) {
+      finalQuery = `${finalQuery}\n\n${petContext}`;
+    }
+
+    const incomingImages = Array.isArray(requestBody.images)
+      ? requestBody.images as Array<Record<string, unknown>>
+      : [];
+    const uploadedImages: Array<Record<string, unknown>> = [];
+    for (const image of incomingImages) {
+      const base64 = String(image['dataBase64'] ?? '');
+      const fileName = String(image['fileName'] ?? `image_${Date.now()}.jpg`);
+      const mimeType = String(image['mimeType'] ?? 'image/jpeg');
+      if (!base64) continue;
+      const uploadFileId = await uploadImageToDify({
+        user,
+        fileName,
+        mimeType,
+        base64,
+      });
+      uploadedImages.push({ upload_file_id: uploadFileId });
+    }
+
+    const bodyForDify = {
+      ...requestBody,
+      query: finalQuery,
+      user,
+      response_mode: responseMode,
+      files: uploadedImages.length > 0 ? toDifyFiles(uploadedImages) : undefined,
+      images: undefined,
+      doctor_mode: undefined,
+      agent_mode: undefined,
+      pet_context: undefined,
+    };
+
     const difyResponse = await fetch(`${DIFY_BASE_URL}/chat-messages`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${DIFY_API_KEY}`,
-        'Content-Type': 'application/json'
+        'Authorization': `Bearer ${EFFECTIVE_DIFY_KEY}`,
+        'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        ...requestBody,
-        response_mode: responseMode
-      })
+      body: JSON.stringify(bodyForDify),
     });
-    // Handle API errors / 处理 API 错误
+
     if (!difyResponse.ok) {
-      const errorData = await difyResponse.json();
+      let errorData: Record<string, unknown> = {};
+      try {
+        errorData = await difyResponse.json();
+      } catch (_) {
+        const raw = await difyResponse.text();
+        errorData = { message: raw };
+      }
       return new Response(JSON.stringify({
-        error: errorData.message || 'Dify API request failed',
+        error: (errorData.message as string) || 'Dify API request failed',
         status: difyResponse.status,
-        code: errorData.code
+        code: errorData.code,
       }), {
         status: difyResponse.status,
         headers: {
           ...corsHeaders,
-          'Content-Type': 'application/json'
-        }
+          'Content-Type': 'application/json',
+        },
       });
     }
-    // Handle streaming response / 处理流式响应
-    // SSE (Server-Sent Events) format for real-time output
-    // SSE（服务器推送事件）格式，用于实时输出
+
     if (responseMode === 'streaming') {
       const stream = difyResponse.body;
       return new Response(stream, {
@@ -70,60 +214,29 @@ Deno.serve(async (req)=>{
           ...corsHeaders,
           'Content-Type': 'text/event-stream',
           'Cache-Control': 'no-cache',
-          'Connection': 'keep-alive'
-        }
+          'Connection': 'keep-alive',
+        },
       });
     }
-    // Handle blocking response / 处理阻塞模式响应
-    // Returns complete result after execution / 等待执行完毕后返回完整结果
+
     const data = await difyResponse.json();
     return new Response(JSON.stringify(data), {
       headers: {
         ...corsHeaders,
-        'Content-Type': 'application/json'
-      }
+        'Content-Type': 'application/json',
+      },
     });
   } catch (error) {
-    // Error handling and logging / 错误处理和日志记录
     console.error('Error:', error);
     return new Response(JSON.stringify({
       error: error.message || 'Internal server error',
-      details: error.toString()
+      details: error.toString(),
     }), {
       status: 500,
       headers: {
         ...corsHeaders,
-        'Content-Type': 'application/json'
-      }
+        'Content-Type': 'application/json',
+      },
     });
   }
 });
-/* 
- * Usage Examples / 使用示例:
- * 
- * Streaming Mode / 流式模式:
- * const response = await fetch('YOUR_SUPABASE_FUNCTION_URL', {
- *   method: 'POST',
- *   headers: { 'Content-Type': 'application/json' },
- *   body: JSON.stringify({
- *     query: "What are the specs of the iPhone 13 Pro Max?",
- *     user: "user-123",
- *     response_mode: "streaming"
- *   })
- * })
- * 
- * Blocking Mode / 阻塞模式:
- * const response = await fetch('YOUR_SUPABASE_FUNCTION_URL', {
- *   method: 'POST',
- *   headers: { 'Content-Type': 'application/json' },
- *   body: JSON.stringify({
- *     query: "What are the specs of the iPhone 13 Pro Max?",
- *     user: "user-123",
- *     response_mode: "blocking",
- *     conversation_id: "previous-conversation-id" // Optional, for continuing conversation / 可选，用于继续对话
- *   })
- * })
- * 
- * Environment Setup / 环境配置:
- * supabase secrets set DIFY_API_KEY=your_dify_api_key
- */
