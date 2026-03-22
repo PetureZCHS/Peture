@@ -73,6 +73,16 @@ enum UploadStatus {
   failed,
 }
 
+class ImagePrecheckResult {
+  final bool pass;
+  final String reason;
+
+  const ImagePrecheckResult({
+    required this.pass,
+    required this.reason,
+  });
+}
+
 class AiStylePreset {
   final String id;
   final String name;
@@ -151,6 +161,7 @@ class _PreparationPageState extends State<PreparationPage>
   String _uploadError = '';
 
   bool _isStartingTask = false;
+  bool _isPrecheckingImage = false;
   bool _hasNavigatedToLoadingPage = false;
   bool _isLoadingStyles = true;
   String _selectedAspectRatio = _defaultAspectRatio;
@@ -162,6 +173,8 @@ class _PreparationPageState extends State<PreparationPage>
   late AnimationController _orbController;
 
   List<AiStylePreset> _styles = const [];
+  Set<String> _imageCachingPresetIds = <String>{};
+  Set<String> _imageCacheFailedPresetIds = <String>{};
 
   @override
   void initState() {
@@ -292,10 +305,17 @@ class _PreparationPageState extends State<PreparationPage>
       }
 
       if (!mounted || epoch != _styleLoadEpoch) return;
+      final missingImageIds = cached
+          .where((preset) =>
+              preset.localImagePath == null || preset.localImagePath!.isEmpty)
+          .map((preset) => preset.id)
+          .toSet();
       setState(() {
         _styles = cached;
         _selectedStyleIndex =
             _clampedRememberedStyleIndex(aspectRatio, cached.length);
+        _imageCachingPresetIds = missingImageIds;
+        _imageCacheFailedPresetIds = <String>{};
         _isLoadingStyles = false;
       });
 
@@ -336,22 +356,30 @@ class _PreparationPageState extends State<PreparationPage>
           .eq('aspect_ratio', aspectRatio);
       final currentCount = countRows.length;
 
-        final cachedLatestCreatedAt =
+      final cachedLatestCreatedAt =
           prefs.getString(_cacheLatestCreatedAtKey(aspectRatio));
-        final cachedCount = prefs.getInt(_cacheCountKey(aspectRatio));
+      final cachedCount = prefs.getInt(_cacheCountKey(aspectRatio));
+
+      final hasMissingPreviewImage = _styles.any((preset) {
+        final localPath = preset.localImagePath;
+        if (localPath == null || localPath.isEmpty) return true;
+        return !File(localPath).existsSync();
+      });
 
       if (_styles.isNotEmpty &&
+          !hasMissingPreviewImage &&
           cachedLatestCreatedAt == currentLatestCreatedAt &&
           cachedCount == currentCount) {
         if (mounted) {
           setState(() {
+            _imageCachingPresetIds = <String>{};
             _isLoadingStyles = false;
           });
         }
         return;
       }
 
-        final String? lastSyncAt = prefs.getString(_cacheLastSyncKey(aspectRatio));
+      final String? lastSyncAt = prefs.getString(_cacheLastSyncKey(aspectRatio));
       final bool shouldFullRefresh =
           _styles.isEmpty || cachedCount == null || currentCount < cachedCount;
 
@@ -384,13 +412,23 @@ class _PreparationPageState extends State<PreparationPage>
       for (final row in rows) {
         final remotePreset = AiStylePreset.fromDb(row);
         if (remotePreset.id.isEmpty || remotePreset.name.isEmpty) continue;
-        final withImage =
-            await _ensurePresetImageCached(remotePreset, keepOldPath: true);
-        mergedMap[withImage.id] = withImage;
+        final existing = mergedMap[remotePreset.id];
+        mergedMap[remotePreset.id] = remotePreset.copyWith(
+          localImagePath: existing?.localImagePath,
+        );
       }
 
       final merged = mergedMap.values.toList()
         ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+
+      final pendingImageIds = merged
+          .where((preset) {
+            final localPath = preset.localImagePath;
+            if (localPath == null || localPath.isEmpty) return true;
+            return !File(localPath).existsSync();
+          })
+          .map((preset) => preset.id)
+          .toSet();
 
       final nowIso = DateTime.now().toIso8601String();
       await prefs.setString(_cacheStylesKey(aspectRatio),
@@ -405,12 +443,22 @@ class _PreparationPageState extends State<PreparationPage>
         _styles = merged;
         _selectedStyleIndex =
             _clampedRememberedStyleIndex(aspectRatio, merged.length);
+        _imageCachingPresetIds = pendingImageIds;
+        _imageCacheFailedPresetIds = <String>{};
         _isLoadingStyles = false;
       });
 
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _scrollToSelectedStyle(animated: false);
       });
+
+      if (pendingImageIds.isNotEmpty) {
+        unawaited(_cachePresetImagesInBackground(
+          aspectRatio: aspectRatio,
+          epoch: epoch,
+          initialPresets: merged,
+        ));
+      }
     } catch (e, st) {
       debugPrint('同步风格预设失败: $e\n$st');
       if (mounted) {
@@ -421,10 +469,76 @@ class _PreparationPageState extends State<PreparationPage>
     }
   }
 
+  Future<void> _cachePresetImagesInBackground({
+    required String aspectRatio,
+    required int epoch,
+    required List<AiStylePreset> initialPresets,
+  }) async {
+    if (initialPresets.isEmpty) return;
+
+    final pending = initialPresets.where((preset) {
+      final localPath = preset.localImagePath;
+      if (localPath == null || localPath.isEmpty) return true;
+      return !File(localPath).existsSync();
+    }).toList(growable: false);
+
+    if (pending.isEmpty) return;
+
+    var hasAnyUpdate = false;
+
+    for (final preset in pending) {
+      if (!mounted || epoch != _styleLoadEpoch || _selectedAspectRatio != aspectRatio) {
+        return;
+      }
+
+      final withImage =
+          await _ensurePresetImageCached(preset, keepOldPath: true);
+
+      if (!mounted || epoch != _styleLoadEpoch || _selectedAspectRatio != aspectRatio) {
+        return;
+      }
+
+      final resolvedPath = withImage.localImagePath;
+      final hasImage =
+          resolvedPath != null && resolvedPath.isNotEmpty && await File(resolvedPath).exists();
+
+      setState(() {
+        final index = _styles.indexWhere((item) => item.id == withImage.id);
+        if (index >= 0) {
+          _styles = List<AiStylePreset>.from(_styles)
+            ..[index] = withImage;
+          hasAnyUpdate = true;
+        }
+        _imageCachingPresetIds.remove(withImage.id);
+        if (hasImage) {
+          _imageCacheFailedPresetIds.remove(withImage.id);
+        } else {
+          _imageCacheFailedPresetIds.add(withImage.id);
+        }
+      });
+    }
+
+    if (hasAnyUpdate && mounted && epoch == _styleLoadEpoch) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+        _cacheStylesKey(aspectRatio),
+        jsonEncode(_styles.map((e) => e.toCacheJson()).toList()),
+      );
+    }
+  }
+
   Future<AiStylePreset> _ensurePresetImageCached(
     AiStylePreset preset, {
     required bool keepOldPath,
   }) async {
+    final presetLocalPath = preset.localImagePath;
+    if (presetLocalPath != null && presetLocalPath.isNotEmpty) {
+      final presetLocalFile = File(presetLocalPath);
+      if (await presetLocalFile.exists()) {
+        return preset;
+      }
+    }
+
     final existingPreset = keepOldPath
         ? _styles.cast<AiStylePreset?>().firstWhere(
               (item) => item?.id == preset.id,
@@ -495,7 +609,11 @@ class _PreparationPageState extends State<PreparationPage>
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(source: ImageSource.gallery);
     if (pickedFile != null) {
-      setState(() => _selectedImage = File(pickedFile.path));
+      setState(() {
+        _selectedImage = File(pickedFile.path);
+        _uploadError = '';
+        _uploadStatus = UploadStatus.idle;
+      });
     }
   }
 
@@ -659,6 +777,90 @@ class _PreparationPageState extends State<PreparationPage>
         _uploadStatus = UploadStatus.failed;
         _uploadError = message;
       });
+    }
+  }
+
+  Future<ImagePrecheckResult> _precheckUploadedImage({
+    required String uploadedFileName,
+  }) async {
+    final supabase = Supabase.instance.client;
+
+    try {
+      final response = await supabase.functions.invoke(
+        'img-gen-precheck',
+        body: {
+          'file_name': uploadedFileName,
+        },
+      );
+
+      dynamic payload = response.data;
+      if (payload is String && payload.isNotEmpty) {
+        payload = jsonDecode(payload);
+      }
+
+      if (payload is! Map) {
+        return const ImagePrecheckResult(
+          pass: false,
+          reason: '图片检测服务返回了无效结果，请稍后重试',
+        );
+      }
+
+      final bool pass = payload['pass'] == true;
+      final String reason = (payload['reason'] as String? ?? '').trim();
+
+      if (pass) {
+        return const ImagePrecheckResult(pass: true, reason: '');
+      }
+
+      return ImagePrecheckResult(
+        pass: false,
+        reason: reason.isNotEmpty ? reason : '图片不符合生成要求，请更换后重试',
+      );
+    } on SocketException {
+      return const ImagePrecheckResult(
+        pass: false,
+        reason: '图片检测失败：网络连接异常，请检查网络后重试',
+      );
+    } on TimeoutException {
+      return const ImagePrecheckResult(
+        pass: false,
+        reason: '图片检测超时，请稍后再试',
+      );
+    } on FunctionException catch (e) {
+      debugPrint('❌ 预检函数调用失败: $e');
+      final message = e.toString().toLowerCase();
+      if (message.contains('401') ||
+          message.contains('403') ||
+          message.contains('unauthorized') ||
+          message.contains('forbidden')) {
+        return const ImagePrecheckResult(
+          pass: false,
+          reason: '登录状态已失效，请重新登录后重试',
+        );
+      }
+      if (message.contains('timeout')) {
+        return const ImagePrecheckResult(
+          pass: false,
+          reason: '图片检测超时，请稍后再试',
+        );
+      }
+      if (message.contains('network') || message.contains('fetch')) {
+        return const ImagePrecheckResult(
+          pass: false,
+          reason: '图片检测失败：网络连接异常，请检查网络后重试',
+        );
+      }
+
+      return const ImagePrecheckResult(
+        pass: false,
+        reason: '图片检测服务暂时不可用，请稍后重试',
+      );
+    } catch (e, st) {
+      debugPrint('❌ 图片预检异常: $e\n$st');
+      return const ImagePrecheckResult(
+        pass: false,
+        reason: '图片检测失败，请检查网络后重试',
+      );
     }
   }
 
@@ -973,31 +1175,7 @@ class _PreparationPageState extends State<PreparationPage>
                   Padding(
                     padding: const EdgeInsets.symmetric(
                         horizontal: 16.0, vertical: 8.0),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Expanded(
-                          child: Text(
-                            _uploadError,
-                            style: const TextStyle(
-                                color: Colors.red, fontSize: 14),
-                          ),
-                        ),
-                        TextButton(
-                          onPressed: () {
-                            if (_selectedImage != null) {
-                              setState(() {
-                                _uploadStatus = UploadStatus.uploading;
-                                _uploadError = '';
-                                _isStartingTask = false;
-                              });
-                              _uploadImageToSupabaseStorage(_selectedImage!);
-                            }
-                          },
-                          child: const Text('重试'),
-                        ),
-                      ],
-                    ),
+                    child: _buildUploadErrorBanner(_uploadError),
                   ),
                 Container(
                   height: 80,
@@ -1090,6 +1268,8 @@ class _PreparationPageState extends State<PreparationPage>
                                     if (uploadedFileName != null && mounted) {
                                       setState(() {
                                         _isStartingTask = true;
+                                        _isPrecheckingImage = true;
+                                        _uploadError = '';
                                       });
 
                                       if (uploadedFileName.isNotEmpty) {
@@ -1098,6 +1278,7 @@ class _PreparationPageState extends State<PreparationPage>
                                                 _styles.length) {
                                           setState(() {
                                             _isStartingTask = false;
+                                            _isPrecheckingImage = false;
                                             _uploadStatus = UploadStatus.failed;
                                             _uploadError = '风格索引异常，请重试';
                                           });
@@ -1109,16 +1290,49 @@ class _PreparationPageState extends State<PreparationPage>
 
                                         final supabase =
                                             Supabase.instance.client;
-                                        final token = supabase
-                                            .auth.currentSession?.accessToken;
 
-                                        if (token == null) {
-                                          setState(() {
-                                            _isStartingTask = false;
-                                            _uploadStatus = UploadStatus.failed;
-                                            _uploadError = '未登录或会话已过期';
-                                          });
+                                        Session? session;
+                                        try {
+                                          final refreshResponse =
+                                              await supabase.auth.refreshSession();
+                                          session = refreshResponse.session;
+                                        } catch (_) {
+                                          session = supabase.auth.currentSession;
+                                        }
+                                        final accessToken = session?.accessToken;
+                                        if (accessToken == null || accessToken.isEmpty) {
+                                          if (mounted) {
+                                            setState(() {
+                                              _isStartingTask = false;
+                                              _isPrecheckingImage = false;
+                                              _uploadStatus = UploadStatus.failed;
+                                              _uploadError = '登录状态已失效，请重新登录后重试';
+                                            });
+                                          }
                                           return;
+                                        }
+
+                                        final precheckResult =
+                                            await _precheckUploadedImage(
+                                          uploadedFileName: uploadedFileName,
+                                        );
+
+                                        if (!precheckResult.pass) {
+                                          if (mounted) {
+                                            setState(() {
+                                              _isStartingTask = false;
+                                              _isPrecheckingImage = false;
+                                              _uploadStatus = UploadStatus.failed;
+                                              _uploadError = precheckResult.reason;
+                                            });
+                                          }
+                                          return;
+                                        }
+
+                                        if (mounted) {
+                                          setState(() {
+                                            _isPrecheckingImage = false;
+                                          });
                                         }
 
                                         // 核心变更：立刻创建生图请求的 Future
@@ -1128,10 +1342,6 @@ class _PreparationPageState extends State<PreparationPage>
                                           body: {
                                             'file_name': uploadedFileName,
                                             'style': style,
-                                          },
-                                          headers: {
-                                            'Authorization': 'Bearer $token',
-                                            'Content-Type': 'application/json',
                                           },
                                         );
 
@@ -1158,11 +1368,19 @@ class _PreparationPageState extends State<PreparationPage>
                                         if (mounted) {
                                           setState(() {
                                             _isStartingTask = false;
+                                            _isPrecheckingImage = false;
                                             _hasNavigatedToLoadingPage = false;
                                             _uploadStatus = UploadStatus.idle;
                                             _uploadProgress = 0.0;
                                           });
                                         }
+                                      } else {
+                                        setState(() {
+                                          _isStartingTask = false;
+                                          _isPrecheckingImage = false;
+                                          _uploadStatus = UploadStatus.failed;
+                                          _uploadError = '上传结果异常，请重新尝试';
+                                        });
                                       }
                                     }
                                   }
@@ -1201,11 +1419,11 @@ class _PreparationPageState extends State<PreparationPage>
                                       ],
                                     )
                                   : _isStartingTask
-                                      ? const Row(
+                                      ? Row(
                                           mainAxisAlignment:
                                               MainAxisAlignment.center,
                                           children: [
-                                            SizedBox(
+                                            const SizedBox(
                                               height: 16,
                                               width: 16,
                                               child: CircularProgressIndicator(
@@ -1213,9 +1431,11 @@ class _PreparationPageState extends State<PreparationPage>
                                                 color: Colors.white,
                                               ),
                                             ),
-                                            SizedBox(width: 8),
+                                            const SizedBox(width: 8),
                                             Text(
-                                              '正在进入生成流程...',
+                                              _isPrecheckingImage
+                                                  ? '正在检测图片...'
+                                                  : '正在进入生成流程...',
                                               style: TextStyle(
                                                 fontWeight: FontWeight.bold,
                                                 color: Colors.white,
@@ -1407,10 +1627,24 @@ class _PreparationPageState extends State<PreparationPage>
       }
     }
 
-    return _buildPresetImageFallback(preset);
+    return _buildPresetImageFallback(
+      preset,
+      isLoading: _imageCachingPresetIds.contains(preset.id),
+      isFailed: _imageCacheFailedPresetIds.contains(preset.id),
+    );
   }
 
-  Widget _buildPresetImageFallback(AiStylePreset preset) {
+  Widget _buildPresetImageFallback(
+    AiStylePreset preset, {
+    bool isLoading = false,
+    bool isFailed = false,
+  }) {
+    final hintText = isLoading
+        ? '正在载入示例图'
+        : isFailed
+            ? '示例图载入失败'
+            : '暂无示例图';
+
     return Container(
       color: const Color(0xFFE5E5EA),
       alignment: Alignment.center,
@@ -1436,14 +1670,66 @@ class _PreparationPageState extends State<PreparationPage>
             ),
           ),
           const SizedBox(height: 2),
-          const Text(
-            '示例图待上传',
+          Text(
+            hintText,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.center,
-            style: TextStyle(
+            style: const TextStyle(
               color: Color(0xFF8E8E93),
               fontSize: 9,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildUploadErrorBanner(String message) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 220),
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF1F0).withOpacity(0.92),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: const Color(0xFFFFC1BD),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0x33FF6A5B),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 22,
+            height: 22,
+            decoration: const BoxDecoration(
+              color: Color(0xFFFF6B5E),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.error_outline,
+              size: 14,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              message,
+              style: const TextStyle(
+                color: Color(0xFF9B1C13),
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                height: 1.3,
+              ),
             ),
           ),
         ],

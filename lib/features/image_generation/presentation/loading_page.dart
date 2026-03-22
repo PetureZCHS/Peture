@@ -130,16 +130,12 @@ class _LoadingPageState extends State<LoadingPage>
         SnackBar(
           content: Text(message),
           backgroundColor: Colors.red,
-          action: SnackBarAction(
-            label: '返回',
-            textColor: Colors.white,
-            onPressed: () {
-              Navigator.pop(context);
-            },
-          ),
+          duration: const Duration(seconds: 4),
         ),
       );
-      Future.delayed(const Duration(milliseconds: 1500), () {
+
+      // 先展示 SnackBar，再尽快返回上一页。
+      Future.delayed(const Duration(milliseconds: 120), () {
         if (mounted && Navigator.canPop(context)) {
           Navigator.pop(context);
         }
