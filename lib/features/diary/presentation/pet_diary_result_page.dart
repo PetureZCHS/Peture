@@ -1,10 +1,18 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
+import 'dart:typed_data';
+import 'dart:ui' as ui;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:gal/gal.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../../services/supabase_edge_service.dart';
 import '../../../shared/models/pet_diary.dart';
 import '../../../services/supabase_service.dart';
+import 'pet_diary_share_card.dart';
 
 /// 宠物日记结果展示页面
 class PetDiaryResultPage extends StatefulWidget {
@@ -14,7 +22,9 @@ class PetDiaryResultPage extends StatefulWidget {
   final PetDiaryEdgeService? diaryService; // 可选，用于生成新日记
   final String? initialContent;
   final String? nickname;
+  final String? petId; // 关联的宠物ID
   final String? petName;
+  final String? petAvatarUrl; // 新增：宠物头像
   final String? breed;
   final String? gender;
   final String? petType;
@@ -27,7 +37,9 @@ class PetDiaryResultPage extends StatefulWidget {
     this.diaryService,
     this.initialContent,
     this.nickname,
+    this.petId,
     this.petName,
+    this.petAvatarUrl,
     this.breed,
     this.gender,
     this.petType,
@@ -56,6 +68,10 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
   Timer? _typingTimer; // 打字效果定时器
   int _displayedLength = 0; // 已显示的字符数
   int _lastScrollLength = 0; // 上次滚动时的字符数
+  
+  // 分享相关
+  final GlobalKey _globalKey = GlobalKey();
+  ShareCardStyle _currentShareStyle = ShareCardStyle.minimal;
 
   @override
   void initState() {
@@ -185,6 +201,15 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
             _fullTextBuffer = event.finalText;
             setState(() {
               _isGenerating = false;
+              // 强制关闭 loading，防止卡在加载页(即使内容为空)
+              if (_showLoading) {
+                _showLoading = false;
+                _messageTimer?.cancel();
+                // 如果之前没触发打字效果（例如直接Done了），这里触发一下
+                if (_fullTextBuffer.isNotEmpty) {
+                   _startTypingEffect();
+                }
+              }
             });
             _messageTimer?.cancel();
 
@@ -222,6 +247,31 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
           break;
         }
       }
+
+      // [防御性编程] 流结束后的最终状态检查
+      // 防止因为 Stream 意外断开（如服务器关闭连接但未发DONE）而导致 UI 卡在 loading
+      if (mounted && _isGenerating) {
+        debugPrint('⚠️ 流传输异常结束（未收到完成或错误事件），执行强制终止');
+        setState(() {
+           _isGenerating = false;
+           
+           if (_showLoading) {
+             _showLoading = false; 
+             _messageTimer?.cancel();
+             
+             // 如果有累积的内容，即使断开也尝试显示出来
+             if (_fullTextBuffer.isNotEmpty) {
+               _startTypingEffect();
+             } else {
+               // 确实失败了
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('服务器连接不稳定，请稍后重试')),
+                );
+             }
+           }
+        });
+      }
+
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -327,6 +377,7 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
 
     try {
       final diary = PetDiary(
+        petId: widget.petId,
         originalText: widget.originalText,
         content: _generatedContent,
         style: widget.style,
@@ -449,16 +500,13 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
               ),
             ),
             onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: const Text('分享功能开发中'),
-                  backgroundColor: Colors.black87,
-                  behavior: SnackBarBehavior.floating,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-              );
+              if (_showLoading || _generatedContent.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('请等待生成完成')),
+                );
+                return;
+              }
+              _showShareDialog();
             },
           ),
           const SizedBox(width: 8),
@@ -497,6 +545,359 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
         ),
       ),
     );
+  }
+
+  /// 显示分享样式选择对话框
+  void _showShareDialog() {
+    // 确保有内容可分享
+    if (_generatedContent.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('正在生成日记，请稍候...')),
+      );
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            return Center(
+              child: Material(
+                color: Colors.transparent,
+                child: Container(
+                  width: MediaQuery.of(context).size.width * 0.9,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // 顶部：标题 + 关闭
+                      Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              '生成分享卡片',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            IconButton(
+                              onPressed: () => Navigator.of(ctx).pop(),
+                              icon: const Icon(Icons.close),
+                            ),
+                          ],
+                        ),
+                      ),
+                      
+                      const Divider(height: 1),
+
+                      // 中间：卡片预览区 (可滚动)
+                      Flexible(
+                        child: SingleChildScrollView(
+                          padding: const EdgeInsets.symmetric(vertical: 20),
+                          child: Center(
+                            child: RepaintBoundary(
+                              key: _globalKey,
+                              child: PetDiaryShareCard(
+                                // 截断过长内容避免卡片太长
+                                content: _generatedContent.length > 200 
+                                    ? '${_generatedContent.substring(0, 200)}...' 
+                                    : _generatedContent,
+                                petName: widget.petName ?? '我的宠物',
+                                avatarUrl: widget.petAvatarUrl,
+                                breed: widget.breed,
+                                gender: widget.gender,
+                                date: DateTime.now(),
+                                style: _currentShareStyle,
+                                width: 300, 
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+
+                      // 底部：样式选择 + 按钮
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade50,
+                          borderRadius: const BorderRadius.vertical(
+                            bottom: Radius.circular(24),
+                          ),
+                        ),
+                        child: Column(
+                          children: [
+                            SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              child: Row(
+                                children: ShareCardStyle.values.map((style) {
+                                  final isSelected = _currentShareStyle == style;
+                                  return GestureDetector(
+                                    onTap: () {
+                                      setDialogState(() {
+                                        _currentShareStyle = style;
+                                      });
+                                    },
+                                    child: AnimatedContainer(
+                                      duration: const Duration(milliseconds: 200),
+                                      margin: const EdgeInsets.only(right: 12),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 16,
+                                        vertical: 8,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: isSelected
+                                            ? Colors.black87
+                                            : Colors.white,
+                                        borderRadius: BorderRadius.circular(20),
+                                        border: Border.all(
+                                          color: isSelected
+                                              ? Colors.transparent
+                                              : Colors.grey.shade300,
+                                        ),
+                                        boxShadow: isSelected
+                                            ? [
+                                                BoxShadow(
+                                                  color: Colors.black.withOpacity(0.2),
+                                                  blurRadius: 8,
+                                                  offset: const Offset(0, 2),
+                                                ),
+                                              ]
+                                            : [],
+                                      ),
+                                      child: Text(
+                                        _getStyleName(style),
+                                        style: TextStyle(
+                                          color: isSelected
+                                              ? Colors.white
+                                              : Colors.grey.shade700,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
+                            ),
+                            const SizedBox(height: 20),
+                            SizedBox(
+                              width: double.infinity,
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: SizedBox(
+                                      height: 50,
+                                      child: ElevatedButton.icon(
+                                        onPressed: () async {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            const SnackBar(content: Text('正在保存到相册...')),
+                                          );
+                                          await _captureAndSaveToGallery(inDialogContext: ctx);
+                                        },
+                                        icon: const Icon(Icons.download, color: Colors.blue),
+                                        label: const Text(
+                                          '保存相册', 
+                                          style: TextStyle(
+                                            fontSize: 16, 
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.blue,
+                                          ),
+                                        ),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.blue.shade50,
+                                          elevation: 0,
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(25),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Builder(
+                                      builder: (btnContext) {
+                                        return SizedBox(
+                                          height: 50,
+                                          child: ElevatedButton.icon(
+                                            onPressed: () async {
+                                              ScaffoldMessenger.of(context).showSnackBar(
+                                                const SnackBar(content: Text('正在生成图片并分享...')),
+                                              );
+                                              
+                                              final box = btnContext.findRenderObject() as RenderBox?;
+                                              Rect? shareOrigin;
+                                              if (box != null) {
+                                                shareOrigin = box.localToGlobal(Offset.zero) & box.size;
+                                              }
+                                              
+                                              await _captureAndSharePng(
+                                                inDialogContext: ctx, 
+                                                shareOrigin: shareOrigin,
+                                              );
+                                            },
+                                            icon: const Icon(Icons.share, color: Colors.white),
+                                            label: const Text(
+                                              '分享', 
+                                              style: TextStyle(
+                                                fontSize: 16, 
+                                                fontWeight: FontWeight.bold,
+                                                color: Colors.white,
+                                              ),
+                                            ),
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor: Colors.black87,
+                                              elevation: 0,
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius: BorderRadius.circular(25),
+                                              ),
+                                            ),
+                                          ),
+                                        );
+                                      }
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  String _getStyleName(ShareCardStyle style) {
+    switch (style) {
+      case ShareCardStyle.minimal:
+        return '极简艺术';
+      case ShareCardStyle.paper:
+        return '手账笔记';
+    }
+  }
+
+  Future<void> _captureAndSharePng({BuildContext? inDialogContext, Rect? shareOrigin}) async {
+    try {
+      // 确保重绘
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      final boundary = _globalKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+
+      if (boundary == null) {
+        debugPrint('无法获取截图边界');
+        if (mounted) {
+           ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('生成的太快了，请稍后再试')),
+           );
+        }
+        return;
+      }
+
+      // 提高清晰度
+      final image = await boundary.toImage(pixelRatio: 3.0);
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      if (byteData == null) return;
+      
+      final pngBytes = byteData.buffer.asUint8List();
+
+      final tempDir = await getTemporaryDirectory();
+      final file = File('${tempDir.path}/pet_diary_share_${DateTime.now().millisecondsSinceEpoch}.png');
+      await file.writeAsBytes(pngBytes);
+
+      // 截图成功后，关闭弹窗
+      if (inDialogContext != null && inDialogContext.mounted) {
+        Navigator.pop(inDialogContext);
+      }
+      
+      // 调起分享
+      final xFile = XFile(file.path);
+      await Share.shareXFiles(
+        [xFile], 
+        text: '来自 Peture 的宠物日记 🐾',
+        sharePositionOrigin: shareOrigin,
+      );
+
+    } catch (e) {
+      debugPrint('分享失败: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('分享失败: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _captureAndSaveToGallery({BuildContext? inDialogContext}) async {
+    try {
+      // 确保重绘
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      final boundary = _globalKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+
+      if (boundary == null) {
+         if (mounted) {
+           ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('无法获取截图边界')),
+           );
+        }
+        return;
+      }
+
+      // 提高清晰度
+      final image = await boundary.toImage(pixelRatio: 3.0);
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      if (byteData == null) return;
+      
+      final pngBytes = byteData.buffer.asUint8List();
+
+      // 保存到相册
+      await Gal.putImageBytes(pngBytes);
+      
+      // 截图成功后，关闭弹窗
+      if (inDialogContext != null && inDialogContext.mounted) {
+        Navigator.pop(inDialogContext);
+      }
+
+      if (mounted) {
+         ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('图片已保存到相册'),
+              backgroundColor: Colors.green,
+            ),
+         );
+      }
+    } catch (e) {
+      debugPrint('保存失败: $e');
+      if (mounted) {
+        // 如果是 gal 抛出的异常，可能是权限或不支持
+        String message = '保存失败，请检查相册权限';
+        if (e is GalException) {
+           message = '保存失败: ${e.type.message}';
+        } else {
+           message = '保存失败: $e';
+        }
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   Widget _buildOriginalCard() {

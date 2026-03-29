@@ -870,6 +870,88 @@ class SupabaseService {
     }
   }
 
+  // ============================================================
+  // 日记相关方法
+  // ============================================================
+
+  /// 插入日记
+  Future<String?> insertDiary(PetDiary diary) async {
+    final userId = await currentUserId;
+    if (userId == null) return null;
+
+    try {
+      // 确保用户资料存在
+      await _ensureUserProfileExists(userId);
+
+      // 移除 id 字段让数据库自动生成
+      final diaryData = diary.toMap();
+      diaryData.remove('id');
+      diaryData['user_id'] = userId;
+      
+      // 确保使用 created_at 字段名以匹配数据库
+      diaryData['created_at'] = diary.timestamp.toIso8601String();
+      diaryData.remove('timestamp'); // 移除可能导致错误的 timestamp 字段
+      
+      // 检查 pet_id 是否为空字符串，如果是这移除，或者设置为 null
+      if (diaryData['pet_id'] == null || (diaryData['pet_id'] is String && (diaryData['pet_id'] as String).isEmpty)) {
+        diaryData.remove('pet_id');
+      }
+
+      // 尝试插入 pet_diaries 表
+      final response = await _client
+          .from('pet_diaries')
+          .insert(diaryData)
+          .select()
+          .single();
+      return response['id'] as String?;
+    } catch (e) {
+      print('插入日记失败: $e');
+      return null;
+    }
+  }
+
+  /// 获取所有日记
+  /// [petId] 可选，若提供则只获取指定宠物的日记
+  Future<List<PetDiary>> getAllDiaries({String? petId}) async {
+    final userId = await currentUserId;
+    if (userId == null) return [];
+
+    try {
+      var query = _client.from('pet_diaries').select().eq('user_id', userId);
+
+      if (petId != null) {
+        query = query.eq('pet_id', petId);
+      }
+
+      final response = await query.order('created_at', ascending: false);
+      
+      return List<Map<String, dynamic>>.from(response)
+          .map((data) => PetDiary.fromMap(data))
+          .toList();
+    } catch (e) {
+      print('获取日记列表失败: $e');
+      return [];
+    }
+  }
+
+  /// 删除日记
+  Future<bool> deleteDiary(String id) async {
+    final userId = await currentUserId;
+    if (userId == null) return false;
+
+    try {
+      await _client
+          .from('pet_diaries')
+          .delete()
+          .eq('id', id)
+          .eq('user_id', userId);
+      return true;
+    } catch (e) {
+      print('删除日记失败: $e');
+      return false;
+    }
+  }
+
   Future<bool> updateMedicationReminder(Map<String, dynamic> data) async {
     final userId = await currentUserId;
     if (userId == null || data['id'] == null) return false;
@@ -1351,6 +1433,7 @@ class SupabaseService {
         'content': diary.content,
         'style': diary.style,
         'created_at': diary.timestamp.toIso8601String(),
+        if (diary.petId != null) 'pet_id': diary.petId,
       };
 
       final response =
@@ -1363,17 +1446,19 @@ class SupabaseService {
   }
 
   /// 获取所有宠物日记
-  Future<List<PetDiary>> getAllDiaries() async {
+  Future<List<PetDiary>> getAllDiaries({String? petId}) async {
     final userId = await currentUserId;
     if (userId == null) return [];
 
     try {
-      final response = await _client
-          .from('pet_diaries')
-          .select()
-          .eq('user_id', userId)
-          .order('created_at', ascending: false);
+      var query = _client.from('pet_diaries').select().eq('user_id', userId);
 
+      if (petId != null) {
+        query = query.eq('pet_id', petId);
+      }
+
+      final response = await query.order('created_at', ascending: false);
+      
       return (response as List).map((map) => PetDiary.fromMap(map)).toList();
     } catch (e) {
       debugPrint('获取宠物日记失败: $e');
