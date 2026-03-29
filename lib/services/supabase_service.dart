@@ -875,7 +875,7 @@ class SupabaseService {
   // ============================================================
 
   /// 插入日记
-  Future<String?> insertDiary(PetDiary diary) async {
+  Future<String?> insertDiary_OLD(PetDiary diary) async {
     final userId = await currentUserId;
     if (userId == null) return null;
 
@@ -912,7 +912,7 @@ class SupabaseService {
 
   /// 获取所有日记
   /// [petId] 可选，若提供则只获取指定宠物的日记
-  Future<List<PetDiary>> getAllDiaries({String? petId}) async {
+  Future<List<PetDiary>> getAllDiaries_OLD({String? petId}) async {
     final userId = await currentUserId;
     if (userId == null) return [];
 
@@ -931,24 +931,6 @@ class SupabaseService {
     } catch (e) {
       print('获取日记列表失败: $e');
       return [];
-    }
-  }
-
-  /// 删除日记
-  Future<bool> deleteDiary(String id) async {
-    final userId = await currentUserId;
-    if (userId == null) return false;
-
-    try {
-      await _client
-          .from('pet_diaries')
-          .delete()
-          .eq('id', id)
-          .eq('user_id', userId);
-      return true;
-    } catch (e) {
-      print('删除日记失败: $e');
-      return false;
     }
   }
 

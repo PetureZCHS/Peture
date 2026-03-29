@@ -361,7 +361,7 @@ class PetDiaryEdgeService {
       final request = http.Request('POST', url)
         ..headers.addAll({
           'Content-Type': 'application/json',
-          'apikey': SupabaseConfig.anonKey, // 必须携带 Anon Key
+          'apikey': SupabaseConstants.anonKey, // 必须携带 Anon Key
           'Authorization': 'Bearer $accessToken', // ✅ 使用用户 Token
         })
         ..body = jsonEncode(body);

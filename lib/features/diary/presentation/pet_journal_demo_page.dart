@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'dart:ui';
-import 'pet_diary_compose_page.dart'; // import for navigation
 
 class PetJournalDemoPage extends StatefulWidget {
   const PetJournalDemoPage({super.key});
@@ -13,11 +12,7 @@ class PetJournalDemoPage extends StatefulWidget {
 class _PetJournalDemoPageState extends State<PetJournalDemoPage> {
   // Theme colors extracted from screenshots
   final Color _bgDark = const Color(0xFF141416); // Content background
-  final Color _cardDark = const Color(0xFF2C2C2E); // Card background
-  final Color _accentPurple = const Color(0xFF6A6AE4); // Purple stats
-  final Color _accentRed = const Color(0xFFFF6B6B); // Red stats
   final Color _textWhite = Colors.white;
-  final Color _textGrey = Colors.grey;
 
   @override
   Widget build(BuildContext context) {
