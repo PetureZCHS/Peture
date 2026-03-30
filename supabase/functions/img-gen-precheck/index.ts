@@ -10,6 +10,22 @@ const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
 const supabaseServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const siliconFlowApiKey = Deno.env.get("SILICONFLOW_API_KEY") ?? "";
 
+// 在进入主逻辑前校验必要的 Supabase 配置，避免后续出现难以理解的错误
+if (!supabaseUrl || !supabaseServiceRoleKey) {
+  const missing = [
+    !supabaseUrl ? "SUPABASE_URL" : null,
+    !supabaseServiceRoleKey ? "SUPABASE_SERVICE_ROLE_KEY" : null,
+  ].filter((v): v is string => v !== null);
+
+  const message =
+    `Missing required environment variable(s): ${missing.join(
+      ", ",
+    )}. Please check your function configuration.`;
+
+  console.error("[img-gen-precheck] Configuration error:", message);
+  // 抛出错误，使函数以清晰的 500 配置错误失败，而不是在 Supabase 客户端内部报错
+  throw new Error(message);
+}
 // ==========================================
 // 2. 常量与 Prompt 定义
 // ==========================================
