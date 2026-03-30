@@ -75,8 +75,17 @@ serve(async (req: Request) => {
       throw new Error("Server configuration error: SILICONFLOW_API_KEY is missing.");
     }
 
-    // 获取请求体中的 file_name
-    const { file_name } = await req.json();
+    // 获取请求体中的 file_name，并单独捕获 JSON 解析错误
+    let body: any;
+    try {
+      body = await req.json();
+    } catch (_parseErr) {
+      return new Response(
+        JSON.stringify({ error: "Invalid JSON in request body." }),
+        { status: 400, headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) } }
+      );
+    }
+    const { file_name } = body;
     if (!file_name) {
       return new Response(
         JSON.stringify({ error: "Missing file_name in request body." }),
