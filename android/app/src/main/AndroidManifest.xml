@@ -1,13 +1,16 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.NFC" />
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
-    
-    <!-- Android 13 及以上版本需要的媒体权限 -->
+    <!-- Android 9 (API 28) 及以下版本需要写入权限 -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
+    <!-- Android 12 (API 32) 及以下版本需要读取权限，Android 13+ 使用 READ_MEDIA_IMAGES -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+
+    <!-- Android 13 (API 33) 及以上版本需要的媒体权限 -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     
     <application
-        android:requestLegacyExternalStorage="true"
         android:label="my_pet"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">

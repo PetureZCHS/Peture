@@ -7,6 +7,7 @@ import 'dart:math' as math;
 import 'dart:ui';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
+import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
@@ -73,6 +74,7 @@ class ResultPage extends StatefulWidget {
 class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
   late AnimationController _orbController;
   static const String _watermarkText = '智宠合生 Peture AI 生成';
+  static int? _cachedAndroidSdkInt;
 
   bool _isFavorite = false;
   bool _isLiked = false;
@@ -654,7 +656,15 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
                                   status = await Permission.photos.request();
                                 }
                               } else {
-                                status = await Permission.photos.request();
+                                // Android: 根据 API 级别请求合适的存储权限
+                                // Android 13+ (API 33+) 使用 READ_MEDIA_IMAGES (Permission.photos)
+                                // Android 12 及以下 (API 32-) 使用 READ_EXTERNAL_STORAGE (Permission.storage)
+                                _cachedAndroidSdkInt ??= (await DeviceInfoPlugin().androidInfo).version.sdkInt;
+                                if (_cachedAndroidSdkInt! >= 33) {
+                                  status = await Permission.photos.request();
+                                } else {
+                                  status = await Permission.storage.request();
+                                }
                               }
 
                               if (status.isGranted || status == PermissionStatus.limited) {

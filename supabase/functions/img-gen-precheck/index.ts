@@ -93,6 +93,20 @@ serve(async (req: Request) => {
       );
     }
 
+    // 校验 file_name 格式：仅允许字母、数字、连字符、下划线和单个点（用于扩展名），
+    // 且扩展名只能是 jpg/jpeg/png/webp，最大长度 200 字符，防止路径遍历攻击
+    const FILE_NAME_PATTERN = /^[a-zA-Z0-9_\-]+\.(jpg|jpeg|png|webp)$/i;
+    if (
+      typeof file_name !== "string" ||
+      file_name.length > 200 ||
+      !FILE_NAME_PATTERN.test(file_name)
+    ) {
+      return new Response(
+        JSON.stringify({ error: "Invalid file_name format. Only alphanumeric characters, hyphens, underscores, and image extensions (jpg, jpeg, png, webp) are allowed." }),
+        { status: 400, headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) } }
+      );
+    }
+
     // 从 Authorization Header 中提取 JWT
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {

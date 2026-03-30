@@ -1321,6 +1321,19 @@ class _PreparationPageState extends State<PreparationPage>
                                         );
 
                                         if (!precheckResult.pass) {
+                                          // 预检不通过，清理已上传的原图，避免存储泄漏和隐私残留
+                                          final cleanupUserId = supabase.auth.currentUser?.id;
+                                          if (cleanupUserId != null) {
+                                            final cleanupPath = '$cleanupUserId/original/$uploadedFileName';
+                                            try {
+                                              await supabase.storage
+                                                  .from('ai-wallpapers')
+                                                  .remove([cleanupPath]);
+                                              debugPrint('🗑️ 预检不通过，已清理上传文件: $cleanupPath');
+                                            } catch (e) {
+                                              debugPrint('⚠️ 清理上传文件失败: $e');
+                                            }
+                                          }
                                           if (mounted) {
                                             setState(() {
                                               _isStartingTask = false;

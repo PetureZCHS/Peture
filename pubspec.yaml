@@ -72,6 +72,9 @@ dependencies:
   # --- 权限请求依赖 ---
   permission_handler: ^11.3.0
   
+  # --- 设备信息依赖（用于 Android 版本检测）---
+  device_info_plus: ^11.1.1
+  
   # --- 图片缓存依赖 ---
   cached_network_image: ^3.4.0
   
