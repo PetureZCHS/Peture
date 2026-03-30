@@ -430,12 +430,15 @@ class _PreparationPageState extends State<PreparationPage>
           .map((preset) => preset.id)
           .toSet();
 
-      final nowIso = DateTime.now().toIso8601String();
+      // Use server-derived latest createdAt as the incremental sync cursor,
+      // falling back to local time only if none is available.
+      final syncCursorIso =
+          currentLatestCreatedAt ?? DateTime.now().toIso8601String();
       await prefs.setString(_cacheStylesKey(aspectRatio),
           jsonEncode(merged.map((e) => e.toCacheJson()).toList()));
-      await prefs.setString(_cacheLastSyncKey(aspectRatio), nowIso);
+      await prefs.setString(_cacheLastSyncKey(aspectRatio), syncCursorIso);
       await prefs.setString(
-          _cacheLatestCreatedAtKey(aspectRatio), currentLatestCreatedAt ?? '');
+          _cacheLatestCreatedAtKey(aspectRatio), syncCursorIso);
       await prefs.setInt(_cacheCountKey(aspectRatio), currentCount);
 
       if (!mounted || epoch != _styleLoadEpoch) return;
