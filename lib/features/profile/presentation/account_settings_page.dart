@@ -4,7 +4,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:path_provider/path_provider.dart';
 import '../../auth/presentation/login_page.dart';
 import '../../../shared/utils/user_avatar_helper.dart';
 import '../../../services/supabase_service.dart';
@@ -25,7 +24,12 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
   String? _userEmail;
   String? _userName;
   String? _avatarPath;
+  String? _avatarUrl;
   String _ownerNickname = '主人'; // 宠物对主人的称呼
+  String _gender = '未设置';
+  String? _birthDate; // yyyy-MM-dd
+  String _province = '';
+  String _city = '';
 
   // 图片选择器
   final ImagePicker _picker = ImagePicker();
@@ -50,7 +54,12 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
         // 从 Supabase users_profiles 表加载昵称
         final profile = await _supabaseService.getUserProfile();
         final nickname = profile?['nickname'] as String?;
+        final avatarUrl = profile?['avatar_url'] as String?;
         final ownerNickname = profile?['owner_nickname'] as String? ?? '主人';
+        final gender = profile?['gender'] as String?;
+        final birthDateRaw = profile?['birth_date']?.toString();
+        final province = profile?['province'] as String? ?? '';
+        final city = profile?['city'] as String? ?? '';
 
         if (mounted) {
           setState(() {
@@ -58,7 +67,12 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
             // 优先使用数据库中的昵称，如果没有则使用 Auth 的元数据
             _userName = nickname ?? user.userMetadata?['name'] ?? '';
             _avatarPath = avatarPath;
+            _avatarUrl = avatarUrl;
             _ownerNickname = ownerNickname;
+            _gender = (gender == null || gender.isEmpty) ? '未设置' : gender;
+            _birthDate = birthDateRaw?.split('T')[0];
+            _province = province;
+            _city = city;
           });
         }
       }
@@ -69,6 +83,17 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
         setState(() => _isLoading = false);
       }
     }
+  }
+
+  String _formatBirthDate(String? date) {
+    if (date == null || date.isEmpty) return '未设置';
+    return date.split('T')[0];
+  }
+
+  String _regionText() {
+    if (_province.isEmpty && _city.isEmpty) return '未设置';
+    if (_province.isNotEmpty && _city.isNotEmpty) return '$_province $_city';
+    return _province.isNotEmpty ? _province : _city;
   }
 
   // 修改密码
@@ -237,62 +262,24 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
         return;
       }
 
-      // 获取应用文档目录
-      final Directory appDir = await getApplicationDocumentsDirectory();
-      final String avatarsDir = '${appDir.path}/avatars';
-
-      // 创建头像目录
-      final Directory avatarDirectory = Directory(avatarsDir);
-      if (!await avatarDirectory.exists()) {
-        await avatarDirectory.create(recursive: true);
-      }
-
-      // 生成新的文件名
-      final String fileName =
-          'avatar_${DateTime.now().millisecondsSinceEpoch}.jpg';
-      final String newPath = '$avatarsDir/$fileName';
-
-      // 复制文件到应用目录
-      await File(pickedFile.path).copy(newPath);
-
-      // 删除旧头像文件（如果存在）
-      if (_avatarPath != null && await File(_avatarPath!).exists()) {
-        try {
-          await File(_avatarPath!).delete();
-        } catch (e) {
-          debugPrint('删除旧头像失败: $e');
-        }
-      }
-
-      // 保存新头像路径到本地存储
-      await UserAvatarHelper.saveUserAvatarPath(newPath);
-      final user = _supabase.auth.currentUser;
-      if (user != null) {
-        // 同时更新到 Supabase 用户元数据
-        try {
-          await _supabase.auth.updateUser(
-            UserAttributes(
-              data: {
-                'name': _userName ?? '',
-                'avatar_path': fileName, // 只存储文件名，不存储完整路径
-              },
-            ),
-          );
-        } catch (e) {
-          debugPrint('更新Supabase头像信息失败: $e');
-          // 不影响本地存储
-        }
-      }
+      final avatarUrl =
+          await _supabaseService.uploadUserAvatar(File(pickedFile.path));
+      final success = avatarUrl != null
+          ? await _supabaseService.upsertUserProfile(avatarUrl: avatarUrl)
+          : false;
 
       if (mounted) {
-        setState(() {
-          _avatarPath = newPath;
-        });
+        if (success) {
+          setState(() {
+            _avatarPath = null;
+            _avatarUrl = avatarUrl;
+          });
+        }
 
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ 头像更换成功'),
-            backgroundColor: Colors.green,
+          SnackBar(
+            content: Text(success ? '✅ 头像更换成功' : '❌ 头像上传失败，请重试'),
+            backgroundColor: success ? Colors.green : Colors.red,
           ),
         );
       }
@@ -400,6 +387,116 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
           setState(() => _isLoading = false);
         }
       }
+    }
+  }
+
+  Future<void> _changeGender() async {
+    const options = ['男', '女', '其他', '不透露'];
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: const Text('选择性别'),
+        children: options
+            .map(
+              (item) => SimpleDialogOption(
+                onPressed: () => Navigator.pop(context, item),
+                child: Text(item),
+              ),
+            )
+            .toList(),
+      ),
+    );
+
+    if (result == null || !mounted) return;
+    setState(() => _isLoading = true);
+    try {
+      final success = await _supabaseService.upsertUserProfile(gender: result);
+      if (success && mounted) {
+        setState(() => _gender = result);
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _changeBirthDate() async {
+    final now = DateTime.now();
+    final initial = _birthDate != null
+        ? DateTime.tryParse(_birthDate!) ?? DateTime(now.year - 18, 1, 1)
+        : DateTime(now.year - 18, 1, 1);
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(1900, 1, 1),
+      lastDate: now,
+    );
+    if (picked == null || !mounted) return;
+
+    final birthDate = picked.toIso8601String().split('T')[0];
+    setState(() => _isLoading = true);
+    try {
+      final success =
+          await _supabaseService.upsertUserProfile(birthDate: birthDate);
+      if (success && mounted) {
+        setState(() => _birthDate = birthDate);
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _changeRegion() async {
+    final provinceController = TextEditingController(text: _province);
+    final cityController = TextEditingController(text: _city);
+    final result = await showDialog<Map<String, String>>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('设置地区'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: provinceController,
+              decoration: const InputDecoration(labelText: '省份'),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: cityController,
+              decoration: const InputDecoration(labelText: '城市'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('取消'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, {
+              'province': provinceController.text.trim(),
+              'city': cityController.text.trim(),
+            }),
+            child: const Text('保存'),
+          ),
+        ],
+      ),
+    );
+
+    if (result == null || !mounted) return;
+    setState(() => _isLoading = true);
+    try {
+      final success = await _supabaseService.upsertUserProfile(
+        province: result['province'] ?? '',
+        city: result['city'] ?? '',
+      );
+      if (success && mounted) {
+        setState(() {
+          _province = result['province'] ?? '';
+          _city = result['city'] ?? '';
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -567,9 +664,12 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
                           backgroundImage: _avatarPath != null &&
                                   File(_avatarPath!).existsSync()
                               ? FileImage(File(_avatarPath!))
-                              : null,
+                              : (_avatarUrl != null
+                                  ? NetworkImage(_avatarUrl!)
+                                  : null) as ImageProvider?,
                           child: _avatarPath == null ||
-                                  !File(_avatarPath!).existsSync()
+                                  !File(_avatarPath!).existsSync() &&
+                                      _avatarUrl == null
                               ? Text(
                                   _userName?.isNotEmpty == true
                                       ? _userName![0].toUpperCase()
@@ -640,6 +740,24 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
                         subtitle:
                             _userName?.isNotEmpty == true ? _userName! : '未设置',
                         onTap: _changeName,
+                      ),
+                      _buildListTile(
+                        icon: Icons.wc,
+                        title: '性别',
+                        subtitle: _gender,
+                        onTap: _changeGender,
+                      ),
+                      _buildListTile(
+                        icon: Icons.cake_outlined,
+                        title: '出生日期',
+                        subtitle: _formatBirthDate(_birthDate),
+                        onTap: _changeBirthDate,
+                      ),
+                      _buildListTile(
+                        icon: Icons.location_on_outlined,
+                        title: '地区',
+                        subtitle: _regionText(),
+                        onTap: _changeRegion,
                       ),
                       _buildListTile(
                         icon: Icons.pets,

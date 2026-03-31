@@ -3,7 +3,6 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:path_provider/path_provider.dart';
 import '../../../services/supabase_service.dart';
 import '../../../shared/models/pet.dart';
 import '../../home/presentation/home_screen.dart'; 
@@ -66,6 +65,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String _userNickname = '';
   String? _avatarPath;
   String? _avatarUrl; // Supabase Storage 的 URL
+  String _gender = '未设置';
+  String? _birthDate;
+  String _province = '';
+  String _city = '';
 
   @override
   void initState() {
@@ -81,6 +84,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
         setState(() {
           _userNickname = profile?['nickname'] as String? ?? '';
           _avatarUrl = profile?['avatar_url'] as String?;
+          _gender = (profile?['gender'] as String?)?.isNotEmpty == true
+              ? profile!['gender'] as String
+              : '未设置';
+          _birthDate = profile?['birth_date']?.toString().split('T')[0];
+          _province = profile?['province'] as String? ?? '';
+          _city = profile?['city'] as String? ?? '';
         });
       }
       // 加载本地头像（如果有）
@@ -99,6 +108,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
     });
   }
 
+  String _displayRegion() {
+    if (_province.isEmpty && _city.isEmpty) return '未设置';
+    if (_province.isNotEmpty && _city.isNotEmpty) return '$_province $_city';
+    return _province.isNotEmpty ? _province : _city;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -115,6 +130,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             children: [
               const SizedBox(height: 60),
               _buildHeader(context),
+              const SizedBox(height: 12),
+              _buildBasicInfoSummary(),
               const SizedBox(height: AppSpaces.sectionSpacing),
               PetProfileSection(onProfileUpdate: _updateNickname),
               const SizedBox(height: 120), // Bottom padding for nav bar
@@ -122,6 +139,50 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildBasicInfoSummary() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.72),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          Expanded(child: _buildInfoCell('性别', _gender)),
+          Expanded(child: _buildInfoCell('出生日期', _birthDate ?? '未设置')),
+          Expanded(child: _buildInfoCell('地区', _displayRegion())),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoCell(String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 12,
+            color: AppColors.secondaryText,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          value,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            fontSize: 13,
+            color: AppColors.primaryText,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
     );
   }
 
@@ -355,56 +416,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
         return;
       }
 
-      // 保存到本地
-      final Directory appDir = await getApplicationDocumentsDirectory();
-      final String avatarsDir = '${appDir.path}/avatars';
-      final Directory avatarDirectory = Directory(avatarsDir);
-      if (!await avatarDirectory.exists()) {
-        await avatarDirectory.create(recursive: true);
-      }
-
-      final String fileName =
-          'avatar_${DateTime.now().millisecondsSinceEpoch}.jpg';
-      final String newPath = '$avatarsDir/$fileName';
-      await File(pickedFile.path).copy(newPath);
-
-      // 删除旧头像
-      if (_avatarPath != null && await File(_avatarPath!).exists()) {
-        try {
-          await File(_avatarPath!).delete();
-        } catch (e) {
-          debugPrint('删除旧头像失败: $e');
-        }
-      }
-
-      // 上传到 Supabase Storage（可选，如果需要云端存储）
-      final userId = await _supabaseService.currentUserId;
-      String? avatarUrl;
-      if (userId != null) {
-        try {
-          final uploadPath = '$userId/avatar.jpg';
-          final url =
-              await _supabaseService.uploadPostImage(File(newPath), uploadPath);
-          avatarUrl = url;
-        } catch (e) {
-          debugPrint('上传头像到 Storage 失败: $e');
-        }
-      }
-
-      // 保存到本地和 Supabase
-      await UserAvatarHelper.saveUserAvatarPath(newPath);
-      final success =
-          await _supabaseService.upsertUserProfile(avatarUrl: avatarUrl);
+      final avatarUrl =
+          await _supabaseService.uploadUserAvatar(File(pickedFile.path));
+      final success = avatarUrl != null
+          ? await _supabaseService.upsertUserProfile(avatarUrl: avatarUrl)
+          : false;
 
       if (mounted) {
         setState(() {
-          _avatarPath = newPath;
-          if (avatarUrl != null) _avatarUrl = avatarUrl;
+          _avatarPath = null;
+          if (avatarUrl != null) {
+            _avatarUrl = avatarUrl;
+          }
         });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(success ? '✅ 头像更换成功' : '⚠️ 头像已保存，但同步失败'),
-            backgroundColor: success ? Colors.green : Colors.orange,
+            content: Text(success ? '✅ 头像更换成功' : '❌ 头像上传失败，请重试'),
+            backgroundColor: success ? Colors.green : Colors.red,
           ),
         );
       }
@@ -434,11 +462,25 @@ class PetProfileSection extends StatefulWidget {
 class _PetProfileSectionState extends State<PetProfileSection> {
   final List<Pet> pets = [];
   final _supabaseService = SupabaseService();
+  String _defaultOwnerNickname = '主人';
 
   @override
   void initState() {
     super.initState();
+    _loadDefaultOwnerNickname();
     _loadPets();
+  }
+
+  Future<void> _loadDefaultOwnerNickname() async {
+    final nickname = await _supabaseService.getOwnerNickname();
+    if (mounted) {
+      setState(() => _defaultOwnerNickname = nickname);
+    }
+  }
+
+  String _formatAge(int years, int months) {
+    if (months <= 0) return '${years}岁';
+    return '${years}岁${months}个月';
   }
 
   Future<void> _loadPets() async {
@@ -627,7 +669,7 @@ class _PetProfileSectionState extends State<PetProfileSection> {
                       }
 
                       // 计算年龄（根据出生日期）
-                      String age = '1岁0个月';
+                      String age = '1岁';
                       if (petData['birth_date'] != null) {
                         final birthDate =
                             DateTime.tryParse(petData['birth_date']);
@@ -644,7 +686,7 @@ class _PetProfileSectionState extends State<PetProfileSection> {
                           if (now.day < birthDate.day && months > 0) {
                             months--;
                           }
-                          age = '$years岁$months个月';
+                          age = _formatAge(years, months);
                         }
                       }
 
@@ -738,12 +780,17 @@ class _PetProfileSectionState extends State<PetProfileSection> {
                             },
                             child: PetProfileCard(
                               pet: pet,
+                              defaultOwnerNickname: _defaultOwnerNickname,
                               onView: () async {
                                 await Navigator.push<Pet>(
                                   context,
                                   MaterialPageRoute(
                                     builder: (context) =>
-                                        PetProfileDetailsPage(pet: pet),
+                                        PetProfileDetailsPage(
+                                      pet: pet,
+                                      defaultOwnerNickname:
+                                          _defaultOwnerNickname,
+                                    ),
                                   ),
                                 );
                                 _loadPets();
@@ -768,9 +815,15 @@ class _PetProfileSectionState extends State<PetProfileSection> {
 // =========================================================
 class PetProfileCard extends StatefulWidget {
   final Pet pet;
+  final String defaultOwnerNickname;
   final VoidCallback onView;
 
-  const PetProfileCard({super.key, required this.pet, required this.onView});
+  const PetProfileCard({
+    super.key,
+    required this.pet,
+    required this.defaultOwnerNickname,
+    required this.onView,
+  });
 
   @override
   State<PetProfileCard> createState() => _PetProfileCardState();
@@ -814,6 +867,18 @@ class _PetProfileCardState extends State<PetProfileCard>
 
   void _onTapCancel() {
     _scaleController.reverse();
+  }
+
+  String _resolvedOwnerNickname() {
+    if (widget.pet.useCustomNickname &&
+        widget.pet.ownerNickname != null &&
+        widget.pet.ownerNickname!.isNotEmpty) {
+      return widget.pet.ownerNickname!;
+    }
+    if (widget.defaultOwnerNickname.isNotEmpty) {
+      return widget.defaultOwnerNickname;
+    }
+    return '未设置';
   }
 
   @override
@@ -888,26 +953,51 @@ class _PetProfileCardState extends State<PetProfileCard>
                                   borderRadius: BorderRadius.circular(20),
                                   child: widget.pet.avatar != null &&
                                           widget.pet.avatar!.isNotEmpty
-                                      ? Image.network(
-                                          widget.pet.avatar!,
-                                          width: 80,
-                                          height: 80,
-                                          fit: BoxFit.cover,
-                                          errorBuilder:
-                                              (context, error, stackTrace) {
-                                            return Container(
-                                              color: AppColors.petTypeColors[
-                                                      widget.pet.type] ??
-                                                  AppColors.petTypeColors['其他'],
-                                              child: Icon(
-                                                Icons.pets,
-                                                color: Colors.white
-                                                    .withOpacity(0.8),
-                                                size: 30,
-                                              ),
-                                            );
-                                          },
-                                        )
+                                    ? (widget.pet.avatar!.startsWith('http://') ||
+                                            widget.pet.avatar!
+                                                .startsWith('https://')
+                                        ? Image.network(
+                                            widget.pet.avatar!,
+                                            width: 80,
+                                            height: 80,
+                                            fit: BoxFit.cover,
+                                            errorBuilder:
+                                                (context, error, stackTrace) {
+                                              return Container(
+                                                color: AppColors.petTypeColors[
+                                                        widget.pet.type] ??
+                                                    AppColors
+                                                        .petTypeColors['其他'],
+                                                child: Icon(
+                                                  Icons.pets,
+                                                  color: Colors.white
+                                                      .withOpacity(0.8),
+                                                  size: 30,
+                                                ),
+                                              );
+                                            },
+                                          )
+                                        : Image.file(
+                                            File(widget.pet.avatar!),
+                                            width: 80,
+                                            height: 80,
+                                            fit: BoxFit.cover,
+                                            errorBuilder:
+                                                (context, error, stackTrace) {
+                                              return Container(
+                                                color: AppColors.petTypeColors[
+                                                        widget.pet.type] ??
+                                                    AppColors
+                                                        .petTypeColors['其他'],
+                                                child: Icon(
+                                                  Icons.pets,
+                                                  color: Colors.white
+                                                      .withOpacity(0.8),
+                                                  size: 30,
+                                                ),
+                                              );
+                                            },
+                                          ))
                                       : Container(
                                           color: AppColors.petTypeColors[
                                                   widget.pet.type] ??
@@ -988,6 +1078,18 @@ class _PetProfileCardState extends State<PetProfileCard>
                                       ),
                                     ],
                                   ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    '期望称呼：${_resolvedOwnerNickname()}',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: AppColors.secondaryText
+                                          .withOpacity(0.85),
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
                                 ],
                               ),
                             ),
@@ -1025,8 +1127,13 @@ class _PetProfileCardState extends State<PetProfileCard>
 // =========================================================
 class PetProfileDetailsPage extends StatefulWidget {
   final Pet pet;
+  final String defaultOwnerNickname;
 
-  const PetProfileDetailsPage({super.key, required this.pet});
+  const PetProfileDetailsPage({
+    super.key,
+    required this.pet,
+    required this.defaultOwnerNickname,
+  });
 
   @override
   State<PetProfileDetailsPage> createState() => _PetProfileDetailsPageState();
@@ -1035,11 +1142,37 @@ class PetProfileDetailsPage extends StatefulWidget {
 class _PetProfileDetailsPageState extends State<PetProfileDetailsPage> {
   late Pet _currentPet;
   final _supabaseService = SupabaseService();
+  late String _defaultOwnerNickname;
 
   @override
   void initState() {
     super.initState();
     _currentPet = widget.pet;
+    _defaultOwnerNickname = widget.defaultOwnerNickname;
+  }
+
+  Future<void> _refreshDefaultOwnerNickname() async {
+    final nickname = await _supabaseService.getOwnerNickname();
+    if (mounted) {
+      setState(() => _defaultOwnerNickname = nickname);
+    }
+  }
+
+  String _resolvedOwnerNickname() {
+    if (_currentPet.useCustomNickname &&
+        _currentPet.ownerNickname != null &&
+        _currentPet.ownerNickname!.isNotEmpty) {
+      return _currentPet.ownerNickname!;
+    }
+    if (_defaultOwnerNickname.isNotEmpty) {
+      return _defaultOwnerNickname;
+    }
+    return '未设置';
+  }
+
+  String _formatAge(int years, int months) {
+    if (months <= 0) return '${years}岁';
+    return '${years}岁${months}个月';
   }
 
   Widget _buildInfoCard(String label, String value,
@@ -1156,7 +1289,7 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage> {
                         years--;
                         months += 12;
                       }
-                      age = '$years岁$months个月';
+                      age = _formatAge(years, months);
                     } catch (e) {
                       debugPrint('Error calculating age: $e');
                     }
@@ -1192,6 +1325,7 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage> {
                     setState(() {
                       _currentPet = updatedPet;
                     });
+                    await _refreshDefaultOwnerNickname();
                     if (context.mounted) {
                       ScaffoldMessenger.of(
                         context,
@@ -1253,6 +1387,12 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage> {
                 _buildInfoCard('性别', _currentPet.gender),
                 const SizedBox(height: 12),
                 _buildInfoCard('年龄', _currentPet.age),
+                const SizedBox(height: 12),
+                _buildInfoCard(
+                  '期望宠物对主人的称呼',
+                  _resolvedOwnerNickname(),
+                  isPlaceholder: _resolvedOwnerNickname() == '未设置',
+                ),
                 const SizedBox(height: 12),
                 if (_currentPet.birthDate != null)
                   _buildInfoCard('出生日期', _currentPet.birthDate!.split('T')[0]),
@@ -1327,6 +1467,11 @@ class _EditPetDialogState extends State<EditPetDialog> {
     if (monthsMatch != null) {
       _selectedMonths = int.tryParse(monthsMatch.group(1) ?? '0') ?? 0;
     }
+  }
+
+  String _formatAge(int years, int months) {
+    if (months <= 0) return '${years}岁';
+    return '${years}岁${months}个月';
   }
 
   @override
@@ -1451,7 +1596,8 @@ class _EditPetDialogState extends State<EditPetDialog> {
         ElevatedButton(
           onPressed: () {
             if (_nameController.text.isNotEmpty) {
-              final String ageString = '$_selectedYears岁$_selectedMonths个月';
+              final String ageString =
+                  _formatAge(_selectedYears, _selectedMonths);
 
               Navigator.of(context).pop(
                 Pet(

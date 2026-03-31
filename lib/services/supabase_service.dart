@@ -122,7 +122,15 @@ class SupabaseService {
   }
 
   /// 创建或更新用户资料
-  Future<bool> upsertUserProfile({String? nickname, String? avatarUrl, String? ownerNickname}) async {
+  Future<bool> upsertUserProfile({
+    String? nickname,
+    String? avatarUrl,
+    String? ownerNickname,
+    String? gender,
+    String? birthDate,
+    String? province,
+    String? city,
+  }) async {
     final userId = await currentUserId;
     if (userId == null) return false;
 
@@ -134,6 +142,13 @@ class SupabaseService {
       if (nickname != null) data['nickname'] = nickname;
       if (avatarUrl != null) data['avatar_url'] = avatarUrl;
       if (ownerNickname != null) data['owner_nickname'] = ownerNickname;
+      if (gender != null) data['gender'] = gender;
+      if (birthDate != null) {
+        data['birth_date'] =
+            birthDate.contains('T') ? birthDate.split('T')[0] : birthDate;
+      }
+      if (province != null) data['province'] = province;
+      if (city != null) data['city'] = city;
 
       await _client.from('users_profiles').upsert(data);
 
@@ -2651,6 +2666,8 @@ class SupabaseService {
   // ============================================================
 
   static const String _communityBucket = 'post-images';
+  static const String _userAvatarBucket = 'user-avatars';
+  static const String _petAvatarBucket = 'pet-avatars';
 
   /// 上传帖子图片到 Storage，返回公开 URL
   /// path 建议格式: {userId}/{postId}_{index}.jpg
@@ -2680,6 +2697,46 @@ class SupabaseService {
       return _client.storage.from(_communityBucket).getPublicUrl(path);
     } catch (e) {
       debugPrint('上传帖子图片失败: $e');
+      return null;
+    }
+  }
+
+  /// 上传用户头像到 Storage，返回公开 URL
+  Future<String?> uploadUserAvatar(File file) async {
+    final userId = await currentUserId;
+    if (userId == null) return null;
+    final path = '$userId/avatar.jpg';
+    try {
+      await _client.storage.from(_userAvatarBucket).upload(
+            path,
+            file,
+            fileOptions: const FileOptions(upsert: true),
+          );
+      return _client.storage.from(_userAvatarBucket).getPublicUrl(path);
+    } catch (e) {
+      debugPrint('上传用户头像失败: $e');
+      return null;
+    }
+  }
+
+  /// 上传宠物头像到 Storage，返回公开 URL
+  Future<String?> uploadPetAvatar({
+    required File file,
+    String? petId,
+  }) async {
+    final userId = await currentUserId;
+    if (userId == null) return null;
+    final identifier = petId ?? DateTime.now().millisecondsSinceEpoch.toString();
+    final path = '$userId/$identifier/avatar.jpg';
+    try {
+      await _client.storage.from(_petAvatarBucket).upload(
+            path,
+            file,
+            fileOptions: const FileOptions(upsert: true),
+          );
+      return _client.storage.from(_petAvatarBucket).getPublicUrl(path);
+    } catch (e) {
+      debugPrint('上传宠物头像失败: $e');
       return null;
     }
   }
