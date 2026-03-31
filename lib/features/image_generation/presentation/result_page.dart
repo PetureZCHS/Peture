@@ -917,7 +917,7 @@ class _ContainedImageWithWatermarkState
     return Image(
       key: ValueKey(_refreshTick),
       image: widget.imageProvider,
-      fit: BoxFit.cover,
+      fit: BoxFit.contain,
       width: double.infinity,
       height: double.infinity,
       loadingBuilder: (context, child, loadingProgress) {
