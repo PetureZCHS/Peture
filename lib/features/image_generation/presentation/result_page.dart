@@ -906,6 +906,14 @@ class _ContainedImageWithWatermarkState
           _aspectRatio = info.image.width / info.image.height;
         });
       },
+      onError: (Object exception, StackTrace? stackTrace) {
+        if (!mounted) return;
+        // 图片加载失败时设置兜底宽高比，使 build 退出 loading spinner
+        // 并转入 _buildImage() 的 errorBuilder 展示错误 UI
+        setState(() {
+          _aspectRatio = 1.0;
+        });
+      },
     );
 
     stream.addListener(listener);
