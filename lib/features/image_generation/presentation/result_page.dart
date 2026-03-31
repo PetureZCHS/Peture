@@ -5,7 +5,6 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui';
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/services.dart';
@@ -14,6 +13,72 @@ import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../../shared/utils/ui_helpers.dart';
+
+class _WatermarkMetrics {
+  final double horizontalPadding;
+  final double verticalPadding;
+  final double textPaddingH;
+  final double textPaddingV;
+  final double fontSize;
+  final double letterSpacing;
+  final double blurRadius;
+  final Offset shadowOffset;
+  final double borderRadius;
+
+  const _WatermarkMetrics({
+    required this.horizontalPadding,
+    required this.verticalPadding,
+    required this.textPaddingH,
+    required this.textPaddingV,
+    required this.fontSize,
+    required this.letterSpacing,
+    required this.blurRadius,
+    required this.shadowOffset,
+    required this.borderRadius,
+  });
+}
+
+_WatermarkMetrics _computeWatermarkMetrics(Size imageSize) {
+  final scale = (imageSize.shortestSide / 1080.0).clamp(0.2, 1.5).toDouble();
+  return _WatermarkMetrics(
+    horizontalPadding: 24.0 * scale,
+    verticalPadding: 16.0 * scale,
+    textPaddingH: 14.0 * scale,
+    textPaddingV: 8.0 * scale,
+    fontSize: 30.0 * scale,
+    letterSpacing: 0.4 * scale,
+    blurRadius: 6.0 * scale,
+    shadowOffset: Offset(0, 1.5 * scale),
+    borderRadius: 14.0 * scale,
+  );
+}
+
+double _computeWatermarkTextFitScale({
+  required String text,
+  required double maxTextWidth,
+  required double fontSize,
+  required double letterSpacing,
+}) {
+  final safeMaxWidth = math.max(1.0, maxTextWidth);
+  final painter = TextPainter(
+    text: TextSpan(
+      text: text,
+      style: TextStyle(
+        fontSize: fontSize,
+        fontWeight: FontWeight.w600,
+        letterSpacing: letterSpacing,
+      ),
+    ),
+    textDirection: TextDirection.ltr,
+    maxLines: 1,
+  )..layout();
+
+  if (painter.width <= safeMaxWidth) {
+    return 1.0;
+  }
+
+  return (safeMaxWidth / painter.width).clamp(0.45, 1.0);
+}
 
 class AppColors {
   static const Color background = Color(0xFFF2F2F7);
@@ -117,6 +182,15 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
       sourceImage.width.toDouble(),
       sourceImage.height.toDouble(),
     );
+    final watermarkMetrics = _computeWatermarkMetrics(imageSize);
+    final maxTextWidth =
+        (imageSize.width * 0.75) - (watermarkMetrics.textPaddingH * 2);
+    final textFitScale = _computeWatermarkTextFitScale(
+      text: _watermarkText,
+      maxTextWidth: maxTextWidth,
+      fontSize: watermarkMetrics.fontSize,
+      letterSpacing: watermarkMetrics.letterSpacing,
+    );
 
     canvas.drawImageRect(
       sourceImage,
@@ -125,41 +199,41 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
       Paint(),
     );
 
-    final scale = (imageSize.shortestSide / 1080.0).clamp(0.5, 1.5);
-    final horizontalPadding = 24.0 * scale;
-    final verticalPadding = 16.0 * scale;
-    final textPaddingH = 14.0 * scale;
-    final textPaddingV = 8.0 * scale;
-
     final textPainter = TextPainter(
       text: TextSpan(
         text: _watermarkText,
         style: TextStyle(
           color: Colors.white.withOpacity(0.82),
-          fontSize: 30.0 * scale,
+          fontSize: watermarkMetrics.fontSize * textFitScale,
           fontWeight: FontWeight.w600,
-          letterSpacing: 0.4 * scale,
+          letterSpacing: watermarkMetrics.letterSpacing * textFitScale,
           shadows: [
             Shadow(
               color: Colors.black.withOpacity(0.25),
-              blurRadius: 6 * scale,
-              offset: Offset(0, 1.5 * scale),
+              blurRadius: watermarkMetrics.blurRadius * textFitScale,
+              offset: watermarkMetrics.shadowOffset * textFitScale,
             ),
           ],
         ),
       ),
       textDirection: TextDirection.ltr,
       maxLines: 1,
-    )..layout(maxWidth: imageSize.width * 0.75);
+    )..layout(maxWidth: math.max(1.0, maxTextWidth));
 
     final watermarkRect = RRect.fromRectAndRadius(
       Rect.fromLTWH(
-        imageSize.width - textPainter.width - (textPaddingH * 2) - horizontalPadding,
-        imageSize.height - textPainter.height - (textPaddingV * 2) - verticalPadding,
-        textPainter.width + (textPaddingH * 2),
-        textPainter.height + (textPaddingV * 2),
+        imageSize.width -
+            textPainter.width -
+            (watermarkMetrics.textPaddingH * 2) -
+            watermarkMetrics.horizontalPadding,
+        imageSize.height -
+            textPainter.height -
+            (watermarkMetrics.textPaddingV * 2) -
+            watermarkMetrics.verticalPadding,
+        textPainter.width + (watermarkMetrics.textPaddingH * 2),
+        textPainter.height + (watermarkMetrics.textPaddingV * 2),
       ),
-      Radius.circular(14 * scale),
+      Radius.circular(watermarkMetrics.borderRadius),
     );
 
     canvas.drawRRect(
@@ -170,8 +244,8 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
     textPainter.paint(
       canvas,
       Offset(
-        watermarkRect.left + textPaddingH,
-        watermarkRect.top + textPaddingV,
+        watermarkRect.left + watermarkMetrics.textPaddingH,
+        watermarkRect.top + watermarkMetrics.textPaddingV,
       ),
     );
 
@@ -238,20 +312,21 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     final isResultUrlLocalFile = _isLocalFilePath(widget.resultImageUrl);
-    final resultFileFromUrl = widget.resultImageUrl != null && isResultUrlLocalFile
-        ? _fileFromPath(widget.resultImageUrl!)
-        : null;
-    final useNetworkImage = widget.resultImageFile == null && !isResultUrlLocalFile;
-    final ImageProvider<Object>? resultImageProvider =
-      widget.resultImageFile != null
+    final resultFileFromUrl =
+        widget.resultImageUrl != null && isResultUrlLocalFile
+            ? _fileFromPath(widget.resultImageUrl!)
+            : null;
+    final useNetworkImage =
+        widget.resultImageFile == null && !isResultUrlLocalFile;
+    final ImageProvider<Object>? resultImageProvider = widget.resultImageFile !=
+            null
         ? FileImage(widget.resultImageFile!) as ImageProvider<Object>
         : resultFileFromUrl != null
-          ? FileImage(resultFileFromUrl) as ImageProvider<Object>
-          : (widget.resultImageUrl != null &&
-              widget.resultImageUrl!.isNotEmpty)
-            ? NetworkImage(widget.resultImageUrl!)
-              as ImageProvider<Object>
-            : null;
+            ? FileImage(resultFileFromUrl) as ImageProvider<Object>
+            : (widget.resultImageUrl != null &&
+                    widget.resultImageUrl!.isNotEmpty)
+                ? NetworkImage(widget.resultImageUrl!) as ImageProvider<Object>
+                : null;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -260,9 +335,7 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
         title: const Text("生成完成"),
         backgroundColor: Colors.transparent,
         elevation: 0,
-        actions: [
-          IconButton(icon: const Icon(Icons.share), onPressed: () {})
-        ],
+        actions: [IconButton(icon: const Icon(Icons.share), onPressed: () {})],
       ),
       body: Stack(
         children: [
@@ -411,14 +484,17 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
                       Navigator.of(context).push(
                         TransparentImageRoute(
                           builder: (_) => FullscreenImagePage(
-                              imageFile: widget.resultImageFile ?? resultFileFromUrl ?? File(''),
-                              heroTag: 'ai_result_hero',
-                              isNetworkImage: useNetworkImage,
-                              showWatermark: _enableWatermark,
-                              networkImage: useNetworkImage && widget.resultImageUrl != null
-                                  ? NetworkImage(widget.resultImageUrl!)
-                                  : null,
-                            ),
+                            imageFile: widget.resultImageFile ??
+                                resultFileFromUrl ??
+                                File(''),
+                            heroTag: 'ai_result_hero',
+                            isNetworkImage: useNetworkImage,
+                            showWatermark: _enableWatermark,
+                            networkImage:
+                                useNetworkImage && widget.resultImageUrl != null
+                                    ? NetworkImage(widget.resultImageUrl!)
+                                    : null,
+                          ),
                         ),
                       );
                     },
@@ -659,7 +735,10 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
                                 // Android: 根据 API 级别请求合适的存储权限
                                 // Android 13+ (API 33+) 使用 READ_MEDIA_IMAGES (Permission.photos)
                                 // Android 12 及以下 (API 32-) 使用 READ_EXTERNAL_STORAGE (Permission.storage)
-                                _cachedAndroidSdkInt ??= (await DeviceInfoPlugin().androidInfo).version.sdkInt;
+                                _cachedAndroidSdkInt ??=
+                                    (await DeviceInfoPlugin().androidInfo)
+                                        .version
+                                        .sdkInt;
                                 if (_cachedAndroidSdkInt! >= 33) {
                                   status = await Permission.photos.request();
                                 } else {
@@ -667,7 +746,8 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
                                 }
                               }
 
-                              if (status.isGranted || status == PermissionStatus.limited) {
+                              if (status.isGranted ||
+                                  status == PermissionStatus.limited) {
                                 // 权限已授予，继续保存
                               } else if (status.isPermanentlyDenied ||
                                   status == PermissionStatus.restricted) {
@@ -678,7 +758,8 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
                                     builder: (context) {
                                       return AlertDialog(
                                         title: const Text('权限被拒绝'),
-                                        content: const Text('相册权限已被拒绝，请前往设置开启。'),
+                                        content:
+                                            const Text('相册权限已被拒绝，请前往设置开启。'),
                                         actions: [
                                           TextButton(
                                             onPressed: () {
@@ -703,7 +784,8 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
                                 // 权限被拒绝，但可以再次请求
                                 if (context.mounted) {
                                   ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(content: Text("需要相册权限才能保存图片")));
+                                      const SnackBar(
+                                          content: Text("需要相册权限才能保存图片")));
                                 }
                                 return;
                               }
@@ -730,7 +812,8 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
                                       return;
                                     }
                                   } else {
-                                    final response = await http.get(Uri.parse(url));
+                                    final response =
+                                        await http.get(Uri.parse(url));
                                     if (response.statusCode == 200) {
                                       bytes = response.bodyBytes;
                                     } else {
@@ -757,18 +840,19 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
 
                                 // 保存到临时文件
                                 final tempDir = await getTemporaryDirectory();
-                                final tempPath = '${tempDir.path}/ai_result_${DateTime.now().millisecondsSinceEpoch}.png';
+                                final tempPath =
+                                    '${tempDir.path}/ai_result_${DateTime.now().millisecondsSinceEpoch}.png';
                                 final tempFile = File(tempPath);
                                 await tempFile.writeAsBytes(bytes);
-                                
+
                                 // 使用 Gal 插件保存图片到相册
                                 await Gal.putImage(tempPath, album: 'Peture');
-                                
+
                                 // 删除临时文件
                                 if (await tempFile.exists()) {
                                   await tempFile.delete();
                                 }
-                                
+
                                 if (context.mounted) {
                                   ScaffoldMessenger.of(context).showSnackBar(
                                       const SnackBar(content: Text("已保存到相册！")));
@@ -777,7 +861,8 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
                                 debugPrint('保存图片到相册时出错: $e');
                                 if (context.mounted) {
                                   ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(content: Text("保存失败，请检查权限设置")));
+                                      const SnackBar(
+                                          content: Text("保存失败，请检查权限设置")));
                                 }
                               }
                             },
@@ -872,6 +957,58 @@ class _ContainedImageWithWatermarkState
   void initState() {
     super.initState();
     _resolveAspectRatio();
+  }
+
+  Widget _buildWatermarkOverlay(BoxConstraints constraints) {
+    final imageSize = Size(constraints.maxWidth, constraints.maxHeight);
+    final metrics = _computeWatermarkMetrics(imageSize);
+    final maxTextWidth = (imageSize.width * 0.75) - (metrics.textPaddingH * 2);
+    final textFitScale = _computeWatermarkTextFitScale(
+      text: widget.watermarkText,
+      maxTextWidth: maxTextWidth,
+      fontSize: metrics.fontSize,
+      letterSpacing: metrics.letterSpacing,
+    );
+
+    return Positioned(
+      right: metrics.horizontalPadding,
+      bottom: metrics.verticalPadding,
+      child: IgnorePointer(
+        child: Container(
+          padding: EdgeInsets.symmetric(
+            horizontal: metrics.textPaddingH,
+            vertical: metrics.textPaddingV,
+          ),
+          decoration: BoxDecoration(
+            color: Colors.black.withOpacity(0.22),
+            borderRadius: BorderRadius.circular(metrics.borderRadius),
+          ),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: math.max(1, maxTextWidth),
+            ),
+            child: Text(
+              widget.watermarkText,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.85),
+                fontSize: metrics.fontSize * textFitScale,
+                fontWeight: FontWeight.w600,
+                letterSpacing: metrics.letterSpacing * textFitScale,
+                shadows: [
+                  Shadow(
+                    color: Colors.black.withOpacity(0.25),
+                    blurRadius: metrics.blurRadius * textFitScale,
+                    offset: metrics.shadowOffset * textFitScale,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -984,34 +1121,14 @@ class _ContainedImageWithWatermarkState
         : Center(
             child: AspectRatio(
               aspectRatio: ratio,
-              child: Stack(
-                children: [
-                  Positioned.fill(child: _buildImage()),
-                  if (widget.showWatermark)
-                    Positioned(
-                      right: 12,
-                      bottom: 12,
-                      child: IgnorePointer(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withOpacity(0.22),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Text(
-                            widget.watermarkText,
-                            style: TextStyle(
-                              color: Colors.white.withOpacity(0.85),
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: 0.2,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
+              child: LayoutBuilder(
+                builder: (context, constraints) => Stack(
+                  children: [
+                    Positioned.fill(child: _buildImage()),
+                    if (widget.showWatermark)
+                      _buildWatermarkOverlay(constraints),
+                  ],
+                ),
               ),
             ),
           );
@@ -1088,11 +1205,11 @@ class _FullscreenImagePageState extends State<FullscreenImagePage>
     final scale = 1.0 - dragPercent * 0.4;
     final bgOpacity = (1.0 - dragPercent).clamp(0.0, 1.0);
     final ImageProvider<Object> fullscreenImageProvider =
-      widget.isNetworkImage && widget.networkImage != null
-        ? widget.networkImage! as ImageProvider<Object>
-        : widget.isAssetImage && widget.assetImage != null
-          ? widget.assetImage! as ImageProvider<Object>
-          : FileImage(widget.imageFile) as ImageProvider<Object>;
+        widget.isNetworkImage && widget.networkImage != null
+            ? widget.networkImage! as ImageProvider<Object>
+            : widget.isAssetImage && widget.assetImage != null
+                ? widget.assetImage! as ImageProvider<Object>
+                : FileImage(widget.imageFile) as ImageProvider<Object>;
 
     return Stack(
       children: [

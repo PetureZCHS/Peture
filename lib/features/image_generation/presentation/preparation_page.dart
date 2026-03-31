@@ -1294,27 +1294,6 @@ class _PreparationPageState extends State<PreparationPage>
                                         final supabase =
                                             Supabase.instance.client;
 
-                                        Session? session;
-                                        try {
-                                          final refreshResponse =
-                                              await supabase.auth.refreshSession();
-                                          session = refreshResponse.session;
-                                        } catch (_) {
-                                          session = supabase.auth.currentSession;
-                                        }
-                                        final accessToken = session?.accessToken;
-                                        if (accessToken == null || accessToken.isEmpty) {
-                                          if (mounted) {
-                                            setState(() {
-                                              _isStartingTask = false;
-                                              _isPrecheckingImage = false;
-                                              _uploadStatus = UploadStatus.failed;
-                                              _uploadError = '登录状态已失效，请重新登录后重试';
-                                            });
-                                          }
-                                          return;
-                                        }
-
                                         final precheckResult =
                                             await _precheckUploadedImage(
                                           uploadedFileName: uploadedFileName,
