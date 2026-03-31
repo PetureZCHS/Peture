@@ -1480,7 +1480,7 @@ class _PreparationPageState extends State<PreparationPage>
     final preset = _styles[index];
 
     return GestureDetector(
-      onTap: () => setState(() => _onStyleSelected(index)),
+      onTap: () => _onStyleSelected(index),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         width: 100,

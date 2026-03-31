@@ -123,24 +123,23 @@ class _LoadingPageState extends State<LoadingPage>
   }
 
   void _handleLoadingError(String message) {
+    if (!mounted) return;
     _isTaskFinished = true;
     _progressController.stop();
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(message),
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 4),
-        ),
-      );
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+        duration: const Duration(seconds: 4),
+      ),
+    );
 
-      // 先展示 SnackBar，再尽快返回上一页。
-      Future.delayed(const Duration(milliseconds: 120), () {
-        if (mounted && Navigator.canPop(context)) {
-          Navigator.pop(context);
-        }
-      });
-    }
+    // 先展示 SnackBar，再尽快返回上一页。
+    Future.delayed(const Duration(milliseconds: 120), () {
+      if (mounted && Navigator.canPop(context)) {
+        Navigator.pop(context);
+      }
+    });
   }
 
   Future<void> _waitForGenerationResult() async {
@@ -251,6 +250,7 @@ class _LoadingPageState extends State<LoadingPage>
 
   @override
   void dispose() {
+    _isTaskFinished = true;
     _progressController.dispose();
     _orbController.dispose();
     _timeoutTimer?.cancel();
