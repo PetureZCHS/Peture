@@ -347,11 +347,11 @@ class _PreparationPageState extends State<PreparationPage>
       final currentLatestCreatedAt =
           latestRow.isNotEmpty ? latestRow.first['created_at']?.toString() : '';
 
-      final countRows = await supabase
+      final countResponse = await supabase
           .from(_presetView)
-          .select('id')
+          .select('id', const FetchOptions(count: CountOption.exact, head: true))
           .eq('aspect_ratio', aspectRatio);
-      final currentCount = countRows.length;
+      final currentCount = countResponse.count ?? 0;
 
       final cachedLatestCreatedAt =
           prefs.getString(_cacheLatestCreatedAtKey(aspectRatio));

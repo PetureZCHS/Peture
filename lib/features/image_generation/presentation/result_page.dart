@@ -169,12 +169,14 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
     return File(path);
   }
 
-  Future<ui.Image> _decodeImage(Uint8List bytes) {
-    final completer = Completer<ui.Image>();
-    ui.decodeImageFromList(bytes, (image) {
-      completer.complete(image);
-    });
-    return completer.future;
+  Future<ui.Image> _decodeImage(Uint8List bytes) async {
+    try {
+      final codec = await ui.instantiateImageCodec(bytes);
+      final frame = await codec.getNextFrame();
+      return frame.image;
+    } catch (e) {
+      throw Exception('Failed to decode image: $e');
+    }
   }
 
   Future<Uint8List> _addWatermarkToBytes(Uint8List originalBytes) async {
@@ -734,8 +736,7 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
                                 } else {
                                   status = await Permission.photos.request();
                                 }
-                              } else {
-                                // Android: 根据 API 级别请求合适的存储权限
+                              } else if (Platform.isAndroid) {
                                 // Android 13+ (API 33+) 使用 READ_MEDIA_IMAGES (Permission.photos)
                                 // Android 12 及以下 (API 32-) 使用 READ_EXTERNAL_STORAGE (Permission.storage)
                                 _cachedAndroidSdkInt ??=
@@ -747,6 +748,14 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
                                 } else {
                                   status = await Permission.storage.request();
                                 }
+                              } else {
+                                // 桌面或其他不支持保存到相册的平台
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                          content: Text("当前平台不支持保存到相册")));
+                                }
+                                return;
                               }
 
                               if (status.isGranted ||
@@ -848,12 +857,14 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
                                 final tempFile = File(tempPath);
                                 await tempFile.writeAsBytes(bytes);
 
-                                // 使用 Gal 插件保存图片到相册
-                                await Gal.putImage(tempPath, album: 'Peture');
-
-                                // 删除临时文件
-                                if (await tempFile.exists()) {
-                                  await tempFile.delete();
+                                try {
+                                  // 使用 Gal 插件保存图片到相册
+                                  await Gal.putImage(tempPath, album: 'Peture');
+                                } finally {
+                                  // 无论保存成功或失败都删除临时文件
+                                  if (await tempFile.exists()) {
+                                    await tempFile.delete();
+                                  }
                                 }
 
                                 if (context.mounted) {

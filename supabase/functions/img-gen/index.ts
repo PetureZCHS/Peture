@@ -41,13 +41,8 @@ function jsonResponse(body: unknown, status = 200) {
 }
 
 function isSafeFileName(name: string) {
-  return (
-    !!name &&
-    !name.includes("..") &&
-    !name.includes("/") &&
-    !name.includes("\\") &&
-    name.length <= 200
-  );
+  return !!name && name.length <= 200 &&
+    /^[A-Za-z0-9_\-]+\.(jpg|jpeg|png|webp)$/i.test(name);
 }
 
 function resolveImageSize(aspectRatio: string) {
