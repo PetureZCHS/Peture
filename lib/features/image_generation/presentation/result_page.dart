@@ -39,13 +39,16 @@ class _WatermarkMetrics {
 }
 
 _WatermarkMetrics _computeWatermarkMetrics(Size imageSize) {
+  final ratio = imageSize.width / math.max(1.0, imageSize.height);
+  final isSixteenByNine = (ratio - (16 / 9)).abs() <= 0.03;
   final scale = (imageSize.shortestSide / 1080.0).clamp(0.2, 1.5).toDouble();
+  final fontBoost = isSixteenByNine ? 2.0 : 1.0;
   return _WatermarkMetrics(
     horizontalPadding: 24.0 * scale,
     verticalPadding: 16.0 * scale,
     textPaddingH: 14.0 * scale,
     textPaddingV: 8.0 * scale,
-    fontSize: 30.0 * scale,
+    fontSize: 30.0 * scale * fontBoost,
     letterSpacing: 0.4 * scale,
     blurRadius: 6.0 * scale,
     shadowOffset: Offset(0, 1.5 * scale),

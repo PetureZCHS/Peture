@@ -162,7 +162,6 @@ class _PreparationPageState extends State<PreparationPage>
 
   bool _isStartingTask = false;
   bool _isPrecheckingImage = false;
-  bool _hasNavigatedToLoadingPage = false;
   bool _isLoadingStyles = true;
   String _selectedAspectRatio = _defaultAspectRatio;
   int _styleLoadEpoch = 0;
@@ -203,8 +202,6 @@ class _PreparationPageState extends State<PreparationPage>
           });
         }
       });
-
-      _hasNavigatedToLoadingPage = false;
     }
   }
 
@@ -235,7 +232,7 @@ class _PreparationPageState extends State<PreparationPage>
 
   Future<void> _restoreLastSelectedIndices() async {
     final prefs = await SharedPreferences.getInstance();
-    for (final aspectRatio in const ['1:1', '9:16']) {
+    for (final aspectRatio in const ['1:1', '9:16', '16:9']) {
       final stored = prefs.getInt(_lastSelectedIndexKey(aspectRatio));
       if (stored != null && stored >= 0) {
         _lastSelectedIndexByAspectRatio[aspectRatio] = stored;
@@ -379,7 +376,8 @@ class _PreparationPageState extends State<PreparationPage>
         return;
       }
 
-      final String? lastSyncAt = prefs.getString(_cacheLastSyncKey(aspectRatio));
+      final String? lastSyncAt =
+          prefs.getString(_cacheLastSyncKey(aspectRatio));
       final bool shouldFullRefresh =
           _styles.isEmpty || cachedCount == null || currentCount < cachedCount;
 
@@ -490,26 +488,30 @@ class _PreparationPageState extends State<PreparationPage>
     var hasAnyUpdate = false;
 
     for (final preset in pending) {
-      if (!mounted || epoch != _styleLoadEpoch || _selectedAspectRatio != aspectRatio) {
+      if (!mounted ||
+          epoch != _styleLoadEpoch ||
+          _selectedAspectRatio != aspectRatio) {
         return;
       }
 
       final withImage =
           await _ensurePresetImageCached(preset, keepOldPath: true);
 
-      if (!mounted || epoch != _styleLoadEpoch || _selectedAspectRatio != aspectRatio) {
+      if (!mounted ||
+          epoch != _styleLoadEpoch ||
+          _selectedAspectRatio != aspectRatio) {
         return;
       }
 
       final resolvedPath = withImage.localImagePath;
-      final hasImage =
-          resolvedPath != null && resolvedPath.isNotEmpty && await File(resolvedPath).exists();
+      final hasImage = resolvedPath != null &&
+          resolvedPath.isNotEmpty &&
+          await File(resolvedPath).exists();
 
       setState(() {
         final index = _styles.indexWhere((item) => item.id == withImage.id);
         if (index >= 0) {
-          _styles = List<AiStylePreset>.from(_styles)
-            ..[index] = withImage;
+          _styles = List<AiStylePreset>.from(_styles)..[index] = withImage;
           hasAnyUpdate = true;
         }
         _imageCachingPresetIds.remove(withImage.id);
@@ -774,6 +776,21 @@ class _PreparationPageState extends State<PreparationPage>
     }
   }
 
+  double _styleCardWidthForAspectRatio(String aspectRatio) {
+    if (aspectRatio == '16:9') {
+      return 126.0;
+    }
+    return 100.0;
+  }
+
+  double _styleListHeightForAspectRatio(String aspectRatio) {
+    return 160.0;
+  }
+
+  double _styleItemExtentForAspectRatio(String aspectRatio) {
+    return _styleCardWidthForAspectRatio(aspectRatio) + 12.0;
+  }
+
   void _showErrorSnackBar(String message) {
     if (mounted) {
       setState(() {
@@ -869,12 +886,6 @@ class _PreparationPageState extends State<PreparationPage>
 
   @override
   Widget build(BuildContext context) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && _hasNavigatedToLoadingPage) {
-        _hasNavigatedToLoadingPage = false;
-      }
-    });
-
     return Scaffold(
       backgroundColor: AppColors.background,
       extendBodyBehindAppBar: true,
@@ -1113,23 +1124,30 @@ class _PreparationPageState extends State<PreparationPage>
                     children: [
                       Expanded(
                         child: _buildAspectRatioButton(
-                          label: '头像 1:1',
+                          label: '头像\n1:1',
                           value: '1:1',
                         ),
                       ),
-                      const SizedBox(width: 10),
+                      const SizedBox(width: 8),
                       Expanded(
                         child: _buildAspectRatioButton(
-                          label: '封面 / 壁纸 9:16',
+                          label: '书封 / 手机壁纸\n9:16',
                           value: '9:16',
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _buildAspectRatioButton(
+                          label: '电脑壁纸\n16:9',
+                          value: '16:9',
                         ),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 26),
                 SizedBox(
-                  height: 160,
+                  height: _styleListHeightForAspectRatio(_selectedAspectRatio),
                   child: _isLoadingStyles && _styles.isEmpty
                       ? const Center(
                           child: Column(
@@ -1301,14 +1319,17 @@ class _PreparationPageState extends State<PreparationPage>
 
                                         if (!precheckResult.pass) {
                                           // 预检不通过，清理已上传的原图，避免存储泄漏和隐私残留
-                                          final cleanupUserId = supabase.auth.currentUser?.id;
+                                          final cleanupUserId =
+                                              supabase.auth.currentUser?.id;
                                           if (cleanupUserId != null) {
-                                            final cleanupPath = '$cleanupUserId/original/$uploadedFileName';
+                                            final cleanupPath =
+                                                '$cleanupUserId/original/$uploadedFileName';
                                             try {
                                               await supabase.storage
                                                   .from('ai-wallpapers')
                                                   .remove([cleanupPath]);
-                                              debugPrint('🗑️ 预检不通过，已清理上传文件: $cleanupPath');
+                                              debugPrint(
+                                                  '🗑️ 预检不通过，已清理上传文件: $cleanupPath');
                                             } catch (e) {
                                               debugPrint('⚠️ 清理上传文件失败: $e');
                                             }
@@ -1317,8 +1338,10 @@ class _PreparationPageState extends State<PreparationPage>
                                             setState(() {
                                               _isStartingTask = false;
                                               _isPrecheckingImage = false;
-                                              _uploadStatus = UploadStatus.failed;
-                                              _uploadError = precheckResult.reason;
+                                              _uploadStatus =
+                                                  UploadStatus.failed;
+                                              _uploadError =
+                                                  precheckResult.reason;
                                             });
                                           }
                                           return;
@@ -1340,10 +1363,6 @@ class _PreparationPageState extends State<PreparationPage>
                                           },
                                         );
 
-                                        setState(() {
-                                          _hasNavigatedToLoadingPage = true;
-                                        });
-
                                         if (!context.mounted) return;
                                         // 核心变更：将 Future 传给 LoadingPage
                                         await Navigator.push(
@@ -1364,7 +1383,6 @@ class _PreparationPageState extends State<PreparationPage>
                                           setState(() {
                                             _isStartingTask = false;
                                             _isPrecheckingImage = false;
-                                            _hasNavigatedToLoadingPage = false;
                                             _uploadStatus = UploadStatus.idle;
                                             _uploadProgress = 0.0;
                                           });
@@ -1478,14 +1496,17 @@ class _PreparationPageState extends State<PreparationPage>
 
   Widget _buildTechStyleCard(int index, bool isSelected) {
     final preset = _styles[index];
+    final cardWidth = _styleCardWidthForAspectRatio(_selectedAspectRatio);
+    final selectedScale = _selectedAspectRatio == '16:9' ? 1.02 : 1.05;
 
     return GestureDetector(
       onTap: () => _onStyleSelected(index),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        width: 100,
-        transform:
-            isSelected ? (Matrix4.identity()..scale(1.05)) : Matrix4.identity(),
+        width: cardWidth,
+        transform: isSelected
+            ? (Matrix4.identity()..scale(selectedScale))
+            : Matrix4.identity(),
         transformAlignment: Alignment.center,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
@@ -1570,14 +1591,18 @@ class _PreparationPageState extends State<PreparationPage>
     required String value,
   }) {
     final isSelected = _selectedAspectRatio == value;
+    final lines = label.split('\n');
+    final title = lines.isNotEmpty ? lines.first : label;
+    final ratio = lines.length > 1 ? lines.sublist(1).join(' ') : '';
+
     return GestureDetector(
       onTap: () => _onAspectRatioChanged(value),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        height: 38,
-        alignment: Alignment.center,
+        height: 46,
+        padding: const EdgeInsets.symmetric(vertical: 5),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(16),
           color: isSelected
               ? const Color(0xFF5D5FEF)
               : Colors.white.withOpacity(0.65),
@@ -1590,20 +1615,52 @@ class _PreparationPageState extends State<PreparationPage>
           boxShadow: [
             BoxShadow(
               color: isSelected
-                  ? const Color(0xFF5D5FEF).withOpacity(0.22)
+                  ? const Color(0xFF5D5FEF).withOpacity(0.34)
                   : Colors.black.withOpacity(0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
+              blurRadius: isSelected ? 12 : 6,
+              spreadRadius: isSelected ? -1 : 0,
+              offset: const Offset(0, 3),
             ),
+            if (isSelected)
+              BoxShadow(
+                color: Colors.white.withOpacity(0.35),
+                blurRadius: 1,
+                offset: const Offset(0, -1),
+                blurStyle: BlurStyle.inner,
+              ),
           ],
         ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: isSelected ? Colors.white : const Color(0xFF1D1D1F),
-            fontWeight: FontWeight.w700,
-            fontSize: 13,
-          ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: isSelected ? Colors.white : const Color(0xFF1D1D1F),
+                fontWeight: FontWeight.w700,
+                fontSize: 11,
+                height: 1.0,
+              ),
+            ),
+            if (ratio.isNotEmpty)
+              const SizedBox(height: 2),
+            if (ratio.isNotEmpty)
+              Text(
+                ratio,
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                style: TextStyle(
+                  color: isSelected ? Colors.white : const Color(0xFF1D1D1F),
+                  fontWeight: FontWeight.w800,
+                  fontSize: 12,
+                  height: 1.0,
+                ),
+              ),
+          ],
         ),
       ),
     );
@@ -1743,10 +1800,11 @@ class _PreparationPageState extends State<PreparationPage>
   void _scrollToSelectedStyle({bool animated = true}) {
     if (!_styleScrollController.hasClients) return;
 
-    const double itemExtent = 112.0;
+    final itemExtent = _styleItemExtentForAspectRatio(_selectedAspectRatio);
+    final cardWidth = _styleCardWidthForAspectRatio(_selectedAspectRatio);
     final target = (_selectedStyleIndex * itemExtent) -
         (MediaQuery.of(context).size.width / 2) +
-        (itemExtent / 2);
+        (cardWidth / 2);
     final clamped =
         target.clamp(0.0, _styleScrollController.position.maxScrollExtent);
 
