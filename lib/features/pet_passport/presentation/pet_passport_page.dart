@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/services.dart';
 import 'dart:math' as math;
 import 'dart:io';
@@ -361,7 +362,21 @@ class _PetPassportPageState extends State<PetPassportPage>
 
     // 其次使用 pet.avatar（宠物档案头像，仅在电子档案没设置时使用）
     if (pet.avatar != null && pet.avatar!.isNotEmpty) {
-      final file = File(pet.avatar!);
+      final a = pet.avatar!;
+      if (a.startsWith('http://') || a.startsWith('https://')) {
+        return ClipOval(
+          child: CachedNetworkImage(
+            imageUrl: a,
+            width: 60,
+            height: 60,
+            fit: BoxFit.cover,
+            placeholder: (context, url) => _buildDefaultPetSelectorIcon(isSelected),
+            errorWidget: (context, url, err) =>
+                _buildDefaultPetSelectorIcon(isSelected),
+          ),
+        );
+      }
+      final file = File(a);
       if (file.existsSync()) {
         return ClipOval(
           child: Image.file(
@@ -825,7 +840,16 @@ class _PetPassportPageState extends State<PetPassportPage>
 
     // 其次使用 pet.avatar（宠物档案头像，仅在电子档案没设置时使用）
     if (pet.avatar != null && pet.avatar!.isNotEmpty) {
-      final file = File(pet.avatar!);
+      final a = pet.avatar!;
+      if (a.startsWith('http://') || a.startsWith('https://')) {
+        return CachedNetworkImage(
+          imageUrl: a,
+          fit: BoxFit.cover,
+          placeholder: (context, url) => _buildDefaultPetIcon(),
+          errorWidget: (context, url, err) => _buildDefaultPetIcon(),
+        );
+      }
+      final file = File(a);
       if (file.existsSync()) {
         return Image.file(
           file,

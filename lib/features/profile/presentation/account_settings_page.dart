@@ -5,7 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../auth/presentation/login_page.dart';
+import '../../../shared/utils/avatar_image_helper.dart';
+import '../../../shared/utils/china_regions_loader.dart';
 import '../../../shared/utils/user_avatar_helper.dart';
+import '../../../shared/utils/user_gender_mapper.dart';
 import '../../../services/supabase_service.dart';
 
 class AccountSettingsPage extends StatefulWidget {
@@ -40,6 +43,14 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
     _loadUserInfo();
   }
 
+  Future<void> _syncAvatarFromProfile(String? avatarUrl) async {
+    final path = await UserAvatarHelper.ensureCachedAvatarFile(
+      avatarUrl,
+      _supabaseService.cacheUserAvatarFromPublicUrl,
+    );
+    if (mounted) setState(() => _avatarPath = path);
+  }
+
   // 加载用户信息
   Future<void> _loadUserInfo() async {
     if (!mounted) return;
@@ -48,10 +59,6 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
     try {
       final user = _supabase.auth.currentUser;
       if (user != null) {
-        // 从本地存储加载头像路径
-        final avatarPath = await UserAvatarHelper.getCurrentUserAvatarPath();
-
-        // 从 Supabase users_profiles 表加载昵称
         final profile = await _supabaseService.getUserProfile();
         final nickname = profile?['nickname'] as String?;
         final avatarUrl = profile?['avatar_url'] as String?;
@@ -64,17 +71,17 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
         if (mounted) {
           setState(() {
             _userEmail = user.email;
-            // 优先使用数据库中的昵称，如果没有则使用 Auth 的元数据
             _userName = nickname ?? user.userMetadata?['name'] ?? '';
-            _avatarPath = avatarPath;
+            _avatarPath = null;
             _avatarUrl = avatarUrl;
             _ownerNickname = ownerNickname;
-            _gender = (gender == null || gender.isEmpty) ? '未设置' : gender;
+            _gender = UserGenderMapper.toDisplayLabel(gender);
             _birthDate = birthDateRaw?.split('T')[0];
             _province = province;
             _city = city;
           });
         }
+        await _syncAvatarFromProfile(avatarUrl);
       }
     } catch (e) {
       debugPrint('❌ 加载用户信息失败: $e');
@@ -247,12 +254,11 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
 
       setState(() => _isLoading = true);
 
-      // 选择图片
       final XFile? pickedFile = await _picker.pickImage(
         source: source,
-        maxWidth: 512,
-        maxHeight: 512,
-        imageQuality: 80,
+        maxWidth: 2048,
+        maxHeight: 2048,
+        imageQuality: 92,
       );
 
       if (pickedFile == null) {
@@ -262,27 +268,32 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
         return;
       }
 
-      final avatarUrl =
-          await _supabaseService.uploadUserAvatar(File(pickedFile.path));
+      final prepared =
+          await AvatarImageHelper.cropAndCompressAvatar(pickedFile.path);
+      if (prepared == null) {
+        if (mounted) setState(() => _isLoading = false);
+        return;
+      }
+
+      await UserAvatarHelper.clearLocalAvatarCacheForCurrentUser();
+
+      final avatarUrl = await _supabaseService.uploadUserAvatar(prepared);
       final success = avatarUrl != null
           ? await _supabaseService.upsertUserProfile(avatarUrl: avatarUrl)
           : false;
 
-      if (mounted) {
-        if (success) {
-          setState(() {
-            _avatarPath = null;
-            _avatarUrl = avatarUrl;
-          });
-        }
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(success ? '✅ 头像更换成功' : '❌ 头像上传失败，请重试'),
-            backgroundColor: success ? Colors.green : Colors.red,
-          ),
-        );
+      if (!mounted) return;
+      if (success) {
+        setState(() => _avatarUrl = avatarUrl);
+        await _syncAvatarFromProfile(avatarUrl);
       }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(success ? '✅ 头像更换成功' : '❌ 头像上传失败，请重试'),
+          backgroundColor: success ? Colors.green : Colors.red,
+        ),
+      );
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -391,12 +402,11 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
   }
 
   Future<void> _changeGender() async {
-    const options = ['男', '女', '其他', '不透露'];
     final result = await showDialog<String>(
       context: context,
       builder: (context) => SimpleDialog(
         title: const Text('选择性别'),
-        children: options
+        children: UserGenderMapper.dialogOptions
             .map(
               (item) => SimpleDialogOption(
                 onPressed: () => Navigator.pop(context, item),
@@ -408,9 +418,12 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
     );
 
     if (result == null || !mounted) return;
+    final dbValue = UserGenderMapper.toDatabaseValue(result);
+    if (dbValue == null) return;
     setState(() => _isLoading = true);
     try {
-      final success = await _supabaseService.upsertUserProfile(gender: result);
+      final success =
+          await _supabaseService.upsertUserProfile(gender: dbValue);
       if (success && mounted) {
         setState(() => _gender = result);
       }
@@ -446,39 +459,107 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
   }
 
   Future<void> _changeRegion() async {
-    final provinceController = TextEditingController(text: _province);
-    final cityController = TextEditingController(text: _city);
+    List<Map<String, dynamic>> regions;
+    try {
+      regions = await ChinaRegionsLoader.load();
+    } catch (e) {
+      debugPrint('加载地区数据失败: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('地区数据加载失败')),
+        );
+      }
+      return;
+    }
+    if (!mounted) return;
+
+    var selProvince = _province.isNotEmpty
+        ? _province
+        : (regions.first['province'] as String);
+    List<String> citiesFor(String p) {
+      final row = regions.firstWhere(
+        (r) => r['province'] == p,
+        orElse: () => regions.first,
+      );
+      return (row['cities'] as List<dynamic>).cast<String>();
+    }
+
+    var selCity = _city.isNotEmpty && citiesFor(selProvince).contains(_city)
+        ? _city
+        : citiesFor(selProvince).first;
+
     final result = await showDialog<Map<String, String>>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('设置地区'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: provinceController,
-              decoration: const InputDecoration(labelText: '省份'),
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setLocal) {
+          final cities = citiesFor(selProvince);
+          if (!cities.contains(selCity)) {
+            selCity = cities.first;
+          }
+          return AlertDialog(
+            title: const Text('设置地区'),
+            content: SizedBox(
+              width: double.maxFinite,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  DropdownButtonFormField<String>(
+                    isExpanded: true,
+                    decoration: const InputDecoration(labelText: '省份'),
+                    value: selProvince,
+                    items: regions
+                        .map(
+                          (r) => DropdownMenuItem<String>(
+                            value: r['province'] as String,
+                            child: Text(r['province'] as String),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (v) {
+                      if (v == null) return;
+                      setLocal(() {
+                        selProvince = v;
+                        final c = citiesFor(v);
+                        selCity = c.first;
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    isExpanded: true,
+                    decoration: const InputDecoration(labelText: '城市'),
+                    value: selCity,
+                    items: cities
+                        .map(
+                          (c) => DropdownMenuItem<String>(
+                            value: c,
+                            child: Text(c),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (v) {
+                      if (v == null) return;
+                      setLocal(() => selCity = v);
+                    },
+                  ),
+                ],
+              ),
             ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: cityController,
-              decoration: const InputDecoration(labelText: '城市'),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('取消'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, {
-              'province': provinceController.text.trim(),
-              'city': cityController.text.trim(),
-            }),
-            child: const Text('保存'),
-          ),
-        ],
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('取消'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(ctx, {
+                  'province': selProvince,
+                  'city': selCity,
+                }),
+                child: const Text('保存'),
+              ),
+            ],
+          );
+        },
       ),
     );
 
@@ -508,16 +589,28 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('宠物对你的称呼'),
-        content: TextField(
-          controller: nicknameController,
-          decoration: const InputDecoration(
-            labelText: '称呼',
-            hintText: '例如：主人、妈妈、姐姐',
-            prefixIcon: Icon(Icons.pets),
-            helperText: '这将作为宠物日记中对你的默认称呼',
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '这将作为宠物日记中对你的默认称呼。',
+                style: TextStyle(fontSize: 13, color: Colors.grey[700]),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: nicknameController,
+                decoration: const InputDecoration(
+                  labelText: '称呼',
+                  hintText: '例如：主人、妈妈、姐姐',
+                  prefixIcon: Icon(Icons.pets),
+                ),
+                autofocus: true,
+                maxLength: 10,
+              ),
+            ],
           ),
-          autofocus: true,
-          maxLength: 10,
         ),
         actions: [
           TextButton(
@@ -652,38 +745,41 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
                   const SizedBox(height: 20),
 
                   // 用户头像（可点击更换）
-                  GestureDetector(
-                    onTap: _changeAvatar,
-                    child: Stack(
-                      children: [
-                        CircleAvatar(
-                          radius: 50,
-                          backgroundColor: Theme.of(
-                            context,
-                          ).primaryColor.withOpacity(0.1),
-                          backgroundImage: _avatarPath != null &&
-                                  File(_avatarPath!).existsSync()
-                              ? FileImage(File(_avatarPath!))
-                              : (_avatarUrl != null
-                                  ? NetworkImage(_avatarUrl!)
-                                  : null) as ImageProvider?,
-                          child: _avatarPath == null ||
-                                  !File(_avatarPath!).existsSync() &&
-                                      _avatarUrl == null
-                              ? Text(
-                                  _userName?.isNotEmpty == true
-                                      ? _userName![0].toUpperCase()
-                                      : (_userEmail?.isNotEmpty == true
-                                          ? _userEmail![0].toUpperCase()
-                                          : '?'),
-                                  style: TextStyle(
-                                    fontSize: 32,
-                                    fontWeight: FontWeight.bold,
-                                    color: Theme.of(context).primaryColor,
-                                  ),
-                                )
-                              : null,
-                        ),
+                  Builder(
+                    builder: (context) {
+                      final hasLocalAvatar = _avatarPath != null &&
+                          File(_avatarPath!).existsSync();
+                      final hasRemoteAvatar = _avatarUrl != null &&
+                          _avatarUrl!.isNotEmpty;
+                      return GestureDetector(
+                        onTap: _changeAvatar,
+                        child: Stack(
+                          children: [
+                            CircleAvatar(
+                              radius: 50,
+                              backgroundColor: Theme.of(
+                                context,
+                              ).primaryColor.withOpacity(0.1),
+                              backgroundImage: hasLocalAvatar
+                                  ? FileImage(File(_avatarPath!))
+                                  : (hasRemoteAvatar
+                                      ? NetworkImage(_avatarUrl!)
+                                      : null) as ImageProvider?,
+                              child: !hasLocalAvatar && !hasRemoteAvatar
+                                  ? Text(
+                                      _userName?.isNotEmpty == true
+                                          ? _userName![0].toUpperCase()
+                                          : (_userEmail?.isNotEmpty == true
+                                              ? _userEmail![0].toUpperCase()
+                                              : '?'),
+                                      style: TextStyle(
+                                        fontSize: 32,
+                                        fontWeight: FontWeight.bold,
+                                        color: Theme.of(context).primaryColor,
+                                      ),
+                                    )
+                                  : null,
+                            ),
                         Positioned(
                           bottom: 0,
                           right: 0,
@@ -701,8 +797,10 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
                             ),
                           ),
                         ),
-                      ],
-                    ),
+                          ],
+                        ),
+                      );
+                    },
                   ),
                   const SizedBox(height: 16),
 
@@ -762,7 +860,27 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
                       _buildListTile(
                         icon: Icons.pets,
                         title: '宠物对我的称呼',
-                        subtitle: _ownerNickname,
+                        subtitleWidget: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _ownerNickname,
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.grey[800],
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '这将作为宠物日记中对你的默认称呼',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey[600],
+                              ),
+                            ),
+                          ],
+                        ),
                         onTap: _changeOwnerNickname,
                       ),
                       _buildListTile(
@@ -864,21 +982,24 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
     required IconData icon,
     required String title,
     String? subtitle,
+    Widget? subtitleWidget,
     Widget? trailing,
     VoidCallback? onTap,
   }) {
     return ListTile(
+      isThreeLine: subtitleWidget != null,
       leading: CircleAvatar(
         backgroundColor: Theme.of(context).primaryColor.withOpacity(0.1),
         child: Icon(icon, color: Theme.of(context).primaryColor, size: 20),
       ),
       title: Text(title, style: const TextStyle(fontWeight: FontWeight.w500)),
-      subtitle: subtitle != null
-          ? Text(
-              subtitle,
-              style: TextStyle(fontSize: 13, color: Colors.grey[600]),
-            )
-          : null,
+      subtitle: subtitleWidget ??
+          (subtitle != null
+              ? Text(
+                  subtitle,
+                  style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                )
+              : null),
       trailing: trailing ??
           (onTap != null
               ? const Icon(Icons.arrow_forward_ios, size: 16)

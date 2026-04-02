@@ -3,13 +3,16 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../../services/supabase_service.dart';
 import '../../../shared/models/pet.dart';
 import '../../home/presentation/home_screen.dart'; 
 import 'settings_page.dart';
 import 'pet_profile_form_page.dart';
 import '../../../shared/utils/ui_helpers.dart';
+import '../../../shared/utils/avatar_image_helper.dart';
 import '../../../shared/utils/user_avatar_helper.dart';
+import '../../../shared/utils/user_gender_mapper.dart';
 
 // =========================================================
 // 全局设计系统 - 美学升级版
@@ -78,25 +81,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _loadUserProfile() async {
     try {
-      // 从 Supabase 加载昵称和头像 URL
       final profile = await _supabaseService.getUserProfile();
+      final avatarUrl = profile?['avatar_url'] as String?;
+      final genderRaw = profile?['gender'] as String?;
       if (mounted) {
         setState(() {
           _userNickname = profile?['nickname'] as String? ?? '';
-          _avatarUrl = profile?['avatar_url'] as String?;
-          _gender = (profile?['gender'] as String?)?.isNotEmpty == true
-              ? profile!['gender'] as String
-              : '未设置';
+          _avatarUrl = avatarUrl;
+          _gender = UserGenderMapper.toDisplayLabel(genderRaw);
           _birthDate = profile?['birth_date']?.toString().split('T')[0];
           _province = profile?['province'] as String? ?? '';
           _city = profile?['city'] as String? ?? '';
+          _avatarPath = null;
         });
       }
-      // 加载本地头像（如果有）
-      final localAvatar = await UserAvatarHelper.getCurrentUserAvatarPath();
-      if (mounted && localAvatar != null) {
-        setState(() => _avatarPath = localAvatar);
-      }
+      final path = await UserAvatarHelper.ensureCachedAvatarFile(
+        avatarUrl,
+        _supabaseService.cacheUserAvatarFromPublicUrl,
+      );
+      if (mounted) setState(() => _avatarPath = path);
     } catch (e) {
       debugPrint('加载用户资料失败: $e');
     }
@@ -407,35 +410,42 @@ class _ProfileScreenState extends State<ProfileScreen> {
     try {
       final XFile? pickedFile = await _picker.pickImage(
         source: source,
-        maxWidth: 512,
-        maxHeight: 512,
-        imageQuality: 80,
+        maxWidth: 2048,
+        maxHeight: 2048,
+        imageQuality: 92,
       );
 
       if (pickedFile == null) {
         return;
       }
 
-      final avatarUrl =
-          await _supabaseService.uploadUserAvatar(File(pickedFile.path));
+      final prepared =
+          await AvatarImageHelper.cropAndCompressAvatar(pickedFile.path);
+      if (prepared == null) return;
+
+      await UserAvatarHelper.clearLocalAvatarCacheForCurrentUser();
+
+      final avatarUrl = await _supabaseService.uploadUserAvatar(prepared);
       final success = avatarUrl != null
           ? await _supabaseService.upsertUserProfile(avatarUrl: avatarUrl)
           : false;
 
-      if (mounted) {
-        setState(() {
-          _avatarPath = null;
-          if (avatarUrl != null) {
-            _avatarUrl = avatarUrl;
-          }
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(success ? '✅ 头像更换成功' : '❌ 头像上传失败，请重试'),
-            backgroundColor: success ? Colors.green : Colors.red,
-          ),
+      if (!mounted) return;
+      if (success) {
+        setState(() => _avatarUrl = avatarUrl);
+        final path = await UserAvatarHelper.ensureCachedAvatarFile(
+          avatarUrl,
+          _supabaseService.cacheUserAvatarFromPublicUrl,
         );
+        if (mounted) setState(() => _avatarPath = path);
       }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(success ? '✅ 头像更换成功' : '❌ 头像上传失败，请重试'),
+          backgroundColor: success ? Colors.green : Colors.red,
+        ),
+      );
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1143,6 +1153,7 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage> {
   late Pet _currentPet;
   final _supabaseService = SupabaseService();
   late String _defaultOwnerNickname;
+  bool _isSyncingProfile = false;
 
   @override
   void initState() {
@@ -1173,6 +1184,59 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage> {
   String _formatAge(int years, int months) {
     if (months <= 0) return '${years}岁';
     return '${years}岁${months}个月';
+  }
+
+  Widget _buildPetDetailAvatar() {
+    const size = 120.0;
+    final a = _currentPet.avatar;
+    if (a != null && a.isNotEmpty) {
+      if (a.startsWith('http://') || a.startsWith('https://')) {
+        return ClipOval(
+          child: CachedNetworkImage(
+            imageUrl: a,
+            width: size,
+            height: size,
+            fit: BoxFit.cover,
+            placeholder: (context, url) => Container(
+              width: size,
+              height: size,
+              color: Colors.grey[200],
+              child: const Center(child: CircularProgressIndicator()),
+            ),
+            errorWidget: (context, url, error) => _buildPetAvatarPlaceholder(),
+          ),
+        );
+      }
+      final file = File(a);
+      if (file.existsSync()) {
+        return ClipOval(
+          child: Image.file(
+            file,
+            width: size,
+            height: size,
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) =>
+                _buildPetAvatarPlaceholder(),
+          ),
+        );
+      }
+    }
+    return _buildPetAvatarPlaceholder();
+  }
+
+  Widget _buildPetAvatarPlaceholder() {
+    return ClipOval(
+      child: Container(
+        width: 120,
+        height: 120,
+        color: Colors.grey[200],
+        child: Icon(
+          Icons.pets,
+          color: Colors.grey[600],
+          size: 50,
+        ),
+      ),
+    );
   }
 
   Widget _buildInfoCard(String label, String value,
@@ -1235,27 +1299,30 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage> {
           stops: [0.0, 1.0],
         ),
       ),
-      child: Scaffold(
-        backgroundColor: Colors.transparent,
-        appBar: AppBar(
-          title: Text(
-            '${_currentPet.name} 的档案',
-            style: AppStyles.sectionTitle.copyWith(fontSize: 20),
-          ),
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          leading: IconButton(
-            icon: const Icon(
-              Icons.arrow_back_ios,
-              color: AppColors.primaryText,
-            ),
-            onPressed: () => Navigator.of(context).pop(),
-          ),
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.edit, color: AppColors.primary),
-              onPressed: () async {
+      child: Stack(
+        children: [
+          Scaffold(
+            backgroundColor: Colors.transparent,
+            appBar: AppBar(
+              title: Text(
+                '${_currentPet.name} 的档案',
+                style: AppStyles.sectionTitle.copyWith(fontSize: 20),
+              ),
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              leading: IconButton(
+                icon: const Icon(
+                  Icons.arrow_back_ios,
+                  color: AppColors.primaryText,
+                ),
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.edit, color: AppColors.primary),
+                  onPressed: () async {
                 final initialData = {
+                  'id': _currentPet.id,
                   'name': _currentPet.name,
                   'species': _currentPet.breed,
                   'birthDate': _currentPet.birthDate,
@@ -1268,151 +1335,162 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage> {
                   'useCustomNickname': _currentPet.useCustomNickname,
                 };
 
-                final result = await Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) =>
-                        PetProfileFormPage(initialData: initialData),
-                  ),
-                );
-
-                if (result != null && mounted) {
-                  // 计算年龄
-                  String age = _currentPet.age;
-                  if (result['birth_date'] != null) {
-                    try {
-                      final birthDate = DateTime.parse(result['birth_date']);
-                      final now = DateTime.now();
-                      int years = now.year - birthDate.year;
-                      int months = now.month - birthDate.month;
-                      if (months < 0) {
-                        years--;
-                        months += 12;
-                      }
-                      age = _formatAge(years, months);
-                    } catch (e) {
-                      debugPrint('Error calculating age: $e');
-                    }
-                  }
-
-                  final updatedPet = Pet(
-                    id: _currentPet.id,
-                    name: result['name'],
-                    type: result['type'],
-                    breed: result['breed'],
-                    birthDate: result['birth_date'],
-                    gender: result['gender'],
-                    neuterStatus: result['neuter_status'],
-                    weight: result['weight'],
-                    avatar: result['avatar'],
-                    age: age,
-                    ownerNickname: result['ownerNickname'],
-                    useCustomNickname: result['useCustomNickname'] ?? false,
-                  );
-
-                  try {
-                    final success = await _supabaseService.updatePet(
-                      updatedPet.toMap(),
+                    final result = await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) =>
+                            PetProfileFormPage(initialData: initialData),
+                      ),
                     );
-                    if (!success) {
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('更新失败，请检查网络连接')),
-                        );
+
+                    if (result != null && mounted) {
+                      String age = _currentPet.age;
+                      if (result['birth_date'] != null) {
+                        try {
+                          final birthDate =
+                              DateTime.parse(result['birth_date']);
+                          final now = DateTime.now();
+                          int years = now.year - birthDate.year;
+                          int months = now.month - birthDate.month;
+                          if (months < 0) {
+                            years--;
+                            months += 12;
+                          }
+                          age = _formatAge(years, months);
+                        } catch (e) {
+                          debugPrint('Error calculating age: $e');
+                        }
                       }
-                      return;
-                    }
-                    setState(() {
-                      _currentPet = updatedPet;
-                    });
-                    await _refreshDefaultOwnerNickname();
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(
-                        context,
-                      ).showSnackBar(const SnackBar(content: Text('档案已更新')));
-                    }
-                  } catch (e) {
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(
-                        context,
-                      ).showSnackBar(const SnackBar(content: Text('更新失败，请重试')));
-                    }
-                  }
-                }
-              },
-            ),
-          ],
-        ),
-        body: SingleChildScrollView(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpaces.horizontalPadding,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                const SizedBox(height: 20),
-                ClipOval(
-                  child: Image.network(
-                    'https://loremflickr.com/240/240/animal,${_currentPet.breed.toLowerCase()}',
-                    width: 120,
-                    height: 120,
-                    fit: BoxFit.cover,
-                    loadingBuilder: (context, child, progress) {
-                      return progress == null
-                          ? child
-                          : const Center(child: CircularProgressIndicator());
-                    },
-                    errorBuilder: (context, error, stackTrace) {
-                      return Container(
-                        width: 120,
-                        height: 120,
-                        color: Colors.grey[200],
-                        child: const Icon(
-                          Icons.pets,
-                          color: Colors.grey,
-                          size: 50,
-                        ),
+
+                      final updatedPet = Pet(
+                        id: _currentPet.id,
+                        name: result['name'],
+                        type: result['type'],
+                        breed: result['breed'],
+                        birthDate: result['birth_date'],
+                        gender: result['gender'],
+                        neuterStatus: result['neuter_status'],
+                        weight: result['weight'],
+                        avatar: result['avatar'],
+                        age: age,
+                        ownerNickname: result['ownerNickname'],
+                        useCustomNickname:
+                            result['useCustomNickname'] ?? false,
                       );
-                    },
-                  ),
+
+                      setState(() => _isSyncingProfile = true);
+                      try {
+                        final success = await _supabaseService.updatePet(
+                          updatedPet.toMap(),
+                        );
+                        if (!success) {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                  content: Text('更新失败，请检查网络连接')),
+                            );
+                          }
+                          return;
+                        }
+                        setState(() {
+                          _currentPet = updatedPet;
+                        });
+                        await _refreshDefaultOwnerNickname();
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('档案已更新')),
+                          );
+                        }
+                      } catch (e) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('更新失败，请重试')),
+                          );
+                        }
+                      } finally {
+                        if (mounted) {
+                          setState(() => _isSyncingProfile = false);
+                        }
+                      }
+                    }
+                  },
                 ),
-                const SizedBox(height: 16),
-                Text(_currentPet.name, style: AppStyles.sectionTitle),
-                const SizedBox(height: 32),
-                _buildInfoCard('类型', _currentPet.type),
-                const SizedBox(height: 12),
-                _buildInfoCard('品种', _currentPet.breed),
-                const SizedBox(height: 12),
-                _buildInfoCard('性别', _currentPet.gender),
-                const SizedBox(height: 12),
-                _buildInfoCard('年龄', _currentPet.age),
-                const SizedBox(height: 12),
-                _buildInfoCard(
-                  '期望宠物对主人的称呼',
-                  _resolvedOwnerNickname(),
-                  isPlaceholder: _resolvedOwnerNickname() == '未设置',
-                ),
-                const SizedBox(height: 12),
-                if (_currentPet.birthDate != null)
-                  _buildInfoCard('出生日期', _currentPet.birthDate!.split('T')[0]),
-                if (_currentPet.birthDate != null) const SizedBox(height: 12),
-                if (_currentPet.neuterStatus != null)
-                  _buildInfoCard('绝育状态', _currentPet.neuterStatus!),
-                if (_currentPet.neuterStatus != null)
-                  const SizedBox(height: 12),
-                _buildInfoCard(
-                  '体重',
-                  _currentPet.weight != null
-                      ? '${_currentPet.weight!.toStringAsFixed(1)} kg'
-                      : '未填写',
-                  isPlaceholder: _currentPet.weight == null,
-                ),
-                const SizedBox(height: 50),
               ],
             ),
+            body: SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpaces.horizontalPadding,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    const SizedBox(height: 20),
+                    _buildPetDetailAvatar(),
+                    const SizedBox(height: 16),
+                    Text(_currentPet.name, style: AppStyles.sectionTitle),
+                    const SizedBox(height: 32),
+                    _buildInfoCard('类型', _currentPet.type),
+                    const SizedBox(height: 12),
+                    _buildInfoCard('品种', _currentPet.breed),
+                    const SizedBox(height: 12),
+                    _buildInfoCard('性别', _currentPet.gender),
+                    const SizedBox(height: 12),
+                    _buildInfoCard('年龄', _currentPet.age),
+                    const SizedBox(height: 12),
+                    _buildInfoCard(
+                      '期望宠物对主人的称呼',
+                      _resolvedOwnerNickname(),
+                      isPlaceholder:
+                          _resolvedOwnerNickname() == '未设置',
+                    ),
+                    const SizedBox(height: 12),
+                    if (_currentPet.birthDate != null)
+                      _buildInfoCard(
+                          '出生日期', _currentPet.birthDate!.split('T')[0]),
+                    if (_currentPet.birthDate != null)
+                      const SizedBox(height: 12),
+                    if (_currentPet.neuterStatus != null)
+                      _buildInfoCard('绝育状态', _currentPet.neuterStatus!),
+                    if (_currentPet.neuterStatus != null)
+                      const SizedBox(height: 12),
+                    _buildInfoCard(
+                      '体重',
+                      _currentPet.weight != null
+                          ? '${_currentPet.weight!.toStringAsFixed(1)} kg'
+                          : '未填写',
+                      isPlaceholder: _currentPet.weight == null,
+                    ),
+                    const SizedBox(height: 50),
+                  ],
+                ),
+              ),
+            ),
           ),
-        ),
+          if (_isSyncingProfile)
+            Positioned.fill(
+              child: AbsorbPointer(
+                child: Container(
+                  color: Colors.black26,
+                  alignment: Alignment.center,
+                  child: const Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircularProgressIndicator(),
+                      SizedBox(height: 16),
+                      Text(
+                        '正在保存档案…',
+                        style: TextStyle(
+                          color: AppColors.primaryText,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }

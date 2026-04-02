@@ -2,7 +2,10 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../shared/utils/storage_avatar_utils.dart';
 import '../shared/models/conversation.dart';
 import '../shared/models/pet_diary.dart';
 import '../shared/models/fitness_course.dart';
@@ -2701,20 +2704,51 @@ class SupabaseService {
     }
   }
 
-  /// 上传用户头像到 Storage，返回公开 URL
+  /// 上传用户头像到 Storage，返回带 cache buster 的公开 URL（写入 users_profiles.avatar_url）
   Future<String?> uploadUserAvatar(File file) async {
     final userId = await currentUserId;
     if (userId == null) return null;
-    final path = '$userId/avatar.jpg';
+    final path =
+        '$userId/avatar_${DateTime.now().millisecondsSinceEpoch}.jpg';
     try {
       await _client.storage.from(_userAvatarBucket).upload(
             path,
             file,
             fileOptions: const FileOptions(upsert: true),
           );
-      return _client.storage.from(_userAvatarBucket).getPublicUrl(path);
+      final base =
+          _client.storage.from(_userAvatarBucket).getPublicUrl(path);
+      return StorageAvatarUtils.appendCacheBuster(base);
     } catch (e) {
       debugPrint('上传用户头像失败: $e');
+      return null;
+    }
+  }
+
+  /// 使用 Storage API 下载当前用户头像到应用支持目录，返回本地路径（供 FileImage 展示）
+  Future<String?> cacheUserAvatarFromPublicUrl(String? avatarPublicUrl) async {
+    if (avatarPublicUrl == null || avatarPublicUrl.isEmpty) return null;
+    final userId = await currentUserId;
+    if (userId == null) return null;
+    final pathOnly = avatarPublicUrl.split('?').first;
+    final objectPath = StorageAvatarUtils.objectPathFromPublicUrl(
+      pathOnly,
+      _userAvatarBucket,
+    );
+    if (objectPath == null) {
+      debugPrint('无法从头像 URL 解析 Storage 路径: $avatarPublicUrl');
+      return null;
+    }
+    try {
+      final bytes = await _client.storage
+          .from(_userAvatarBucket)
+          .download(objectPath);
+      final dir = await getApplicationSupportDirectory();
+      final out = File(p.join(dir.path, 'user_avatar_$userId.jpg'));
+      await out.writeAsBytes(bytes, flush: true);
+      return out.path;
+    } catch (e) {
+      debugPrint('下载用户头像到本地失败: $e');
       return null;
     }
   }
@@ -2727,14 +2761,17 @@ class SupabaseService {
     final userId = await currentUserId;
     if (userId == null) return null;
     final identifier = petId ?? DateTime.now().millisecondsSinceEpoch.toString();
-    final path = '$userId/$identifier/avatar.jpg';
+    final path =
+        '$userId/$identifier/avatar_${DateTime.now().millisecondsSinceEpoch}.jpg';
     try {
       await _client.storage.from(_petAvatarBucket).upload(
             path,
             file,
             fileOptions: const FileOptions(upsert: true),
           );
-      return _client.storage.from(_petAvatarBucket).getPublicUrl(path);
+      final base =
+          _client.storage.from(_petAvatarBucket).getPublicUrl(path);
+      return StorageAvatarUtils.appendCacheBuster(base);
     } catch (e) {
       debugPrint('上传宠物头像失败: $e');
       return null;

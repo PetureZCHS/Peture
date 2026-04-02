@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:image_picker/image_picker.dart';
+import '../../../shared/utils/avatar_image_helper.dart';
 import '../../../shared/utils/user_avatar_helper.dart';
 import '../../../services/supabase_service.dart';
 
@@ -28,6 +29,7 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
   String? _userAvatarPath; // 用户头像路径
   String? _userAvatarUrl; // 用户头像URL
   bool _isSaving = false;
+  String _saveButtonLabel = '保存档案';
 
   // 主人昵称相关
 
@@ -255,11 +257,15 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
   Future<void> _loadUserAvatar() async {
     try {
       final profile = await SupabaseService().getUserProfile();
-      final avatarPath = await UserAvatarHelper.getCurrentUserAvatarPath();
+      final url = profile?['avatar_url'] as String?;
+      final path = await UserAvatarHelper.ensureCachedAvatarFile(
+        url,
+        SupabaseService().cacheUserAvatarFromPublicUrl,
+      );
       if (mounted) {
         setState(() {
-          _userAvatarPath = avatarPath;
-          _userAvatarUrl = profile?['avatar_url'] as String?;
+          _userAvatarPath = path;
+          _userAvatarUrl = url;
         });
       }
     } catch (e) {
@@ -270,13 +276,20 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
   Future<void> _pickAvatar() async {
     try {
       final picker = ImagePicker();
-      final file = await picker.pickImage(source: ImageSource.gallery);
-      if (file != null) {
-        setState(() {
-          _avatarFile = File(file.path);
-          _avatarUrl = null;
-        });
-      }
+      final file = await picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 2048,
+        maxHeight: 2048,
+        imageQuality: 92,
+      );
+      if (file == null) return;
+      final prepared =
+          await AvatarImageHelper.cropAndCompressAvatar(file.path);
+      if (prepared == null || !mounted) return;
+      setState(() {
+        _avatarFile = prepared;
+        _avatarUrl = null;
+      });
     } catch (e) {
       debugPrint('选择头像失败: $e');
     }
@@ -1865,13 +1878,24 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
       typeForDb = petType;
     }
 
-    setState(() => _isSaving = true);
+    setState(() {
+      _isSaving = true;
+      _saveButtonLabel =
+          _avatarFile != null ? '正在上传头像…' : '正在保存…';
+    });
     String? finalAvatar = _avatarUrl;
     if (_avatarFile != null) {
-      final uploaded = await SupabaseService().uploadPetAvatar(file: _avatarFile!);
+      final petId = widget.initialData?['id']?.toString();
+      final uploaded = await SupabaseService().uploadPetAvatar(
+        file: _avatarFile!,
+        petId: petId,
+      );
       if (uploaded == null) {
         if (mounted) {
-          setState(() => _isSaving = false);
+          setState(() {
+            _isSaving = false;
+            _saveButtonLabel = '保存档案';
+          });
           ScaffoldMessenger.of(
             context,
           ).showSnackBar(const SnackBar(content: Text('头像上传失败，请重试')));
@@ -1895,7 +1919,10 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
     };
 
     if (mounted) {
-      setState(() => _isSaving = false);
+      setState(() {
+        _isSaving = false;
+        _saveButtonLabel = '保存档案';
+      });
       Navigator.pop(context, result);
     }
   }
@@ -2143,13 +2170,35 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
                       elevation: 0,
                     ),
                     onPressed: _isSaving ? null : () async => _savePetProfile(),
-                    child: const Text(
-                      '保存档案',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                    child: _isSaving
+                        ? Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const SizedBox(
+                                width: 22,
+                                height: 22,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2.5,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Text(
+                                _saveButtonLabel,
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          )
+                        : const Text(
+                            '保存档案',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                   ),
                 ),
               ),

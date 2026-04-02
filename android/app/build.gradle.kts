@@ -42,3 +42,8 @@ android {
 flutter {
     source = "../.."
 }
+
+dependencies {
+    // image_cropper (uCrop) 使用 AppCompat 主题
+    implementation("androidx.appcompat:appcompat:1.6.1")
+}
