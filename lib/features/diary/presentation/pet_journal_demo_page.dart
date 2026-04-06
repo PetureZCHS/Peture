@@ -12,7 +12,6 @@ class PetJournalDemoPage extends StatefulWidget {
 class _PetJournalDemoPageState extends State<PetJournalDemoPage> {
   // Theme colors extracted from screenshots
   final Color _bgDark = const Color(0xFF141416); // Content background
-  final Color _textWhite = Colors.white;
 
   @override
   Widget build(BuildContext context) {
@@ -23,7 +22,11 @@ class _PetJournalDemoPageState extends State<PetJournalDemoPage> {
           return [
             SliverAppBar(
               backgroundColor: _bgDark,
-              title: const Text('书写手记', style: TextStyle(fontWeight: FontWeight.bold)),
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back, color: Colors.white),
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+              title: const Text('书写手记', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
               centerTitle: false,
               floating: true,
               pinned: true,

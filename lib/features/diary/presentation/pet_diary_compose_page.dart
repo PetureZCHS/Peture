@@ -8,6 +8,7 @@ import '../../../services/supabase_edge_service.dart';
 import '../../../shared/models/pet.dart';
 import '../../../services/supabase_service.dart';
 import 'pet_diary_result_page.dart';
+import 'pet_journal_demo_page.dart';
 import 'dart:io';
 import '../../library/presentation/library_screen.dart';
 
@@ -39,9 +40,6 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
   // 可用的风格列表
   final List<String> _availableStyles = ['哲学', '搞笑', '治愈', '中二', '小红书'];
 
-  // 示例文本
-  final String _exampleText =
-      '今天，我带我的宠物狗狗十六去逍遥津的大草坪玩飞盘。小妮带着她的宠物狗狗朱朱一起。十六跑得比朱朱快。十六和朱朱都玩得很开心，我奖励它们吃苹果狗粮。';
   @override
   void initState() {
     super.initState();

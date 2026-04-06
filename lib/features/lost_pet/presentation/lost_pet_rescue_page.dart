@@ -1093,15 +1093,13 @@ class _LostPetRescuePageState extends State<LostPetRescuePage>
           ),
           const SizedBox(height: 24),
 
-          SizedBox(
-            height: 500, // Fixed height for tab view content
-            child: TabBarView(
-              controller: _tabController,
-              children: [
+          AnimatedBuilder(
+            animation: _tabController,
+            builder: (context, _) {
+              if (_tabController.index == 0) {
                 // Copywriting Tab
-                SingleChildScrollView(
-                  child: Column(
-                    children: [
+                return Column(
+                  children: [
                       _buildPlatformCard('朋友圈文案', m.wechatMomentsText,
                           const Color(0xFF07C160), Icons.chat_bubble_rounded),
                       _buildPlatformCard(
@@ -1112,11 +1110,10 @@ class _LostPetRescuePageState extends State<LostPetRescuePage>
                       _buildPlatformCard('短消息/群发', m.shortMessageText,
                           const Color(0xFF007AFF), Icons.message_rounded),
                     ],
-                  ),
-                ),
+                );
+              } else {
                 // Poster Tab
-                SingleChildScrollView(
-                  child: Column(
+                return Column(
                     children: [
                       RepaintBoundary(
                         key: _posterKey,
@@ -1183,11 +1180,9 @@ class _LostPetRescuePageState extends State<LostPetRescuePage>
                       ),
                       const SizedBox(height: 20),
                     ],
-                  ),
-                ),
-              ],
-            ),
-          ),
+                  );
+              }
+            }),
 
           const SizedBox(height: 40),
         ],
