@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/physics.dart';
 import 'package:flutter/material.dart';
@@ -900,8 +901,12 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen>
                 child: CircleAvatar(
                   radius: 24,
                   backgroundColor: Colors.white,
-                  backgroundImage: const NetworkImage(
-                    'https://loremflickr.com/150/150/cutedog',
+                  child: ClipOval(
+                    child: _buildPetAvatarImage(
+                      pet.avatar,
+                      width: 48,
+                      height: 48,
+                    ),
                   ),
                 ),
               ),
@@ -936,6 +941,49 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen>
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildPetAvatarImage(
+    String? avatar, {
+    required double width,
+    required double height,
+  }) {
+    if (avatar != null && avatar.isNotEmpty) {
+      if (avatar.startsWith('http://') || avatar.startsWith('https://')) {
+        return Image.network(
+          avatar,
+          width: width,
+          height: height,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => _buildPetAvatarFallback(width, height),
+        );
+      }
+      final file = File(avatar);
+      if (file.existsSync()) {
+        return Image.file(
+          file,
+          width: width,
+          height: height,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => _buildPetAvatarFallback(width, height),
+        );
+      }
+    }
+    return _buildPetAvatarFallback(width, height);
+  }
+
+  Widget _buildPetAvatarFallback(double width, double height) {
+    return Container(
+      width: width,
+      height: height,
+      color: AppColors.petTypeColors[_selectedPet?.type] ??
+          AppColors.petTypeColors['其他'],
+      child: Icon(
+        Icons.pets,
+        color: Colors.white.withOpacity(0.8),
+        size: 30,
       ),
     );
   }
@@ -1075,40 +1123,11 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen>
                                   ),
                                   child: ClipRRect(
                                     borderRadius: BorderRadius.circular(20),
-                                    child: _selectedPet?.avatar != null &&
-                                            _selectedPet!.avatar!.isNotEmpty
-                                        ? Image.network(
-                                            _selectedPet!.avatar!,
-                                            width: 80,
-                                            height: 80,
-                                            fit: BoxFit.cover,
-                                            errorBuilder:
-                                                (context, error, stackTrace) {
-                                              return Container(
-                                                color: AppColors.petTypeColors[
-                                                        _selectedPet?.type] ??
-                                                    AppColors
-                                                        .petTypeColors['其他'],
-                                                child: Icon(
-                                                  Icons.pets,
-                                                  color: Colors.white
-                                                      .withOpacity(0.8),
-                                                  size: 30,
-                                                ),
-                                              );
-                                            },
-                                          )
-                                        : Container(
-                                            color: AppColors.petTypeColors[
-                                                    _selectedPet?.type] ??
-                                                AppColors.petTypeColors['其他'],
-                                            child: Icon(
-                                              Icons.pets,
-                                              color:
-                                                  Colors.white.withOpacity(0.8),
-                                              size: 30,
-                                            ),
-                                          ),
+                                    child: _buildPetAvatarImage(
+                                      _selectedPet?.avatar,
+                                      width: 80,
+                                      height: 80,
+                                    ),
                                   ),
                                 ),
                               ),

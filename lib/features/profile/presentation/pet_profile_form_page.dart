@@ -2,7 +2,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:image_picker/image_picker.dart';
-import '../../../shared/utils/avatar_image_helper.dart';
 import '../../../shared/utils/user_avatar_helper.dart';
 import '../../../services/supabase_service.dart';
 
@@ -18,7 +17,6 @@ class PetProfileFormPage extends StatefulWidget {
 
 class _PetProfileFormPageState extends State<PetProfileFormPage> {
   File? _avatarFile;
-  String? _avatarUrl;
   String? _petName;
   String? _petType; // 宠物类型：狗狗/猫咪
   String? _petSpecies; // 品种
@@ -27,14 +25,12 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
   String? _neuterStatus; // 已绝育/未绝育
   double? _weight; // kg
   String? _userAvatarPath; // 用户头像路径
-  String? _userAvatarUrl; // 用户头像URL
-  bool _isSaving = false;
-  String _saveButtonLabel = '保存档案';
 
   // 主人昵称相关
 
   String? _ownerNickname; // 该宠物对主人的自定义称呼
   String _defaultOwnerNickname = '主人'; // 用户默认称呼
+  bool _isSaving = false;
 
   final Map<String, List<String>> _speciesOptions = {
     '猫咪': [
@@ -232,10 +228,7 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
       // 如果有头像路径
       if (data['avatar'] != null) {
         final avatarPath = data['avatar'] as String;
-        if (avatarPath.startsWith('http://') ||
-            avatarPath.startsWith('https://')) {
-          _avatarUrl = avatarPath;
-        } else if (File(avatarPath).existsSync()) {
+        if (File(avatarPath).existsSync()) {
           _avatarFile = File(avatarPath);
         }
       }
@@ -256,16 +249,10 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
 
   Future<void> _loadUserAvatar() async {
     try {
-      final profile = await SupabaseService().getUserProfile();
-      final url = profile?['avatar_url'] as String?;
-      final path = await UserAvatarHelper.ensureCachedAvatarFile(
-        url,
-        SupabaseService().cacheUserAvatarFromPublicUrl,
-      );
-      if (mounted) {
+      final avatarPath = await UserAvatarHelper.getCurrentUserAvatarPath();
+      if (mounted && avatarPath != null) {
         setState(() {
-          _userAvatarPath = path;
-          _userAvatarUrl = url;
+          _userAvatarPath = avatarPath;
         });
       }
     } catch (e) {
@@ -276,20 +263,10 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
   Future<void> _pickAvatar() async {
     try {
       final picker = ImagePicker();
-      final file = await picker.pickImage(
-        source: ImageSource.gallery,
-        maxWidth: 2048,
-        maxHeight: 2048,
-        imageQuality: 92,
-      );
-      if (file == null) return;
-      final prepared =
-          await AvatarImageHelper.cropAndCompressAvatar(file.path);
-      if (prepared == null || !mounted) return;
-      setState(() {
-        _avatarFile = prepared;
-        _avatarUrl = null;
-      });
+      final file = await picker.pickImage(source: ImageSource.gallery);
+      if (file != null) {
+        setState(() => _avatarFile = File(file.path));
+      }
     } catch (e) {
       debugPrint('选择头像失败: $e');
     }
@@ -1471,19 +1448,12 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
                                           padding: const EdgeInsets.only(
                                             bottom: 12,
                                           ),
-                                          child: SizedBox(
-                                            width: 28,
-                                            child: Text(
-                                              '${value.toInt()}',
-                                              textAlign: TextAlign.center,
-                                              maxLines: 1,
-                                              softWrap: false,
-                                              overflow: TextOverflow.visible,
-                                              style: const TextStyle(
-                                                fontSize: 14,
-                                                fontWeight: FontWeight.w600,
-                                                color: Color(0xFF1A1A1A),
-                                              ),
+                                          child: Text(
+                                            '${value.toInt()}',
+                                            style: const TextStyle(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w600,
+                                              color: Color(0xFF1A1A1A),
                                             ),
                                           ),
                                         )
@@ -1815,11 +1785,11 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('期望宠物对主人的称呼'),
+        title: const Text('宠物对你的称呼'),
         content: TextField(
           controller: controller,
           decoration: const InputDecoration(
-            labelText: '期望宠物对主人的称呼',
+            labelText: '称呼',
             hintText: '例如：妈妈、姐姐、爸爸',
           ),
           maxLength: 10,
@@ -1878,35 +1848,21 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
       typeForDb = petType;
     }
 
-    setState(() {
-      _isSaving = true;
-      _saveButtonLabel =
-          _avatarFile != null ? '正在上传头像…' : '正在保存…';
-    });
-    String? finalAvatar = _avatarUrl;
+    setState(() => _isSaving = true);
+    String? avatarValue = _avatarFile?.path;
     if (_avatarFile != null) {
       final petId = widget.initialData?['id']?.toString();
       final uploaded = await SupabaseService().uploadPetAvatar(
         file: _avatarFile!,
         petId: petId,
       );
-      if (uploaded == null) {
-        if (mounted) {
-          setState(() {
-            _isSaving = false;
-            _saveButtonLabel = '保存档案';
-          });
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text('头像上传失败，请重试')));
-        }
-        return;
+      if (uploaded != null) {
+        avatarValue = uploaded;
       }
-      finalAvatar = uploaded;
     }
 
     final result = {
-      'avatar': finalAvatar,
+      'avatar': avatarValue,
       'name': _petName,
       'type': typeForDb, // 宠物类型：狗、猫
       'breed': _petSpecies, // 品种：边牧犬、布偶猫
@@ -1917,14 +1873,9 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
       'useCustomNickname': _ownerNickname != null && _ownerNickname!.isNotEmpty,
       'ownerNickname': _ownerNickname,
     };
-
-    if (mounted) {
-      setState(() {
-        _isSaving = false;
-        _saveButtonLabel = '保存档案';
-      });
-      Navigator.pop(context, result);
-    }
+    if (!mounted) return;
+    setState(() => _isSaving = false);
+    Navigator.pop(context, result);
   }
 
   @override
@@ -1962,12 +1913,6 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
                       CircleAvatar(
                         radius: 18,
                         backgroundImage: FileImage(File(_userAvatarPath!)),
-                      )
-                    else if (_userAvatarUrl != null &&
-                        _userAvatarUrl!.isNotEmpty)
-                      CircleAvatar(
-                        radius: 18,
-                        backgroundImage: NetworkImage(_userAvatarUrl!),
                       )
                     else
                       CircleAvatar(
@@ -2018,11 +1963,8 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
                                 backgroundColor: const Color(0xFFF8F8F8),
                                 backgroundImage: _avatarFile != null
                                     ? FileImage(_avatarFile!)
-                                    : (_avatarUrl != null
-                                            ? NetworkImage(_avatarUrl!)
-                                            : null)
-                                        as ImageProvider?,
-                                child: _avatarFile == null && _avatarUrl == null
+                                    : null,
+                                child: _avatarFile == null
                                     ? const Icon(
                                         Icons.camera_alt,
                                         size: 42,
@@ -2114,7 +2056,7 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
                         ),
                         // 昵称设置
                         _FormRow(
-                          label: '期望称呼',
+                          label: '我的称呼',
                           onTap: _showNicknameEditor,
                           isLast: true,
                           child: Text(
@@ -2169,28 +2111,12 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
                       ),
                       elevation: 0,
                     ),
-                    onPressed: _isSaving ? null : () async => _savePetProfile(),
+                    onPressed: _isSaving ? null : _savePetProfile,
                     child: _isSaving
-                        ? Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const SizedBox(
-                                width: 22,
-                                height: 22,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2.5,
-                                  color: Colors.white,
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Text(
-                                _saveButtonLabel,
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : const Text(
                             '保存档案',

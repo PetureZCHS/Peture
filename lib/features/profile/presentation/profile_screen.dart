@@ -10,9 +10,7 @@ import '../../home/presentation/home_screen.dart';
 import 'settings_page.dart';
 import 'pet_profile_form_page.dart';
 import '../../../shared/utils/ui_helpers.dart';
-import '../../../shared/utils/avatar_image_helper.dart';
 import '../../../shared/utils/user_avatar_helper.dart';
-import '../../../shared/utils/user_gender_mapper.dart';
 
 // =========================================================
 // 全局设计系统 - 美学升级版
@@ -68,10 +66,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String _userNickname = '';
   String? _avatarPath;
   String? _avatarUrl; // Supabase Storage 的 URL
-  String _gender = '未设置';
-  String? _birthDate;
-  String _province = '';
-  String _city = '';
 
   @override
   void initState() {
@@ -81,25 +75,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _loadUserProfile() async {
     try {
+      // 从 Supabase 加载昵称和头像 URL
       final profile = await _supabaseService.getUserProfile();
       final avatarUrl = profile?['avatar_url'] as String?;
-      final genderRaw = profile?['gender'] as String?;
       if (mounted) {
         setState(() {
           _userNickname = profile?['nickname'] as String? ?? '';
           _avatarUrl = avatarUrl;
-          _gender = UserGenderMapper.toDisplayLabel(genderRaw);
-          _birthDate = profile?['birth_date']?.toString().split('T')[0];
-          _province = profile?['province'] as String? ?? '';
-          _city = profile?['city'] as String? ?? '';
-          _avatarPath = null;
         });
       }
-      final path = await UserAvatarHelper.ensureCachedAvatarFile(
+      final localAvatar = await UserAvatarHelper.ensureCachedAvatarFile(
         avatarUrl,
         _supabaseService.cacheUserAvatarFromPublicUrl,
       );
-      if (mounted) setState(() => _avatarPath = path);
+      if (mounted) setState(() => _avatarPath = localAvatar);
     } catch (e) {
       debugPrint('加载用户资料失败: $e');
     }
@@ -109,12 +98,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     setState(() {
       _userNickname = newName;
     });
-  }
-
-  String _displayRegion() {
-    if (_province.isEmpty && _city.isEmpty) return '未设置';
-    if (_province.isNotEmpty && _city.isNotEmpty) return '$_province $_city';
-    return _province.isNotEmpty ? _province : _city;
   }
 
   @override
@@ -133,8 +116,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
             children: [
               const SizedBox(height: 60),
               _buildHeader(context),
-              const SizedBox(height: 12),
-              _buildBasicInfoSummary(),
               const SizedBox(height: AppSpaces.sectionSpacing),
               PetProfileSection(onProfileUpdate: _updateNickname),
               const SizedBox(height: 120), // Bottom padding for nav bar
@@ -142,50 +123,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         ),
       ),
-    );
-  }
-
-  Widget _buildBasicInfoSummary() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.72),
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Row(
-        children: [
-          Expanded(child: _buildInfoCell('性别', _gender)),
-          Expanded(child: _buildInfoCell('出生日期', _birthDate ?? '未设置')),
-          Expanded(child: _buildInfoCell('地区', _displayRegion())),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildInfoCell(String label, String value) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 12,
-            color: AppColors.secondaryText,
-          ),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          value,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-            fontSize: 13,
-            color: AppColors.primaryText,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ],
     );
   }
 
@@ -258,11 +195,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
               ),
               const SizedBox(width: 20),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                   Text(
                     displayName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: AppStyles.ownerId.copyWith(
                       fontSize: 24,
                       fontWeight: FontWeight.w800,
@@ -287,7 +227,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                     ),
                   ),
-                ],
+                  ],
+                ),
               ),
             ],
           ),
@@ -412,40 +353,35 @@ class _ProfileScreenState extends State<ProfileScreen> {
         source: source,
         maxWidth: 2048,
         maxHeight: 2048,
-        imageQuality: 92,
+        imageQuality: 90,
       );
 
       if (pickedFile == null) {
         return;
       }
 
-      final prepared =
-          await AvatarImageHelper.cropAndCompressAvatar(pickedFile.path);
-      if (prepared == null) return;
-
       await UserAvatarHelper.clearLocalAvatarCacheForCurrentUser();
-
-      final avatarUrl = await _supabaseService.uploadUserAvatar(prepared);
-      final success = avatarUrl != null
-          ? await _supabaseService.upsertUserProfile(avatarUrl: avatarUrl)
-          : false;
-
-      if (!mounted) return;
-      if (success) {
-        setState(() => _avatarUrl = avatarUrl);
-        final path = await UserAvatarHelper.ensureCachedAvatarFile(
-          avatarUrl,
-          _supabaseService.cacheUserAvatarFromPublicUrl,
-        );
-        if (mounted) setState(() => _avatarPath = path);
-      }
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(success ? '✅ 头像更换成功' : '❌ 头像上传失败，请重试'),
-          backgroundColor: success ? Colors.green : Colors.red,
-        ),
+      final avatarUrl =
+          await _supabaseService.uploadUserAvatar(File(pickedFile.path));
+      final success =
+          await _supabaseService.upsertUserProfile(avatarUrl: avatarUrl);
+      final localPath = await UserAvatarHelper.ensureCachedAvatarFile(
+        avatarUrl,
+        _supabaseService.cacheUserAvatarFromPublicUrl,
       );
+
+      if (mounted) {
+        setState(() {
+          _avatarPath = localPath;
+          if (avatarUrl != null) _avatarUrl = avatarUrl;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(success ? '✅ 头像更换成功' : '⚠️ 头像已保存，但同步失败'),
+            backgroundColor: success ? Colors.green : Colors.orange,
+          ),
+        );
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -472,25 +408,11 @@ class PetProfileSection extends StatefulWidget {
 class _PetProfileSectionState extends State<PetProfileSection> {
   final List<Pet> pets = [];
   final _supabaseService = SupabaseService();
-  String _defaultOwnerNickname = '主人';
 
   @override
   void initState() {
     super.initState();
-    _loadDefaultOwnerNickname();
     _loadPets();
-  }
-
-  Future<void> _loadDefaultOwnerNickname() async {
-    final nickname = await _supabaseService.getOwnerNickname();
-    if (mounted) {
-      setState(() => _defaultOwnerNickname = nickname);
-    }
-  }
-
-  String _formatAge(int years, int months) {
-    if (months <= 0) return '${years}岁';
-    return '${years}岁${months}个月';
   }
 
   Future<void> _loadPets() async {
@@ -679,7 +601,7 @@ class _PetProfileSectionState extends State<PetProfileSection> {
                       }
 
                       // 计算年龄（根据出生日期）
-                      String age = '1岁';
+                      String age = '1岁0个月';
                       if (petData['birth_date'] != null) {
                         final birthDate =
                             DateTime.tryParse(petData['birth_date']);
@@ -696,7 +618,7 @@ class _PetProfileSectionState extends State<PetProfileSection> {
                           if (now.day < birthDate.day && months > 0) {
                             months--;
                           }
-                          age = _formatAge(years, months);
+                          age = '$years岁$months个月';
                         }
                       }
 
@@ -790,17 +712,12 @@ class _PetProfileSectionState extends State<PetProfileSection> {
                             },
                             child: PetProfileCard(
                               pet: pet,
-                              defaultOwnerNickname: _defaultOwnerNickname,
                               onView: () async {
                                 await Navigator.push<Pet>(
                                   context,
                                   MaterialPageRoute(
                                     builder: (context) =>
-                                        PetProfileDetailsPage(
-                                      pet: pet,
-                                      defaultOwnerNickname:
-                                          _defaultOwnerNickname,
-                                    ),
+                                        PetProfileDetailsPage(pet: pet),
                                   ),
                                 );
                                 _loadPets();
@@ -825,15 +742,9 @@ class _PetProfileSectionState extends State<PetProfileSection> {
 // =========================================================
 class PetProfileCard extends StatefulWidget {
   final Pet pet;
-  final String defaultOwnerNickname;
   final VoidCallback onView;
 
-  const PetProfileCard({
-    super.key,
-    required this.pet,
-    required this.defaultOwnerNickname,
-    required this.onView,
-  });
+  const PetProfileCard({super.key, required this.pet, required this.onView});
 
   @override
   State<PetProfileCard> createState() => _PetProfileCardState();
@@ -877,18 +788,6 @@ class _PetProfileCardState extends State<PetProfileCard>
 
   void _onTapCancel() {
     _scaleController.reverse();
-  }
-
-  String _resolvedOwnerNickname() {
-    if (widget.pet.useCustomNickname &&
-        widget.pet.ownerNickname != null &&
-        widget.pet.ownerNickname!.isNotEmpty) {
-      return widget.pet.ownerNickname!;
-    }
-    if (widget.defaultOwnerNickname.isNotEmpty) {
-      return widget.defaultOwnerNickname;
-    }
-    return '未设置';
   }
 
   @override
@@ -963,51 +862,47 @@ class _PetProfileCardState extends State<PetProfileCard>
                                   borderRadius: BorderRadius.circular(20),
                                   child: widget.pet.avatar != null &&
                                           widget.pet.avatar!.isNotEmpty
-                                    ? (widget.pet.avatar!.startsWith('http://') ||
-                                            widget.pet.avatar!
-                                                .startsWith('https://')
-                                        ? Image.network(
-                                            widget.pet.avatar!,
-                                            width: 80,
-                                            height: 80,
-                                            fit: BoxFit.cover,
-                                            errorBuilder:
-                                                (context, error, stackTrace) {
-                                              return Container(
-                                                color: AppColors.petTypeColors[
-                                                        widget.pet.type] ??
-                                                    AppColors
-                                                        .petTypeColors['其他'],
-                                                child: Icon(
-                                                  Icons.pets,
-                                                  color: Colors.white
-                                                      .withOpacity(0.8),
-                                                  size: 30,
-                                                ),
-                                              );
-                                            },
-                                          )
-                                        : Image.file(
-                                            File(widget.pet.avatar!),
-                                            width: 80,
-                                            height: 80,
-                                            fit: BoxFit.cover,
-                                            errorBuilder:
-                                                (context, error, stackTrace) {
-                                              return Container(
-                                                color: AppColors.petTypeColors[
-                                                        widget.pet.type] ??
-                                                    AppColors
-                                                        .petTypeColors['其他'],
-                                                child: Icon(
-                                                  Icons.pets,
-                                                  color: Colors.white
-                                                      .withOpacity(0.8),
-                                                  size: 30,
-                                                ),
-                                              );
-                                            },
-                                          ))
+                                      ? (widget.pet.avatar!.startsWith('http://') ||
+                                              widget.pet.avatar!.startsWith('https://')
+                                          ? Image.network(
+                                          widget.pet.avatar!,
+                                          width: 80,
+                                          height: 80,
+                                          fit: BoxFit.cover,
+                                          errorBuilder:
+                                              (context, error, stackTrace) {
+                                            return Container(
+                                              color: AppColors.petTypeColors[
+                                                      widget.pet.type] ??
+                                                  AppColors.petTypeColors['其他'],
+                                              child: Icon(
+                                                Icons.pets,
+                                                color: Colors.white
+                                                    .withOpacity(0.8),
+                                                size: 30,
+                                              ),
+                                            );
+                                          },
+                                        ) : Image.file(
+                                          File(widget.pet.avatar!),
+                                          width: 80,
+                                          height: 80,
+                                          fit: BoxFit.cover,
+                                          errorBuilder:
+                                              (context, error, stackTrace) {
+                                            return Container(
+                                              color: AppColors.petTypeColors[
+                                                      widget.pet.type] ??
+                                                  AppColors.petTypeColors['其他'],
+                                              child: Icon(
+                                                Icons.pets,
+                                                color: Colors.white
+                                                    .withOpacity(0.8),
+                                                size: 30,
+                                              ),
+                                            );
+                                          },
+                                        ))
                                       : Container(
                                           color: AppColors.petTypeColors[
                                                   widget.pet.type] ??
@@ -1088,18 +983,6 @@ class _PetProfileCardState extends State<PetProfileCard>
                                       ),
                                     ],
                                   ),
-                                  const SizedBox(height: 6),
-                                  Text(
-                                    '期望称呼：${_resolvedOwnerNickname()}',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: AppColors.secondaryText
-                                          .withOpacity(0.85),
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
                                 ],
                               ),
                             ),
@@ -1137,13 +1020,8 @@ class _PetProfileCardState extends State<PetProfileCard>
 // =========================================================
 class PetProfileDetailsPage extends StatefulWidget {
   final Pet pet;
-  final String defaultOwnerNickname;
 
-  const PetProfileDetailsPage({
-    super.key,
-    required this.pet,
-    required this.defaultOwnerNickname,
-  });
+  const PetProfileDetailsPage({super.key, required this.pet});
 
   @override
   State<PetProfileDetailsPage> createState() => _PetProfileDetailsPageState();
@@ -1152,91 +1030,12 @@ class PetProfileDetailsPage extends StatefulWidget {
 class _PetProfileDetailsPageState extends State<PetProfileDetailsPage> {
   late Pet _currentPet;
   final _supabaseService = SupabaseService();
-  late String _defaultOwnerNickname;
   bool _isSyncingProfile = false;
 
   @override
   void initState() {
     super.initState();
     _currentPet = widget.pet;
-    _defaultOwnerNickname = widget.defaultOwnerNickname;
-  }
-
-  Future<void> _refreshDefaultOwnerNickname() async {
-    final nickname = await _supabaseService.getOwnerNickname();
-    if (mounted) {
-      setState(() => _defaultOwnerNickname = nickname);
-    }
-  }
-
-  String _resolvedOwnerNickname() {
-    if (_currentPet.useCustomNickname &&
-        _currentPet.ownerNickname != null &&
-        _currentPet.ownerNickname!.isNotEmpty) {
-      return _currentPet.ownerNickname!;
-    }
-    if (_defaultOwnerNickname.isNotEmpty) {
-      return _defaultOwnerNickname;
-    }
-    return '未设置';
-  }
-
-  String _formatAge(int years, int months) {
-    if (months <= 0) return '${years}岁';
-    return '${years}岁${months}个月';
-  }
-
-  Widget _buildPetDetailAvatar() {
-    const size = 120.0;
-    final a = _currentPet.avatar;
-    if (a != null && a.isNotEmpty) {
-      if (a.startsWith('http://') || a.startsWith('https://')) {
-        return ClipOval(
-          child: CachedNetworkImage(
-            imageUrl: a,
-            width: size,
-            height: size,
-            fit: BoxFit.cover,
-            placeholder: (context, url) => Container(
-              width: size,
-              height: size,
-              color: Colors.grey[200],
-              child: const Center(child: CircularProgressIndicator()),
-            ),
-            errorWidget: (context, url, error) => _buildPetAvatarPlaceholder(),
-          ),
-        );
-      }
-      final file = File(a);
-      if (file.existsSync()) {
-        return ClipOval(
-          child: Image.file(
-            file,
-            width: size,
-            height: size,
-            fit: BoxFit.cover,
-            errorBuilder: (context, error, stackTrace) =>
-                _buildPetAvatarPlaceholder(),
-          ),
-        );
-      }
-    }
-    return _buildPetAvatarPlaceholder();
-  }
-
-  Widget _buildPetAvatarPlaceholder() {
-    return ClipOval(
-      child: Container(
-        width: 120,
-        height: 120,
-        color: Colors.grey[200],
-        child: Icon(
-          Icons.pets,
-          color: Colors.grey[600],
-          size: 50,
-        ),
-      ),
-    );
   }
 
   Widget _buildInfoCard(String label, String value,
@@ -1287,6 +1086,49 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage> {
     );
   }
 
+  Widget _buildPetAvatar() {
+    final avatar = _currentPet.avatar;
+    if (avatar != null && avatar.isNotEmpty) {
+      if (avatar.startsWith('http://') || avatar.startsWith('https://')) {
+        return ClipOval(
+          child: CachedNetworkImage(
+            imageUrl: avatar,
+            width: 120,
+            height: 120,
+            fit: BoxFit.cover,
+            errorWidget: (context, url, error) => _buildPetAvatarPlaceholder(),
+          ),
+        );
+      }
+      final file = File(avatar);
+      if (file.existsSync()) {
+        return ClipOval(
+          child: Image.file(
+            file,
+            width: 120,
+            height: 120,
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) =>
+                _buildPetAvatarPlaceholder(),
+          ),
+        );
+      }
+    }
+    return _buildPetAvatarPlaceholder();
+  }
+
+  Widget _buildPetAvatarPlaceholder() {
+    return Container(
+      width: 120,
+      height: 120,
+      decoration: BoxDecoration(
+        color: Colors.grey[200],
+        shape: BoxShape.circle,
+      ),
+      child: const Icon(Icons.pets, color: Colors.grey, size: 50),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -1304,23 +1146,23 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage> {
           Scaffold(
             backgroundColor: Colors.transparent,
             appBar: AppBar(
-              title: Text(
-                '${_currentPet.name} 的档案',
-                style: AppStyles.sectionTitle.copyWith(fontSize: 20),
-              ),
-              backgroundColor: Colors.transparent,
-              elevation: 0,
-              leading: IconButton(
-                icon: const Icon(
-                  Icons.arrow_back_ios,
-                  color: AppColors.primaryText,
-                ),
-                onPressed: () => Navigator.of(context).pop(),
-              ),
-              actions: [
-                IconButton(
-                  icon: const Icon(Icons.edit, color: AppColors.primary),
-                  onPressed: () async {
+          title: Text(
+            '${_currentPet.name} 的档案',
+            style: AppStyles.sectionTitle.copyWith(fontSize: 20),
+          ),
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(
+              Icons.arrow_back_ios,
+              color: AppColors.primaryText,
+            ),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.edit, color: AppColors.primary),
+              onPressed: () async {
                 final initialData = {
                   'id': _currentPet.id,
                   'name': _currentPet.name,
@@ -1335,135 +1177,121 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage> {
                   'useCustomNickname': _currentPet.useCustomNickname,
                 };
 
-                    final result = await Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) =>
-                            PetProfileFormPage(initialData: initialData),
-                      ),
-                    );
+                final result = await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) =>
+                        PetProfileFormPage(initialData: initialData),
+                  ),
+                );
 
-                    if (result != null && mounted) {
-                      String age = _currentPet.age;
-                      if (result['birth_date'] != null) {
-                        try {
-                          final birthDate =
-                              DateTime.parse(result['birth_date']);
-                          final now = DateTime.now();
-                          int years = now.year - birthDate.year;
-                          int months = now.month - birthDate.month;
-                          if (months < 0) {
-                            years--;
-                            months += 12;
-                          }
-                          age = _formatAge(years, months);
-                        } catch (e) {
-                          debugPrint('Error calculating age: $e');
-                        }
+                if (result != null && mounted) {
+                  // 计算年龄
+                  String age = _currentPet.age;
+                  if (result['birth_date'] != null) {
+                    try {
+                      final birthDate = DateTime.parse(result['birth_date']);
+                      final now = DateTime.now();
+                      int years = now.year - birthDate.year;
+                      int months = now.month - birthDate.month;
+                      if (months < 0) {
+                        years--;
+                        months += 12;
                       }
-
-                      final updatedPet = Pet(
-                        id: _currentPet.id,
-                        name: result['name'],
-                        type: result['type'],
-                        breed: result['breed'],
-                        birthDate: result['birth_date'],
-                        gender: result['gender'],
-                        neuterStatus: result['neuter_status'],
-                        weight: result['weight'],
-                        avatar: result['avatar'],
-                        age: age,
-                        ownerNickname: result['ownerNickname'],
-                        useCustomNickname:
-                            result['useCustomNickname'] ?? false,
-                      );
-
-                      setState(() => _isSyncingProfile = true);
-                      try {
-                        final success = await _supabaseService.updatePet(
-                          updatedPet.toMap(),
-                        );
-                        if (!success) {
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                  content: Text('更新失败，请检查网络连接')),
-                            );
-                          }
-                          return;
-                        }
-                        setState(() {
-                          _currentPet = updatedPet;
-                        });
-                        await _refreshDefaultOwnerNickname();
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('档案已更新')),
-                          );
-                        }
-                      } catch (e) {
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('更新失败，请重试')),
-                          );
-                        }
-                      } finally {
-                        if (mounted) {
-                          setState(() => _isSyncingProfile = false);
-                        }
-                      }
+                      age = '$years岁$months个月';
+                    } catch (e) {
+                      debugPrint('Error calculating age: $e');
                     }
-                  },
-                ),
-              ],
+                  }
+
+                  final updatedPet = Pet(
+                    id: _currentPet.id,
+                    name: result['name'],
+                    type: result['type'],
+                    breed: result['breed'],
+                    birthDate: result['birth_date'],
+                    gender: result['gender'],
+                    neuterStatus: result['neuter_status'],
+                    weight: result['weight'],
+                    avatar: result['avatar'],
+                    age: age,
+                    ownerNickname: result['ownerNickname'],
+                    useCustomNickname: result['useCustomNickname'] ?? false,
+                  );
+
+                  setState(() => _isSyncingProfile = true);
+                  try {
+                    final success = await _supabaseService.updatePet(
+                      updatedPet.toMap(),
+                    );
+                    if (!success) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('更新失败，请检查网络连接')),
+                        );
+                      }
+                      return;
+                    }
+                    setState(() {
+                      _currentPet = updatedPet;
+                    });
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(
+                        context,
+                      ).showSnackBar(const SnackBar(content: Text('档案已更新')));
+                    }
+                  } catch (e) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(
+                        context,
+                      ).showSnackBar(const SnackBar(content: Text('更新失败，请重试')));
+                    }
+                  } finally {
+                    if (mounted) setState(() => _isSyncingProfile = false);
+                  }
+                }
+              },
             ),
+          ],
+        ),
             body: SingleChildScrollView(
               child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpaces.horizontalPadding,
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpaces.horizontalPadding,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                const SizedBox(height: 20),
+                _buildPetAvatar(),
+                const SizedBox(height: 16),
+                Text(_currentPet.name, style: AppStyles.sectionTitle),
+                const SizedBox(height: 32),
+                _buildInfoCard('类型', _currentPet.type),
+                const SizedBox(height: 12),
+                _buildInfoCard('品种', _currentPet.breed),
+                const SizedBox(height: 12),
+                _buildInfoCard('性别', _currentPet.gender),
+                const SizedBox(height: 12),
+                _buildInfoCard('年龄', _currentPet.age),
+                const SizedBox(height: 12),
+                if (_currentPet.birthDate != null)
+                  _buildInfoCard('出生日期', _currentPet.birthDate!.split('T')[0]),
+                if (_currentPet.birthDate != null) const SizedBox(height: 12),
+                if (_currentPet.neuterStatus != null)
+                  _buildInfoCard('绝育状态', _currentPet.neuterStatus!),
+                if (_currentPet.neuterStatus != null)
+                  const SizedBox(height: 12),
+                _buildInfoCard(
+                  '体重',
+                  _currentPet.weight != null
+                      ? '${_currentPet.weight!.toStringAsFixed(1)} kg'
+                      : '未填写',
+                  isPlaceholder: _currentPet.weight == null,
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    const SizedBox(height: 20),
-                    _buildPetDetailAvatar(),
-                    const SizedBox(height: 16),
-                    Text(_currentPet.name, style: AppStyles.sectionTitle),
-                    const SizedBox(height: 32),
-                    _buildInfoCard('类型', _currentPet.type),
-                    const SizedBox(height: 12),
-                    _buildInfoCard('品种', _currentPet.breed),
-                    const SizedBox(height: 12),
-                    _buildInfoCard('性别', _currentPet.gender),
-                    const SizedBox(height: 12),
-                    _buildInfoCard('年龄', _currentPet.age),
-                    const SizedBox(height: 12),
-                    _buildInfoCard(
-                      '期望宠物对主人的称呼',
-                      _resolvedOwnerNickname(),
-                      isPlaceholder:
-                          _resolvedOwnerNickname() == '未设置',
-                    ),
-                    const SizedBox(height: 12),
-                    if (_currentPet.birthDate != null)
-                      _buildInfoCard(
-                          '出生日期', _currentPet.birthDate!.split('T')[0]),
-                    if (_currentPet.birthDate != null)
-                      const SizedBox(height: 12),
-                    if (_currentPet.neuterStatus != null)
-                      _buildInfoCard('绝育状态', _currentPet.neuterStatus!),
-                    if (_currentPet.neuterStatus != null)
-                      const SizedBox(height: 12),
-                    _buildInfoCard(
-                      '体重',
-                      _currentPet.weight != null
-                          ? '${_currentPet.weight!.toStringAsFixed(1)} kg'
-                          : '未填写',
-                      isPlaceholder: _currentPet.weight == null,
-                    ),
-                    const SizedBox(height: 50),
-                  ],
-                ),
+                const SizedBox(height: 50),
+              ],
+            ),
               ),
             ),
           ),
@@ -1477,14 +1305,8 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       CircularProgressIndicator(),
-                      SizedBox(height: 16),
-                      Text(
-                        '正在保存档案…',
-                        style: TextStyle(
-                          color: AppColors.primaryText,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
+                      SizedBox(height: 12),
+                      Text('正在保存档案…'),
                     ],
                   ),
                 ),
@@ -1545,11 +1367,6 @@ class _EditPetDialogState extends State<EditPetDialog> {
     if (monthsMatch != null) {
       _selectedMonths = int.tryParse(monthsMatch.group(1) ?? '0') ?? 0;
     }
-  }
-
-  String _formatAge(int years, int months) {
-    if (months <= 0) return '${years}岁';
-    return '${years}岁${months}个月';
   }
 
   @override
@@ -1674,8 +1491,7 @@ class _EditPetDialogState extends State<EditPetDialog> {
         ElevatedButton(
           onPressed: () {
             if (_nameController.text.isNotEmpty) {
-              final String ageString =
-                  _formatAge(_selectedYears, _selectedMonths);
+              final String ageString = '$_selectedYears岁$_selectedMonths个月';
 
               Navigator.of(context).pop(
                 Pet(

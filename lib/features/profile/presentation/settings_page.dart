@@ -8,6 +8,7 @@ import '../../invitation/presentation/invitation_code_page.dart';
 import '../../invitation/presentation/my_invitation_code_page.dart';
 import '../../auth/presentation/login_page.dart';
 import 'account_settings_page.dart';
+import 'change_password_page.dart';
 
 // ==========================================
 // 1. 主设置页面框架 (SettingsPage)
@@ -329,7 +330,7 @@ class _AppSettingsState extends State<AppSettings> {
               onTap: () {
                 Navigator.of(context).push(
                   MaterialPageRoute(
-                    builder: (context) => const AccountSettingsPage(),
+                    builder: (context) => const ChangePasswordPage(),
                   ),
                 );
               },

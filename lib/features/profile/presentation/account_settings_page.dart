@@ -5,8 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../auth/presentation/login_page.dart';
-import '../../../shared/utils/avatar_image_helper.dart';
-import '../../../shared/utils/china_regions_loader.dart';
 import '../../../shared/utils/user_avatar_helper.dart';
 import '../../../shared/utils/user_gender_mapper.dart';
 import '../../../services/supabase_service.dart';
@@ -30,9 +28,6 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
   String? _avatarUrl;
   String _ownerNickname = '主人'; // 宠物对主人的称呼
   String _gender = '未设置';
-  String? _birthDate; // yyyy-MM-dd
-  String _province = '';
-  String _city = '';
 
   // 图片选择器
   final ImagePicker _picker = ImagePicker();
@@ -43,14 +38,6 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
     _loadUserInfo();
   }
 
-  Future<void> _syncAvatarFromProfile(String? avatarUrl) async {
-    final path = await UserAvatarHelper.ensureCachedAvatarFile(
-      avatarUrl,
-      _supabaseService.cacheUserAvatarFromPublicUrl,
-    );
-    if (mounted) setState(() => _avatarPath = path);
-  }
-
   // 加载用户信息
   Future<void> _loadUserInfo() async {
     if (!mounted) return;
@@ -59,153 +46,34 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
     try {
       final user = _supabase.auth.currentUser;
       if (user != null) {
+        // 从 Supabase users_profiles 表加载昵称
         final profile = await _supabaseService.getUserProfile();
         final nickname = profile?['nickname'] as String?;
         final avatarUrl = profile?['avatar_url'] as String?;
         final ownerNickname = profile?['owner_nickname'] as String? ?? '主人';
         final gender = profile?['gender'] as String?;
-        final birthDateRaw = profile?['birth_date']?.toString();
-        final province = profile?['province'] as String? ?? '';
-        final city = profile?['city'] as String? ?? '';
+        final localAvatar = await UserAvatarHelper.ensureCachedAvatarFile(
+          avatarUrl,
+          _supabaseService.cacheUserAvatarFromPublicUrl,
+        );
 
         if (mounted) {
           setState(() {
             _userEmail = user.email;
+            // 优先使用数据库中的昵称，如果没有则使用 Auth 的元数据
             _userName = nickname ?? user.userMetadata?['name'] ?? '';
-            _avatarPath = null;
+            _avatarPath = localAvatar;
             _avatarUrl = avatarUrl;
             _ownerNickname = ownerNickname;
             _gender = UserGenderMapper.toDisplayLabel(gender);
-            _birthDate = birthDateRaw?.split('T')[0];
-            _province = province;
-            _city = city;
           });
         }
-        await _syncAvatarFromProfile(avatarUrl);
       }
     } catch (e) {
       debugPrint('❌ 加载用户信息失败: $e');
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
-      }
-    }
-  }
-
-  String _formatBirthDate(String? date) {
-    if (date == null || date.isEmpty) return '未设置';
-    return date.split('T')[0];
-  }
-
-  String _regionText() {
-    if (_province.isEmpty && _city.isEmpty) return '未设置';
-    if (_province.isNotEmpty && _city.isNotEmpty) return '$_province $_city';
-    return _province.isNotEmpty ? _province : _city;
-  }
-
-  // 修改密码
-  Future<void> _changePassword() async {
-    final oldPasswordController = TextEditingController();
-    final newPasswordController = TextEditingController();
-    final confirmPasswordController = TextEditingController();
-
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('修改密码'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: oldPasswordController,
-                obscureText: true,
-                decoration: const InputDecoration(
-                  labelText: '当前密码',
-                  prefixIcon: Icon(Icons.lock_outline),
-                ),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: newPasswordController,
-                obscureText: true,
-                decoration: const InputDecoration(
-                  labelText: '新密码',
-                  prefixIcon: Icon(Icons.lock),
-                  helperText: '至少6个字符',
-                ),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: confirmPasswordController,
-                obscureText: true,
-                decoration: const InputDecoration(
-                  labelText: '确认新密码',
-                  prefixIcon: Icon(Icons.lock),
-                ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('取消'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              // 验证输入
-              if (newPasswordController.text.length < 6) {
-                ScaffoldMessenger.of(
-                  context,
-                ).showSnackBar(const SnackBar(content: Text('新密码至少需要6个字符')));
-                return;
-              }
-
-              if (newPasswordController.text !=
-                  confirmPasswordController.text) {
-                ScaffoldMessenger.of(
-                  context,
-                ).showSnackBar(const SnackBar(content: Text('两次输入的新密码不一致')));
-                return;
-              }
-
-              Navigator.pop(context, true);
-            },
-            child: const Text('确认修改'),
-          ),
-        ],
-      ),
-    );
-
-    if (result == true && mounted) {
-      setState(() => _isLoading = true);
-
-      try {
-        // Supabase 修改密码（需要先验证当前密码）
-        // 注意：Supabase 的 updateUser 不需要验证旧密码
-        await _supabase.auth.updateUser(
-          UserAttributes(password: newPasswordController.text),
-        );
-
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('✅ 密码修改成功'),
-              backgroundColor: Colors.green,
-            ),
-          );
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text('❌ 密码修改失败: $e')));
-        }
-      } finally {
-        if (mounted) {
-          setState(() => _isLoading = false);
-        }
       }
     }
   }
@@ -258,7 +126,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
         source: source,
         maxWidth: 2048,
         maxHeight: 2048,
-        imageQuality: 92,
+        imageQuality: 90,
       );
 
       if (pickedFile == null) {
@@ -268,32 +136,30 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
         return;
       }
 
-      final prepared =
-          await AvatarImageHelper.cropAndCompressAvatar(pickedFile.path);
-      if (prepared == null) {
-        if (mounted) setState(() => _isLoading = false);
-        return;
-      }
-
       await UserAvatarHelper.clearLocalAvatarCacheForCurrentUser();
-
-      final avatarUrl = await _supabaseService.uploadUserAvatar(prepared);
+      final avatarUrl =
+          await _supabaseService.uploadUserAvatar(File(pickedFile.path));
       final success = avatarUrl != null
           ? await _supabaseService.upsertUserProfile(avatarUrl: avatarUrl)
           : false;
-
-      if (!mounted) return;
-      if (success) {
-        setState(() => _avatarUrl = avatarUrl);
-        await _syncAvatarFromProfile(avatarUrl);
-      }
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(success ? '✅ 头像更换成功' : '❌ 头像上传失败，请重试'),
-          backgroundColor: success ? Colors.green : Colors.red,
-        ),
+      final localPath = await UserAvatarHelper.ensureCachedAvatarFile(
+        avatarUrl,
+        _supabaseService.cacheUserAvatarFromPublicUrl,
       );
+
+      if (mounted) {
+        setState(() {
+          _avatarPath = localPath;
+          _avatarUrl = avatarUrl;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(success ? '✅ 头像更换成功' : '❌ 头像更换失败，请重试'),
+            backgroundColor: success ? Colors.green : Colors.red,
+          ),
+        );
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -304,6 +170,36 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
       if (mounted) {
         setState(() => _isLoading = false);
       }
+    }
+  }
+
+  Future<void> _changeGender() async {
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: const Text('选择性别'),
+        children: UserGenderMapper.dialogOptions
+            .map(
+              (item) => SimpleDialogOption(
+                onPressed: () => Navigator.pop(context, item),
+                child: Text(item),
+              ),
+            )
+            .toList(),
+      ),
+    );
+
+    if (result == null || !mounted) return;
+    final dbValue = UserGenderMapper.toDatabaseValue(result);
+    if (dbValue == null) return;
+    setState(() => _isLoading = true);
+    try {
+      final success = await _supabaseService.upsertUserProfile(gender: dbValue);
+      if (success && mounted) {
+        setState(() => _gender = result);
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -401,186 +297,6 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
     }
   }
 
-  Future<void> _changeGender() async {
-    final result = await showDialog<String>(
-      context: context,
-      builder: (context) => SimpleDialog(
-        title: const Text('选择性别'),
-        children: UserGenderMapper.dialogOptions
-            .map(
-              (item) => SimpleDialogOption(
-                onPressed: () => Navigator.pop(context, item),
-                child: Text(item),
-              ),
-            )
-            .toList(),
-      ),
-    );
-
-    if (result == null || !mounted) return;
-    final dbValue = UserGenderMapper.toDatabaseValue(result);
-    if (dbValue == null) return;
-    setState(() => _isLoading = true);
-    try {
-      final success =
-          await _supabaseService.upsertUserProfile(gender: dbValue);
-      if (success && mounted) {
-        setState(() => _gender = result);
-      }
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  Future<void> _changeBirthDate() async {
-    final now = DateTime.now();
-    final initial = _birthDate != null
-        ? DateTime.tryParse(_birthDate!) ?? DateTime(now.year - 18, 1, 1)
-        : DateTime(now.year - 18, 1, 1);
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: initial,
-      firstDate: DateTime(1900, 1, 1),
-      lastDate: now,
-    );
-    if (picked == null || !mounted) return;
-
-    final birthDate = picked.toIso8601String().split('T')[0];
-    setState(() => _isLoading = true);
-    try {
-      final success =
-          await _supabaseService.upsertUserProfile(birthDate: birthDate);
-      if (success && mounted) {
-        setState(() => _birthDate = birthDate);
-      }
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  Future<void> _changeRegion() async {
-    List<Map<String, dynamic>> regions;
-    try {
-      regions = await ChinaRegionsLoader.load();
-    } catch (e) {
-      debugPrint('加载地区数据失败: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('地区数据加载失败')),
-        );
-      }
-      return;
-    }
-    if (!mounted) return;
-
-    var selProvince = _province.isNotEmpty
-        ? _province
-        : (regions.first['province'] as String);
-    List<String> citiesFor(String p) {
-      final row = regions.firstWhere(
-        (r) => r['province'] == p,
-        orElse: () => regions.first,
-      );
-      return (row['cities'] as List<dynamic>).cast<String>();
-    }
-
-    var selCity = _city.isNotEmpty && citiesFor(selProvince).contains(_city)
-        ? _city
-        : citiesFor(selProvince).first;
-
-    final result = await showDialog<Map<String, String>>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (context, setLocal) {
-          final cities = citiesFor(selProvince);
-          if (!cities.contains(selCity)) {
-            selCity = cities.first;
-          }
-          return AlertDialog(
-            title: const Text('设置地区'),
-            content: SizedBox(
-              width: double.maxFinite,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  DropdownButtonFormField<String>(
-                    isExpanded: true,
-                    decoration: const InputDecoration(labelText: '省份'),
-                    value: selProvince,
-                    items: regions
-                        .map(
-                          (r) => DropdownMenuItem<String>(
-                            value: r['province'] as String,
-                            child: Text(r['province'] as String),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (v) {
-                      if (v == null) return;
-                      setLocal(() {
-                        selProvince = v;
-                        final c = citiesFor(v);
-                        selCity = c.first;
-                      });
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    isExpanded: true,
-                    decoration: const InputDecoration(labelText: '城市'),
-                    value: selCity,
-                    items: cities
-                        .map(
-                          (c) => DropdownMenuItem<String>(
-                            value: c,
-                            child: Text(c),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (v) {
-                      if (v == null) return;
-                      setLocal(() => selCity = v);
-                    },
-                  ),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('取消'),
-              ),
-              ElevatedButton(
-                onPressed: () => Navigator.pop(ctx, {
-                  'province': selProvince,
-                  'city': selCity,
-                }),
-                child: const Text('保存'),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-
-    if (result == null || !mounted) return;
-    setState(() => _isLoading = true);
-    try {
-      final success = await _supabaseService.upsertUserProfile(
-        province: result['province'] ?? '',
-        city: result['city'] ?? '',
-      );
-      if (success && mounted) {
-        setState(() {
-          _province = result['province'] ?? '';
-          _city = result['city'] ?? '';
-        });
-      }
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
   // 修改主人昵称（宠物对主人的称呼）
   Future<void> _changeOwnerNickname() async {
     final nicknameController = TextEditingController(text: _ownerNickname);
@@ -589,28 +305,16 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('宠物对你的称呼'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '这将作为宠物日记中对你的默认称呼。',
-                style: TextStyle(fontSize: 13, color: Colors.grey[700]),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: nicknameController,
-                decoration: const InputDecoration(
-                  labelText: '称呼',
-                  hintText: '例如：主人、妈妈、姐姐',
-                  prefixIcon: Icon(Icons.pets),
-                ),
-                autofocus: true,
-                maxLength: 10,
-              ),
-            ],
+        content: TextField(
+          controller: nicknameController,
+          decoration: const InputDecoration(
+            labelText: '称呼',
+            hintText: '例如：主人、妈妈、姐姐',
+            prefixIcon: Icon(Icons.pets),
+            helperText: '这将作为宠物日记中对你的默认称呼',
           ),
+          autofocus: true,
+          maxLength: 10,
         ),
         actions: [
           TextButton(
@@ -745,41 +449,38 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
                   const SizedBox(height: 20),
 
                   // 用户头像（可点击更换）
-                  Builder(
-                    builder: (context) {
-                      final hasLocalAvatar = _avatarPath != null &&
-                          File(_avatarPath!).existsSync();
-                      final hasRemoteAvatar = _avatarUrl != null &&
-                          _avatarUrl!.isNotEmpty;
-                      return GestureDetector(
-                        onTap: _changeAvatar,
-                        child: Stack(
-                          children: [
-                            CircleAvatar(
-                              radius: 50,
-                              backgroundColor: Theme.of(
-                                context,
-                              ).primaryColor.withOpacity(0.1),
-                              backgroundImage: hasLocalAvatar
-                                  ? FileImage(File(_avatarPath!))
-                                  : (hasRemoteAvatar
-                                      ? NetworkImage(_avatarUrl!)
-                                      : null) as ImageProvider?,
-                              child: !hasLocalAvatar && !hasRemoteAvatar
-                                  ? Text(
-                                      _userName?.isNotEmpty == true
-                                          ? _userName![0].toUpperCase()
-                                          : (_userEmail?.isNotEmpty == true
-                                              ? _userEmail![0].toUpperCase()
-                                              : '?'),
-                                      style: TextStyle(
-                                        fontSize: 32,
-                                        fontWeight: FontWeight.bold,
-                                        color: Theme.of(context).primaryColor,
-                                      ),
-                                    )
-                                  : null,
-                            ),
+                  GestureDetector(
+                    onTap: _changeAvatar,
+                    child: Stack(
+                      children: [
+                        CircleAvatar(
+                          radius: 50,
+                          backgroundColor: Theme.of(
+                            context,
+                          ).primaryColor.withOpacity(0.1),
+                          backgroundImage: _avatarPath != null &&
+                                  File(_avatarPath!).existsSync()
+                              ? FileImage(File(_avatarPath!))
+                              : (_avatarUrl != null
+                                  ? NetworkImage(_avatarUrl!)
+                                  : null) as ImageProvider?,
+                          child: (_avatarPath == null ||
+                                      !File(_avatarPath!).existsSync()) &&
+                                  (_avatarUrl == null || _avatarUrl!.isEmpty)
+                              ? Text(
+                                  _userName?.isNotEmpty == true
+                                      ? _userName![0].toUpperCase()
+                                      : (_userEmail?.isNotEmpty == true
+                                          ? _userEmail![0].toUpperCase()
+                                          : '?'),
+                                  style: TextStyle(
+                                    fontSize: 32,
+                                    fontWeight: FontWeight.bold,
+                                    color: Theme.of(context).primaryColor,
+                                  ),
+                                )
+                              : null,
+                        ),
                         Positioned(
                           bottom: 0,
                           right: 0,
@@ -797,19 +498,22 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
                             ),
                           ),
                         ),
-                          ],
-                        ),
-                      );
-                    },
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 16),
 
                   // 用户昵称
-                  Text(
-                    _userName?.isNotEmpty == true ? _userName! : '未设置昵称',
-                    style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Text(
+                      _userName?.isNotEmpty == true ? _userName! : '未设置昵称',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -846,41 +550,9 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
                         onTap: _changeGender,
                       ),
                       _buildListTile(
-                        icon: Icons.cake_outlined,
-                        title: '出生日期',
-                        subtitle: _formatBirthDate(_birthDate),
-                        onTap: _changeBirthDate,
-                      ),
-                      _buildListTile(
-                        icon: Icons.location_on_outlined,
-                        title: '地区',
-                        subtitle: _regionText(),
-                        onTap: _changeRegion,
-                      ),
-                      _buildListTile(
                         icon: Icons.pets,
                         title: '宠物对我的称呼',
-                        subtitleWidget: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              _ownerNickname,
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.grey[800],
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              '这将作为宠物日记中对你的默认称呼',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey[600],
-                              ),
-                            ),
-                          ],
-                        ),
+                        subtitle: _ownerNickname,
                         onTap: _changeOwnerNickname,
                       ),
                       _buildListTile(
@@ -892,21 +564,6 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
                           color: Colors.green,
                         ),
                         onTap: null, // 邮箱不可修改
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  // 安全设置部分
-                  _buildSection(
-                    title: '安全设置',
-                    children: [
-                      _buildListTile(
-                        icon: Icons.lock,
-                        title: '修改密码',
-                        subtitle: '定期修改密码以保护账户安全',
-                        onTap: _changePassword,
                       ),
                     ],
                   ),
@@ -982,24 +639,23 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
     required IconData icon,
     required String title,
     String? subtitle,
-    Widget? subtitleWidget,
     Widget? trailing,
     VoidCallback? onTap,
   }) {
     return ListTile(
-      isThreeLine: subtitleWidget != null,
       leading: CircleAvatar(
         backgroundColor: Theme.of(context).primaryColor.withOpacity(0.1),
         child: Icon(icon, color: Theme.of(context).primaryColor, size: 20),
       ),
       title: Text(title, style: const TextStyle(fontWeight: FontWeight.w500)),
-      subtitle: subtitleWidget ??
-          (subtitle != null
-              ? Text(
-                  subtitle,
-                  style: TextStyle(fontSize: 13, color: Colors.grey[600]),
-                )
-              : null),
+      subtitle: subtitle != null
+          ? Text(
+              subtitle,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+            )
+          : null,
       trailing: trailing ??
           (onTap != null
               ? const Icon(Icons.arrow_forward_ios, size: 16)
