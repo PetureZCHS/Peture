@@ -8,6 +8,8 @@ import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:gal/gal.dart';
+import '../../../core/page_tracker_mixin.dart';
+import '../../../services/analytics_service.dart';
 import '../../../shared/models/pet_diary.dart';
 
 class DiarySharePage extends StatefulWidget {
@@ -19,7 +21,8 @@ class DiarySharePage extends StatefulWidget {
   State<DiarySharePage> createState() => _DiarySharePageState();
 }
 
-class _DiarySharePageState extends State<DiarySharePage> {
+class _DiarySharePageState extends State<DiarySharePage>
+    with PageTrackerMixin<DiarySharePage> {
   final GlobalKey _globalKey = GlobalKey();
 
   // State for customization
@@ -47,6 +50,9 @@ class _DiarySharePageState extends State<DiarySharePage> {
     '🌬️ 大风'
   ];
   final List<String> _styleNames = ['简约白', '温暖手账', '拍立得', '萌宠主题'];
+
+  @override
+  String get analyticsPageName => 'DiarySharePage';
 
   @override
   Widget build(BuildContext context) {
@@ -557,6 +563,16 @@ class _DiarySharePageState extends State<DiarySharePage> {
           [XFile(imagePath)],
           text: '我的宠物日记 ✨ #Peture',
           sharePositionOrigin: shareOrigin,
+        );
+        AnalyticsService.logEvent(
+          'share_card_click',
+          params: {
+            'card_id': _selectedStyleIndex.toString(),
+            'card_style': _styleNames[_selectedStyleIndex],
+            'diary_id': widget.diary.id ?? 'unknown',
+            'diary_style': widget.diary.style,
+            'entry_page': 'DiarySharePage',
+          },
         );
       } else {
         // Save to Gallery using 'gal' package

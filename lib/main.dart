@@ -5,8 +5,10 @@ import 'package:intl/date_symbol_data_local.dart'; // 添加 intl 包
 import 'package:flutter_localizations/flutter_localizations.dart'; // 添加本地化支持
 import 'package:supabase_flutter/supabase_flutter.dart'; // ✅ 添加 Supabase
 import 'package:sentry_flutter/sentry_flutter.dart'; // ✅ 添加 Sentry
+import 'core/app_route_observer.dart';
 import 'features/auth/presentation/login_page.dart';
 import 'features/home/presentation/home_screen.dart';
+import 'services/analytics_service.dart';
 
 void main() async {
   // 确保 Flutter 框架初始化
@@ -49,6 +51,7 @@ void main() async {
         ),
       );
       debugPrint('✅ Supabase 初始化成功');
+      await AnalyticsService.tryInitIfConsented();
 
       // 启动根路由，根据登录状态自动切换
       runApp(const RootRouter());
@@ -106,6 +109,7 @@ class _RootRouterState extends State<RootRouter> {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
+      navigatorObservers: [appRouteObserver],
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
@@ -128,6 +132,7 @@ class MyApp extends StatelessWidget {
     double appBarTextFontSize = 20;
     return MaterialApp(
       debugShowCheckedModeBanner: false,
+      navigatorObservers: [appRouteObserver],
       title: '智宠合生',
       theme: ThemeData(
         useMaterial3: true,
