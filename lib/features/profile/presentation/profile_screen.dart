@@ -11,6 +11,7 @@ import 'settings_page.dart';
 import 'pet_profile_form_page.dart';
 import '../../../shared/utils/ui_helpers.dart';
 import '../../../shared/utils/user_avatar_helper.dart';
+import '../../../shared/utils/user_gender_mapper.dart';
 
 // =========================================================
 // 全局设计系统 - 美学升级版
@@ -66,6 +67,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String _userNickname = '';
   String? _avatarPath;
   String? _avatarUrl; // Supabase Storage 的 URL
+  String _genderLabel = '未设置';
+  String _birthDateLabel = '未设置';
+  String _regionLabel = '未设置';
 
   @override
   void initState() {
@@ -82,6 +86,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
         setState(() {
           _userNickname = profile?['nickname'] as String? ?? '';
           _avatarUrl = avatarUrl;
+          _genderLabel =
+              UserGenderMapper.toDisplayLabel(profile?['gender'] as String?);
+          final birthDate = profile?['birth_date'] as String?;
+          _birthDateLabel =
+              (birthDate != null && birthDate.isNotEmpty) ? birthDate : '未设置';
+          final province = profile?['province'] as String?;
+          final city = profile?['city'] as String?;
+          final region = profile?['region'] as String?;
+          if (province != null &&
+              province.isNotEmpty &&
+              city != null &&
+              city.isNotEmpty) {
+            _regionLabel = '$province / $city';
+          } else if (region != null && region.isNotEmpty) {
+            _regionLabel = region;
+          } else {
+            _regionLabel = '未设置';
+          }
         });
       }
       final localAvatar = await UserAvatarHelper.ensureCachedAvatarFile(
@@ -116,6 +138,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             children: [
               const SizedBox(height: 60),
               _buildHeader(context),
+              const SizedBox(height: 14),
+              _buildProfileMetaCard(),
               const SizedBox(height: AppSpaces.sectionSpacing),
               PetProfileSection(onProfileUpdate: _updateNickname),
               const SizedBox(height: 120), // Bottom padding for nav bar
@@ -135,107 +159,109 @@ class _ProfileScreenState extends State<ProfileScreen> {
             _avatarUrl != null;
 
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        GestureDetector(
-          onTap: _showEditNicknameDialog,
-          child: Row(
-            children: [
-              // 头像（可点击更换）
-              GestureDetector(
-                onTap: _showChangeAvatarDialog,
-                child: Container(
-                  padding: const EdgeInsets.all(3),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: const LinearGradient(
-                      colors: [
-                        AppColors.primaryGradientStart,
-                        AppColors.primaryGradientEnd,
+        Expanded(
+          child: GestureDetector(
+            onTap: _showEditNicknameDialog,
+            child: Row(
+              children: [
+                // 头像（可点击更换）
+                GestureDetector(
+                  onTap: _showChangeAvatarDialog,
+                  child: Container(
+                    padding: const EdgeInsets.all(3),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: const LinearGradient(
+                        colors: [
+                          AppColors.primaryGradientStart,
+                          AppColors.primaryGradientEnd,
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.primary.withOpacity(0.4),
+                          blurRadius: 16,
+                          offset: const Offset(0, 8),
+                        ),
                       ],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
                     ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.primary.withOpacity(0.4),
-                        blurRadius: 16,
-                        offset: const Offset(0, 8),
+                    child: Container(
+                      padding: const EdgeInsets.all(2),
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                      ),
+                      child: CircleAvatar(
+                        radius: 32,
+                        backgroundColor: AppColors.primary,
+                        backgroundImage: hasAvatar &&
+                                _avatarPath != null &&
+                                File(_avatarPath!).existsSync()
+                            ? FileImage(File(_avatarPath!))
+                            : (_avatarUrl != null
+                                ? NetworkImage(_avatarUrl!)
+                                : null) as ImageProvider?,
+                        child: !hasAvatar
+                            ? Text(
+                                avatarText,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 24,
+                                ),
+                              )
+                            : null,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 20),
+                Flexible(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        displayName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppStyles.ownerId.copyWith(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.primaryText,
+                          letterSpacing: -0.5,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          '主人',
+                          style: AppStyles.ownerId.copyWith(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.primary,
+                          ),
+                        ),
                       ),
                     ],
                   ),
-                  child: Container(
-                    padding: const EdgeInsets.all(2),
-                    decoration: const BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                    ),
-                    child: CircleAvatar(
-                      radius: 32,
-                      backgroundColor: AppColors.primary,
-                      backgroundImage: hasAvatar &&
-                              _avatarPath != null &&
-                              File(_avatarPath!).existsSync()
-                          ? FileImage(File(_avatarPath!))
-                          : (_avatarUrl != null
-                              ? NetworkImage(_avatarUrl!)
-                              : null) as ImageProvider?,
-                      child: !hasAvatar
-                          ? Text(
-                              avatarText,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 24,
-                              ),
-                            )
-                          : null,
-                    ),
-                  ),
                 ),
-              ),
-              const SizedBox(width: 20),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                  Text(
-                    displayName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppStyles.ownerId.copyWith(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.primaryText,
-                      letterSpacing: -0.5,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: AppColors.primary.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      '主人',
-                      style: AppStyles.ownerId.copyWith(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.primary,
-                      ),
-                    ),
-                  ),
-                  ],
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
         IconButton(
-          icon:
-              const Icon(Icons.settings_outlined, color: AppColors.primaryText),
+          icon: const Icon(Icons.settings_outlined, color: AppColors.primaryText),
           onPressed: () {
             Navigator.push(
               context,
@@ -244,6 +270,51 @@ class _ProfileScreenState extends State<ProfileScreen> {
           },
         ),
       ],
+    );
+  }
+
+  Widget _buildProfileMetaCard() {
+    Widget item(String title, String value) {
+      return Expanded(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              title,
+              style: AppStyles.ownerId.copyWith(fontSize: 13),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              value,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: AppColors.primaryText,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.75),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.white.withOpacity(0.7)),
+      ),
+      child: Row(
+        children: [
+          item('性别', _genderLabel),
+          item('出生日期', _birthDateLabel),
+          item('地区', _regionLabel),
+        ],
+      ),
     );
   }
 
@@ -360,15 +431,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
         return;
       }
 
-      await UserAvatarHelper.clearLocalAvatarCacheForCurrentUser();
-      final avatarUrl =
-          await _supabaseService.uploadUserAvatar(File(pickedFile.path));
-      final success =
+      // 先本地生效，避免网络波动导致“改了但看起来没改”
+      final localFile = File(pickedFile.path);
+      final persistedPath =
+          await UserAvatarHelper.persistAvatarFile(localFile.path) ??
+              localFile.path;
+      await UserAvatarHelper.saveUserAvatarPath(persistedPath);
+      if (mounted) {
+        setState(() {
+          _avatarPath = persistedPath;
+        });
+      }
+
+      final avatarUrl = await _supabaseService.uploadUserAvatar(localFile);
+      final success = avatarUrl != null &&
           await _supabaseService.upsertUserProfile(avatarUrl: avatarUrl);
-      final localPath = await UserAvatarHelper.ensureCachedAvatarFile(
-        avatarUrl,
-        _supabaseService.cacheUserAvatarFromPublicUrl,
-      );
+
+      String? localPath = persistedPath;
+      if (avatarUrl != null) {
+        localPath = await UserAvatarHelper.ensureCachedAvatarFile(
+          avatarUrl,
+          _supabaseService.cacheUserAvatarFromPublicUrl,
+        );
+      }
 
       if (mounted) {
         setState(() {

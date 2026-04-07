@@ -2,6 +2,8 @@
 
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -91,6 +93,24 @@ class UserAvatarHelper {
     } catch (e) {
       debugPrint('保存用户头像路径失败: $e');
       return false;
+    }
+  }
+
+  /// 将临时头像文件复制到应用持久目录，返回新路径
+  static Future<String?> persistAvatarFile(String sourcePath) async {
+    try {
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user == null) return null;
+      final source = File(sourcePath);
+      if (!source.existsSync()) return null;
+
+      final dir = await getApplicationSupportDirectory();
+      final targetPath = p.join(dir.path, 'user_avatar_${user.id}.jpg');
+      final target = await source.copy(targetPath);
+      return target.path;
+    } catch (e) {
+      debugPrint('persistAvatarFile 失败: $e');
+      return null;
     }
   }
 

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../auth/presentation/login_page.dart';
+import '../../../shared/utils/china_regions_loader.dart';
 import '../../../shared/utils/user_avatar_helper.dart';
 import '../../../shared/utils/user_gender_mapper.dart';
 import '../../../services/supabase_service.dart';
@@ -28,6 +29,9 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
   String? _avatarUrl;
   String _ownerNickname = '主人'; // 宠物对主人的称呼
   String _gender = '未设置';
+  String _birthDate = '未设置';
+  String _province = '未设置';
+  String _city = '未设置';
 
   // 图片选择器
   final ImagePicker _picker = ImagePicker();
@@ -52,6 +56,23 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
         final avatarUrl = profile?['avatar_url'] as String?;
         final ownerNickname = profile?['owner_nickname'] as String? ?? '主人';
         final gender = profile?['gender'] as String?;
+        final birthDateRaw = profile?['birth_date'] as String?;
+        String? province = profile?['province'] as String?;
+        String? city = profile?['city'] as String?;
+        final region = profile?['region'] as String?;
+        if ((province == null || province.isEmpty) &&
+            (city == null || city.isEmpty) &&
+            region != null &&
+            region.isNotEmpty) {
+          final tokens = region
+              .split(RegExp(r'[/\-\s]+'))
+              .where((e) => e.trim().isNotEmpty)
+              .toList();
+          if (tokens.isNotEmpty) {
+            province = tokens.first.trim();
+            if (tokens.length > 1) city = tokens[1].trim();
+          }
+        }
         final localAvatar = await UserAvatarHelper.ensureCachedAvatarFile(
           avatarUrl,
           _supabaseService.cacheUserAvatarFromPublicUrl,
@@ -66,6 +87,12 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
             _avatarUrl = avatarUrl;
             _ownerNickname = ownerNickname;
             _gender = UserGenderMapper.toDisplayLabel(gender);
+            _birthDate = (birthDateRaw != null && birthDateRaw.isNotEmpty)
+                ? birthDateRaw
+                : '未设置';
+            _province =
+                (province != null && province.isNotEmpty) ? province : '未设置';
+            _city = (city != null && city.isNotEmpty) ? city : '未设置';
           });
         }
       }
@@ -136,16 +163,30 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
         return;
       }
 
-      await UserAvatarHelper.clearLocalAvatarCacheForCurrentUser();
-      final avatarUrl =
-          await _supabaseService.uploadUserAvatar(File(pickedFile.path));
+      // 网络不稳定时先本地显示新头像，云端再异步同步
+      final localFile = File(pickedFile.path);
+      final persistedPath =
+          await UserAvatarHelper.persistAvatarFile(localFile.path) ??
+              localFile.path;
+      await UserAvatarHelper.saveUserAvatarPath(persistedPath);
+      if (mounted) {
+        setState(() {
+          _avatarPath = persistedPath;
+        });
+      }
+
+      final avatarUrl = await _supabaseService.uploadUserAvatar(localFile);
       final success = avatarUrl != null
           ? await _supabaseService.upsertUserProfile(avatarUrl: avatarUrl)
           : false;
-      final localPath = await UserAvatarHelper.ensureCachedAvatarFile(
-        avatarUrl,
-        _supabaseService.cacheUserAvatarFromPublicUrl,
-      );
+
+      String? localPath = persistedPath;
+      if (avatarUrl != null) {
+        localPath = await UserAvatarHelper.ensureCachedAvatarFile(
+          avatarUrl,
+          _supabaseService.cacheUserAvatarFromPublicUrl,
+        );
+      }
 
       if (mounted) {
         setState(() {
@@ -197,6 +238,167 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
       final success = await _supabaseService.upsertUserProfile(gender: dbValue);
       if (success && mounted) {
         setState(() => _gender = result);
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _changeBirthDate() async {
+    DateTime initial = DateTime.now();
+    if (_birthDate != '未设置') {
+      final parsed = DateTime.tryParse(_birthDate);
+      if (parsed != null) initial = parsed;
+    }
+
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(1950),
+      lastDate: DateTime.now(),
+    );
+    if (picked == null || !mounted) return;
+    final value =
+        '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
+    setState(() => _isLoading = true);
+    try {
+      final success = await _supabaseService.upsertUserProfile(birthDate: value);
+      if (success && mounted) {
+        setState(() => _birthDate = value);
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _changeRegion() async {
+    final regions = await ChinaRegionsLoader.load();
+    if (!mounted) return;
+
+    String selectedProvince = _province == '未设置' ? '' : _province;
+    String selectedCity = _city == '未设置' ? '' : _city;
+
+    final provinceNames = regions
+        .map((e) => (e['province'] as String?) ?? '')
+        .where((e) => e.isNotEmpty)
+        .toList();
+
+    if (selectedProvince.isNotEmpty && !provinceNames.contains(selectedProvince)) {
+      selectedProvince = '';
+      selectedCity = '';
+    }
+
+    List<String> citiesForProvince(String province) {
+      final entry = regions.cast<Map<String, dynamic>?>().firstWhere(
+            (e) => e?['province'] == province,
+            orElse: () => null,
+          );
+      if (entry == null) return <String>[];
+      return (entry['cities'] as List<dynamic>)
+          .map((e) => e.toString())
+          .where((e) => e.isNotEmpty)
+          .toList();
+    }
+
+    var cityNames =
+        selectedProvince.isEmpty ? <String>[] : citiesForProvince(selectedProvince);
+    if (selectedCity.isNotEmpty && !cityNames.contains(selectedCity)) {
+      selectedCity = '';
+    }
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('设置地区'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DropdownButtonFormField<String>(
+                isExpanded: true,
+                value: selectedProvince.isEmpty ? null : selectedProvince,
+                decoration: const InputDecoration(labelText: '省份'),
+                hint: const Text('请选择省份'),
+                items: provinceNames
+                    .map(
+                      (p) => DropdownMenuItem<String>(
+                        value: p,
+                        child: Text(
+                          p,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (value) {
+                  setDialogState(() {
+                    selectedProvince = value ?? '';
+                    cityNames = selectedProvince.isEmpty
+                        ? <String>[]
+                        : citiesForProvince(selectedProvince);
+                    selectedCity = '';
+                  });
+                },
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                isExpanded: true,
+                value: selectedCity.isEmpty ? null : selectedCity,
+                decoration: const InputDecoration(labelText: '城市'),
+                hint: const Text('请选择城市'),
+                items: cityNames
+                    .map(
+                      (c) => DropdownMenuItem<String>(
+                        value: c,
+                        child: Text(
+                          c,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    )
+                    .toList(),
+                onChanged: selectedProvince.isEmpty
+                    ? null
+                    : (value) {
+                        setDialogState(() {
+                          selectedCity = value ?? '';
+                        });
+                      },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('取消'),
+            ),
+            ElevatedButton(
+              onPressed: selectedProvince.isEmpty || selectedCity.isEmpty
+                  ? null
+                  : () => Navigator.pop(context, true),
+              child: const Text('保存'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (result != true || !mounted) return;
+    final newProvince = selectedProvince.trim();
+    final newCity = selectedCity.trim();
+    setState(() => _isLoading = true);
+    try {
+      final success = await _supabaseService.upsertUserProfile(
+        province: newProvince,
+        city: newCity,
+      );
+      if (success && mounted) {
+        setState(() {
+          _province = newProvince.isEmpty ? '未设置' : newProvince;
+          _city = newCity.isEmpty ? '未设置' : newCity;
+        });
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -548,6 +750,20 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
                         title: '性别',
                         subtitle: _gender,
                         onTap: _changeGender,
+                      ),
+                      _buildListTile(
+                        icon: Icons.cake_outlined,
+                        title: '出生日期',
+                        subtitle: _birthDate,
+                        onTap: _changeBirthDate,
+                      ),
+                      _buildListTile(
+                        icon: Icons.location_on_outlined,
+                        title: '地区',
+                        subtitle: _province == '未设置' && _city == '未设置'
+                            ? '未设置'
+                            : '${_province == '未设置' ? '' : _province}${_city == '未设置' ? '' : ' / $_city'}',
+                        onTap: _changeRegion,
                       ),
                       _buildListTile(
                         icon: Icons.pets,
