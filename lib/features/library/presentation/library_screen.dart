@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../shared/models/pet_diary.dart';
@@ -5,6 +6,7 @@ import '../../../services/supabase_service.dart';
 import '../../diary/presentation/diary_timeline_page.dart';
 
 class Book {
+  final String? id; // Pet ID (null for "Other")
   final String title;
   final String coverUrl;
   final int entryCount;
@@ -12,6 +14,7 @@ class Book {
   final List<PetDiary> entries;
 
   Book({
+    this.id,
     required this.title,
     required this.coverUrl,
     required this.entryCount,
@@ -29,53 +32,112 @@ class LibraryScreen extends StatefulWidget {
 
 class _LibraryScreenState extends State<LibraryScreen> {
   bool _isLoading = true;
-  List<PetDiary> _diaries = [];
+  List<Book> _books = [];
 
   @override
   void initState() {
     super.initState();
-    _fetchDiaries();
+    _fetchData();
   }
 
-  Future<void> _fetchDiaries() async {
+  Future<void> _fetchData() async {
+    setState(() => _isLoading = true);
     try {
-      final diaries = await SupabaseService().getAllDiaries();
-      setState(() {
-        _diaries = diaries;
-        _isLoading = false;
-      });
+      final service = SupabaseService();
+      
+      // 并行获取宠物列表和所有日记
+      final results = await Future.wait([
+        service.getAllPets(),
+        service.getAllDiaries(),
+      ]);
+
+      final petsData = results[0] as List<Map<String, dynamic>>;
+      final diaries = results[1] as List<PetDiary>;
+
+      // 按 petId 分组日记
+      final Map<String, List<PetDiary>> diariesByPetId = {};
+      final List<PetDiary> unknownPetDiaries = [];
+
+      for (var diary in diaries) {
+        if (diary.petId != null) {
+          if (!diariesByPetId.containsKey(diary.petId)) {
+            diariesByPetId[diary.petId!] = [];
+          }
+          diariesByPetId[diary.petId!]!.add(diary);
+        } else {
+          unknownPetDiaries.add(diary);
+        }
+      }
+
+      final List<Book> books = [];
+      
+      // 为每个宠物创建一个"书"
+      for (var pet in petsData) {
+        final petId = pet['id'] as String;
+        final petName = pet['name'] as String? ?? '未命名';
+        final petAvatar = pet['avatar'] as String?;
+        final petDiaries = diariesByPetId[petId] ?? [];
+        
+        books.add(Book(
+          id: petId,
+          title: "$petName 的日记",
+          coverUrl: petAvatar ?? "https://images.unsplash.com/photo-1517849845537-4d257902454a?w=500&auto=format&fit=crop&q=60",
+          entryCount: petDiaries.length,
+          color: _getPetColor(petId),
+          entries: petDiaries,
+        ));
+      }
+
+      // 如果有归属不明的日记，也创建一个书
+      if (unknownPetDiaries.isNotEmpty) {
+        books.add(Book(
+          id: null,
+          title: "其他的日记",
+          coverUrl: "https://images.unsplash.com/photo-1544376798-89aa6b82c630?w=500&auto=format&fit=crop&q=60",
+          entryCount: unknownPetDiaries.length,
+          color: Colors.blueGrey.shade700,
+          entries: unknownPetDiaries,
+        ));
+      }
+
+      if (mounted) {
+        setState(() {
+          _books = books;
+          _isLoading = false;
+        });
+      }
     } catch (e) {
-      debugPrint('Error fetching diaries: $e');
-      setState(() {
-        _isLoading = false;
-      });
+      debugPrint('Error fetching library data: $e');
+      if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  Color _getPetColor(String id) {
+    final colors = [
+      Colors.amber.shade800,
+      Colors.blue.shade700,
+      Colors.green.shade700,
+      Colors.purple.shade700,
+      Colors.orange.shade800,
+      Colors.teal.shade700,
+      Colors.indigo.shade700,
+      Colors.deepOrange.shade800,
+      Colors.brown.shade700,
+      Colors.red.shade700,
+    ];
+    return colors[id.hashCode.abs() % colors.length];
   }
 
   @override
   Widget build(BuildContext context) {
-    // Create a single book containing all fetched diaries
-    // In a real app, you might group these by Pet, Year, or Month.
-    final List<Book> books = [];
-
-    if (_diaries.isNotEmpty) {
-      books.add(
-        Book(
-          title: "我的宠物日记",
-          coverUrl:
-              "https://images.unsplash.com/photo-1517849845537-4d257902454a?w=500&auto=format&fit=crop&q=60",
-          entryCount: _diaries.length,
-          color: Colors.amber.shade800,
-          entries: _diaries,
-        ),
-      );
-    }
-
     return Scaffold(
       backgroundColor: const Color(0xFFF5F5F5), // Soft off-white
-      body: CustomScrollView(
-        slivers: [
-          SliverAppBar(
+      body: RefreshIndicator(
+        onRefresh: _fetchData,
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            SliverAppBar(
             backgroundColor: const Color(0xFFF5F5F5),
             floating: true,
             pinned: true,
@@ -98,7 +160,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
             const SliverFillRemaining(
               child: Center(child: CircularProgressIndicator()),
             )
-          else if (books.isEmpty)
+          else if (_books.isEmpty)
             SliverFillRemaining(
               child: Center(
                 child: Column(
@@ -137,10 +199,13 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 ),
                 delegate: SliverChildBuilderDelegate(
                   (context, index) {
-                    final book = books[index];
-                    return _BookItem(book: book);
+                    final book = _books[index];
+                    return _BookItem(
+                      book: book,
+                      onRefresh: _fetchData,
+                    );
                   },
-                  childCount: books.length,
+                  childCount: _books.length,
                 ),
               ),
             ),
@@ -150,25 +215,34 @@ class _LibraryScreenState extends State<LibraryScreen> {
           ),
         ],
       ),
+      ),
     );
   }
 }
 
 class _BookItem extends StatelessWidget {
   final Book book;
+  final VoidCallback onRefresh;
 
-  const _BookItem({required this.book});
+  const _BookItem({
+    required this.book,
+    required this.onRefresh,
+  });
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () {
-        Navigator.push(
+      onTap: () async {
+        await Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => const DiaryTimelinePage(),
+            builder: (context) => DiaryTimelinePage(
+              petId: book.id,
+              bookTitle: book.title,
+            ),
           ),
         );
+        onRefresh();
       },
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -218,6 +292,13 @@ class BookCover extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    ImageProvider? imageProvider;
+    if (imageUrl.startsWith('http')) {
+      imageProvider = NetworkImage(imageUrl);
+    } else {
+      imageProvider = FileImage(File(imageUrl));
+    }
+
     return AspectRatio(
       aspectRatio: 0.7, // 2:3 ratio roughly
       child: Container(
@@ -244,7 +325,7 @@ class BookCover extends StatelessWidget {
             ),
           ],
           image: DecorationImage(
-            image: NetworkImage(imageUrl),
+            image: imageProvider,
             fit: BoxFit.cover,
             onError: (exception, stackTrace) {
               // Fallback if image fails

@@ -20,7 +20,8 @@ class SupabaseConfig {
   // Edge Function 名称
   // 这是您在 Supabase 中创建的 Edge Function 的名称
   static const String difyChatFunctionName = 'chat';
-  static const String diaryFunctionName = 'diary';
+  static const String diaryFunctionName = 'diary-v4'; // 使用 v4 版本
+  static const String rechargeFunctionName = 'recharge-test'; // 充值测试函数
 
   // Edge Function 完整 URL
   static String get difyChatUrl =>
