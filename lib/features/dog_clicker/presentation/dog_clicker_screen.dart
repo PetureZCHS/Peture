@@ -314,13 +314,6 @@ class _DogClickerScreenState extends State<DogClickerScreen>
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
             ),
-            action: SnackBarAction(
-              label: '选择音效',
-              textColor: Colors.white,
-              onPressed: () {
-                _showSoundPickerDialog(projectName);
-              },
-            ),
           ),
         );
       }

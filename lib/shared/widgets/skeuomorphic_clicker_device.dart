@@ -1601,8 +1601,9 @@ class _SkeuomorphicClickerDeviceState extends State<SkeuomorphicClickerDevice>
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
                     margin: const EdgeInsets.only(right: 8),
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+                    padding: EdgeInsets.symmetric(
+                        horizontal: (isSelected && !isDefaultProject) ? 8 : 14,
+                        vertical: 5),
                     decoration: BoxDecoration(
                       gradient: isSelected
                           ? const LinearGradient(
@@ -1648,26 +1649,46 @@ class _SkeuomorphicClickerDeviceState extends State<SkeuomorphicClickerDevice>
                             ],
                     ),
                     child: Center(
-                      child: Text(
-                        projectName,
-                        style: TextStyle(
-                          color: isSelected
-                              ? Colors.white
-                              : const Color(0xFF999999),
-                          fontSize: 12,
-                          fontWeight:
-                              isSelected ? FontWeight.w700 : FontWeight.w500,
-                          letterSpacing: 0.5,
-                          shadows: isSelected
-                              ? [
-                                  Shadow(
-                                    color: Colors.black.withOpacity(0.3),
-                                    offset: const Offset(0, 1),
-                                    blurRadius: 2,
-                                  ),
-                                ]
-                              : null,
-                        ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            projectName,
+                            style: TextStyle(
+                              color: isSelected
+                                  ? Colors.white
+                                  : const Color(0xFF999999),
+                              fontSize: 12,
+                              fontWeight:
+                                  isSelected ? FontWeight.w700 : FontWeight.w500,
+                              letterSpacing: 0.5,
+                              shadows: isSelected
+                                  ? [
+                                      Shadow(
+                                        color: Colors.black.withOpacity(0.3),
+                                        offset: const Offset(0, 1),
+                                        blurRadius: 2,
+                                      ),
+                                    ]
+                                  : null,
+                            ),
+                          ),
+                          if (isSelected == true && !isDefaultProject)
+                            Padding(
+                              padding: const EdgeInsets.only(left: 4.0),
+                              child: GestureDetector(
+                                onTap: () {
+                                  HapticFeedback.mediumImpact();
+                                  _showDeleteProjectDialog(projectName);
+                                },
+                                child: Icon(
+                                  Icons.close_rounded,
+                                  size: 14,
+                                  color: Colors.white.withOpacity(0.8),
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
                     ),
                   ),
