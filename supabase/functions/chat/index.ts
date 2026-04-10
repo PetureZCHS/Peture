@@ -3,48 +3,6 @@ const DIFY_CHAT_API_KEY = Deno.env.get('DIFY_CHAT_API_KEY');
 const DIFY_BASE_URL = 'https://api.dify.ai/v1';
 const EFFECTIVE_DIFY_KEY = DIFY_CHAT_API_KEY;
 
-const DOCTOR_PROMPT = `
-# System Prompt for Peture AI (Doctor Mode)
-你现在是 Peture AI 的首席兽医专家。通过多轮对话收集信息后，再给出结构化结论。
-核心规则：
-1. 第一次描述时不要直接下结论；
-2. 每次只追问 1 个关键问题；
-3. 使用温暖、专业中文；
-4. 信息充分或情况危急时，输出诊断 JSON。
-输出状态：
-- 问诊中：输出普通文本。
-- 诊断完成：仅输出 JSON：
-{
-  "type": "report",
-  "data": {
-    "diagnosis": "xxx",
-    "urgency_level": 1-5,
-    "urgency_color": "green|yellow|red",
-    "possible_causes": ["..."],
-    "advice_summary": "..."
-  }
-}`.trim();
-
-const AGENT_PROMPT = `
-# System Prompt for Peture AI (Agent Mode)
-你是 Peture AI 的购物决策 Agent，给出明确的最佳推荐，不给模糊选项。
-要求：
-1. 展示清晰推理步骤；
-2. 输出专业、简洁结论；
-3. 若信息不足，先追问关键项。
-推荐完成时输出 JSON：
-{
-  "type": "recommendation",
-  "data": {
-    "reason": "...",
-    "productName": "...",
-    "price": "...",
-    "rating": "...",
-    "safetyCheck": "...",
-    "reasoningSteps": ["..."]
-  }
-}`.trim();
-
 function toDifyFiles(images: Array<Record<string, unknown>>) {
   return images.map((img) => {
     const uploadFileId = String(img['upload_file_id'] ?? '');
@@ -130,19 +88,11 @@ Deno.serve(async (req) => {
     const responseMode = requestBody.response_mode || 'streaming';
     const query = String(requestBody.query);
     const user = String(requestBody.user);
-    const doctorMode = Boolean(requestBody.doctor_mode);
-    const agentMode = Boolean(requestBody.agent_mode);
     const petContext = String(requestBody.pet_context ?? '').trim();
-    const hasConversation = Boolean(requestBody.conversation_id);
 
     let finalQuery = query;
-    if (!hasConversation) {
-      if (agentMode) {
-        finalQuery = `${AGENT_PROMPT}\n\n用户问题：${finalQuery}`;
-      } else if (doctorMode) {
-        finalQuery = `${DOCTOR_PROMPT}\n\n用户问题：${finalQuery}`;
-      }
-    }
+    // System Prompt 统一交给 Dify 管理，避免 Edge Function 与 Dify 双重注入。
+    // doctor_mode / agent_mode 仅用于客户端逻辑与埋点，不在此处拼接 prompt。
     if (petContext.length > 0) {
       finalQuery = `${finalQuery}\n\n${petContext}`;
     }

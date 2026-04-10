@@ -80,6 +80,9 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
 
   // 打字机效果相关
   String _currentTypingText = '';
+  // 打字机文本高频变更，避免整页 setState 导致大范围重建
+  final ValueNotifier<String> _typingTextNotifier =
+      ValueNotifier<String>('');
   Timer? _typingTimer;
   final List<String> _pendingChunks = [];
   bool _isTyping = false;
@@ -136,7 +139,8 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
 
   void _onTextChange() {
     if (mounted) {
-      final isComposing = _textController.text.isNotEmpty;
+      final isComposing =
+          _textController.text.isNotEmpty || _pendingImages.isNotEmpty;
       if (isComposing != _isComposing) {
         setState(() {
           _isComposing = isComposing;
@@ -151,6 +155,7 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
     _textController.dispose();
     _scrollController.dispose();
     _typingTimer?.cancel();
+    _typingTextNotifier.dispose();
     _suggestionFadeController.dispose();
     _orbController.dispose();
     // ✅ Edge Function 服务不需要 dispose
@@ -339,6 +344,7 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
       _pendingChunks.clear();
       _isTyping = false;
       _currentTypingText = '';
+      _typingTextNotifier.value = '';
       _fullResponseText = '';
       _pendingSaveQuestion = null;
       _updateSuggestions();
@@ -375,6 +381,7 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
         _pendingChunks.clear();
         _isTyping = false;
         _currentTypingText = '';
+        _typingTextNotifier.value = '';
         _fullResponseText = '';
         _pendingSaveQuestion = null;
 
@@ -436,6 +443,17 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
       if (_isStreamDone && mounted) {
         setState(() {
           _isLoading = false;
+          // 打字结束后，将最终文本写回 messages，确保后续逻辑/历史记录一致
+          if (_messages.isNotEmpty && !_messages.last.isUser) {
+            final lastMessage = _messages.last;
+            _messages[_messages.length - 1] = ChatMessage(
+              text: _currentTypingText,
+              isUser: false,
+              isLiked: lastMessage.isLiked,
+              isDisliked: lastMessage.isDisliked,
+              recommendationData: lastMessage.recommendationData,
+            );
+          }
         });
         // ✅ 所有内容都显示完成后，保存对话
         if (_pendingSaveQuestion != null && _fullResponseText.isNotEmpty) {
@@ -453,22 +471,11 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
     _typingTimer?.cancel();
     _typingTimer = Timer.periodic(const Duration(milliseconds: 15), (timer) {
       if (index < characters.length) {
-        if (mounted) {
-          setState(() {
-            _currentTypingText += characters[index];
-            if (_messages.isNotEmpty && !_messages.last.isUser) {
-              final lastMessage = _messages.last;
-              _messages[_messages.length - 1] = ChatMessage(
-                text: _currentTypingText,
-                isUser: false,
-                isLiked: lastMessage.isLiked,
-                isDisliked: lastMessage.isDisliked,
-              );
-            }
-          });
-          if (index % 10 == 0 || characters[index] == '\n') {
-            _smoothScrollToEnd();
-          }
+        // 高频更新只更新 notifier，避免整页 setState 触发大范围重建
+        _currentTypingText += characters[index];
+        _typingTextNotifier.value = _currentTypingText;
+        if (index % 10 == 0 || characters[index] == '\n') {
+          _smoothScrollToEnd();
         }
         index++;
       } else {
@@ -493,9 +500,15 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
 
   Future<void> _sendMessage({String? text}) async {
     if (_isLoading) return;
-    final messageText = (text ?? _textController.text).trim();
-    if (messageText.isEmpty) return;
+    var messageText = (text ?? _textController.text).trim();
     final attachedImages = List<Map<String, String>>.from(_pendingImages);
+    if (messageText.isEmpty && attachedImages.isEmpty) return;
+    if (messageText.isEmpty && attachedImages.isNotEmpty) {
+      // Dify/Edge Function 需要 query；图片单发时补一个合理的默认 query
+      messageText = _isDoctorMode
+          ? '请根据我上传的图片分析情况，并继续问诊：还需要我补充哪些症状信息？'
+          : '请描述并分析我上传的图片。';
+    }
     HapticFeedback.mediumImpact();
     _textController.clear();
     FocusScope.of(context).unfocus();
@@ -508,12 +521,14 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
       _messages.add(ChatMessage(text: "", isUser: false));
       _isLoading = true;
       _currentTypingText = '';
+      _typingTextNotifier.value = '';
       _pendingChunks.clear();
       _isTyping = false;
       _shouldAutoScroll = true;
       _isStreamDone = false;
       _userScrolledUp = false;
       _pendingImages.clear();
+      _isComposing = false;
     });
 
     _saveMessageToDatabase(messageText, true);
@@ -668,6 +683,7 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
       _messages.add(ChatMessage(text: "", isUser: false));
       _isLoading = true;
       _currentTypingText = '';
+      _typingTextNotifier.value = '';
       _pendingChunks.clear();
       _isTyping = false;
       _shouldAutoScroll = true;
@@ -851,7 +867,51 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
         'mimeType': mimeType,
         'dataBase64': base64Encode(bytes),
       });
+      // 选择图片后也应视为“可发送”
+      _isComposing = true;
     });
+  }
+
+  Future<void> _onPlusPressed() async {
+    HapticFeedback.selectionClick();
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('添加图片'),
+              onTap: () => Navigator.pop(context, 'image'),
+            ),
+            if (_pendingImages.isNotEmpty)
+              ListTile(
+                leading: const Icon(Icons.delete_outline, color: Colors.red),
+                title: const Text(
+                  '清空已选图片',
+                  style: TextStyle(color: Colors.red),
+                ),
+                onTap: () => Navigator.pop(context, 'clear_images'),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || action == null) return;
+    if (action == 'image') {
+      await _onPickImagePressed();
+      return;
+    }
+    if (action == 'clear_images') {
+      setState(() {
+        _pendingImages.clear();
+        _isComposing = _textController.text.isNotEmpty;
+      });
+    }
   }
 
   void _showPendingImagePreview(String base64Data) {
@@ -876,7 +936,7 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
 
   void _onCopyPressed(ChatMessage message) {
     HapticFeedback.lightImpact();
-    Clipboard.setData(ClipboardData(text: message.text));
+    Clipboard.setData(ClipboardData(text: _buildCopyText(message)));
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text("已复制到剪贴板"),
@@ -884,6 +944,78 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
         behavior: SnackBarBehavior.floating,
       ),
     );
+  }
+
+  String _buildCopyText(ChatMessage message) {
+    final raw = message.text;
+    final startIndex = raw.indexOf('{');
+    final endIndex = raw.lastIndexOf('}');
+    if (startIndex == -1 || endIndex == -1 || endIndex <= startIndex) {
+      return raw;
+    }
+    try {
+      final jsonString = raw.substring(startIndex, endIndex + 1);
+      final jsonMap = jsonDecode(jsonString);
+      final type = jsonMap['type'];
+      final data = (jsonMap['data'] as Map?)?.cast<String, dynamic>() ?? {};
+
+      if (type == 'report') {
+        final petName = (data['pet_name'] as String?)?.trim();
+        final diagnosis = (data['diagnosis'] as String?)?.trim() ?? '';
+        final urgency = data['urgency_level']?.toString() ?? '';
+        final possible = (data['possible_causes'] as List?)
+                ?.map((e) => e.toString())
+                .where((s) => s.trim().isNotEmpty)
+                .toList() ??
+            const <String>[];
+        final advice = (data['advice_summary'] as String?)?.trim() ?? '';
+
+        final b = StringBuffer();
+        b.writeln('Peture AI 辅助诊断报告');
+        if (petName != null && petName.isNotEmpty) b.writeln('姓名：$petName');
+        if (urgency.isNotEmpty) b.writeln('紧急度：$urgency/5');
+        if (diagnosis.isNotEmpty) b.writeln('\n诊断印象：\n$diagnosis');
+        if (possible.isNotEmpty) {
+          b.writeln('\n检查所见 / 症状分析：');
+          for (final c in possible) {
+            b.writeln('- $c');
+          }
+        }
+        if (advice.isNotEmpty) b.writeln('\n处置建议：\n$advice');
+        return b.toString().trim();
+      }
+
+      if (type == 'recommendation') {
+        final productName = (data['productName'] as String?)?.trim() ?? '';
+        final reason = (data['reason'] as String?)?.trim() ?? '';
+        final price = (data['price'] as String?)?.trim() ?? '';
+        final rating = (data['rating'] as String?)?.trim() ?? '';
+        final safety = (data['safetyCheck'] as String?)?.trim() ?? '';
+        final steps = (data['reasoningSteps'] as List?)
+                ?.map((e) => e.toString())
+                .where((s) => s.trim().isNotEmpty)
+                .toList() ??
+            const <String>[];
+
+        final b = StringBuffer();
+        b.writeln('Peture AI 推荐');
+        if (productName.isNotEmpty) b.writeln('商品：$productName');
+        if (price.isNotEmpty) b.writeln('价格：$price');
+        if (rating.isNotEmpty) b.writeln('评分：$rating');
+        if (safety.isNotEmpty) b.writeln('安全检核：$safety');
+        if (reason.isNotEmpty) b.writeln('\n理由：\n$reason');
+        if (steps.isNotEmpty) {
+          b.writeln('\n推理步骤：');
+          for (final s in steps) {
+            b.writeln('- $s');
+          }
+        }
+        return b.toString().trim();
+      }
+    } catch (_) {
+      // ignore
+    }
+    return raw;
   }
 
   void _onMoreOptionsPressed(ChatMessage message) {
@@ -1537,8 +1669,11 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
                               top: -6,
                               right: -6,
                               child: GestureDetector(
-                                onTap: () =>
-                                    setState(() => _pendingImages.removeAt(index)),
+                                onTap: () => setState(() {
+                                  _pendingImages.removeAt(index);
+                                  _isComposing = _textController.text.isNotEmpty ||
+                                      _pendingImages.isNotEmpty;
+                                }),
                                 child: Container(
                                   width: 16,
                                   height: 16,
@@ -1617,7 +1752,7 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
                           key: const ValueKey('plus_btn'),
                           icon: const Icon(Icons.add_circle_outline,
                               color: Colors.black87),
-                          onPressed: enabled ? () {} : null,
+                          onPressed: enabled ? _onPlusPressed : null,
                           padding: EdgeInsets.zero,
                           constraints: const BoxConstraints(),
                         ),
@@ -1701,10 +1836,39 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
                   index == _messages.length - 1 &&
                   message.text.isEmpty;
               final isLastMessage = index == _messages.length - 1;
+              final padding =
+                  EdgeInsets.only(bottom: isLastMessage ? 80.0 : 0);
+
+              // 流式打字：只刷新最后一条气泡，避免整页 rebuild
+              if (isLastMessageLoading && !message.isUser) {
+                return Padding(
+                  padding: padding,
+                  child: ValueListenableBuilder<String>(
+                    valueListenable: _typingTextNotifier,
+                    builder: (context, typingText, _) {
+                      return _MessageBubble(
+                        message: message,
+                        consultationPetName: _selectedConsultationPet?.name,
+                        overrideText: typingText,
+                        isLoading: true,
+                        isResponseComplete: false,
+                        onLikePressed: () => _onLikePressed(message),
+                        onDislikePressed: () => _onDislikePressed(message),
+                        onRegeneratePressed: _regenerateResponse,
+                        onCopyPressed: () => _onCopyPressed(message),
+                        onMoreOptionsPressed: () =>
+                            _onMoreOptionsPressed(message),
+                      );
+                    },
+                  ),
+                );
+              }
+
               return Padding(
-                padding: EdgeInsets.only(bottom: isLastMessage ? 80.0 : 0),
+                padding: padding,
                 child: _MessageBubble(
                   message: message,
+                  consultationPetName: _selectedConsultationPet?.name,
                   isLoading: isLastMessageLoading,
                   isResponseComplete: !_isLoading && !message.isUser,
                   onLikePressed: () => _onLikePressed(message),
@@ -2270,6 +2434,9 @@ class _TypingIndicatorState extends State<_TypingIndicator>
 // =======================================================================
 class _MessageBubble extends StatelessWidget {
   final ChatMessage message;
+  final String? consultationPetName;
+  // 流式打字阶段：从外部覆盖要展示的文本，避免依赖 message.text 的高频 setState
+  final String? overrideText;
   final bool isLoading;
   final bool isResponseComplete;
   final VoidCallback onLikePressed;
@@ -2280,6 +2447,8 @@ class _MessageBubble extends StatelessWidget {
 
   const _MessageBubble({
     required this.message,
+    this.consultationPetName,
+    this.overrideText,
     this.isLoading = false,
     this.isResponseComplete = false,
     required this.onLikePressed,
@@ -2293,6 +2462,7 @@ class _MessageBubble extends StatelessWidget {
   Widget build(BuildContext context) {
     final isUser = message.isUser;
     final theme = Theme.of(context);
+    final renderText = overrideText ?? message.text;
     final bubbleDecoration = isUser
         ? BoxDecoration(
             color: theme.primaryColor,
@@ -2320,7 +2490,8 @@ class _MessageBubble extends StatelessWidget {
         fontWeight: FontWeight.bold,
       ),
     );
-    final showLoadingIndicator = isLoading && message.text.isEmpty;
+    final showLoadingIndicator = isLoading && renderText.isEmpty;
+    final isStreaming = isLoading && !isResponseComplete && !isUser;
 
     // ✅ 优先渲染推荐卡片
     if (message.recommendationData != null) {
@@ -2364,9 +2535,10 @@ class _MessageBubble extends StatelessWidget {
     // 增强的检测逻辑：如果消息以 { 开头，或者包含 "type": "recommendation"，则视为协议消息
     // 这样可以避免在流式传输初期显示原始 JSON 文本
     bool isProtocolMessage = !isUser &&
-        (message.text.trimLeft().startsWith('{') ||
-            message.text.contains('"type": "recommendation"') ||
-            message.text.contains('"type": "report"'));
+        !isStreaming &&
+        (renderText.trimLeft().startsWith('{') ||
+            renderText.contains('"type": "recommendation"') ||
+            renderText.contains('"type": "report"'));
 
     if (isProtocolMessage) {
       try {
@@ -2378,7 +2550,13 @@ class _MessageBubble extends StatelessWidget {
           final jsonMap = jsonDecode(jsonString);
 
           if (jsonMap['type'] == 'report') {
-            messageContent = DiagnosticReportCard(data: jsonMap['data']);
+            final data = (jsonMap['data'] as Map?)?.cast<String, dynamic>() ??
+                <String, dynamic>{};
+            final petName = consultationPetName?.trim();
+            if (petName != null && petName.isNotEmpty) {
+              data['pet_name'] = petName;
+            }
+            messageContent = DiagnosticReportCard(data: data);
             isCustomCard = true;
           } else if (jsonMap['type'] == 'recommendation') {
             // ✅ 动态解析推荐数据
@@ -2559,11 +2737,23 @@ class _MessageBubble extends StatelessWidget {
         }
       }
     } else {
-      messageContent = MarkdownBody(
-        data: message.text.isEmpty && !isUser ? "思考中..." : message.text,
-        selectable: true,
-        styleSheet: markdownStyleSheet,
-      );
+      // 流式阶段不走 Markdown/JSON 解析，直接展示纯文本以降低每帧开销
+      if (isStreaming) {
+        messageContent = SelectableText(
+          renderText.isEmpty ? "思考中..." : renderText,
+          style: TextStyle(
+            color: isUser ? Colors.white : Colors.black87,
+            fontSize: 16,
+            height: 1.5,
+          ),
+        );
+      } else {
+        messageContent = MarkdownBody(
+          data: renderText.isEmpty && !isUser ? "思考中..." : renderText,
+          selectable: true,
+          styleSheet: markdownStyleSheet,
+        );
+      }
     }
 
     return Container(
