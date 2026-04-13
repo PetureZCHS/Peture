@@ -1,9 +1,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.NFC" />
 
     <application
         android:label="my_pet"
-        android:name="${applicationName}"
+        android:name=".PetureApplication"
         android:icon="@mipmap/ic_launcher">
         <activity
             android:name=".MainActivity"
@@ -29,6 +32,14 @@
                 <data
                     android:scheme="my_pet"
                     android:host="open"/>
+            </intent-filter>
+
+            <!-- 友盟集成测试唤端：scheme 为 um. + AppKey -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="um.69da1f829a7f376488bdeb2d" />
             </intent-filter>
 
             <intent-filter>

@@ -11,22 +11,44 @@ class AnalyticsService {
   static Future<void> init() async {
     if (_isInitialized) return;
 
-    const androidKey = String.fromEnvironment('UMENG_ANDROID_KEY');
+    // 默认值为友盟控制台 Android AppKey，本地可直接 flutter run；发布前可用 dart-define 覆盖。
+    const androidKey = String.fromEnvironment(
+      'UMENG_ANDROID_KEY',
+      defaultValue: '69da1f829a7f376488bdeb2d',
+    );
     const iosKey = String.fromEnvironment('UMENG_IOS_KEY');
 
     if (!Platform.isAndroid && !Platform.isIOS) {
       return;
     }
 
-    if (androidKey.isEmpty || iosKey.isEmpty) {
-      debugPrint('AnalyticsService: UMENG_ANDROID_KEY / UMENG_IOS_KEY 未完整配置');
-      return;
+    // initCommon(androidKey, iosKey, channel)。仅配置 Android Key 时，iOS 参数用 Android Key 占位以便本地调试。
+    if (Platform.isAndroid) {
+      if (androidKey.isEmpty) {
+        debugPrint('AnalyticsService: UMENG_ANDROID_KEY 未配置');
+        return;
+      }
+      final iosParam = iosKey.isEmpty ? androidKey : iosKey;
+      await UmengCommonSdk.initCommon(androidKey, iosParam, 'official');
+    } else if (Platform.isIOS) {
+      if (iosKey.isEmpty) {
+        debugPrint('AnalyticsService: UMENG_IOS_KEY 未配置');
+        return;
+      }
+      final androidParam = androidKey.isEmpty ? iosKey : androidKey;
+      await UmengCommonSdk.initCommon(androidParam, iosKey, 'official');
     }
 
-    await UmengCommonSdk.initCommon(androidKey, iosKey, 'official');
     UmengCommonSdk.setPageCollectionModeManual();
 
     _isInitialized = true;
+    debugPrint('AnalyticsService: 友盟 initCommon 已完成（channel=official）');
+  }
+
+  /// 用户同意《隐私政策》等后调用：持久化同意并初始化友盟。
+  static Future<void> acceptConsentAndInit() async {
+    await setConsentAccepted(true);
+    await init();
   }
 
   static Future<bool> hasConsent() async {
