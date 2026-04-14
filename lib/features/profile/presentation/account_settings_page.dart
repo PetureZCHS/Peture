@@ -451,7 +451,8 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
       setState(() => _isLoading = true);
 
       try {
-        final success = await _supabaseService.updateOwnerNickname(result.trim());
+        final success =
+            await _supabaseService.updateOwnerNickname(result.trim());
 
         if (success) {
           if (mounted) {

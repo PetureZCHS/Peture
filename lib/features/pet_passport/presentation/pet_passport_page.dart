@@ -9,7 +9,7 @@ import '../../profile/presentation/account_settings_page.dart';
 import '../../../shared/utils/user_avatar_helper.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'edit_pet_passport_page.dart';
-import '../../home/presentation/home_screen.dart'; 
+import '../../home/presentation/home_screen.dart';
 
 /// 宠物身份证（护照风格）页面
 class PetPassportPage extends StatefulWidget {

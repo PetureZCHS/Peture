@@ -37,7 +37,8 @@ class _DiaryTimelinePageState extends State<DiaryTimelinePage> {
   Future<void> _fetchDiaries() async {
     setState(() => _isLoading = true);
     try {
-      final diaries = await SupabaseService().getAllDiaries(petId: widget.petId);
+      final diaries =
+          await SupabaseService().getAllDiaries(petId: widget.petId);
       if (mounted) {
         setState(() {
           _allDiaries = diaries;
@@ -466,15 +467,15 @@ class _DiaryTimelinePageState extends State<DiaryTimelinePage> {
       // Revert if failed
       if (mounted) {
         setState(() {
-           if (index >= 0) _allDiaries.insert(index, diary);
-           _applyFilterAndSort();
+          if (index >= 0) _allDiaries.insert(index, diary);
+          _applyFilterAndSort();
         });
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('删除失败，请重试')),
         );
       }
     } else {
-       if (mounted) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('日记已删除')),
         );

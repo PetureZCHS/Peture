@@ -41,7 +41,8 @@ void main() async {
       debugPrint('   实际评论: ${comments.length} 条');
       if (comments.isNotEmpty) {
         for (final comment in comments) {
-          debugPrint('     - ${comment['content']} (用户: ${comment['user_id']})');
+          debugPrint(
+              '     - ${comment['content']} (用户: ${comment['user_id']})');
         }
       }
     }

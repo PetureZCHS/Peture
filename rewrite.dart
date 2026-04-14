@@ -1,7 +1,8 @@
 import 'dart:io';
 
 void main() {
-  final file = File('lib/features/lost_pet/presentation/lost_pet_rescue_page.dart');
+  final file =
+      File('lib/features/lost_pet/presentation/lost_pet_rescue_page.dart');
   final content = file.readAsStringSync();
 
   final regex = RegExp(

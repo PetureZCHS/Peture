@@ -33,7 +33,8 @@ class PetDiary {
       originalText: map['original_text'] as String? ?? '',
       content: map['content'] as String,
       style: map['style'] as String? ?? '小红书',
-      timestamp: timeStr != null ? DateTime.parse(timeStr.toString()) : DateTime.now(),
+      timestamp:
+          timeStr != null ? DateTime.parse(timeStr.toString()) : DateTime.now(),
     );
   }
 }

@@ -5,7 +5,7 @@ import 'package:intl/intl.dart';
 
 enum ShareCardStyle {
   minimal, // 极简艺术 (Art Gallery)
-  paper,   // 手账笔记 (Journal)
+  paper, // 手账笔记 (Journal)
 }
 
 class PetDiaryShareCard extends StatelessWidget {
@@ -67,7 +67,7 @@ class PetDiaryShareCard extends StatelessWidget {
               ],
             ),
           ),
-          
+
           // 3. 装饰层 (浮动元素/水印)
           _buildDecorationLayer(),
         ],
@@ -168,7 +168,8 @@ class PetDiaryShareCard extends StatelessWidget {
         const Spacer(),
         // 极简风右上角加个Logo或引号
         if (style == ShareCardStyle.minimal)
-          Icon(Icons.format_quote_rounded, color: Colors.grey.shade200, size: 40),
+          Icon(Icons.format_quote_rounded,
+              color: Colors.grey.shade200, size: 40),
       ],
     );
   }
@@ -184,7 +185,8 @@ class PetDiaryShareCard extends StatelessWidget {
         );
         break;
       case ShareCardStyle.minimal:
-        textStyle = const TextStyle( // 使用系统字体确保中文可读性
+        textStyle = const TextStyle(
+          // 使用系统字体确保中文可读性
           color: Color(0xFF2D3436),
           fontSize: 15,
           height: 1.9,
@@ -196,7 +198,8 @@ class PetDiaryShareCard extends StatelessWidget {
     return Text(
       content,
       style: textStyle,
-      textAlign: style == ShareCardStyle.paper ? TextAlign.left : TextAlign.justify,
+      textAlign:
+          style == ShareCardStyle.paper ? TextAlign.left : TextAlign.justify,
     );
   }
 
@@ -221,7 +224,8 @@ class PetDiaryShareCard extends StatelessWidget {
                     color: _getTextColor().withOpacity(0.05),
                     borderRadius: BorderRadius.circular(4),
                   ),
-                  child: Icon(Icons.qr_code_2, color: _getTextColor().withOpacity(0.5)),
+                  child: Icon(Icons.qr_code_2,
+                      color: _getTextColor().withOpacity(0.5)),
                 ),
                 const SizedBox(width: 8),
                 Column(
@@ -253,7 +257,8 @@ class PetDiaryShareCard extends StatelessWidget {
                 shape: BoxShape.circle,
                 border: Border.all(color: _getTextColor().withOpacity(0.1)),
               ),
-              child: Icon(Icons.thumb_up_alt_outlined, size: 16, color: _getTextColor().withOpacity(0.5)),
+              child: Icon(Icons.thumb_up_alt_outlined,
+                  size: 16, color: _getTextColor().withOpacity(0.5)),
             ),
           ],
         ),
@@ -297,13 +302,13 @@ class PetDiaryShareCard extends StatelessWidget {
 
   DecorationImage? _getAvatarImage() {
     if (avatarUrl == null || avatarUrl!.isEmpty) return null;
-    
+
     ImageProvider? imageProvider;
     final uri = Uri.tryParse(avatarUrl!);
     if (uri != null && (uri.scheme == 'http' || uri.scheme == 'https')) {
-       imageProvider = NetworkImage(avatarUrl!);
+      imageProvider = NetworkImage(avatarUrl!);
     } else {
-       imageProvider = FileImage(File(avatarUrl!));
+      imageProvider = FileImage(File(avatarUrl!));
     }
 
     return DecorationImage(
@@ -351,7 +356,7 @@ class _NotebookPainter extends CustomPainter {
     final marginPaint = Paint()
       ..color = Colors.red.withOpacity(0.05)
       ..strokeWidth = 1.0;
-    
+
     canvas.drawLine(
       const Offset(40, 0),
       Offset(40, size.height),

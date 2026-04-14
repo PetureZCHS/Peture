@@ -462,16 +462,14 @@ class _UnifiedExpenseHomePageState extends State<UnifiedExpenseHomePage>
         decoration: BoxDecoration(
             color: Colors.white,
             shape: BoxShape.circle,
-            border: Border.all(
-                color: Colors.grey.withOpacity(0.1), width: 1),
+            border: Border.all(color: Colors.grey.withOpacity(0.1), width: 1),
             boxShadow: [
               BoxShadow(
                   color: Colors.black.withOpacity(0.05),
                   blurRadius: 8,
                   offset: const Offset(0, 2))
             ]),
-        child:
-            Icon(icon, color: ExpenseStyles.textDark, size: 20),
+        child: Icon(icon, color: ExpenseStyles.textDark, size: 20),
       ),
     );
   }
@@ -503,7 +501,7 @@ class _UnifiedExpenseHomePageState extends State<UnifiedExpenseHomePage>
                   const BoxDecoration(gradient: ExpenseStyles.bgGradient),
             ),
           ),
-          
+
           SafeArea(
             bottom: false,
             child: Column(
@@ -542,9 +540,9 @@ class _UnifiedExpenseHomePageState extends State<UnifiedExpenseHomePage>
                                 borderRadius: BorderRadius.circular(24),
                                 boxShadow: [
                                   BoxShadow(
-                                      color:
-                                          ExpenseStyles.mainGradient.colors.first
-                                              .withOpacity(0.3),
+                                      color: ExpenseStyles
+                                          .mainGradient.colors.first
+                                          .withOpacity(0.3),
                                       blurRadius: 8,
                                       offset: const Offset(0, 2))
                                 ]),
@@ -871,7 +869,8 @@ class _UnifiedExpenseHomePageState extends State<UnifiedExpenseHomePage>
       // 检查是否已经有“其他”项，如果有则累加
       int otherIdx = processedEntries.indexWhere((e) => e.key == '其他');
       if (otherIdx != -1) {
-        processedEntries[otherIdx] = MapEntry('其他', processedEntries[otherIdx].value + otherTotal);
+        processedEntries[otherIdx] =
+            MapEntry('其他', processedEntries[otherIdx].value + otherTotal);
       } else {
         processedEntries.add(MapEntry('其他', otherTotal));
       }
@@ -902,7 +901,7 @@ class _UnifiedExpenseHomePageState extends State<UnifiedExpenseHomePage>
       final percent = (amount / total) * 100;
       final isTouched = i == _touchedIndex;
       final anyTouched = _touchedIndex != -1;
-      
+
       if (isTouched) touchedColor = color;
 
       // 动态计算半径：选中项放大，非选中项在有选中时缩小
@@ -918,21 +917,22 @@ class _UnifiedExpenseHomePageState extends State<UnifiedExpenseHomePage>
       sections.add(PieChartSectionData(
         color: isTouched ? color : color.withOpacity(anyTouched ? 0.6 : 1.0),
         value: amount,
-        title: isTouched ? '${percent.toStringAsFixed(1)}%' : (anyTouched ? '' : '${percent.toStringAsFixed(0)}%'),
+        title: isTouched
+            ? '${percent.toStringAsFixed(1)}%'
+            : (anyTouched ? '' : '${percent.toStringAsFixed(0)}%'),
         radius: radius,
         titleStyle: TextStyle(
             fontSize: isTouched ? 14 : 12,
             fontWeight: FontWeight.bold,
             color: Colors.white),
         // 玻璃风格边缘：通过多层 borderSide 模拟发光/模糊感
-        borderSide: isTouched 
+        borderSide: isTouched
             ? BorderSide(
                 color: color.withOpacity(0.8), // 提高透明度使边缘更明显
                 width: 6, // 增加宽度
-              ) 
+              )
             : const BorderSide(color: Colors.transparent, width: 0),
-        badgeWidget: _buildBadge(
-            category?.icon ?? Icons.more_horiz.codePoint, 
+        badgeWidget: _buildBadge(category?.icon ?? Icons.more_horiz.codePoint,
             isTouched ? color : color.withOpacity(anyTouched ? 0.5 : 1.0),
             size: isTouched ? 24 : 18),
         badgePositionPercentageOffset: .98,
@@ -979,7 +979,7 @@ class _UnifiedExpenseHomePageState extends State<UnifiedExpenseHomePage>
               ],
             ),
           ),
-          
+
           // Collapsible Content
           AnimatedCrossFade(
             firstChild: Container(),
@@ -994,13 +994,16 @@ class _UnifiedExpenseHomePageState extends State<UnifiedExpenseHomePage>
                       PieChart(
                         PieChartData(
                           pieTouchData: PieTouchData(
-                            touchCallback: (FlTouchEvent event, pieTouchResponse) {
-                              final touchedSection = pieTouchResponse?.touchedSection;
+                            touchCallback:
+                                (FlTouchEvent event, pieTouchResponse) {
+                              final touchedSection =
+                                  pieTouchResponse?.touchedSection;
 
                               // 命中扇形
                               if (touchedSection != null) {
-                                final newIndex = touchedSection.touchedSectionIndex;
-                                
+                                final newIndex =
+                                    touchedSection.touchedSectionIndex;
+
                                 // 只有在按下瞬间（TapDown）处理切换逻辑，避免滑动过程中频繁切换
                                 if (event is FlTapDownEvent) {
                                   setState(() {
@@ -1012,7 +1015,8 @@ class _UnifiedExpenseHomePageState extends State<UnifiedExpenseHomePage>
                                       _touchedIndex = newIndex;
                                     }
                                   });
-                                } else if (event is FlPanUpdateEvent || event is FlPanStartEvent) {
+                                } else if (event is FlPanUpdateEvent ||
+                                    event is FlPanStartEvent) {
                                   // 滑动过程中，如果进入了新的扇形，则更新选中（增强钻取感）
                                   if (newIndex != _touchedIndex) {
                                     setState(() {
@@ -1046,7 +1050,8 @@ class _UnifiedExpenseHomePageState extends State<UnifiedExpenseHomePage>
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           AnimatedDefaultTextStyle(
-                            duration: const Duration(milliseconds: 50), // 极短时间，实现近乎即时的变色
+                            duration: const Duration(
+                                milliseconds: 50), // 极短时间，实现近乎即时的变色
                             curve: Curves.linear,
                             style: TextStyle(
                               fontSize: 20,
@@ -1054,7 +1059,7 @@ class _UnifiedExpenseHomePageState extends State<UnifiedExpenseHomePage>
                               color: touchedColor ?? ExpenseStyles.textDark,
                             ),
                             child: Text(
-                              _touchedIndex != -1 
+                              _touchedIndex != -1
                                   ? '¥${processedEntries[_touchedIndex].value.toStringAsFixed(2)}'
                                   : '¥${total.toStringAsFixed(2)}',
                             ),
@@ -1064,11 +1069,14 @@ class _UnifiedExpenseHomePageState extends State<UnifiedExpenseHomePage>
                             curve: Curves.linear,
                             style: TextStyle(
                               fontSize: 12,
-                              fontWeight: _touchedIndex != -1 ? FontWeight.bold : FontWeight.normal,
-                              color: touchedColor?.withOpacity(0.8) ?? ExpenseStyles.textGrey,
+                              fontWeight: _touchedIndex != -1
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
+                              color: touchedColor?.withOpacity(0.8) ??
+                                  ExpenseStyles.textGrey,
                             ),
                             child: Text(
-                              _touchedIndex != -1 
+                              _touchedIndex != -1
                                   ? processedEntries[_touchedIndex].key
                                   : '总支出',
                             ),
@@ -1126,8 +1134,7 @@ class _UnifiedExpenseHomePageState extends State<UnifiedExpenseHomePage>
       final color = category != null
           ? Color(category.color)
           : palette[i % palette.length];
-      final iconCodePoint =
-          category?.icon ?? Icons.more_horiz.codePoint;
+      final iconCodePoint = category?.icon ?? Icons.more_horiz.codePoint;
       legendEntries.add(_LegendEntry(
         label: e.key,
         percent: percent,
@@ -1602,8 +1609,8 @@ class AnimatedBackgroundOrb extends StatefulWidget {
   final Offset offset;
 
   const AnimatedBackgroundOrb({
-    super.key, 
-    required this.color, 
+    super.key,
+    required this.color,
     required this.size,
     this.offset = Offset.zero,
   });
@@ -1633,9 +1640,9 @@ class _AnimatedBackgroundOrbState extends State<AnimatedBackgroundOrb>
     _scaleAnim = Tween<double>(begin: 0.9, end: 1.1).animate(
       CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
     );
-    
+
     _slideAnim = Tween<Offset>(
-      begin: Offset.zero, 
+      begin: Offset.zero,
       end: const Offset(10, -10),
     ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
   }
@@ -1676,8 +1683,8 @@ class CuteEmptyState extends StatefulWidget {
   final bool isSleeping;
 
   const CuteEmptyState({
-    super.key, 
-    required this.message, 
+    super.key,
+    required this.message,
     this.emoji = '🐱',
     this.isSleeping = true,
   });
@@ -1698,7 +1705,7 @@ class _CuteEmptyStateState extends State<CuteEmptyState>
       duration: const Duration(seconds: 2),
       vsync: this,
     )..repeat(reverse: true);
-    
+
     _floatAnim = Tween<double>(begin: 0, end: -10).animate(
       CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
     );
@@ -1732,7 +1739,7 @@ class _CuteEmptyStateState extends State<CuteEmptyState>
               Transform.scale(
                 scale: 1.0,
                 child: Text(
-                  widget.emoji, 
+                  widget.emoji,
                   style: const TextStyle(fontSize: 80),
                 ),
               ),
@@ -1747,13 +1754,12 @@ class _CuteEmptyStateState extends State<CuteEmptyState>
                         offset: Offset(5, _floatAnim.value),
                         child: const Opacity(
                           opacity: 0.8,
-                          child: Text('Zzz...', 
-                            style: TextStyle(
-                              fontSize: 28, 
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF8D6E63),
-                            )
-                          ),
+                          child: Text('Zzz...',
+                              style: TextStyle(
+                                fontSize: 28,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF8D6E63),
+                              )),
                         ),
                       );
                     },
@@ -1775,4 +1781,3 @@ class _CuteEmptyStateState extends State<CuteEmptyState>
     );
   }
 }
-

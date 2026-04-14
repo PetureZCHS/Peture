@@ -1659,8 +1659,9 @@ class _SkeuomorphicClickerDeviceState extends State<SkeuomorphicClickerDevice>
                                   ? Colors.white
                                   : const Color(0xFF999999),
                               fontSize: 12,
-                              fontWeight:
-                                  isSelected ? FontWeight.w700 : FontWeight.w500,
+                              fontWeight: isSelected
+                                  ? FontWeight.w700
+                                  : FontWeight.w500,
                               letterSpacing: 0.5,
                               shadows: isSelected
                                   ? [
@@ -1857,12 +1858,6 @@ class _SkeuomorphicClickerDeviceState extends State<SkeuomorphicClickerDevice>
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // 狗爪图标
-              CustomPaint(
-                size: const Size(14, 14),
-                painter: PawPrintPainter(color: const Color(0xFF8BC34A)),
-              ),
-              const SizedBox(width: 6),
               const Text(
                 'PetClicker',
                 style: TextStyle(
@@ -2005,11 +2000,6 @@ class _SkeuomorphicClickerDeviceState extends State<SkeuomorphicClickerDevice>
                   _buildProgressBar(successRate),
                 ],
               ),
-            ),
-            // 扫描线效果
-            CustomPaint(
-              size: const Size(double.infinity, 180),
-              painter: ScanLinePainter(),
             ),
             // 玻璃反光
             AnimatedBuilder(
@@ -2283,6 +2273,7 @@ class _SkeuomorphicClickerDeviceState extends State<SkeuomorphicClickerDevice>
     required Color color,
   }) {
     return Container(
+      width: 86,
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
       decoration: BoxDecoration(
         color: color.withOpacity(0.1),
@@ -2693,19 +2684,12 @@ class _SkeuomorphicClickerDeviceState extends State<SkeuomorphicClickerDevice>
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
-                    Colors.white.withOpacity(0.25),
+                    Colors.white.withOpacity(0.15),
                     Colors.transparent,
                   ],
                 ),
                 borderRadius: BorderRadius.circular(25),
               ),
-            ),
-          ),
-          // 狗爪图标
-          CustomPaint(
-            size: const Size(36, 36),
-            painter: PawPrintPainter(
-              color: Colors.white.withOpacity(_isPressed ? 1.0 : 0.9),
             ),
           ),
         ],

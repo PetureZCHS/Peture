@@ -44,7 +44,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
     setState(() => _isLoading = true);
     try {
       final service = SupabaseService();
-      
+
       // 并行获取宠物列表和所有日记
       final results = await Future.wait([
         service.getAllPets(),
@@ -70,18 +70,19 @@ class _LibraryScreenState extends State<LibraryScreen> {
       }
 
       final List<Book> books = [];
-      
+
       // 为每个宠物创建一个"书"
       for (var pet in petsData) {
         final petId = pet['id'] as String;
         final petName = pet['name'] as String? ?? '未命名';
         final petAvatar = pet['avatar'] as String?;
         final petDiaries = diariesByPetId[petId] ?? [];
-        
+
         books.add(Book(
           id: petId,
           title: "$petName 的日记",
-          coverUrl: petAvatar ?? "https://images.unsplash.com/photo-1517849845537-4d257902454a?w=500&auto=format&fit=crop&q=60",
+          coverUrl: petAvatar ??
+              "https://images.unsplash.com/photo-1517849845537-4d257902454a?w=500&auto=format&fit=crop&q=60",
           entryCount: petDiaries.length,
           color: _getPetColor(petId),
           entries: petDiaries,
@@ -93,7 +94,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
         books.add(Book(
           id: null,
           title: "其他的日记",
-          coverUrl: "https://images.unsplash.com/photo-1544376798-89aa6b82c630?w=500&auto=format&fit=crop&q=60",
+          coverUrl:
+              "https://images.unsplash.com/photo-1544376798-89aa6b82c630?w=500&auto=format&fit=crop&q=60",
           entryCount: unknownPetDiaries.length,
           color: Colors.blueGrey.shade700,
           entries: unknownPetDiaries,
@@ -138,83 +140,84 @@ class _LibraryScreenState extends State<LibraryScreen> {
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
             SliverAppBar(
-            backgroundColor: const Color(0xFFF5F5F5),
-            floating: true,
-            pinned: true,
-            elevation: 0,
-            centerTitle: false,
-            expandedHeight: 100,
-            flexibleSpace: FlexibleSpaceBar(
-              titlePadding: const EdgeInsets.only(left: 20, bottom: 16),
-              title: Text(
-                '书库',
-                style: GoogleFonts.notoSerif(
-                  color: Colors.black87,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 28, // Large title like Apple Books
+              backgroundColor: const Color(0xFFF5F5F5),
+              floating: true,
+              pinned: true,
+              elevation: 0,
+              centerTitle: false,
+              expandedHeight: 100,
+              flexibleSpace: FlexibleSpaceBar(
+                titlePadding: const EdgeInsets.only(left: 20, bottom: 16),
+                title: Text(
+                  '书库',
+                  style: GoogleFonts.notoSerif(
+                    color: Colors.black87,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 28, // Large title like Apple Books
+                  ),
                 ),
               ),
             ),
-          ),
-          if (_isLoading)
-            const SliverFillRemaining(
-              child: Center(child: CircularProgressIndicator()),
-            )
-          else if (_books.isEmpty)
-            SliverFillRemaining(
-              child: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.book_outlined,
-                        size: 64, color: Colors.grey[400]),
-                    const SizedBox(height: 16),
-                    Text(
-                      "暂无日记",
-                      style: GoogleFonts.notoSerif(
-                        fontSize: 18,
-                        color: Colors.grey[600],
+            if (_isLoading)
+              const SliverFillRemaining(
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else if (_books.isEmpty)
+              SliverFillRemaining(
+                child: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.book_outlined,
+                          size: 64, color: Colors.grey[400]),
+                      const SizedBox(height: 16),
+                      Text(
+                        "暂无日记",
+                        style: GoogleFonts.notoSerif(
+                          fontSize: 18,
+                          color: Colors.grey[600],
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      "创建你的第一篇宠物日记",
-                      style: GoogleFonts.lato(
-                        color: Colors.grey[500],
+                      const SizedBox(height: 8),
+                      Text(
+                        "创建你的第一篇宠物日记",
+                        style: GoogleFonts.lato(
+                          color: Colors.grey[500],
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
+                ),
+              )
+            else
+              SliverPadding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+                sliver: SliverGrid(
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    childAspectRatio: 0.65, // Accommodate book + text
+                    crossAxisSpacing: 20,
+                    mainAxisSpacing: 30,
+                  ),
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) {
+                      final book = _books[index];
+                      return _BookItem(
+                        book: book,
+                        onRefresh: _fetchData,
+                      );
+                    },
+                    childCount: _books.length,
+                  ),
                 ),
               ),
-            )
-          else
-            SliverPadding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-              sliver: SliverGrid(
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  childAspectRatio: 0.65, // Accommodate book + text
-                  crossAxisSpacing: 20,
-                  mainAxisSpacing: 30,
-                ),
-                delegate: SliverChildBuilderDelegate(
-                  (context, index) {
-                    final book = _books[index];
-                    return _BookItem(
-                      book: book,
-                      onRefresh: _fetchData,
-                    );
-                  },
-                  childCount: _books.length,
-                ),
-              ),
+            // Add some bottom padding
+            const SliverToBoxAdapter(
+              child: SizedBox(height: 40),
             ),
-          // Add some bottom padding
-          const SliverToBoxAdapter(
-            child: SizedBox(height: 40),
-          ),
-        ],
-      ),
+          ],
+        ),
       ),
     );
   }

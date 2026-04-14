@@ -14,7 +14,7 @@ class SupabaseConstants {
 
   // Edge Function 名称
   static const String difyChatFunction = 'chat';
-  static const String diaryFunction = 'diary-v3';
+  static const String diaryFunction = 'diary-v4';
   static const String rechargeFunction = 'recharge-test';
 
   // 完整的 Edge Function URL

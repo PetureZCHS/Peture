@@ -6,7 +6,7 @@ import 'package:intl/intl.dart';
 // 添加数据库助手导入
 import '../../../services/supabase_service.dart';
 import '../../../shared/models/pet.dart';
-import '../../home/presentation/home_screen.dart'; 
+import '../../home/presentation/home_screen.dart';
 import '../../../shared/widgets/weight_trend_card.dart';
 import '../../../shared/utils/ui_helpers.dart';
 

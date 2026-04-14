@@ -8,14 +8,14 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:share_plus/share_plus.dart';
 // ✅ 使用新的 Supabase Dify 服务
 import '../../../services/supabase_edge_service.dart';
-import '../../../services/supabase_service.dart'; 
-import '../../../shared/models/pet.dart'; 
+import '../../../services/supabase_service.dart';
+import '../../../shared/models/pet.dart';
 // ================== 所有必需的导入 ==================
 import '../../../shared/models/conversation.dart';
 import '../../../shared/utils/ui_helpers.dart';
 import '../../../shared/widgets/diagnostic_report_card.dart';
-import '../../../shared/widgets/recommendation_card.dart'; 
-import '../../shop/presentation/cart_page.dart'; 
+import '../../../shared/widgets/recommendation_card.dart';
+import '../../shop/presentation/cart_page.dart';
 import 'dart:convert'; // Ensure dart:convert is available for JSON parsing
 
 // ===============================================

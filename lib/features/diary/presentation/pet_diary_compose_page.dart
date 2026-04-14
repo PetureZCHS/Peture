@@ -26,7 +26,7 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
   final PetDiaryEdgeService _diaryService = PetDiaryEdgeService();
   final SupabaseService _supabaseService = SupabaseService();
   late AnimationController _orbController;
-  
+
   // 宠物选择
   List<Pet> _pets = [];
   Pet? _selectedPet;
@@ -47,7 +47,7 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
       vsync: this,
       duration: const Duration(seconds: 10),
     )..repeat(reverse: true);
-    
+
     _loadPets();
   }
 
@@ -240,7 +240,7 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
                 ),
               ),
               const SizedBox(height: 24),
-              
+
               // 标题
               Text(
                 title,
@@ -252,7 +252,7 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
                 ),
               ),
               const SizedBox(height: 12),
-              
+
               // 内容
               Text(
                 content,
@@ -264,7 +264,7 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
                 ),
               ),
               const SizedBox(height: 28),
-              
+
               // 按钮
               SizedBox(
                 width: double.infinity,
@@ -713,8 +713,8 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
                       color: Colors.grey.shade200,
                       shape: BoxShape.circle,
                     ),
-                    child: Icon(Icons.pets,
-                        color: Colors.grey.shade400, size: 20),
+                    child:
+                        Icon(Icons.pets, color: Colors.grey.shade400, size: 20),
                   ),
                   const SizedBox(width: 12),
                   const Text(

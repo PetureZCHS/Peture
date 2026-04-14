@@ -6,7 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import '../../../services/supabase_service.dart';
 import '../../../shared/models/pet.dart';
-import '../../home/presentation/home_screen.dart'; 
+import '../../home/presentation/home_screen.dart';
 import 'settings_page.dart';
 import 'pet_profile_form_page.dart';
 import '../../../shared/utils/ui_helpers.dart';
@@ -416,7 +416,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       }
     }
   }
-
 }
 
 // =========================================================

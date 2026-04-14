@@ -122,7 +122,8 @@ class SupabaseService {
   }
 
   /// 创建或更新用户资料
-  Future<bool> upsertUserProfile({String? nickname, String? avatarUrl, String? ownerNickname}) async {
+  Future<bool> upsertUserProfile(
+      {String? nickname, String? avatarUrl, String? ownerNickname}) async {
     final userId = await currentUserId;
     if (userId == null) return false;
 
@@ -887,22 +888,21 @@ class SupabaseService {
       final diaryData = diary.toMap();
       diaryData.remove('id');
       diaryData['user_id'] = userId;
-      
+
       // 确保使用 created_at 字段名以匹配数据库
       diaryData['created_at'] = diary.timestamp.toIso8601String();
       diaryData.remove('timestamp'); // 移除可能导致错误的 timestamp 字段
-      
+
       // 检查 pet_id 是否为空字符串，如果是这移除，或者设置为 null
-      if (diaryData['pet_id'] == null || (diaryData['pet_id'] is String && (diaryData['pet_id'] as String).isEmpty)) {
+      if (diaryData['pet_id'] == null ||
+          (diaryData['pet_id'] is String &&
+              (diaryData['pet_id'] as String).isEmpty)) {
         diaryData.remove('pet_id');
       }
 
       // 尝试插入 pet_diaries 表
-      final response = await _client
-          .from('pet_diaries')
-          .insert(diaryData)
-          .select()
-          .single();
+      final response =
+          await _client.from('pet_diaries').insert(diaryData).select().single();
       return response['id'] as String?;
     } catch (e) {
       print('插入日记失败: $e');
@@ -924,7 +924,7 @@ class SupabaseService {
       }
 
       final response = await query.order('created_at', ascending: false);
-      
+
       return List<Map<String, dynamic>>.from(response)
           .map((data) => PetDiary.fromMap(data))
           .toList();
@@ -1440,7 +1440,7 @@ class SupabaseService {
       }
 
       final response = await query.order('created_at', ascending: false);
-      
+
       return (response as List).map((map) => PetDiary.fromMap(map)).toList();
     } catch (e) {
       debugPrint('获取宠物日记失败: $e');

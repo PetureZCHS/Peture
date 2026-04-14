@@ -65,7 +65,8 @@ class SupabaseEdgeFunctionService {
 
       debugPrint('📤 调用 Edge Function: ${SupabaseConstants.difyChatFunction}');
       debugPrint('📦 必填参数:');
-      debugPrint('   - query: ${query.substring(0, 50.clamp(0, query.length))}...');
+      debugPrint(
+          '   - query: ${query.substring(0, 50.clamp(0, query.length))}...');
       debugPrint('   - user: $user');
       debugPrint('   - response_mode: streaming');
       debugPrint('   - inputs: {}');
@@ -181,7 +182,8 @@ class SupabaseEdgeFunctionService {
             }
           } catch (e) {
             debugPrint('⚠️ 解析失败: $e');
-            debugPrint('   行内容: ${line.substring(0, 100.clamp(0, line.length))}...');
+            debugPrint(
+                '   行内容: ${line.substring(0, 100.clamp(0, line.length))}...');
           }
         }
       }
@@ -328,11 +330,12 @@ class PetDiaryEdgeService {
       final inputs = {
         'query': query,
         'style': style,
-        // v4 参数映射: 
-        if (nickname != null) 'owner_title': nickname, // 主人称呼 (API参数名: owner_title)
-        if (petName != null) 'nickname': petName,      // 宠物名字 (API参数名: nickname)
-        if (petType != null) 'species': petType,       // 宠物物种 (API参数名: species)
-        if (breed != null) 'breed': breed,             // 宠物品种
+        // v4 参数映射:
+        if (nickname != null)
+          'owner_title': nickname, // 主人称呼 (API参数名: owner_title)
+        if (petName != null) 'nickname': petName, // 宠物名字 (API参数名: nickname)
+        if (petType != null) 'species': petType, // 宠物物种 (API参数名: species)
+        if (breed != null) 'breed': breed, // 宠物品种
         // 保留其他可能用到的字段
         if (gender != null) 'gender': gender,
       };

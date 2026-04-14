@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'dart:math' as math;
 import 'package:audioplayers/audioplayers.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:async';
 import '../../../shared/utils/ui_helpers.dart';
 import '../../../shared/widgets/skeuomorphic_clicker_device.dart';
 
@@ -37,6 +38,8 @@ class _DogClickerScreenState extends State<DogClickerScreen>
   bool _pendingConfirmation = false; // 是否处于待确认状态
   int _selectedFilterIndex = 0; // 选中的筛选标签索引
   List<String> _filterOptions = []; // 用户自定义的训练项目列表
+  bool _showErrorTip = false; // 是否显示纠错提示
+  Timer? _errorTimer; // 错误提示定时器
 
   // 本地存储的键名
   static const String _keyPrefix = 'dog_clicker_';
@@ -82,6 +85,7 @@ class _DogClickerScreenState extends State<DogClickerScreen>
     // 释放音频播放器资源
     _audioPlayer.dispose();
     _previewPlayer?.dispose();
+    _errorTimer?.cancel();
     super.dispose();
   }
 
@@ -1633,7 +1637,9 @@ class _DogClickerScreenState extends State<DogClickerScreen>
       setState(() {
         _isCoolingDown = true;
         _pendingConfirmation = true; // 进入待确认状态
+        _showErrorTip = false;
       });
+      _errorTimer?.cancel();
 
       // 250ms 后解除冷却
       Future.delayed(const Duration(milliseconds: 250), () {
@@ -1687,15 +1693,21 @@ class _DogClickerScreenState extends State<DogClickerScreen>
     setState(() {
       _failCount++;
       _pendingConfirmation = false;
+      _showErrorTip = true;
     });
     await _saveFailureCount();
 
     // 触觉反馈
     await HapticFeedback.mediumImpact();
 
-    if (mounted) {
-      _showFailureTip(context);
-    }
+    _errorTimer?.cancel();
+    _errorTimer = Timer(const Duration(seconds: 4), () {
+      if (mounted) {
+        setState(() {
+          _showErrorTip = false;
+        });
+      }
+    });
   }
 
   /// 跳过确认（记为未确认）
@@ -1878,16 +1890,13 @@ class _DogClickerScreenState extends State<DogClickerScreen>
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    // 如果没有项目，显示空状态引导
-                    if (_filterOptions.isEmpty) ...[
-                      _buildEmptyState(),
-                    ] else ...[
-                      // 新手提示（呼吸感文字）
-                      if (!_pendingConfirmation) _buildTrainingTip(),
-                      // 待确认状态提示
-                      if (_pendingConfirmation) _buildConfirmationTip(),
-                      const SizedBox(height: 12),
-                      // 拟物化响片设备（包含项目选择和统计）
+                      // 如果没有项目，显示空状态引导
+                      if (_filterOptions.isEmpty) ...[
+                        _buildEmptyState(),
+                      ] else ...[
+                        _buildDynamicIsland(),
+                        const SizedBox(height: 12),
+                        // 拟物化响片设备（包含项目选择和统计）
                       SkeuomorphicClickerDevice(
                         successCount: _clickCount,
                         failCount: _failCount,
@@ -1906,12 +1915,20 @@ class _DogClickerScreenState extends State<DogClickerScreen>
                         // 保留旧的回调用于兼容
                         onSuccess: _playClickSound,
                         onFail: () async {
-                          setState(() => _failCount++);
+                          setState(() {
+                            _failCount++;
+                            _showErrorTip = true;
+                          });
                           await HapticFeedback.lightImpact();
                           await _saveFailureCount();
-                          if (context.mounted) {
-                            _showFailureTip(context);
-                          }
+                          _errorTimer?.cancel();
+                          _errorTimer = Timer(const Duration(seconds: 4), () {
+                            if (mounted) {
+                              setState(() {
+                                _showErrorTip = false;
+                              });
+                            }
+                          });
                         },
                         onProjectChanged: (index) {
                           // 如果正在待确认状态，先取消
@@ -1941,130 +1958,124 @@ class _DogClickerScreenState extends State<DogClickerScreen>
     );
   }
 
-  /// 新手提示 - 呼吸感文字
-  Widget _buildTrainingTip() {
-    return AnimatedBuilder(
-      animation: _orbController,
-      builder: (context, child) {
-        // 使用 sin 函数创建平滑的呼吸效果
-        final breathValue =
-            0.5 + 0.5 * math.sin(_orbController.value * math.pi * 2);
-        return Opacity(
-          opacity: 0.5 + breathValue * 0.5,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-            decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.05),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.tips_and_updates_outlined,
-                  color: Colors.black.withOpacity(0.5),
-                  size: 16,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  '在它做对的那一秒，按下快门（响片）',
-                  style: TextStyle(
-                    color: Colors.black.withOpacity(0.6),
-                    fontSize: 13,
-                    fontWeight: FontWeight.w400,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
+  /// 动态岛状态提示区
+  Widget _buildDynamicIsland() {
+    String text;
+    Color indicatorColor;
+    bool isBreathing;
+    bool isPulse;
 
-  /// 待确认状态提示
-  Widget _buildConfirmationTip() {
+    if (_showErrorTip) {
+      text = '不要气馁，试试分解步骤或者增加引导';
+      indicatorColor = Colors.orange;
+      isBreathing = false;
+      isPulse = false;
+    } else if (_pendingConfirmation) {
+      text = '它做到了吗？请确认结果';
+      indicatorColor = const Color(0xFF4CAF50);
+      isBreathing = false;
+      isPulse = true;
+    } else {
+      text = '在它做对的那一秒，按下快门（响片）';
+      indicatorColor = Colors.white;
+      isBreathing = true;
+      isPulse = false;
+    }
+
     return AnimatedBuilder(
       animation: _orbController,
       builder: (context, child) {
-        // 脉冲效果
-        final pulseValue =
-            0.5 + 0.5 * math.sin(_orbController.value * math.pi * 6);
-        return Container(
+        double opacity = 1.0;
+        double shadowOpacity = 0.5;
+
+        if (isBreathing) {
+          final breathValue = 0.5 + 0.5 * math.sin(_orbController.value * math.pi * 2);
+          opacity = 0.4 + breathValue * 0.6;
+          shadowOpacity = 0.2 + breathValue * 0.4;
+        }
+
+        final pulseValue = isPulse ? 0.5 + 0.5 * math.sin(_orbController.value * math.pi * 6) : 0.0;
+
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 300),
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
           decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                const Color(0xFF4CAF50).withOpacity(0.15),
-                const Color(0xFFFF9800).withOpacity(0.15),
-              ],
-            ),
-            borderRadius: BorderRadius.circular(20),
+            color: const Color(0xFF2A2A2A).withOpacity(0.9), // 深灰色磨砂质感背景
+            borderRadius: BorderRadius.circular(30),
             border: Border.all(
-              color: Colors.white.withOpacity(0.1),
+              color: Colors.white.withOpacity(0.08),
               width: 1,
             ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.3),
+                blurRadius: 15,
+                offset: const Offset(0, 8),
+              ),
+              if (isPulse)
+                BoxShadow(
+                  color: indicatorColor.withOpacity(pulseValue * 0.4),
+                  blurRadius: 12,
+                  spreadRadius: 2,
+                ),
+            ],
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // 脉冲指示器
-              Container(
-                width: 8,
-                height: 8,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: const Color(0xFF4CAF50)
-                      .withOpacity(0.5 + pulseValue * 0.5),
-                  boxShadow: [
-                    BoxShadow(
-                      color:
-                          const Color(0xFF4CAF50).withOpacity(pulseValue * 0.5),
-                      blurRadius: 8,
-                      spreadRadius: 2,
+              if (isBreathing)
+                Opacity(
+                  opacity: opacity,
+                  child: Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: indicatorColor,
+                      boxShadow: [
+                        BoxShadow(
+                          color: indicatorColor.withOpacity(shadowOpacity),
+                          blurRadius: 6,
+                          spreadRadius: 1,
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
+                )
+              else
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: indicatorColor.withOpacity(isPulse ? 0.5 + pulseValue * 0.5 : 1.0),
+                    boxShadow: [
+                      BoxShadow(
+                        color: indicatorColor.withOpacity(isPulse ? pulseValue * 0.6 : 0.4),
+                        blurRadius: 8,
+                        spreadRadius: 2,
+                      ),
+                    ],
+                  ),
                 ),
-              ),
               const SizedBox(width: 10),
-              Text(
-                '它做到了吗？请确认结果',
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.85),
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  letterSpacing: 0.5,
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 300),
+                child: Text(
+                  text,
+                  key: ValueKey<String>(text),
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.85),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    letterSpacing: 0.5,
+                  ),
                 ),
               ),
             ],
           ),
         );
       },
-    );
-  }
-
-  /// 显示失败提示
-  void _showFailureTip(BuildContext context) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Row(
-          children: [
-            Icon(Icons.psychology, color: Colors.white),
-            SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                '训练小贴士：永远不要惩罚，试试分解步骤或增加引导',
-                style: TextStyle(fontSize: 14),
-              ),
-            ),
-          ],
-        ),
-        backgroundColor: Colors.orange[700],
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        duration: const Duration(seconds: 4),
-      ),
     );
   }
 
