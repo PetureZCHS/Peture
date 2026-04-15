@@ -5,6 +5,7 @@ import 'package:intl/date_symbol_data_local.dart'; // 添加 intl 包
 import 'package:flutter_localizations/flutter_localizations.dart'; // 添加本地化支持
 import 'package:supabase_flutter/supabase_flutter.dart'; // ✅ 添加 Supabase
 import 'package:sentry_flutter/sentry_flutter.dart'; // ✅ 添加 Sentry
+import 'app_navigator.dart';
 import 'features/auth/presentation/login_page.dart';
 import 'features/home/presentation/home_screen.dart';
 
@@ -127,6 +128,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     double appBarTextFontSize = 20;
     return MaterialApp(
+      navigatorKey: AppNavigator.rootKey,
       debugShowCheckedModeBanner: false,
       title: '智宠合生',
       theme: ThemeData(

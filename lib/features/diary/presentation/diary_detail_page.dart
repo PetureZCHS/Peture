@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../../../shared/models/pet_diary.dart';
+import '../../content_feedback/domain/content_feedback_kind.dart';
+import '../../content_feedback/presentation/content_feedback_bar.dart';
+import '../../content_feedback/utils/content_ref_digest.dart';
 import 'diary_share_page.dart';
 
 class DiaryDetailPage extends StatelessWidget {
@@ -141,6 +144,16 @@ class DiaryDetailPage extends StatelessWidget {
                   ],
                 ],
               ),
+            ),
+            const SizedBox(height: 20),
+            ContentFeedbackBar(
+              surface: ContentSurface.petDiaryDetail,
+              ref: {
+                if (diary.id != null && diary.id!.isNotEmpty)
+                  'diary_id': diary.id,
+                'content_sha256': contentDigestSha256(diary.content),
+                'style': diary.style,
+              },
             ),
           ],
         ),

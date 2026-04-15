@@ -5,6 +5,9 @@ import 'package:flutter/material.dart';
 import '../../../services/supabase_edge_service.dart';
 import '../../../shared/models/pet_diary.dart';
 import '../../../services/supabase_service.dart';
+import '../../content_feedback/domain/content_feedback_kind.dart';
+import '../../content_feedback/presentation/content_feedback_bar.dart';
+import '../../content_feedback/utils/content_ref_digest.dart';
 
 /// 宠物日记结果展示页面
 class PetDiaryResultPage extends StatefulWidget {
@@ -47,6 +50,7 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
   bool _isSaved = false; // 标记是否已保存
+  String? _persistedDiaryId; // 保存成功后用于举报引用
   bool _isGenerating = false; // 是否正在生成
   bool _showLoading = true; // 是否显示加载动画
   String _generatedContent = ''; // 生成的内容
@@ -180,17 +184,15 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
             }
           }
         } else if (event is DiaryDoneEvent) {
-          if (mounted) {
-            // 更新缓冲区为最终文本，让打字效果继续完成
-            _fullTextBuffer = event.finalText;
-            setState(() {
-              _isGenerating = false;
-            });
-            _messageTimer?.cancel();
+          // 更新缓冲区为最终文本，让打字效果继续完成
+          _fullTextBuffer = event.finalText;
+          setState(() {
+            _isGenerating = false;
+          });
+          _messageTimer?.cancel();
 
-            // 等待打字效果完成后再真正结束
-            // 打字定时器会在显示完所有内容后自动停止
-          }
+          // 等待打字效果完成后再真正结束
+          // 打字定时器会在显示完所有内容后自动停止
           break;
         } else if (event is DiaryErrorEvent) {
           if (mounted) {
@@ -350,6 +352,7 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
       if (mounted) {
         setState(() {
           _isSaved = true;
+          _persistedDiaryId = diaryId;
         });
 
         ScaffoldMessenger.of(context).showSnackBar(
@@ -658,12 +661,27 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
 
                 // 日记内容或加载动画
                 _showLoading ? _buildLoadingState() : _buildDiaryContent(),
+                if (!_showLoading && _generatedContent.isNotEmpty)
+                  ContentFeedbackBar(
+                    surface: ContentSurface.petDiary,
+                    ref: _diaryFeedbackRef(),
+                  ),
               ],
             ),
           ),
         ],
       ),
     );
+  }
+
+  Map<String, dynamic> _diaryFeedbackRef() {
+    if (_persistedDiaryId != null) {
+      return {'diary_id': _persistedDiaryId};
+    }
+    return {
+      'content_sha256': contentDigestSha256(_generatedContent),
+      'style': widget.style,
+    };
   }
 
   // 加载动画状态

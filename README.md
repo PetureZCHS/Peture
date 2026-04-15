@@ -1736,7 +1736,7 @@ Future _onUpgrade(Database db, int oldVersion, int newVersion) async {
 3. **Dify API 配置**：
    - Edge Functions 需要配置 Dify API Key
    - 在 Supabase Dashboard → Edge Functions → Settings 中设置环境变量
-   - 变量名：`DIFY_API_KEY`
+   - 变量名：`DIFY_CHAT_API_KEY`（兼容回退：`DIFY_API_KEY`）
 
 ### 资源文件
 4. **音效文件**：

@@ -242,11 +242,11 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const arrayBuffer = await imgResp.arrayBuffer();
     const fileBytes = new Uint8Array(arrayBuffer);
 
-    // 保存到 Supabase Storage: ai-wallpapers / <userId>/generated/<file_name>
+    // 保存到 Supabase Storage: ai-images / <userId>/generated/<file_name>
     const storagePath = `${userId}/generated/${file_name}`;
 
     const { error: uploadError } = await supabase.storage
-      .from("ai-wallpapers")
+      .from("ai-images")
       .upload(storagePath, fileBytes, {
         contentType: "image/jpeg", // 或根据 file_name 判断
         upsert: true,

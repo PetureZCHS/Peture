@@ -8,6 +8,10 @@ import 'package:path_provider/path_provider.dart';
 import '../../auth/presentation/login_page.dart';
 import '../../../shared/utils/user_avatar_helper.dart';
 import '../../../services/supabase_service.dart';
+import '../../moderation/data/moderation_client.dart';
+import '../../moderation/domain/moderation_scene.dart';
+import '../../moderation/presentation/moderation_dialog.dart';
+import '../../moderation/utils/moderation_guard.dart';
 
 class AccountSettingsPage extends StatefulWidget {
   const AccountSettingsPage({super.key});
@@ -19,6 +23,7 @@ class AccountSettingsPage extends StatefulWidget {
 class _AccountSettingsPageState extends State<AccountSettingsPage> {
   final _supabase = Supabase.instance.client;
   final _supabaseService = SupabaseService();
+  late final ModerationGuard _moderationGuard;
   bool _isLoading = false;
 
   // 用户信息
@@ -33,6 +38,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
   @override
   void initState() {
     super.initState();
+    _moderationGuard = ModerationGuard(ModerationClient());
     _loadUserInfo();
   }
 
@@ -237,6 +243,21 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
         return;
       }
 
+      final avatarBytes = await File(pickedFile.path).readAsBytes();
+      final passed = await _moderationGuard.runImageGuardByBytes(
+        context: context,
+        scene: ModerationScene.avatar,
+        bytes: avatarBytes,
+        onPassed: () async {},
+      );
+      if (!passed) {
+        if (mounted) {
+          setState(() => _isLoading = false);
+        }
+        return;
+      }
+      if (!mounted) return;
+
       // 获取应用文档目录
       final Directory appDir = await getApplicationDocumentsDirectory();
       final String avatarsDir = '${appDir.path}/avatars';
@@ -266,6 +287,26 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
 
       // 保存新头像路径到本地存储
       await UserAvatarHelper.saveUserAvatarPath(newPath);
+      String? avatarUrl;
+      final userId = await _supabaseService.currentUserId;
+      if (userId != null) {
+        try {
+          final uploadPath =
+              '$userId/avatar-temp-${DateTime.now().millisecondsSinceEpoch}.jpg';
+          final tempUploaded = await _supabaseService.uploadAvatarTemp(
+            File(newPath),
+            uploadPath,
+          );
+          if (tempUploaded) {
+            avatarUrl = await _supabaseService.finalizeAvatarFromTemp(uploadPath);
+            if (avatarUrl != null) {
+              await _supabaseService.upsertUserProfile(avatarUrl: avatarUrl);
+            }
+          }
+        } catch (e) {
+          debugPrint('头像 finalize 失败: $e');
+        }
+      }
       final user = _supabase.auth.currentUser;
       if (user != null) {
         // 同时更新到 Supabase 用户元数据
@@ -275,6 +316,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
               data: {
                 'name': _userName ?? '',
                 'avatar_path': fileName, // 只存储文件名，不存储完整路径
+                if (avatarUrl != null) 'avatar_url': avatarUrl,
               },
             ),
           );
@@ -288,14 +330,12 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
         setState(() {
           _avatarPath = newPath;
         });
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ 头像更换成功'),
-            backgroundColor: Colors.green,
-          ),
-        );
       }
+
+      await showModerationSuccessDialog(
+        mounted ? context : null,
+        message: '头像更换成功',
+      );
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -357,6 +397,18 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
       setState(() => _isLoading = true);
 
       try {
+        final passed = await _moderationGuard.runTextGuard(
+          context: context,
+          scene: ModerationScene.nickname,
+          content: result.trim(),
+          onPassed: () async {},
+        );
+        if (!passed) {
+          if (mounted) {
+            setState(() => _isLoading = false);
+          }
+          return;
+        }
         // 使用 SupabaseService 保存昵称到 users_profiles 表
         final success = await _supabaseService.upsertUserProfile(
           nickname: result.trim(),
@@ -365,15 +417,11 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
         if (success) {
           if (mounted) {
             setState(() => _userName = result.trim());
-
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('✅ 昵称修改成功'),
-                backgroundColor: Colors.green,
-                duration: Duration(seconds: 2),
-              ),
-            );
           }
+          await showModerationSuccessDialog(
+            mounted ? context : null,
+            message: '昵称修改成功',
+          );
         } else {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -451,20 +499,28 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
       setState(() => _isLoading = true);
 
       try {
+        final passed = await _moderationGuard.runTextGuard(
+          context: context,
+          scene: ModerationScene.ownerNickname,
+          content: result.trim(),
+          onPassed: () async {},
+        );
+        if (!passed) {
+          if (mounted) {
+            setState(() => _isLoading = false);
+          }
+          return;
+        }
         final success = await _supabaseService.updateOwnerNickname(result.trim());
 
         if (success) {
           if (mounted) {
             setState(() => _ownerNickname = result.trim());
-
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('✅ 称呼修改成功'),
-                backgroundColor: Colors.green,
-                duration: Duration(seconds: 2),
-              ),
-            );
           }
+          await showModerationSuccessDialog(
+            mounted ? context : null,
+            message: '称呼修改成功',
+          );
         } else {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(

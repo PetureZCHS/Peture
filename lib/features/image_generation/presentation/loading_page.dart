@@ -1,5 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+
+import '../../../app_navigator.dart';
 import 'dart:io';
 import 'dart:typed_data';
 import 'dart:async';
@@ -7,6 +9,11 @@ import 'dart:ui';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../shared/utils/ui_helpers.dart';
 import 'result_page.dart';
+import '../../moderation/data/moderation_client.dart';
+import '../../moderation/domain/moderation_scene.dart';
+import '../../moderation/domain/moderation_storage_buckets.dart';
+import '../../content_feedback/presentation/ai_generated_image_disclaimer.dart';
+import '../../moderation/presentation/moderation_dialog.dart';
 
 // 添加颜色常量定义，与chat_page.dart保持一致
 class AppColors {
@@ -111,6 +118,7 @@ class _LoadingPageState extends State<LoadingPage>
   bool _isTimeout = false; // 添加超时标志
   String? _generatedImageUrl; // 存储生成的图片URL（备用）
   File? _generatedImageFile; // 存储下载到本地的生成图片文件
+  String? _generatedStoragePath;
 
   @override
   void initState() {
@@ -185,10 +193,14 @@ class _LoadingPageState extends State<LoadingPage>
     });
   }
 
-  void _handleLoadingError(String message) {
+  void _abortTaskPipeline() {
     _isTaskFinished = true;
     _pollingTimer?.cancel();
     _progressController.stop();
+  }
+
+  void _handleLoadingError(String message) {
+    _abortTaskPipeline();
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -247,6 +259,7 @@ class _LoadingPageState extends State<LoadingPage>
         if (data is Map<String, dynamic>) {
           final status = ((data['status'] as String?) ?? '').toUpperCase();
           final path = data['path'] as String?;
+          _generatedStoragePath = path;
 
           debugPrint('Task status: $status');
 
@@ -268,7 +281,7 @@ class _LoadingPageState extends State<LoadingPage>
             if (path != null && path.isNotEmpty) {
               try {
                 final bytes = await supabase.storage
-                    .from('ai-wallpapers')
+                    .from(ModerationStorageBuckets.aiImages)
                     .download(path) as Uint8List?;
 
                 if (bytes != null && bytes.isNotEmpty) {
@@ -291,13 +304,14 @@ class _LoadingPageState extends State<LoadingPage>
             String? publicUrl;
             final user = supabase.auth.currentUser;
             if (path != null && path.isNotEmpty) {
-              publicUrl =
-                  supabase.storage.from('ai-wallpapers').getPublicUrl(path);
+              publicUrl = supabase.storage
+                  .from(ModerationStorageBuckets.aiImages)
+                  .getPublicUrl(path);
             } else if (user != null && widget.uploadedFileName != null) {
               final storagePath =
                   '${user.id}/generated/${widget.uploadedFileName}';
               publicUrl = supabase.storage
-                  .from('ai-wallpapers')
+                  .from(ModerationStorageBuckets.aiImages)
                   .getPublicUrl(storagePath);
             }
 
@@ -356,6 +370,48 @@ class _LoadingPageState extends State<LoadingPage>
   void _onTaskComplete() async {
     // 如果 Widget 已被移除（disposed），就不继续执行，防止对已释放的 controller 调用方法
     if (!mounted) return;
+
+    final moderationClient = ModerationClient();
+    if (_generatedStoragePath != null && _generatedStoragePath!.isNotEmpty) {
+      final outputCheck = await moderationClient.moderateImageByStoragePath(
+        scene: ModerationScene.imageOutput,
+        storagePath: _generatedStoragePath!,
+      );
+      if (!outputCheck.passed) {
+        _abortTaskPipeline();
+        final rootCtx = AppNavigator.rootKey.currentContext;
+        if (rootCtx != null) {
+          await showModerationBlockedDialog(rootCtx, result: outputCheck);
+        } else if (mounted) {
+          _handleLoadingError(
+            outputCheck.traceId.isEmpty
+                ? '生成结果未通过内容审核，请重试'
+                : '生成结果未通过内容审核（traceId: ${outputCheck.traceId}）',
+          );
+        }
+        return;
+      }
+    } else if (_generatedImageFile != null) {
+      final bytes = await _generatedImageFile!.readAsBytes();
+      final outputCheck = await moderationClient.moderateImageByBytes(
+        scene: ModerationScene.imageOutput,
+        bytes: bytes,
+      );
+      if (!outputCheck.passed) {
+        _abortTaskPipeline();
+        final rootCtx = AppNavigator.rootKey.currentContext;
+        if (rootCtx != null) {
+          await showModerationBlockedDialog(rootCtx, result: outputCheck);
+        } else if (mounted) {
+          _handleLoadingError(
+            outputCheck.traceId.isEmpty
+                ? '生成结果未通过内容审核，请重试'
+                : '生成结果未通过内容审核（traceId: ${outputCheck.traceId}）',
+          );
+        }
+        return;
+      }
+    }
 
     // 阶段3: 收到完成信号，快速冲刺到 100% (500毫秒)
     try {
@@ -572,6 +628,11 @@ class _LoadingPageState extends State<LoadingPage>
                       // 这里可以放一些随机的"技术Tips"增加趣味性
                       Text("正在构建宠物毛发细节...",
                           style: TextStyle(color: const Color(0xFF8E8E93))),
+                      const SizedBox(height: 16),
+                      const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 24),
+                        child: AiGeneratedImageDisclaimer(compact: true),
+                      ),
                     ],
                   );
                 },

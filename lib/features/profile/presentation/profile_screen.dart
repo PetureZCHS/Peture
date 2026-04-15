@@ -11,6 +11,10 @@ import 'settings_page.dart';
 import 'pet_profile_form_page.dart';
 import '../../../shared/utils/ui_helpers.dart';
 import '../../../shared/utils/user_avatar_helper.dart';
+import '../../moderation/data/moderation_client.dart';
+import '../../moderation/domain/moderation_scene.dart';
+import '../../moderation/presentation/moderation_dialog.dart';
+import '../../moderation/utils/moderation_guard.dart';
 
 // =========================================================
 // 全局设计系统 - 美学升级版
@@ -62,6 +66,7 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   final SupabaseService _supabaseService = SupabaseService();
   final ImagePicker _picker = ImagePicker();
+  late final ModerationGuard _moderationGuard;
 
   String _userNickname = '';
   String? _avatarPath;
@@ -70,6 +75,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void initState() {
     super.initState();
+    _moderationGuard = ModerationGuard(ModerationClient());
     _loadUserProfile();
   }
 
@@ -285,22 +291,32 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     if (result != null && result.isNotEmpty && mounted) {
       try {
+        final passed = await _moderationGuard.runTextGuard(
+          context: context,
+          scene: ModerationScene.nickname,
+          content: result.trim(),
+          onPassed: () async {},
+        );
+        if (!passed) return;
         final success =
             await _supabaseService.upsertUserProfile(nickname: result.trim());
-        if (!mounted) return;
         if (success) {
-          setState(() => _userNickname = result.trim());
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-                content: Text('✅ 昵称修改成功'), backgroundColor: Colors.green),
+          if (mounted) {
+            setState(() => _userNickname = result.trim());
+          }
+          await showModerationSuccessDialog(
+            mounted ? context : null,
+            message: '昵称修改成功',
           );
         } else {
+          if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
                 content: Text('❌ 昵称修改失败'), backgroundColor: Colors.red),
           );
         }
       } catch (e) {
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('❌ 昵称修改失败: $e'), backgroundColor: Colors.red),
         );
@@ -354,6 +370,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (pickedFile == null) {
         return;
       }
+      final avatarBytes = await File(pickedFile.path).readAsBytes();
+      final passed = await _moderationGuard.runImageGuardByBytes(
+        context: context,
+        scene: ModerationScene.avatar,
+        bytes: avatarBytes,
+        onPassed: () async {},
+      );
+      if (!passed) return;
+      if (!mounted) return;
 
       // 保存到本地
       final Directory appDir = await getApplicationDocumentsDirectory();
@@ -377,15 +402,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
         }
       }
 
-      // 上传到 Supabase Storage（可选，如果需要云端存储）
+      // 上传到临时桶，再由后端 finalize 到正式桶
       final userId = await _supabaseService.currentUserId;
       String? avatarUrl;
       if (userId != null) {
         try {
-          final uploadPath = '$userId/avatar.jpg';
-          final url =
-              await _supabaseService.uploadPostImage(File(newPath), uploadPath);
-          avatarUrl = url;
+          final uploadPath =
+              '$userId/avatar-temp-${DateTime.now().millisecondsSinceEpoch}.jpg';
+          final tempUploaded = await _supabaseService.uploadAvatarTemp(
+            File(newPath),
+            uploadPath,
+          );
+          if (tempUploaded) {
+            avatarUrl = await _supabaseService.finalizeAvatarFromTemp(uploadPath);
+          }
         } catch (e) {
           debugPrint('上传头像到 Storage 失败: $e');
         }
@@ -401,11 +431,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _avatarPath = newPath;
           if (avatarUrl != null) _avatarUrl = avatarUrl;
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(success ? '✅ 头像更换成功' : '⚠️ 头像已保存，但同步失败'),
-            backgroundColor: success ? Colors.green : Colors.orange,
-          ),
+      }
+      if (success) {
+        await showModerationSuccessDialog(
+          mounted ? context : null,
+          message: '头像更换成功',
+        );
+      } else {
+        await showModerationSuccessDialog(
+          mounted ? context : null,
+          title: '提示',
+          message: '头像已保存，但同步失败',
         );
       }
     } catch (e) {
@@ -476,11 +512,10 @@ class _PetProfileSectionState extends State<PetProfileSection> {
           DataChangeNotifier.markPetDataChanged();
         }
 
-        if (mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text('宠物档案添加成功')));
-        }
+        showModerationSuccessDialog(
+          mounted ? context : null,
+          message: '宠物档案添加成功',
+        );
       } else {
         if (mounted) {
           ScaffoldMessenger.of(
@@ -1189,14 +1224,15 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage> {
                       }
                       return;
                     }
-                    setState(() {
-                      _currentPet = updatedPet;
-                    });
                     if (context.mounted) {
-                      ScaffoldMessenger.of(
-                        context,
-                      ).showSnackBar(const SnackBar(content: Text('档案已更新')));
+                      setState(() {
+                        _currentPet = updatedPet;
+                      });
                     }
+                    await showModerationSuccessDialog(
+                      mounted ? context : null,
+                      message: '档案已更新',
+                    );
                   } catch (e) {
                     if (context.mounted) {
                       ScaffoldMessenger.of(

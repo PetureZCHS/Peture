@@ -4,6 +4,9 @@ import 'package:flutter/cupertino.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../shared/utils/user_avatar_helper.dart';
 import '../../../services/supabase_service.dart';
+import '../../moderation/data/moderation_client.dart';
+import '../../moderation/domain/moderation_scene.dart';
+import '../../moderation/utils/moderation_guard.dart';
 
 /// 宠物档案表单页面 - 模仿截图设计
 class PetProfileFormPage extends StatefulWidget {
@@ -16,6 +19,7 @@ class PetProfileFormPage extends StatefulWidget {
 }
 
 class _PetProfileFormPageState extends State<PetProfileFormPage> {
+  late final ModerationGuard _moderationGuard;
   File? _avatarFile;
   String? _petName;
   String? _petType; // 宠物类型：狗狗/猫咪
@@ -173,6 +177,7 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
   @override
   void initState() {
     super.initState();
+    _moderationGuard = ModerationGuard(ModerationClient());
     _loadUserAvatar();
     _loadDefaultOwnerNickname();
     if (widget.initialData != null) {
@@ -263,9 +268,17 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
     try {
       final picker = ImagePicker();
       final file = await picker.pickImage(source: ImageSource.gallery);
-      if (file != null) {
-        setState(() => _avatarFile = File(file.path));
-      }
+      if (file == null) return;
+      final bytes = await File(file.path).readAsBytes();
+      if (!mounted) return;
+      final passed = await _moderationGuard.runImageGuardByBytes(
+        context: context,
+        scene: ModerationScene.petAvatar,
+        bytes: bytes,
+        onPassed: () async {},
+      );
+      if (!passed || !mounted) return;
+      setState(() => _avatarFile = File(file.path));
     } catch (e) {
       debugPrint('选择头像失败: $e');
     }
@@ -1582,9 +1595,9 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
     );
   }
 
-  void _showNameInput() {
+  Future<void> _showNameInput() async {
     final controller = TextEditingController(text: _petName);
-    showGeneralDialog(
+    final submitted = await showGeneralDialog<String?>(
       context: context,
       barrierDismissible: true,
       barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
@@ -1685,8 +1698,16 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
                               elevation: 0,
                             ),
                             onPressed: () {
-                              setState(() => _petName = controller.text);
-                              Navigator.pop(buildContext);
+                              final t = controller.text.trim();
+                              if (t.isEmpty) {
+                                ScaffoldMessenger.of(buildContext).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('请输入宠物昵称'),
+                                  ),
+                                );
+                                return;
+                              }
+                              Navigator.pop(buildContext, t);
                             },
                             child: const Text(
                               '确认',
@@ -1710,6 +1731,15 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
         );
       },
     );
+    if (submitted == null || !mounted) return;
+    final passed = await _moderationGuard.runTextGuard(
+      context: context,
+      scene: ModerationScene.petName,
+      content: submitted,
+      onPassed: () async {},
+    );
+    if (!passed || !mounted) return;
+    setState(() => _petName = submitted);
   }
 
   Widget _buildListItem({
@@ -1778,12 +1808,12 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
   }
 
   // 编辑昵称
-  void _showNicknameEditor() {
+  Future<void> _showNicknameEditor() async {
     final controller =
         TextEditingController(text: _ownerNickname ?? _defaultOwnerNickname);
-    showDialog(
+    final result = await showDialog<String>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('宠物对你的称呼'),
         content: TextField(
           controller: controller,
@@ -1796,32 +1826,74 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('取消'),
           ),
           ElevatedButton(
             onPressed: () {
               final nickname = controller.text.trim();
-              if (nickname.isNotEmpty) {
-                setState(() {
-                  _ownerNickname = nickname;
-                });
-                Navigator.pop(context);
+              if (nickname.isEmpty) {
+                ScaffoldMessenger.of(dialogContext).showSnackBar(
+                  const SnackBar(content: Text('称呼不能为空')),
+                );
+                return;
               }
+              Navigator.pop(dialogContext, nickname);
             },
             child: const Text('保存'),
           ),
         ],
       ),
     );
+    if (result == null || !mounted) return;
+    final passed = await _moderationGuard.runTextGuard(
+      context: context,
+      scene: ModerationScene.ownerNickname,
+      content: result,
+      onPassed: () async {},
+    );
+    if (!passed || !mounted) return;
+    setState(() => _ownerNickname = result);
   }
 
-  void _savePetProfile() {
+  Future<void> _savePetProfile() async {
     if (_petName == null || _petName!.isEmpty) {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('请输入宠物昵称')));
       return;
+    }
+
+    final petNamePassed = await _moderationGuard.runTextGuard(
+      context: context,
+      scene: ModerationScene.petName,
+      content: _petName!.trim(),
+      onPassed: () async {},
+    );
+    if (!petNamePassed) return;
+    if (!mounted) return;
+
+    if (_ownerNickname != null && _ownerNickname!.trim().isNotEmpty) {
+      final ownerNicknamePassed = await _moderationGuard.runTextGuard(
+        context: context,
+        scene: ModerationScene.ownerNickname,
+        content: _ownerNickname!.trim(),
+        onPassed: () async {},
+      );
+      if (!ownerNicknamePassed) return;
+      if (!mounted) return;
+    }
+
+    if (_avatarFile != null) {
+      final avatarBytes = await _avatarFile!.readAsBytes();
+      final avatarPassed = await _moderationGuard.runImageGuardByBytes(
+        context: context,
+        scene: ModerationScene.petAvatar,
+        bytes: avatarBytes,
+        onPassed: () async {},
+      );
+      if (!avatarPassed) return;
+      if (!mounted) return;
     }
 
     // 保存逻辑，返回数据给上一页

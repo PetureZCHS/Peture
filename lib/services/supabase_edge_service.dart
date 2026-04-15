@@ -35,9 +35,41 @@ class ErrorEvent implements ChatStreamEvent {
   ErrorEvent(this.error);
 }
 
+/// Edge 在流式输出中途拦截（勿与 [ContentEvent] 混用：应整段替换气泡，而非拼接）
+class ModerationInterceptEvent implements ChatStreamEvent {
+  ModerationInterceptEvent(this.message);
+
+  final String message;
+}
+
 /// Supabase Edge Function 服务
 /// 通过 Supabase Edge Function 调用 chat API
 class SupabaseEdgeFunctionService {
+  /// 将 chat Edge Function / Dify 上游错误转为用户可读文案
+  static String formatChatUpstreamError(int statusCode, String body) {
+    try {
+      final map = jsonDecode(body);
+      if (map is! Map<String, dynamic>) return body;
+      final err = map['error']?.toString() ?? '';
+      final code = map['code']?.toString() ?? '';
+      final errorCode = map['errorCode']?.toString() ?? '';
+      if (errorCode == 'DIFY_API_KEY_MISSING') {
+        return err.isNotEmpty
+            ? err
+            : 'AI 服务未正确配置，请联系管理员检查 DIFY_API_KEY。';
+      }
+      if (statusCode == 401 &&
+          (code == 'unauthorized' ||
+              err.toLowerCase().contains('access token'))) {
+        return 'AI 服务密钥无效或已过期（Dify 侧拒绝）。请在 Supabase 项目里为 chat 函数更新正确的 DIFY_API_KEY；这与 App 登录账号无关。';
+      }
+      if (err.isNotEmpty) return err;
+    } catch (_) {
+      // ignore
+    }
+    return body;
+  }
+
   /// 调用 chat 流式对话
   ///
   /// 参数说明：
@@ -49,6 +81,7 @@ class SupabaseEdgeFunctionService {
   Stream<ChatStreamEvent> callDifyChat({
     required String query,
     required String user,
+    required String accessToken,
     String? conversationId,
   }) async* {
     try {
@@ -80,7 +113,8 @@ class SupabaseEdgeFunctionService {
         ..headers.addAll({
           'Content-Type': 'application/json',
           'apikey': SupabaseConstants.anonKey,
-          'Authorization': 'Bearer ${SupabaseConstants.anonKey}',
+          // chat Edge Function 使用 requireUserFromRequest，必须为登录用户的 JWT
+          'Authorization': 'Bearer $accessToken',
         })
         ..body = jsonEncode(body);
 
@@ -90,7 +124,11 @@ class SupabaseEdgeFunctionService {
       if (response.statusCode != 200) {
         final errorBody = await response.stream.bytesToString();
         debugPrint('❌ Edge Function 错误: $errorBody');
-        yield ErrorEvent('请求失败 (${response.statusCode}): $errorBody');
+        final friendly = formatChatUpstreamError(
+          response.statusCode,
+          errorBody,
+        );
+        yield ErrorEvent('请求失败 (${response.statusCode}): $friendly');
         return;
       }
 
@@ -117,18 +155,17 @@ class SupabaseEdgeFunctionService {
 
         // 处理完整的行
         for (int i = 0; i < lines.length - 1; i++) {
-          var line = lines[i].trim();
-          if (line.isEmpty) continue;
+          final raw = lines[i].trim();
+          if (raw.isEmpty) continue;
+
+          // 标准 SSE：除 data: 外还有 event:/id:/retry: 等（如 Dify 的 event: ping），勿当 JSON 解析
+          if (!raw.startsWith('data:')) continue;
+
+          var line = raw.substring('data:'.length).trim();
+          if (line.isEmpty || line == '[DONE]') continue;
 
           try {
-            // ✅ SSE 格式处理：移除 "data: " 前缀
-            if (line.startsWith('data:')) {
-              line = line.substring(5).trim();
-            }
-
-            if (line.isEmpty) continue;
-
-            // 解析 JSON
+            // 解析 JSON（仅 data: 负载）
             final json = jsonDecode(line) as Map<String, dynamic>;
             final event = json['event'] as String?;
 
@@ -158,6 +195,13 @@ class SupabaseEdgeFunctionService {
                 debugPrint('📨 message_end 事件: ✅ 消息完成');
                 break;
 
+              case 'moderation_intercept':
+                final msg = json['message'] as String? ??
+                    '该回复因内容审核未通过，已被拦截。';
+                debugPrint('📨 moderation_intercept: 流式输出被服务端拦截');
+                yield ModerationInterceptEvent(msg);
+                break;
+
               case 'error':
                 // 错误事件
                 final message = json['message'] as String? ?? '未知错误';
@@ -180,8 +224,10 @@ class SupabaseEdgeFunctionService {
                 debugPrint('📨 未知事件: $event');
             }
           } catch (e) {
+            // 非预期 data 行（畸形 JSON 等）
             debugPrint('⚠️ 解析失败: $e');
-            debugPrint('   行内容: ${line.substring(0, 100.clamp(0, line.length))}...');
+            final previewLen = line.length.clamp(0, 100);
+            debugPrint('   行内容: ${line.substring(0, previewLen)}...');
           }
         }
       }
@@ -211,6 +257,7 @@ class SupabaseEdgeFunctionService {
   Future<Map<String, dynamic>?> callDifyChatBlocking({
     required String query,
     required String user,
+    required String accessToken,
     String? conversationId,
   }) async {
     try {
@@ -231,7 +278,7 @@ class SupabaseEdgeFunctionService {
         headers: {
           'Content-Type': 'application/json',
           'apikey': SupabaseConstants.anonKey,
-          'Authorization': 'Bearer ${SupabaseConstants.anonKey}',
+          'Authorization': 'Bearer $accessToken',
         },
         body: jsonEncode(body),
       );

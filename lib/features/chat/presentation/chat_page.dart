@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 // ✅ 使用新的 Supabase Dify 服务
 import '../../../services/supabase_edge_service.dart';
 import '../../../services/supabase_service.dart'; 
@@ -17,6 +18,12 @@ import '../../../shared/widgets/diagnostic_report_card.dart';
 import '../../../shared/widgets/recommendation_card.dart'; 
 import '../../shop/presentation/cart_page.dart'; 
 import 'dart:convert'; // Ensure dart:convert is available for JSON parsing
+import '../../moderation/data/moderation_client.dart';
+import '../../moderation/domain/moderation_scene.dart';
+import '../../moderation/utils/moderation_guard.dart';
+import '../../content_feedback/domain/content_feedback_kind.dart';
+import '../../content_feedback/presentation/content_feedback_bar.dart';
+import '../../content_feedback/utils/content_ref_digest.dart';
 
 // ===============================================
 
@@ -28,6 +35,7 @@ class ChatMessage {
   final bool isUser;
   bool isLiked;
   bool isDisliked;
+  bool isHidden;
   final RecommendationData? recommendationData;
 
   ChatMessage({
@@ -35,6 +43,7 @@ class ChatMessage {
     required this.isUser,
     this.isLiked = false,
     this.isDisliked = false,
+    this.isHidden = false,
     this.recommendationData,
   });
 }
@@ -66,7 +75,6 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
   final ScrollController _scrollController = ScrollController();
   final List<ChatMessage> _messages = [];
   bool _isLoading = false;
-  final String _userId = "flutter_test_user_123";
   bool _hasStartedChat = false;
   bool _isComposing = false;
   final math.Random _random = math.Random();
@@ -95,6 +103,7 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
   final SupabaseEdgeFunctionService _difyService =
       SupabaseEdgeFunctionService();
   final SupabaseService _supabaseService = SupabaseService();
+  late final ModerationGuard _moderationGuard;
   static const String _agentSystemPrompt = """
 # System Prompt for Peture AI (Agent Mode)
 
@@ -207,6 +216,7 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
   @override
   void initState() {
     super.initState();
+    _moderationGuard = ModerationGuard(ModerationClient());
     _suggestionFadeController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 300),
@@ -548,6 +558,7 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
                 isUser: false,
                 isLiked: lastMessage.isLiked,
                 isDisliked: lastMessage.isDisliked,
+                isHidden: lastMessage.isHidden,
               );
             }
           });
@@ -576,10 +587,57 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
     });
   }
 
+  /// Edge 流式中途拦截：整段替换当前 AI 气泡，避免把拦截句当增量拼在已输出正文后。
+  void _applyChatModerationIntercept(String message) {
+    _typingTimer?.cancel();
+    _pendingChunks.clear();
+    _isTyping = false;
+    _fullResponseText = message;
+    _pendingSaveQuestion = null;
+    if (!mounted) return;
+    setState(() {
+      if (_messages.isEmpty) return;
+      final last = _messages.last;
+      if (last.isUser) return;
+      _messages[_messages.length - 1] = ChatMessage(
+        text: message,
+        isUser: false,
+        isLiked: last.isLiked,
+        isDisliked: last.isDisliked,
+        isHidden: last.isHidden,
+        recommendationData: last.recommendationData,
+      );
+      _currentTypingText = message;
+      _isLoading = false;
+    });
+    _scrollToBottom();
+  }
+
   Future<void> _sendMessage({String? text}) async {
     if (_isLoading) return;
     final messageText = (text ?? _textController.text).trim();
     if (messageText.isEmpty) return;
+    final inputPassed = await _moderationGuard.runTextGuard(
+      context: context,
+      scene: ModerationScene.aiInput,
+      content: messageText,
+      onPassed: () async {},
+    );
+    if (!inputPassed) return;
+    if (!mounted) return;
+
+    final accessToken = _supabaseService.sessionAccessToken;
+    if (accessToken == null || accessToken.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('请先登录后再使用 AI 问诊。')),
+      );
+      return;
+    }
+
+    final chatUserId =
+        Supabase.instance.client.auth.currentUser?.id ?? 'user';
+
     HapticFeedback.mediumImpact();
     _textController.clear();
     FocusScope.of(context).unfocus();
@@ -674,8 +732,9 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
     }
 
     final stream = _difyService.callDifyChat(
-      query: messageText,
-      user: _userId,
+      query: queryToSend,
+      user: chatUserId,
+      accessToken: accessToken,
       conversationId: _conversationId,
     );
 
@@ -683,9 +742,13 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
     _fullResponseText = '';
     _pendingSaveQuestion = messageText;
 
-    stream.listen((event) {
+    stream.listen((event) async {
       if (!mounted) return;
       switch (event) {
+        case ModerationInterceptEvent e:
+          _applyChatModerationIntercept(e.message);
+          break;
+
         case ContentEvent():
           // ✅ 累积完整的响应文本
           _fullResponseText += event.content;
@@ -747,6 +810,16 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
 
   void _regenerateResponse() {
     if (_isLoading) return;
+    final accessToken = _supabaseService.sessionAccessToken;
+    if (accessToken == null || accessToken.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('请先登录后再使用 AI 问诊。')),
+      );
+      return;
+    }
+    final chatUserId =
+        Supabase.instance.client.auth.currentUser?.id ?? 'user';
+
     final lastUserMessage = _messages.lastWhere(
       (m) => m.isUser,
       orElse: () => ChatMessage(text: '', isUser: true),
@@ -787,13 +860,18 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
 
     final stream = _difyService.callDifyChat(
       query: lastUserMessage.text,
-      user: _userId,
+      user: chatUserId,
+      accessToken: accessToken,
       conversationId: _conversationId,
     );
 
     stream.listen((event) {
       if (!mounted) return;
       switch (event) {
+        case ModerationInterceptEvent e:
+          _applyChatModerationIntercept(e.message);
+          break;
+
         case ContentEvent():
           // ✅ 累积完整的响应文本
           _fullResponseText += event.content;
@@ -1647,6 +1725,25 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
     );
   }
 
+  /// 聊天 AI 气泡下方「举报 / 不感兴趣」引用（无 DB message id 时用正文 digest）
+  Map<String, dynamic>? _chatContentFeedbackRef(
+    ChatMessage message,
+    int index,
+  ) {
+    if (message.isUser || message.isHidden) return null;
+    final isTailAi = index == _messages.length - 1 && !message.isUser;
+    if (_isLoading && isTailAi) return null;
+    final hasBody = message.text.trim().isNotEmpty ||
+        message.recommendationData != null;
+    if (!hasBody) return null;
+    return {
+      if (_supabaseConversationId != null)
+        'supabase_conversation_id': _supabaseConversationId,
+      if (_conversationId != null) 'dify_conversation_id': _conversationId,
+      'message_digest': contentDigestSha256(message.text),
+    };
+  }
+
   Widget _buildMessageList() {
     return Stack(
       children: [
@@ -1673,6 +1770,9 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
             itemCount: _messages.length,
             itemBuilder: (context, index) {
               final message = _messages[index];
+              if (message.isHidden) {
+                return const SizedBox.shrink();
+              }
               final isLastMessageLoading = _isLoading &&
                   index == _messages.length - 1 &&
                   message.text.isEmpty;
@@ -1683,6 +1783,10 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
                   message: message,
                   isLoading: isLastMessageLoading,
                   isResponseComplete: !_isLoading && !message.isUser,
+                  contentFeedbackRef: _chatContentFeedbackRef(message, index),
+                  onContentNotInterested: () {
+                    setState(() => message.isHidden = true);
+                  },
                   onLikePressed: () => _onLikePressed(message),
                   onDislikePressed: () => _onDislikePressed(message),
                   onRegeneratePressed: _regenerateResponse,
@@ -2107,6 +2211,8 @@ class _MessageBubble extends StatelessWidget {
   final ChatMessage message;
   final bool isLoading;
   final bool isResponseComplete;
+  final Map<String, dynamic>? contentFeedbackRef;
+  final VoidCallback? onContentNotInterested;
   final VoidCallback onLikePressed;
   final VoidCallback onDislikePressed;
   final VoidCallback onRegeneratePressed;
@@ -2117,6 +2223,8 @@ class _MessageBubble extends StatelessWidget {
     required this.message,
     this.isLoading = false,
     this.isResponseComplete = false,
+    this.contentFeedbackRef,
+    this.onContentNotInterested,
     required this.onLikePressed,
     required this.onDislikePressed,
     required this.onRegeneratePressed,
@@ -2159,36 +2267,51 @@ class _MessageBubble extends StatelessWidget {
 
     // ✅ 优先渲染推荐卡片
     if (message.recommendationData != null) {
-      return RecommendationCard(
-        data: message.recommendationData!,
-        onAdopt: () {
-          HapticFeedback.mediumImpact();
-          // 模拟加载
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text("正在为您自动加购..."),
-              duration: Duration(milliseconds: 800),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-
-          Future.delayed(const Duration(milliseconds: 800), () {
-            if (!context.mounted) return;
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => CartPage(
-                  autoAddedItem: {
-                    'name': message.recommendationData!.productName,
-                    'price': 528.00, // 假设价格
-                    'quantity': 1,
-                    'spec': '10kg / 袋',
-                  },
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          RecommendationCard(
+            data: message.recommendationData!,
+            onAdopt: () {
+              HapticFeedback.mediumImpact();
+              // 模拟加载
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text("正在为您自动加购..."),
+                  duration: Duration(milliseconds: 800),
+                  behavior: SnackBarBehavior.floating,
                 ),
-              ),
-            );
-          });
-        },
+              );
+
+              Future.delayed(const Duration(milliseconds: 800), () {
+                if (!context.mounted) return;
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => CartPage(
+                      autoAddedItem: {
+                        'name': message.recommendationData!.productName,
+                        'price': 528.00, // 假设价格
+                        'quantity': 1,
+                        'spec': '10kg / 袋',
+                      },
+                    ),
+                  ),
+                );
+              });
+            },
+          ),
+          if (contentFeedbackRef != null &&
+              isResponseComplete &&
+              onContentNotInterested != null)
+            ContentFeedbackBar(
+              surface: ContentSurface.chatAi,
+              ref: contentFeedbackRef!,
+              onNotInterestedSuccess: onContentNotInterested,
+              dense: true,
+            ),
+        ],
       );
     }
 
@@ -2446,6 +2569,17 @@ class _MessageBubble extends StatelessWidget {
                 ),
                 if (!isUser && isResponseComplete && message.text.isNotEmpty)
                   _buildActionBar(context),
+                if (contentFeedbackRef != null &&
+                    !isUser &&
+                    isResponseComplete &&
+                    !showLoadingIndicator &&
+                    onContentNotInterested != null)
+                  ContentFeedbackBar(
+                    surface: ContentSurface.chatAi,
+                    ref: contentFeedbackRef!,
+                    onNotInterestedSuccess: onContentNotInterested,
+                    dense: true,
+                  ),
               ],
             ),
           ),

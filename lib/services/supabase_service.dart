@@ -11,6 +11,7 @@ import '../shared/models/fitness_course.dart';
 /// 用于替换 SQLite Helper，提供统一的数据访问接口
 class SupabaseService {
   static final SupabaseClient _client = Supabase.instance.client;
+  static const String _avatarsTempBucket = 'avatars-temp';
 
   /// 获取当前用户ID
   /// 优先从 Supabase Auth 获取，如果不存在则从 SharedPreferences 获取 LeanCloud 用户 ID
@@ -40,6 +41,10 @@ class SupabaseService {
     final userId = await currentUserId;
     return userId != null;
   }
+
+  /// 当前 Supabase 会话的 access token（调用需用户鉴权的 Edge Function 时使用）
+  String? get sessionAccessToken =>
+      _client.auth.currentSession?.accessToken;
 
   // ============================================================
   // 用户资料相关方法
@@ -153,6 +158,41 @@ class SupabaseService {
   /// 更新用户默认的主人昵称
   Future<bool> updateOwnerNickname(String nickname) async {
     return await upsertUserProfile(ownerNickname: nickname);
+  }
+
+  Future<bool> uploadAvatarTemp(File file, String path) async {
+    try {
+      await _client.storage.from(_avatarsTempBucket).upload(
+            path,
+            file,
+            fileOptions: const FileOptions(upsert: true),
+          );
+      return true;
+    } catch (e) {
+      debugPrint('上传临时头像失败: $e');
+      return false;
+    }
+  }
+
+  Future<String?> finalizeAvatarFromTemp(String tempPath) async {
+    try {
+      final res = await _client.functions.invoke(
+        'avatar-finalize',
+        body: {'temp_path': tempPath},
+      );
+      final data = res.data is Map<String, dynamic>
+          ? res.data as Map<String, dynamic>
+          : <String, dynamic>{};
+      final passed = data['passed'] == true;
+      if (!passed) {
+        debugPrint('头像审核未通过: ${data['message']} traceId=${data['traceId']}');
+        return null;
+      }
+      return data['avatar_url'] as String?;
+    } catch (e) {
+      debugPrint('finalize 头像失败: $e');
+      return null;
+    }
   }
 
   // ============================================================

@@ -1,9 +1,13 @@
 // supabase/functions/img-gen-start/index.ts
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { createTraceId } from "../_shared/trace.ts";
+import { executeImageModeration } from "../_shared/moderation_provider.ts";
+import { writeModerationError, writeModerationLog } from "../_shared/moderation_logger.ts";
 
 const BASE_URL = "https://api-inference.modelscope.cn/";
 const apiKey = Deno.env.get("MODELSCOPE_API_KEY");
+const AI_IMAGES_TEMP_BUCKET = "ai-images-temp";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -72,6 +76,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
     );
   }
 
+  const traceId = createTraceId();
+  let requestUserId: string | undefined;
   try {
     const { file_name, style } = (await req.json()) as RequestBody;
 
@@ -141,12 +147,38 @@ Deno.serve(async (req: Request): Promise<Response> => {
     }
 
     const userId = user.id;
+    requestUserId = userId;
 
     // 路径相关
     const folder_path = `${userId}/original`;
     const target_file_name = file_name;
     const file_path = `${folder_path}/${target_file_name}`;
     console.log("file_path to sign:", file_path);
+    const inputModerationExec = await executeImageModeration(
+      "image_input",
+      undefined,
+      file_path,
+      traceId,
+    );
+    const inputModeration = inputModerationExec.result;
+    await writeModerationLog({
+      userId,
+      scene: "image_input",
+      traceId,
+      result: inputModeration,
+      resourcePath: file_path,
+      provider: inputModerationExec.provider,
+      providerResponse: inputModerationExec.providerResponse,
+    });
+    if (!inputModeration.passed) {
+      return new Response(JSON.stringify(inputModeration), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*",
+        },
+      });
+    }
 
     // 轮询检查文件是否存在，最多10次，每次间隔0.2s
     const maxAttempts = 10;
@@ -155,7 +187,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     let fileExists = false;
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       const { data: files, error: listError } = await supabase.storage
-        .from("ai-wallpapers")
+        .from(AI_IMAGES_TEMP_BUCKET)
         .list(folder_path, {
           limit: 100,
           search: target_file_name, // 只筛选包含该文件名的对象[web:39]
@@ -200,7 +232,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
     // 生成 5 分钟有效的签名 URL
     const { data: signedData, error: signedError } = await supabase.storage
-      .from("ai-wallpapers")
+      .from(AI_IMAGES_TEMP_BUCKET)
       .createSignedUrl(file_path, 60 * 5); // 5 分钟
 
     if (signedError || !signedData?.signedUrl) {
@@ -279,6 +311,14 @@ Deno.serve(async (req: Request): Promise<Response> => {
       },
     );
   } catch (err) {
+    await writeModerationError({
+      traceId,
+      userId: requestUserId,
+      scene: "image_input",
+      errorCode: "MODERATION_PROVIDER_ERROR",
+      errorMessage: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
     return new Response(JSON.stringify({ error: String(err) }), {
       status: 500,
       headers: {

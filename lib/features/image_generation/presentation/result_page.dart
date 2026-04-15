@@ -9,6 +9,9 @@ import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 
 import '../../../shared/utils/ui_helpers.dart';
+import '../../content_feedback/domain/content_feedback_kind.dart';
+import '../../content_feedback/presentation/ai_generated_image_disclaimer.dart';
+import '../../content_feedback/presentation/content_feedback_bar.dart';
 
 // 添加颜色常量定义，与preparation_page.dart保持一致
 class AppColors {
@@ -80,6 +83,24 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
   // 标记传入的 resultImageFile 是否为临时下载文件，需要在 dispose 时清理
   bool _shouldDeleteTempFile = false;
 
+  /// Android 上 `Directory.systemTemp` 常在 `code_cache` 下，系统可能随时清理；
+  /// 进入本页后尽快读入内存，保存到相册时优先用缓存，避免 PathNotFoundException。
+  Uint8List? _cachedResultImageBytes;
+
+  Future<void> _warmResultImageBytes() async {
+    final f = widget.resultImageFile;
+    if (f == null) return;
+    try {
+      if (await f.exists()) {
+        final bytes = await f.readAsBytes();
+        if (!mounted) return;
+        setState(() => _cachedResultImageBytes = bytes);
+      }
+    } catch (e) {
+      debugPrint('生成图内存缓存失败: $e');
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -100,6 +121,8 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
       } catch (e) {
         debugPrint('检查临时文件标记时出错: $e');
       }
+      // 尽快把临时文件读入内存，避免用户在页面上停留后系统删掉 code_cache 导致无法保存
+      unawaited(_warmResultImageBytes());
     }
   }
 
@@ -464,6 +487,25 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
                   ),
                 ),
 
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+                  child: Column(
+                    children: [
+                      const AiGeneratedImageDisclaimer(),
+                      ContentFeedbackBar(
+                        surface: ContentSurface.aiImage,
+                        ref: {
+                          if (widget.resultImageUrl != null &&
+                              widget.resultImageUrl!.isNotEmpty)
+                            'result_url_hint': widget.resultImageUrl,
+                          if (widget.resultImageFile != null)
+                            'local_path_hint': widget.resultImageFile!.path,
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+
                 // 底部：保存按钮 - 使用毛玻璃效果
                 Container(
                   height: 80,
@@ -534,9 +576,42 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
                               try {
                                 late Uint8List bytes;
 
-                                if (widget.resultImageFile != null) {
-                                  bytes = await widget.resultImageFile!
-                                      .readAsBytes();
+                                if (_cachedResultImageBytes != null &&
+                                    _cachedResultImageBytes!.isNotEmpty) {
+                                  bytes = _cachedResultImageBytes!;
+                                } else if (widget.resultImageFile != null) {
+                                  try {
+                                    bytes = await widget.resultImageFile!
+                                        .readAsBytes();
+                                  } catch (_) {
+                                    // 临时路径已被系统清理或文件已删，回退网络地址
+                                    if (widget.resultImageUrl != null &&
+                                        widget.resultImageUrl!.isNotEmpty) {
+                                      final response = await http.get(
+                                        Uri.parse(widget.resultImageUrl!),
+                                      );
+                                      if (response.statusCode != 200) {
+                                        if (context.mounted) {
+                                          ScaffoldMessenger.of(context)
+                                              .showSnackBar(const SnackBar(
+                                            content: Text('本地文件已失效且下载失败'),
+                                          ));
+                                        }
+                                        return;
+                                      }
+                                      bytes = response.bodyBytes;
+                                    } else {
+                                      if (context.mounted) {
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(const SnackBar(
+                                          content: Text(
+                                            '本地临时文件已失效，请返回重新生成后保存',
+                                          ),
+                                        ));
+                                      }
+                                      return;
+                                    }
+                                  }
                                 } else if (widget.resultImageUrl != null &&
                                     widget.resultImageUrl!.isNotEmpty) {
                                   final response = await http

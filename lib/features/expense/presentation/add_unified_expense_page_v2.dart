@@ -1008,7 +1008,7 @@ class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
           const SizedBox(width: 10),
           _buildMetaChip(
             Icons.folder_outlined,
-            '默认账本',
+            '我的账本',
             onTap: () {},
           ),
           if (_selectedPetName != null) ...[

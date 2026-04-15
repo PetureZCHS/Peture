@@ -14,6 +14,11 @@ import 'package:path_provider/path_provider.dart';
 
 import '../../../shared/utils/ui_helpers.dart';
 import 'loading_page.dart';
+import '../../moderation/data/moderation_client.dart';
+import '../../moderation/domain/moderation_scene.dart';
+import '../../moderation/domain/moderation_storage_buckets.dart';
+import '../../content_feedback/presentation/ai_generated_image_disclaimer.dart';
+import '../../moderation/utils/moderation_guard.dart';
 
 // 添加颜色常量定义，与chat_page.dart保持一致
 class AppColors {
@@ -76,6 +81,7 @@ enum UploadStatus {
 
 class _PreparationPageState extends State<PreparationPage>
     with TickerProviderStateMixin /*, AutomaticKeepAliveClientMixin*/ {
+  late final ModerationGuard _moderationGuard;
   File? _selectedImage;
   int _selectedStyleIndex = 0;
 
@@ -109,6 +115,7 @@ class _PreparationPageState extends State<PreparationPage>
   @override
   void initState() {
     super.initState();
+    _moderationGuard = ModerationGuard(ModerationClient());
     _orbController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 12),
@@ -151,9 +158,17 @@ class _PreparationPageState extends State<PreparationPage>
   Future<void> _pickImage() async {
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(source: ImageSource.gallery);
-    if (pickedFile != null) {
-      setState(() => _selectedImage = File(pickedFile.path));
-    }
+    if (pickedFile == null) return;
+    final bytes = await File(pickedFile.path).readAsBytes();
+    if (!mounted) return;
+    final passed = await _moderationGuard.runImageGuardByBytes(
+      context: context,
+      scene: ModerationScene.imageInput,
+      bytes: bytes,
+      onPassed: () async {},
+    );
+    if (!passed || !mounted) return;
+    setState(() => _selectedImage = File(pickedFile.path));
   }
 
   void _onImageAreaTap() {
@@ -220,7 +235,9 @@ class _PreparationPageState extends State<PreparationPage>
       final bool usedCompressedTempFile =
           fileToUpload.path != originalFile.path;
 
-      final uploadFuture = supabase.storage.from('ai-wallpapers').upload(
+      final uploadFuture = supabase.storage
+          .from(ModerationStorageBuckets.aiImagesTemp)
+          .upload(
             filePath,
             fileToUpload,
             fileOptions: const FileOptions(
@@ -682,6 +699,10 @@ class _PreparationPageState extends State<PreparationPage>
                   ),
 
                 // 5. 开始生成按钮 - 使用毛玻璃效果
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+                  child: const AiGeneratedImageDisclaimer(compact: true),
+                ),
                 Container(
                   height: 80,
                   padding: const EdgeInsets.all(20.0),
@@ -767,6 +788,17 @@ class _PreparationPageState extends State<PreparationPage>
                                     _uploadStatus != UploadStatus.uploading &&
                                     !_isStartingTask)
                                 ? () async {
+                                    final inputImageBytes =
+                                        await _selectedImage!.readAsBytes();
+                                    final inputPassed = await _moderationGuard
+                                        .runImageGuardByBytes(
+                                      context: context,
+                                      scene: ModerationScene.imageInput,
+                                      bytes: inputImageBytes,
+                                      onPassed: () async {},
+                                    );
+                                    if (!inputPassed) return;
+                                    if (!mounted) return;
                                     // 上传图片到Supabase Storage（先执行上传，成功后再进入任务启动阶段显示提示）
                                     final uploadedFileName =
                                         await _uploadImageToSupabaseStorage(

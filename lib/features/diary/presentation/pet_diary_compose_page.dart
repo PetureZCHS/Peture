@@ -5,6 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../shared/utils/ui_helpers.dart';
 import '../../../services/supabase_edge_service.dart';
+import '../../moderation/data/moderation_client.dart';
+import '../../moderation/domain/moderation_scene.dart';
+import '../../moderation/utils/moderation_guard.dart';
 
 import '../../../shared/models/pet.dart';
 import '../../../services/supabase_service.dart';
@@ -25,6 +28,7 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
   final TextEditingController _inputController = TextEditingController();
   final PetDiaryEdgeService _diaryService = PetDiaryEdgeService();
   final SupabaseService _supabaseService = SupabaseService();
+  late final ModerationGuard _moderationGuard;
   late AnimationController _orbController;
   
   // 宠物选择
@@ -44,6 +48,7 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
   @override
   void initState() {
     super.initState();
+    _moderationGuard = ModerationGuard(ModerationClient());
     _orbController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 10),
@@ -103,6 +108,13 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
       _showToast('输入内容超出限制，最多500个字');
       return;
     }
+    final inputPassed = await _moderationGuard.runTextGuard(
+      context: context,
+      scene: ModerationScene.diaryInput,
+      content: userInput,
+      onPassed: () async {},
+    );
+    if (!inputPassed) return;
 
     // 获取昵称：优先使用宠物的自定义昵称，否则使用用户默认昵称
     String? nickname;

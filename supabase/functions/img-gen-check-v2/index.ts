@@ -1,9 +1,13 @@
 // supabase/functions/img-gen-check/index.ts
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { createTraceId } from "../_shared/trace.ts";
+import { executeImageModeration } from "../_shared/moderation_provider.ts";
+import { writeModerationError, writeModerationLog } from "../_shared/moderation_logger.ts";
 
 const UPSTREAM_BASE_URL = "https://api-inference.modelscope.cn/";
 const upstreamApiKey = Deno.env.get("MODELSCOPE_API_KEY");
+const AI_IMAGES_BUCKET = "ai-images";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -17,6 +21,15 @@ interface RequestBody {
 interface TaskResult {
   task_status: string;
   output_images?: string[];
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+  }
+  return btoa(binary);
 }
 
 function corsHeaders() {
@@ -47,6 +60,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
     });
   }
 
+  const traceId = createTraceId();
+  let requestUserId: string | undefined;
   try {
     const { task_id, file_name } = (await req.json()) as RequestBody;
 
@@ -88,6 +103,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     }
 
     const userId = user.id;
+    requestUserId = userId;
 
     const commonHeaders = {
       Authorization: `Bearer ${upstreamApiKey}`,
@@ -233,9 +249,40 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const arrayBuffer = await imgResp.arrayBuffer();
 
     const storagePath = `${userId}/generated/${file_name}`;
+    const outputModerationExec = await executeImageModeration(
+      "image_output",
+      bytesToBase64(new Uint8Array(arrayBuffer)),
+      storagePath,
+      traceId,
+    );
+    const outputModeration = outputModerationExec.result;
+    await writeModerationLog({
+      userId,
+      scene: "image_output",
+      traceId,
+      result: outputModeration,
+      resourcePath: storagePath,
+      provider: outputModerationExec.provider,
+      providerResponse: outputModerationExec.providerResponse,
+    });
+    if (!outputModeration.passed) {
+      return new Response(
+        JSON.stringify({
+          task_id,
+          status: "FAILED",
+          error: outputModeration.message,
+          traceId,
+          errorCode: outputModeration.errorCode,
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json", ...corsHeaders() },
+        },
+      );
+    }
 
     const { error: uploadError } = await supabase.storage
-      .from("ai-wallpapers")
+      .from(AI_IMAGES_BUCKET)
       .upload(storagePath, arrayBuffer, {
         contentType: "image/jpeg",
         upsert: true,
@@ -266,6 +313,14 @@ Deno.serve(async (req: Request): Promise<Response> => {
       },
     );
   } catch (err) {
+    await writeModerationError({
+      traceId,
+      userId: requestUserId,
+      scene: "image_output",
+      errorCode: "MODERATION_PROVIDER_ERROR",
+      errorMessage: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
     return new Response(JSON.stringify({ error: String(err) }), {
       status: 500,
       headers: { "Content-Type": "application/json", ...corsHeaders() },
