@@ -8,7 +8,7 @@ final supabase = Supabase.instance.client;
 /// Supabase Edge Function 配置
 class SupabaseConstants {
   // Supabase 项目配置
-  static const String projectUrl = 'https://tcftpcvcldfudzxgemdh.supabase.co';
+  static const String projectUrl = 'https://dyxbvsnnrzvozcokhlfw.supabase.co';
   static const String anonKey =
       'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRjZnRwY3ZjbGRmdWR6eGdlbWRoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA2NjMzMTQsImV4cCI6MjA3NjIzOTMxNH0.uiusEWfuAw37fL6neZfK3q9NV4HZF7k-kX6hFIJQ83s';
 

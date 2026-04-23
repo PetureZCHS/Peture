@@ -8,7 +8,7 @@
 class SupabaseConfig {
   // Supabase 项目 URL
   // 从 Dashboard → Settings → API → Project URL 获取
-  static const String projectUrl = 'https://tcftpcvcldfudzxgemdh.supabase.co';
+  static const String projectUrl = 'https://dyxbvsnnrzvozcokhlfw.supabase.co';
 
   // Supabase Anon (Public) Key
   // 从 Dashboard → Settings → API → anon public 获取

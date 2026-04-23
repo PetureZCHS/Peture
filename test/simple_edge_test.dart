@@ -12,7 +12,7 @@ import 'dart:convert';
 const String ANON_KEY =
     'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRjZnRwY3ZjbGRmdWR6eGdlbWRoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA2NjMzMTQsImV4cCI6MjA3NjIzOTMxNH0.uiusEWfuAw37fL6neZfK3q9NV4HZF7k-kX6hFIJQ83s';
 const String FUNCTION_URL =
-    'https://tcftpcvcldfudzxgemdh.supabase.co/functions/v1/chat';
+    'https://dyxbvsnnrzvozcokhlfw.supabase.co/functions/v1/chat';
 
 void main() async {
   print('🚀 开始测试 Supabase Edge Function...\n');
