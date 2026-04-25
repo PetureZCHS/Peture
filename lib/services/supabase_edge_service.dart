@@ -324,33 +324,35 @@ class PetDiaryEdgeService {
 
       final accessToken = session.accessToken;
 
-      // ✅ 根据 diary-v3 Edge Function 要求构建请求体
+      // ✅ 根据 diary-v4 Edge Function 要求构建请求体
       final inputs = {
         'query': query,
         'style': style,
-        if (nickname != null) 'nickname': nickname, //主人昵称
-        if (breed != null) 'breed': breed, //宠物品种
-        if (petName != null) 'pet_name': petName, //宠物名字
-        if (gender != null) 'gender': gender, //宠物性别
-        if (petType != null) 'type': petType, //宠物类型，猫狗
+        // v4 参数映射: 
+        if (nickname != null) 'owner_title': nickname, // 主人称呼 (API参数名: owner_title)
+        if (petName != null) 'nickname': petName,      // 宠物名字 (API参数名: nickname)
+        if (petType != null) 'species': petType,       // 宠物物种 (API参数名: species)
+        if (breed != null) 'breed': breed,             // 宠物品种
+        // 保留其他可能用到的字段
+        if (gender != null) 'gender': gender,
       };
 
       final body = {
         'inputs': inputs,
         'response_mode': 'streaming',
+        'user': session.user.id, // 添加 user 字段，确保与 Dify 一致
       };
 
-      debugPrint('📝 调用 Diary-v3 Edge Function');
+      debugPrint('📝 调用 Diary-v4 Edge Function');
       debugPrint('📦 参数:');
       debugPrint(
         '   - inputs.query: ${query.substring(0, 30.clamp(0, query.length))}...',
       );
       debugPrint('   - inputs.style: $style');
-      if (nickname != null) debugPrint('   - inputs.nickname: $nickname');
+      if (nickname != null) debugPrint('   - inputs.owner_title: $nickname');
+      if (petName != null) debugPrint('   - inputs.nickname: $petName');
+      if (petType != null) debugPrint('   - inputs.species: $petType');
       if (breed != null) debugPrint('   - inputs.breed: $breed');
-      if (petName != null) debugPrint('   - inputs.pet_name: $petName');
-      if (gender != null) debugPrint('   - inputs.gender: $gender');
-      if (petType != null) debugPrint('   - inputs.type: $petType');
       debugPrint('   - response_mode: streaming');
 
       final url = Uri.parse(SupabaseConstants.diaryUrl);
@@ -359,6 +361,7 @@ class PetDiaryEdgeService {
       final request = http.Request('POST', url)
         ..headers.addAll({
           'Content-Type': 'application/json',
+          'apikey': SupabaseConstants.anonKey, // 必须携带 Anon Key
           'Authorization': 'Bearer $accessToken', // ✅ 使用用户 Token
         })
         ..body = jsonEncode(body);
@@ -495,9 +498,9 @@ class PetDiaryEdgeService {
       debugPrint('\n✅ Diary 流式响应完成');
       debugPrint('   最终文本长度: ${accumulatedText.length} 字符');
 
-      if (accumulatedText.isNotEmpty) {
-        yield DiaryDoneEvent(accumulatedText);
-      }
+      // 无论如何，在流结束时都发送一个 DoneEvent，确保 UI 状态能够终止
+      // 即使之前已经发过 DoneEvent，多发一次也无害（UI层应该处理幂等性）
+      yield DiaryDoneEvent(accumulatedText);
     } catch (e, stackTrace) {
       debugPrint('❌ Diary Edge Function 调用异常: $e');
       debugPrint('Stack trace: $stackTrace');
