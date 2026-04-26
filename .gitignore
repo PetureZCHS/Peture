@@ -127,6 +127,7 @@ web/plugins.js
 *.iws
 .idea/
 .vscode/
+.specstory/
 *.swp
 *.swo
 *~

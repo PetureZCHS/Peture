@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, "..", "supabase", "functions");
-const PROJECT_ID = "tcftpcvcldfudzxgemdh";
+const PROJECT_ID = "dyxbvsnnrzvozcokhlfw";
 
 const SHARED_FILES = [
   "_shared/auth.ts",
