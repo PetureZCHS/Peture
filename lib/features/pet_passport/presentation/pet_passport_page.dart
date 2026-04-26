@@ -32,6 +32,10 @@ class _PetPassportPageState extends State<PetPassportPage>
   // 用户头像路径
   String? _userAvatarPath;
   String? _userName;
+  /// 账号里「宠物对你的称呼」默认（users_profiles.owner_nickname）
+  String? _profileOwnerNickname;
+
+  static const _placeholderPassportOwnerNames = {'铲屎官', '主人'};
 
   @override
   void initState() {
@@ -41,27 +45,61 @@ class _PetPassportPageState extends State<PetPassportPage>
       duration: const Duration(milliseconds: 600),
     );
     _loadPets();
-    _loadUserInfo();
   }
 
-  /// 加载用户信息（头像和昵称）
+  /// 加载用户信息（头像、昵称、默认主人称呼）
   Future<void> _loadUserInfo() async {
     try {
       final avatarPath = await UserAvatarHelper.getCurrentUserAvatarPath();
       final supabaseService = SupabaseService();
       final profile = await supabaseService.getUserProfile();
       final nickname = profile?['nickname'] as String?;
+      final ownerNick = profile?['owner_nickname'] as String?;
       final user = Supabase.instance.client.auth.currentUser;
+      final metaName = user?.userMetadata?['name'] as String?;
+      final emailLocal = user?.email != null && user!.email!.contains('@')
+          ? user.email!.split('@').first
+          : null;
 
       if (mounted) {
         setState(() {
           _userAvatarPath = avatarPath;
-          _userName = nickname ?? user?.userMetadata?['name'] ?? '铲屎官';
+          _userName = nickname ??
+              (metaName != null && metaName.isNotEmpty ? metaName : null) ??
+              (emailLocal != null && emailLocal.isNotEmpty ? emailLocal : null) ??
+              '宠物家长';
+          _profileOwnerNickname =
+              (ownerNick != null && ownerNick.isNotEmpty) ? ownerNick : '主人';
         });
       }
     } catch (e) {
       debugPrint('加载用户信息失败: $e');
     }
+  }
+
+  /// 身份证「主人」展示：占位文案（铲屎官/主人）或空则与账号昵称同步；用户曾在编辑里自定义则保留。
+  String _displayOwnerName(PetPassport? passport) {
+    final raw = passport?.ownerName?.trim();
+    if (raw != null &&
+        raw.isNotEmpty &&
+        !_placeholderPassportOwnerNames.contains(raw)) {
+      return raw;
+    }
+    final u = _userName?.trim();
+    if (u != null && u.isNotEmpty) return u;
+    return '宠物家长';
+  }
+
+  /// 宠物怎么叫你：优先宠物档案自定义，否则用户默认称呼。
+  String _petCallsOwner(Pet pet) {
+    if (pet.useCustomNickname &&
+        pet.ownerNickname != null &&
+        pet.ownerNickname!.trim().isNotEmpty) {
+      return pet.ownerNickname!.trim();
+    }
+    return _profileOwnerNickname?.trim().isNotEmpty == true
+        ? _profileOwnerNickname!.trim()
+        : '主人';
   }
 
   @override
@@ -73,6 +111,8 @@ class _PetPassportPageState extends State<PetPassportPage>
   Future<void> _loadPets() async {
     setState(() => _isLoading = true);
     try {
+      await _loadUserInfo();
+
       final supabaseService = SupabaseService();
       final pets = await supabaseService.getAllPets();
       setState(() {
@@ -124,7 +164,7 @@ class _PetPassportPageState extends State<PetPassportPage>
 
     return PetPassport(
       petId: pet.id!,
-      ownerName: '铲屎官',
+      ownerName: _userName?.trim().isNotEmpty == true ? _userName!.trim() : '宠物家长',
       adoptionDate: DateTime.now().subtract(
         Duration(days: random.nextInt(1000)),
       ),
@@ -179,8 +219,8 @@ class _PetPassportPageState extends State<PetPassportPage>
                   builder: (context) => const AccountSettingsPage(),
                 ),
               );
-              // 从设置页面返回后，刷新用户信息
-              _loadUserInfo();
+              // 昵称、称呼等可能在设置或资料里变更，顺带刷新宠物档案字段
+              if (mounted) await _loadPets();
             },
           ),
           if (_pets.isNotEmpty && _pets[_selectedPetIndex].id != null)
@@ -621,11 +661,19 @@ class _PetPassportPageState extends State<PetPassportPage>
                               ),
                             ),
                             Text(
-                              passport?.ownerName ?? _userName ?? '铲屎官',
+                              _displayOwnerName(passport),
                               style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 14,
                                 fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            Text(
+                              '对你的称呼 · ${_petCallsOwner(pet)}',
+                              style: TextStyle(
+                                color: Colors.white.withOpacity(0.85),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w500,
                               ),
                             ),
                           ],
@@ -972,7 +1020,11 @@ class _PetPassportPageState extends State<PetPassportPage>
     final result = await Navigator.push<PetPassport>(
       context,
       MaterialPageRoute(
-        builder: (_) => EditPetPassportPage(pet: pet, passport: passport),
+        builder: (_) => EditPetPassportPage(
+              pet: pet,
+              passport: passport,
+              suggestedOwnerDisplay: _displayOwnerName(passport),
+            ),
       ),
     );
 
