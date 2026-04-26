@@ -1,11 +1,11 @@
 package com.example.my_pet
 
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 import android.content.Intent
 
-class MainActivity : FlutterActivity() {
+class MainActivity : FlutterFragmentActivity() {
 
     // 用于与 Flutter 进行通信的频道
     private val CHANNEL = "nfc_channel"

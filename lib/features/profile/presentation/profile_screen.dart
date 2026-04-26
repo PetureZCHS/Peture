@@ -12,6 +12,7 @@ import 'pet_profile_form_page.dart';
 import '../../../shared/utils/ui_helpers.dart';
 import '../../../shared/utils/user_avatar_helper.dart';
 import '../../../shared/utils/user_gender_mapper.dart';
+import '../../../shared/utils/avatar_image_helper.dart';
 
 // =========================================================
 // 全局设计系统 - 美学升级版
@@ -195,6 +196,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         shape: BoxShape.circle,
                       ),
                       child: CircleAvatar(
+                        key: ValueKey<String>(
+                          '${_avatarUrl ?? ''}|${_avatarPath ?? ''}',
+                        ),
                         radius: 32,
                         backgroundColor: AppColors.primary,
                         backgroundImage: hasAvatar &&
@@ -431,11 +435,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
         return;
       }
 
+      if (!mounted) return;
+      final cropped = await AvatarImageHelper.cropAndCompressAvatar(
+        context,
+        pickedFile.path,
+      );
+      if (cropped == null) {
+        return;
+      }
+
       // 先本地生效，避免网络波动导致“改了但看起来没改”
-      final localFile = File(pickedFile.path);
-      final persistedPath =
-          await UserAvatarHelper.persistAvatarFile(localFile.path) ??
-              localFile.path;
+      final localFile = cropped;
+      var persistedPath = await UserAvatarHelper.persistAvatarFile(localFile.path);
+      if (persistedPath == null && localFile.existsSync()) {
+        persistedPath = await UserAvatarHelper.persistAvatarBytes(
+          await localFile.readAsBytes(),
+        );
+      }
+      persistedPath ??= localFile.path;
       await UserAvatarHelper.saveUserAvatarPath(persistedPath);
       if (mounted) {
         setState(() {
@@ -443,16 +460,44 @@ class _ProfileScreenState extends State<ProfileScreen> {
         });
       }
 
-      final avatarUrl = await _supabaseService.uploadUserAvatar(localFile);
-      final success = avatarUrl != null &&
-          await _supabaseService.upsertUserProfile(avatarUrl: avatarUrl);
+      final fileForUpload = File(persistedPath);
+      var upload = await _supabaseService.uploadUserAvatarWithError(
+        fileForUpload,
+      );
+      if (upload.url == null && _retryableSyncError(upload.error)) {
+        await Future<void>.delayed(const Duration(milliseconds: 600));
+        upload = await _supabaseService.uploadUserAvatarWithError(
+          fileForUpload,
+        );
+      }
+
+      String? avatarUrl = upload.url;
+      String? syncError = upload.error;
+      var success = false;
+
+      if (avatarUrl != null) {
+        final prof =
+            await _supabaseService.upsertUserProfileWithError(
+          avatarUrl: avatarUrl,
+        );
+        success = prof.success;
+        if (!prof.success) {
+          syncError = prof.error ?? '更新头像链接到资料失败';
+        }
+      }
 
       String? localPath = persistedPath;
       if (avatarUrl != null) {
-        localPath = await UserAvatarHelper.ensureCachedAvatarFile(
-          avatarUrl,
-          _supabaseService.cacheUserAvatarFromPublicUrl,
+        await UserAvatarHelper.setAvatarSourceUrlBasename(
+          avatarUrl.split('?').first,
         );
+        // 上传文件即 persistedPath，避免 ensureCachedAvatarFile 先删本地再下载导致拍照等场景不刷新
+        localPath = persistedPath;
+        if (File(persistedPath).existsSync()) {
+          try {
+            await FileImage(File(persistedPath)).evict();
+          } catch (_) {}
+        }
       }
 
       if (mounted) {
@@ -462,8 +507,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
         });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(success ? '✅ 头像更换成功' : '⚠️ 头像已保存，但同步失败'),
+            content: Text(
+              success
+                  ? '✅ 头像更换成功'
+                  : '⚠️ 头像已保存，但同步失败${syncError != null ? '：$syncError' : ''}',
+            ),
             backgroundColor: success ? Colors.green : Colors.orange,
+            duration: Duration(seconds: success ? 2 : 6),
           ),
         );
       }
@@ -476,6 +526,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  bool _retryableSyncError(String? message) {
+    if (message == null) return false;
+    final s = message.toLowerCase();
+    return s.contains('socket') ||
+        s.contains('timeout') ||
+        s.contains('connection') ||
+        s.contains('network') ||
+        s.contains('failed host') ||
+        s.contains('temporar');
+  }
 }
 
 // =========================================================
@@ -1325,6 +1385,7 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage> {
                         context,
                       ).showSnackBar(const SnackBar(content: Text('档案已更新')));
                     }
+                    DataChangeNotifier.markPetDataChanged();
                   } catch (e) {
                     if (context.mounted) {
                       ScaffoldMessenger.of(

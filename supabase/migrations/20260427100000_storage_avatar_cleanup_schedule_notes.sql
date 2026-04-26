@@ -1,0 +1,33 @@
+-- Storage 历史头像清理由 Edge Function `cleanup-storage-avatars` 执行（见 supabase/functions/cleanup-storage-avatars）。
+-- 客户端上传后仍会删除同目录其它 avatar_*（见 App 内 _removeOtherAvatarObjectsInFolder），
+-- 本函数用于：补删失败残留、与 DB 不一致对象、以及曾绕过客户端的上传。
+--
+-- 部署后请在 Dashboard → Edge Functions → Secrets 新增：
+--   AVATAR_STORAGE_CLEANUP_SECRET = 随机长字符串（仅 cron / 运维知晓）
+--
+-- 手动试跑（dry_run，不删文件）：
+--   curl -X POST 'https://<PROJECT_REF>.supabase.co/functions/v1/cleanup-storage-avatars?dry_run=true' \
+--     -H "x-cleanup-secret: <与 Secrets 一致>"
+--
+-- 正式执行：去掉 dry_run 参数。
+--
+-- 可选：用 pg_cron + pg_net 每周执行（将 URL 与密钥换成你的项目）：
+--
+--   select cron.schedule(
+--     'cleanup-storage-avatars-weekly',
+--     '0 4 * * 0',
+--     $$
+--     select net.http_post(
+--       url := 'https://<PROJECT_REF>.supabase.co/functions/v1/cleanup-storage-avatars',
+--       headers := jsonb_build_object(
+--         'Content-Type', 'application/json',
+--         'x-cleanup-secret', '<AVATAR_STORAGE_CLEANUP_SECRET>'
+--       ),
+--       body := '{}'::jsonb
+--     );
+--     $$
+--   );
+--
+-- 若库内未启用 pg_cron / pg_net，可在 Supabase Dashboard → Integrations 或 SQL 中先开启扩展。
+
+select 1;

@@ -101,15 +101,36 @@ class UserAvatarHelper {
     try {
       final user = Supabase.instance.client.auth.currentUser;
       if (user == null) return null;
-      final source = File(sourcePath);
-      if (!source.existsSync()) return null;
 
       final dir = await getApplicationSupportDirectory();
       final targetPath = p.join(dir.path, 'user_avatar_${user.id}.jpg');
-      final target = await source.copy(targetPath);
-      return target.path;
+      final target = File(targetPath);
+
+      final source = File(sourcePath);
+      if (source.existsSync()) {
+        await source.copy(targetPath);
+        return target.path;
+      }
+      // 拍照等场景下部分机型临时路径在 copy 时已不可读，改由调用方用 [persistAvatarBytes] 写入
+      debugPrint('persistAvatarFile: 源路径不可读 $sourcePath');
+      return null;
     } catch (e) {
       debugPrint('persistAvatarFile 失败: $e');
+      return null;
+    }
+  }
+
+  /// 从头像字节写入持久目录（拍照/相册在 copy 失败时使用）
+  static Future<String?> persistAvatarBytes(List<int> bytes) async {
+    try {
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user == null) return null;
+      final dir = await getApplicationSupportDirectory();
+      final targetPath = p.join(dir.path, 'user_avatar_${user.id}.jpg');
+      await File(targetPath).writeAsBytes(bytes, flush: true);
+      return targetPath;
+    } catch (e) {
+      debugPrint('persistAvatarBytes 失败: $e');
       return null;
     }
   }
@@ -143,6 +164,7 @@ class UserAvatarHelper {
   }
 
   /// 若 URL 与本地缓存一致则复用；否则 [downloadFn] 下载后写入 prefs。
+  /// 不会先删本地再下载，避免上传成功后短暂无文件、下载失败导致头像空白或不刷新。
   static Future<String?> ensureCachedAvatarFile(
     String? avatarPublicUrl,
     Future<String?> Function(String? url) downloadFn,
@@ -159,13 +181,17 @@ class UserAvatarHelper {
         File(existingPath).existsSync()) {
       return existingPath;
     }
-    await clearLocalAvatarCacheForCurrentUser();
     final local = await downloadFn(avatarPublicUrl);
-    if (local != null) {
+    if (local != null && File(local).existsSync()) {
       await saveUserAvatarPath(local);
       await setAvatarSourceUrlBasename(base);
+      return local;
     }
-    return local;
+    if (existingPath != null && File(existingPath).existsSync()) {
+      return existingPath;
+    }
+    await clearLocalAvatarCacheForCurrentUser();
+    return null;
   }
 
   /// 删除磁盘上的缓存文件并清除 prefs（更换头像前调用，避免旧文件盖住新图）

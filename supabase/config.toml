@@ -1,0 +1,4 @@
+# Supabase CLI：https://supabase.com/docs/guides/cli/config
+# 清理函数由 pg_cron / 脚本调用，无用户 JWT，关闭 JWT 校验
+[functions.cleanup-storage-avatars]
+verify_jwt = false

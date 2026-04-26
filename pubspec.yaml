@@ -83,7 +83,7 @@ dependencies:
 
   # 图片压缩
   flutter_image_compress: ^2.3.0
-  image_cropper: ^8.0.2
+  custom_image_crop: ^0.1.1
 
 dev_dependencies:
   sentry_dart_plugin: ^3.2.1

@@ -8,6 +8,7 @@ import '../../auth/presentation/login_page.dart';
 import '../../../shared/utils/china_regions_loader.dart';
 import '../../../shared/utils/user_avatar_helper.dart';
 import '../../../shared/utils/user_gender_mapper.dart';
+import '../../../shared/utils/avatar_image_helper.dart';
 import '../../../services/supabase_service.dart';
 
 class AccountSettingsPage extends StatefulWidget {
@@ -56,7 +57,9 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
         final avatarUrl = profile?['avatar_url'] as String?;
         final ownerNickname = profile?['owner_nickname'] as String? ?? '主人';
         final gender = profile?['gender'] as String?;
-        final birthDateRaw = profile?['birth_date'] as String?;
+        // 线上库可能是 birth_date（迁移）或仅 birthday（旧/手工库）
+        final birthDateRaw = profile?['birth_date'] as String? ??
+            profile?['birthday']?.toString();
         String? province = profile?['province'] as String?;
         String? city = profile?['city'] as String?;
         final region = profile?['region'] as String?;
@@ -163,11 +166,27 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
         return;
       }
 
+      if (!mounted) return;
+      final cropped = await AvatarImageHelper.cropAndCompressAvatar(
+        context,
+        pickedFile.path,
+      );
+      if (cropped == null) {
+        if (mounted) {
+          setState(() => _isLoading = false);
+        }
+        return;
+      }
+
       // 网络不稳定时先本地显示新头像，云端再异步同步
-      final localFile = File(pickedFile.path);
-      final persistedPath =
-          await UserAvatarHelper.persistAvatarFile(localFile.path) ??
-              localFile.path;
+      final localFile = cropped;
+      var persistedPath = await UserAvatarHelper.persistAvatarFile(localFile.path);
+      if (persistedPath == null && localFile.existsSync()) {
+        persistedPath = await UserAvatarHelper.persistAvatarBytes(
+          await localFile.readAsBytes(),
+        );
+      }
+      persistedPath ??= localFile.path;
       await UserAvatarHelper.saveUserAvatarPath(persistedPath);
       if (mounted) {
         setState(() {
@@ -175,17 +194,49 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
         });
       }
 
-      final avatarUrl = await _supabaseService.uploadUserAvatar(localFile);
-      final success = avatarUrl != null
-          ? await _supabaseService.upsertUserProfile(avatarUrl: avatarUrl)
-          : false;
+      final fileForUpload = File(persistedPath);
+      var upload = await _supabaseService.uploadUserAvatarWithError(
+        fileForUpload,
+      );
+      if (upload.url == null) {
+        final err = upload.error ?? '上传失败';
+        final retry = err.toLowerCase().contains('socket') ||
+            err.toLowerCase().contains('timeout') ||
+            err.toLowerCase().contains('connection') ||
+            err.toLowerCase().contains('network');
+        if (retry) {
+          await Future<void>.delayed(const Duration(milliseconds: 600));
+          upload = await _supabaseService.uploadUserAvatarWithError(
+            fileForUpload,
+          );
+        }
+      }
+
+      String? avatarUrl = upload.url;
+      String? failMsg = upload.error;
+      var success = false;
+
+      if (avatarUrl != null) {
+        final prof = await _supabaseService.upsertUserProfileWithError(
+          avatarUrl: avatarUrl,
+        );
+        success = prof.success;
+        if (!prof.success) {
+          failMsg = prof.error ?? '保存头像链接失败';
+        }
+      }
 
       String? localPath = persistedPath;
       if (avatarUrl != null) {
-        localPath = await UserAvatarHelper.ensureCachedAvatarFile(
-          avatarUrl,
-          _supabaseService.cacheUserAvatarFromPublicUrl,
+        await UserAvatarHelper.setAvatarSourceUrlBasename(
+          avatarUrl.split('?').first,
         );
+        localPath = persistedPath;
+        if (File(persistedPath).existsSync()) {
+          try {
+            await FileImage(File(persistedPath)).evict();
+          } catch (_) {}
+        }
       }
 
       if (mounted) {
@@ -196,8 +247,13 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(success ? '✅ 头像更换成功' : '❌ 头像更换失败，请重试'),
+            content: Text(
+              success
+                  ? '✅ 头像更换成功'
+                  : '❌ 同步失败${failMsg != null ? '：$failMsg' : ''}',
+            ),
             backgroundColor: success ? Colors.green : Colors.red,
+            duration: Duration(seconds: success ? 2 : 6),
           ),
         );
       }
@@ -235,9 +291,18 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
     if (dbValue == null) return;
     setState(() => _isLoading = true);
     try {
-      final success = await _supabaseService.upsertUserProfile(gender: dbValue);
-      if (success && mounted) {
+      final r = await _supabaseService.upsertUserProfileWithError(gender: dbValue);
+      if (r.success && mounted) {
         setState(() => _gender = result);
+      } else if (mounted) {
+        final msg = r.error ?? '保存失败';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('性别保存失败：$msg'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
+          ),
+        );
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -262,9 +327,18 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
         '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
     setState(() => _isLoading = true);
     try {
-      final success = await _supabaseService.upsertUserProfile(birthDate: value);
-      if (success && mounted) {
+      final r = await _supabaseService.upsertUserProfileWithError(birthDate: value);
+      if (r.success && mounted) {
         setState(() => _birthDate = value);
+      } else if (mounted) {
+        final msg = r.error ?? '保存失败';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('出生日期保存失败：$msg'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
+          ),
+        );
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -390,15 +464,24 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
     final newCity = selectedCity.trim();
     setState(() => _isLoading = true);
     try {
-      final success = await _supabaseService.upsertUserProfile(
+      final r = await _supabaseService.upsertUserProfileWithError(
         province: newProvince,
         city: newCity,
       );
-      if (success && mounted) {
+      if (r.success && mounted) {
         setState(() {
           _province = newProvince.isEmpty ? '未设置' : newProvince;
           _city = newCity.isEmpty ? '未设置' : newCity;
         });
+      } else if (mounted) {
+        final msg = r.error ?? '保存失败';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('地区保存失败：$msg'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
+          ),
+        );
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -454,11 +537,11 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
 
       try {
         // 使用 SupabaseService 保存昵称到 users_profiles 表
-        final success = await _supabaseService.upsertUserProfile(
+        final r = await _supabaseService.upsertUserProfileWithError(
           nickname: result.trim(),
         );
 
-        if (success) {
+        if (r.success) {
           if (mounted) {
             setState(() => _userName = result.trim());
 
@@ -472,11 +555,12 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
           }
         } else {
           if (mounted) {
+            final msg = r.error ?? '保存失败';
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('❌ 昵称修改失败，请检查网络连接'),
+              SnackBar(
+                content: Text('❌ 昵称修改失败：$msg'),
                 backgroundColor: Colors.red,
-                duration: Duration(seconds: 3),
+                duration: const Duration(seconds: 4),
               ),
             );
           }
@@ -547,9 +631,11 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
       setState(() => _isLoading = true);
 
       try {
-        final success = await _supabaseService.updateOwnerNickname(result.trim());
+        final r = await _supabaseService.upsertUserProfileWithError(
+          ownerNickname: result.trim(),
+        );
 
-        if (success) {
+        if (r.success) {
           if (mounted) {
             setState(() => _ownerNickname = result.trim());
 
@@ -563,11 +649,12 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
           }
         } else {
           if (mounted) {
+            final msg = r.error ?? '保存失败';
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('❌ 称呼修改失败，请检查网络连接'),
+              SnackBar(
+                content: Text('❌ 称呼修改失败：$msg'),
                 backgroundColor: Colors.red,
-                duration: Duration(seconds: 3),
+                duration: const Duration(seconds: 4),
               ),
             );
           }
@@ -656,6 +743,9 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
                     child: Stack(
                       children: [
                         CircleAvatar(
+                          key: ValueKey<String>(
+                            '${_avatarUrl ?? ''}|${_avatarPath ?? ''}',
+                          ),
                           radius: 50,
                           backgroundColor: Theme.of(
                             context,

@@ -406,6 +406,9 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen>
   // 标记是否已经加载过数据（避免重复加载）
   bool _hasLoadedData = false;
 
+  /// 传给 [WeightTrendCard]，在体重增删改后递增以触发图表重新拉取云端数据。
+  int _weightTrendRefreshNonce = 0;
+
   @override
   void initState() {
     super.initState();
@@ -495,13 +498,20 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen>
     setState(() {
       _allPets = pets.map((p) => Pet.fromMap(p)).toList();
 
-      // 设置默认选中的宠物
+      // 设置默认选中的宠物，并在刷新时用服务端最新数据替换同一 id（含头像 URL）
       if (_allPets.isNotEmpty) {
-        // 如果当前没有选中的宠物，或者当前选中的宠物不在列表中，则选择第一个
-        if (_selectedPet == null ||
-            !_allPets.any(
-                (pet) => pet.id?.toString() == _selectedPet?.id?.toString())) {
+        final currentId = _selectedPet?.id?.toString();
+        if (currentId == null) {
           _selectedPet = _allPets.first;
+        } else {
+          final idx = _allPets.indexWhere(
+            (pet) => pet.id?.toString() == currentId,
+          );
+          if (idx >= 0) {
+            _selectedPet = _allPets[idx];
+          } else {
+            _selectedPet = _allPets.first;
+          }
         }
       } else {
         _selectedPet = null;
@@ -661,6 +671,7 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen>
       final recordWithPetId = WeightRecord.fromMap(recordMap);
       setState(() {
         _weightRecords.add(recordWithPetId);
+        _weightTrendRefreshNonce++;
       });
       _compileAndSortHealthLog();
 
@@ -766,6 +777,7 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen>
       if (success) {
         setState(() {
           _weightRecords.remove(record);
+          _weightTrendRefreshNonce++;
         });
         _compileAndSortHealthLog();
 
@@ -954,6 +966,7 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen>
       if (avatar.startsWith('http://') || avatar.startsWith('https://')) {
         return Image.network(
           avatar,
+          key: ValueKey<String>(avatar),
           width: width,
           height: height,
           fit: BoxFit.cover,
@@ -964,6 +977,7 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen>
       if (file.existsSync()) {
         return Image.file(
           file,
+          key: ValueKey<String>(avatar),
           width: width,
           height: height,
           fit: BoxFit.cover,
@@ -1252,7 +1266,10 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen>
         if (_selectedPet != null && _selectedPet!.id != null)
           Padding(
             padding: const EdgeInsets.only(top: 24.0),
-            child: WeightTrendCard(petId: _selectedPet!.id!),
+            child: WeightTrendCard(
+              petId: _selectedPet!.id!,
+              refreshNonce: _weightTrendRefreshNonce,
+            ),
           ),
       ],
     );
@@ -2407,38 +2424,31 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen>
                     // 先关闭对话框
                     Navigator.of(context).pop();
 
-                    // 更新数据库
-                    if (record.id != null) {
-                      final success = await _supabaseService.updateWeightRecord(
-                        updatedRecord.toMap(),
-                      );
-                      if (!success) {
-                        if (mounted) {
-                          ScaffoldMessenger.of(this.context).showSnackBar(
-                            const SnackBar(content: Text('更新失败，请检查网络连接')),
-                          );
-                        }
+                    if (record.id == null) return;
+
+                    final success = await _supabaseService.updateWeightRecord(
+                      updatedRecord.toMap(),
+                    );
+                    if (!success) {
+                      if (mounted) {
+                        ScaffoldMessenger.of(this.context).showSnackBar(
+                          const SnackBar(content: Text('更新失败，请检查网络连接')),
+                        );
                       }
+                      return;
                     }
 
-                    // 更新本地列表
                     final index = _weightRecords.indexWhere(
                       (r) => r.id == record.id,
                     );
                     if (index != -1) {
                       setState(() {
                         _weightRecords[index] = updatedRecord;
+                        _weightTrendRefreshNonce++;
                       });
                       _compileAndSortHealthLog();
-
-                      // 同步更新宠物档案中的体重
                       await _syncPetWeight();
-
-                      // 强制刷新UI，确保顶部体重显示更新
-                      if (mounted) {
-                        setState(() {});
-                      }
-
+                      if (mounted) setState(() {});
                       if (mounted) _showSuccessSnackBar('体重记录更新成功!');
                     }
                   } catch (e) {

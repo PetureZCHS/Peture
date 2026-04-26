@@ -11,6 +11,7 @@ class UserGenderMapper {
       case '女':
         return 'female';
       case '其他':
+        return 'other';
       case '不透露':
         return 'confidential';
       default:
@@ -26,6 +27,8 @@ class UserGenderMapper {
         return '男';
       case 'female':
         return '女';
+      case 'other':
+        return '其他';
       case 'confidential':
         return '不透露';
       default:
