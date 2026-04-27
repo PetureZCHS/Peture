@@ -1857,12 +1857,6 @@ class _SkeuomorphicClickerDeviceState extends State<SkeuomorphicClickerDevice>
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // 狗爪图标
-              CustomPaint(
-                size: const Size(14, 14),
-                painter: PawPrintPainter(color: const Color(0xFF8BC34A)),
-              ),
-              const SizedBox(width: 6),
               const Text(
                 'PetClicker',
                 style: TextStyle(
@@ -2005,11 +1999,6 @@ class _SkeuomorphicClickerDeviceState extends State<SkeuomorphicClickerDevice>
                   _buildProgressBar(successRate),
                 ],
               ),
-            ),
-            // 扫描线效果
-            CustomPaint(
-              size: const Size(double.infinity, 180),
-              painter: ScanLinePainter(),
             ),
             // 玻璃反光
             AnimatedBuilder(
@@ -2221,6 +2210,7 @@ class _SkeuomorphicClickerDeviceState extends State<SkeuomorphicClickerDevice>
           mainAxisAlignment: MainAxisAlignment.end,
           children: [
             _buildStatBox(
+              width: 86,
               icon: Icons.trending_up_rounded,
               label: 'RATE',
               value: '${successRate.toStringAsFixed(0)}%',
@@ -2232,6 +2222,7 @@ class _SkeuomorphicClickerDeviceState extends State<SkeuomorphicClickerDevice>
             ),
             const SizedBox(height: 6),
             _buildStatBox(
+              width: 86,
               icon: Icons.replay_rounded,
               label: 'RETRY',
               value: widget.failCount.toString(),
@@ -2281,8 +2272,10 @@ class _SkeuomorphicClickerDeviceState extends State<SkeuomorphicClickerDevice>
     required String label,
     required String value,
     required Color color,
+    double? width,
   }) {
     return Container(
+      width: width,
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
       decoration: BoxDecoration(
         color: color.withOpacity(0.1),
@@ -2682,7 +2675,7 @@ class _SkeuomorphicClickerDeviceState extends State<SkeuomorphicClickerDevice>
       child: Stack(
         alignment: Alignment.center,
         children: [
-          // 内部高光
+          // 内部高光 - 调整透明度使其更柔和
           Positioned(
             top: 8,
             child: Container(
@@ -2693,19 +2686,12 @@ class _SkeuomorphicClickerDeviceState extends State<SkeuomorphicClickerDevice>
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
-                    Colors.white.withOpacity(0.25),
+                    Colors.white.withOpacity(0.15),
                     Colors.transparent,
                   ],
                 ),
                 borderRadius: BorderRadius.circular(25),
               ),
-            ),
-          ),
-          // 狗爪图标
-          CustomPaint(
-            size: const Size(36, 36),
-            painter: PawPrintPainter(
-              color: Colors.white.withOpacity(_isPressed ? 1.0 : 0.9),
             ),
           ),
         ],
@@ -2996,69 +2982,7 @@ class WeavePatternPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
-/// 狗爪印绘制器
-class PawPrintPainter extends CustomPainter {
-  final Color color;
 
-  PawPrintPainter({required this.color});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.fill;
-
-    final cx = size.width / 2;
-    final cy = size.height / 2;
-    final scale = size.width / 36;
-
-    // 主掌垫 - 椭圆形
-    canvas.drawOval(
-      Rect.fromCenter(
-        center: Offset(cx, cy + 4 * scale),
-        width: 16 * scale,
-        height: 14 * scale,
-      ),
-      paint,
-    );
-
-    // 四个趾垫
-    final toePads = [
-      Offset(cx - 8 * scale, cy - 6 * scale), // 左外
-      Offset(cx - 3 * scale, cy - 10 * scale), // 左内
-      Offset(cx + 3 * scale, cy - 10 * scale), // 右内
-      Offset(cx + 8 * scale, cy - 6 * scale), // 右外
-    ];
-
-    for (final pos in toePads) {
-      canvas.drawOval(
-        Rect.fromCenter(center: pos, width: 7 * scale, height: 8 * scale),
-        paint,
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant PawPrintPainter oldDelegate) =>
-      oldDelegate.color != color;
-}
-
-/// 扫描线效果绘制器
-class ScanLinePainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = Colors.black.withOpacity(0.03)
-      ..strokeWidth = 1;
-
-    for (double y = 0; y < size.height; y += 3) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), paint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
 
 /// 屏幕反光绘制器
 class ScreenGlarePainter extends CustomPainter {

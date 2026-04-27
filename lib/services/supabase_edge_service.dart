@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
-import '../shared/utils/supabase_constants.dart';
+import '../core/config/supabase_config.dart';
 
 // ============================================================================
 // chat 事件类
@@ -63,7 +63,7 @@ class SupabaseEdgeFunctionService {
         if (conversationId != null) 'conversation_id': conversationId,
       };
 
-      debugPrint('📤 调用 Edge Function: ${SupabaseConstants.difyChatFunction}');
+      debugPrint('📤 调用 Edge Function: ${SupabaseConfig.difyChatFunctionName}');
       debugPrint('📦 必填参数:');
       debugPrint('   - query: ${query.substring(0, 50.clamp(0, query.length))}...');
       debugPrint('   - user: $user');
@@ -73,14 +73,14 @@ class SupabaseEdgeFunctionService {
         debugPrint('📎 可选参数: conversation_id=$conversationId');
       }
 
-      final url = Uri.parse(SupabaseConstants.difyChatUrl);
+      final url = Uri.parse(SupabaseConfig.difyChatUrl);
 
       // 构建 HTTP 请求
       final request = http.Request('POST', url)
         ..headers.addAll({
           'Content-Type': 'application/json',
-          'apikey': SupabaseConstants.anonKey,
-          'Authorization': 'Bearer ${SupabaseConstants.anonKey}',
+          'apikey': SupabaseConfig.anonKey,
+          'Authorization': 'Bearer ${SupabaseConfig.anonKey}',
         })
         ..body = jsonEncode(body);
 
@@ -225,13 +225,13 @@ class SupabaseEdgeFunctionService {
       debugPrint('📤 阻塞模式调用 Edge Function');
       debugPrint('📦 请求体: ${jsonEncode(body)}');
 
-      final url = Uri.parse(SupabaseConstants.difyChatUrl);
+      final url = Uri.parse(SupabaseConfig.difyChatUrl);
       final response = await http.post(
         url,
         headers: {
           'Content-Type': 'application/json',
-          'apikey': SupabaseConstants.anonKey,
-          'Authorization': 'Bearer ${SupabaseConstants.anonKey}',
+          'apikey': SupabaseConfig.anonKey,
+          'Authorization': 'Bearer ${SupabaseConfig.anonKey}',
         },
         body: jsonEncode(body),
       );
@@ -355,13 +355,13 @@ class PetDiaryEdgeService {
       if (breed != null) debugPrint('   - inputs.breed: $breed');
       debugPrint('   - response_mode: streaming');
 
-      final url = Uri.parse(SupabaseConstants.diaryUrl);
+      final url = Uri.parse(SupabaseConfig.diaryUrl);
 
       // ✅ 使用用户的 JWT Token 而不是 Anon Key
       final request = http.Request('POST', url)
         ..headers.addAll({
           'Content-Type': 'application/json',
-          'apikey': SupabaseConstants.anonKey, // 必须携带 Anon Key
+          'apikey': SupabaseConfig.anonKey, // 必须携带 Anon Key
           'Authorization': 'Bearer $accessToken', // ✅ 使用用户 Token
         })
         ..body = jsonEncode(body);
@@ -542,7 +542,7 @@ class PetDiaryEdgeService {
       debugPrint('📝 阻塞模式调用 Diary-v3 Edge Function');
       debugPrint('📦 请求体: ${jsonEncode(body)}');
 
-      final url = Uri.parse(SupabaseConstants.diaryUrl);
+      final url = Uri.parse(SupabaseConfig.diaryUrl);
       final response = await http.post(
         url,
         headers: {
