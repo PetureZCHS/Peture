@@ -1,38 +1,108 @@
 import 'package:gal/gal.dart';
 
 import 'package:flutter/material.dart';
+import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui';
-import 'dart:async';
+import 'dart:ui' as ui;
+import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import '../../../shared/utils/ui_helpers.dart';
 import '../../content_feedback/domain/content_feedback_kind.dart';
 import '../../content_feedback/presentation/ai_generated_image_disclaimer.dart';
 import '../../content_feedback/presentation/content_feedback_bar.dart';
 
-// 添加颜色常量定义，与preparation_page.dart保持一致
+class _WatermarkMetrics {
+  final double horizontalPadding;
+  final double verticalPadding;
+  final double textPaddingH;
+  final double textPaddingV;
+  final double fontSize;
+  final double letterSpacing;
+  final double blurRadius;
+  final Offset shadowOffset;
+  final double borderRadius;
+
+  const _WatermarkMetrics({
+    required this.horizontalPadding,
+    required this.verticalPadding,
+    required this.textPaddingH,
+    required this.textPaddingV,
+    required this.fontSize,
+    required this.letterSpacing,
+    required this.blurRadius,
+    required this.shadowOffset,
+    required this.borderRadius,
+  });
+}
+
+_WatermarkMetrics _computeWatermarkMetrics(Size imageSize) {
+  final ratio = imageSize.width / math.max(1.0, imageSize.height);
+  final isSixteenByNine = (ratio - (16 / 9)).abs() <= 0.03;
+  final scale = (imageSize.shortestSide / 1080.0).clamp(0.2, 1.5).toDouble();
+  final fontBoost = isSixteenByNine ? 2.0 : 1.0;
+  return _WatermarkMetrics(
+    horizontalPadding: 24.0 * scale,
+    verticalPadding: 16.0 * scale,
+    textPaddingH: 14.0 * scale,
+    textPaddingV: 8.0 * scale,
+    fontSize: 30.0 * scale * fontBoost,
+    letterSpacing: 0.4 * scale,
+    blurRadius: 6.0 * scale,
+    shadowOffset: Offset(0, 1.5 * scale),
+    borderRadius: 14.0 * scale,
+  );
+}
+
+double _computeWatermarkTextFitScale({
+  required String text,
+  required double maxTextWidth,
+  required double fontSize,
+  required double letterSpacing,
+}) {
+  final safeMaxWidth = math.max(1.0, maxTextWidth);
+  final painter = TextPainter(
+    text: TextSpan(
+      text: text,
+      style: TextStyle(
+        fontSize: fontSize,
+        fontWeight: FontWeight.w600,
+        letterSpacing: letterSpacing,
+      ),
+    ),
+    textDirection: TextDirection.ltr,
+    maxLines: 1,
+  )..layout();
+
+  if (painter.width <= safeMaxWidth) {
+    return 1.0;
+  }
+
+  return (safeMaxWidth / painter.width).clamp(0.45, 1.0);
+}
+
 class AppColors {
   static const Color background = Color(0xFFF2F2F7);
-  static const Color surface = Color(0xFFFFFFFF); // 卡片表面颜色
+  static const Color surface = Color(0xFFFFFFFF);
   static const Color primary = Color(0xFF5D5FEF);
   static const Color textDark = Color(0xFF1D1D1F);
   static const Color textGrey = Color(0xFF8E8E93);
-  static const Color textLight = Color(0xFFAEAEB2); // 更淡的文字颜色
+  static const Color textLight = Color(0xFFAEAEB2);
 
-  // 添加按钮状态颜色 - 使用更美观的颜色
-  static const Color favoriteActive = Color(0xFFFF5252); // 红色，用于收藏
-  static const Color likeActive = Color(0xFF2196F3); // 蓝色，用于点赞
-  static const Color dislikeActive = Color(0xFF9E9E9E); // 灰色，用于点踩
+  static const Color favoriteActive = Color(0xFFFF5252);
+  static const Color likeActive = Color(0xFF2196F3);
+  static const Color dislikeActive = Color(0xFF9E9E9E);
 
   static const Color orb1 = Color(0xFFC4E0E5);
   static const Color orb2 = Color(0xFFE2D1F9);
   static const Color orb3 = Color(0xFFFFDFC4);
 }
 
-// 添加自定义PageRoute以实现更好的过渡效果
 class FadePageRoute extends PageRouteBuilder {
   final Widget page;
 
@@ -59,8 +129,8 @@ class FadePageRoute extends PageRouteBuilder {
 
 class ResultPage extends StatefulWidget {
   final File originalImage;
-  final String? resultImageUrl; // 生成结果 URL（可选回退）
-  final File? resultImageFile; // 本地下载的生成文件（优先）
+  final String? resultImageUrl;
+  final File? resultImageFile;
 
   const ResultPage(
       {super.key,
@@ -73,15 +143,137 @@ class ResultPage extends StatefulWidget {
 }
 
 class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
-  // Orb动画控制器
   late AnimationController _orbController;
+  static const String _watermarkText = '智宠合生 Peture AI 生成';
+  static int? _cachedAndroidSdkInt;
 
-  // 添加按钮状态变量
   bool _isFavorite = false;
   bool _isLiked = false;
   bool _isDisliked = false;
-  // 标记传入的 resultImageFile 是否为临时下载文件，需要在 dispose 时清理
   bool _shouldDeleteTempFile = false;
+  bool _enableWatermark = true;
+
+  bool _isLocalFilePath(String? path) {
+    if (path == null || path.isEmpty) return false;
+    final uri = Uri.tryParse(path);
+    if (uri == null) return false;
+    if (uri.scheme == 'file') return true;
+    // 本地路径通常以 / 开头（iOS 模拟器/真机）
+    if (uri.scheme.isEmpty && (path.startsWith('/') || path.startsWith('~'))) {
+      return true;
+    }
+    return false;
+  }
+
+  File _fileFromPath(String path) {
+    if (path.startsWith('file://')) {
+      return File(Uri.parse(path).toFilePath());
+    }
+    return File(path);
+  }
+
+  Future<ui.Image> _decodeImage(Uint8List bytes) async {
+    try {
+      final codec = await ui.instantiateImageCodec(bytes);
+      final frame = await codec.getNextFrame();
+      return frame.image;
+    } catch (e) {
+      throw Exception('Failed to decode image: $e');
+    }
+  }
+
+  Future<Uint8List> _addWatermarkToBytes(Uint8List originalBytes) async {
+    final sourceImage = await _decodeImage(originalBytes);
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+    final imageSize = Size(
+      sourceImage.width.toDouble(),
+      sourceImage.height.toDouble(),
+    );
+    final watermarkMetrics = _computeWatermarkMetrics(imageSize);
+    final maxTextWidth =
+        (imageSize.width * 0.75) - (watermarkMetrics.textPaddingH * 2);
+    final textFitScale = _computeWatermarkTextFitScale(
+      text: _watermarkText,
+      maxTextWidth: maxTextWidth,
+      fontSize: watermarkMetrics.fontSize,
+      letterSpacing: watermarkMetrics.letterSpacing,
+    );
+
+    canvas.drawImageRect(
+      sourceImage,
+      Rect.fromLTWH(0, 0, imageSize.width, imageSize.height),
+      Rect.fromLTWH(0, 0, imageSize.width, imageSize.height),
+      Paint(),
+    );
+
+    final textPainter = TextPainter(
+      text: TextSpan(
+        text: _watermarkText,
+        style: TextStyle(
+          color: Colors.white.withOpacity(0.82),
+          fontSize: watermarkMetrics.fontSize * textFitScale,
+          fontWeight: FontWeight.w600,
+          letterSpacing: watermarkMetrics.letterSpacing * textFitScale,
+          shadows: [
+            Shadow(
+              color: Colors.black.withOpacity(0.25),
+              blurRadius: watermarkMetrics.blurRadius * textFitScale,
+              offset: watermarkMetrics.shadowOffset * textFitScale,
+            ),
+          ],
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+      maxLines: 1,
+    )..layout(maxWidth: math.max(1.0, maxTextWidth));
+
+    final watermarkRect = RRect.fromRectAndRadius(
+      Rect.fromLTWH(
+        imageSize.width -
+            textPainter.width -
+            (watermarkMetrics.textPaddingH * 2) -
+            watermarkMetrics.horizontalPadding,
+        imageSize.height -
+            textPainter.height -
+            (watermarkMetrics.textPaddingV * 2) -
+            watermarkMetrics.verticalPadding,
+        textPainter.width + (watermarkMetrics.textPaddingH * 2),
+        textPainter.height + (watermarkMetrics.textPaddingV * 2),
+      ),
+      Radius.circular(watermarkMetrics.borderRadius),
+    );
+
+    canvas.drawRRect(
+      watermarkRect,
+      Paint()..color = Colors.black.withOpacity(0.22),
+    );
+
+    textPainter.paint(
+      canvas,
+      Offset(
+        watermarkRect.left + watermarkMetrics.textPaddingH,
+        watermarkRect.top + watermarkMetrics.textPaddingV,
+      ),
+    );
+
+    final picture = recorder.endRecording();
+    final watermarkedImage = await picture.toImage(
+      sourceImage.width,
+      sourceImage.height,
+    );
+    final byteData = await watermarkedImage.toByteData(
+      format: ui.ImageByteFormat.png,
+    );
+
+    sourceImage.dispose();
+    watermarkedImage.dispose();
+
+    if (byteData == null) {
+      return originalBytes;
+    }
+    return byteData.buffer.asUint8List();
+  }
 
   /// Android 上 `Directory.systemTemp` 常在 `code_cache` 下，系统可能随时清理；
   /// 进入本页后尽快读入内存，保存到相册时优先用缓存，避免 PathNotFoundException。
@@ -109,7 +301,6 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
       duration: const Duration(seconds: 12),
     )..repeat(reverse: true);
 
-    // 如果 resultImageFile 存在且看起来来自系统临时目录或命名为 LoadingPage 生成的文件，标记为需要清理
     if (widget.resultImageFile != null) {
       try {
         final filePath = widget.resultImageFile!.path;
@@ -128,7 +319,6 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
 
   @override
   void dispose() {
-    // 如果需要删除临时生成的文件，异步尝试删除（dispose 不能 await，因此使用 then/catchError）
     if (_shouldDeleteTempFile && widget.resultImageFile != null) {
       widget.resultImageFile!.exists().then((exists) {
         if (exists) {
@@ -149,6 +339,23 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
+    final isResultUrlLocalFile = _isLocalFilePath(widget.resultImageUrl);
+    final resultFileFromUrl =
+        widget.resultImageUrl != null && isResultUrlLocalFile
+            ? _fileFromPath(widget.resultImageUrl!)
+            : null;
+    final useNetworkImage =
+        widget.resultImageFile == null && !isResultUrlLocalFile;
+    final ImageProvider<Object>? resultImageProvider = widget.resultImageFile !=
+            null
+        ? FileImage(widget.resultImageFile!) as ImageProvider<Object>
+        : resultFileFromUrl != null
+            ? FileImage(resultFileFromUrl) as ImageProvider<Object>
+            : (widget.resultImageUrl != null &&
+                    widget.resultImageUrl!.isNotEmpty)
+                ? NetworkImage(widget.resultImageUrl!) as ImageProvider<Object>
+                : null;
+
     return Scaffold(
       backgroundColor: AppColors.background,
       extendBodyBehindAppBar: true,
@@ -160,7 +367,6 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
       ),
       body: Stack(
         children: [
-          // 背景层 - 添加orb动画效果
           Stack(
             children: [
               Container(color: AppColors.background),
@@ -226,13 +432,10 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
               ),
             ],
           ),
-
-          // 内容层
           SafeArea(
             child: Column(
               children: [
                 const SizedBox(height: 20),
-                // 上半部分：原图缩略 (高斯模糊背景 + 小图)
                 GestureDetector(
                   onTap: () {
                     Navigator.of(context).push(
@@ -273,7 +476,7 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
                               radius: 1.8,
                               center: Alignment.topCenter,
                               colors: [
-                                AppColors.surface.withOpacity(0.15), // 降低透明度
+                                AppColors.surface.withOpacity(0.15),
                                 AppColors.surface.withOpacity(0.3),
                                 AppColors.surface.withOpacity(0.45),
                               ],
@@ -283,12 +486,11 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Text("原图",
+                              const Text("原图",
                                   style: TextStyle(color: AppColors.textGrey)),
                               const SizedBox(width: 10),
                               Hero(
-                                tag:
-                                    'pet_photo_hero', // 与preparation_page.dart保持一致
+                                tag: 'pet_photo_hero',
                                 child: ClipRRect(
                                   borderRadius: BorderRadius.circular(8),
                                   child: Image.file(widget.originalImage,
@@ -304,21 +506,22 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
                     ),
                   ),
                 ),
-
-                // 下半部分：AI 大图
                 Expanded(
                   child: GestureDetector(
                     onTap: () {
                       Navigator.of(context).push(
                         TransparentImageRoute(
                           builder: (_) => FullscreenImagePage(
-                            imageFile: widget.resultImageFile ?? File(''),
+                            imageFile: widget.resultImageFile ??
+                                resultFileFromUrl ??
+                                File(''),
                             heroTag: 'ai_result_hero',
-                            isNetworkImage: widget.resultImageFile == null,
-                            networkImage: widget.resultImageFile == null &&
-                                    widget.resultImageUrl != null
-                                ? NetworkImage(widget.resultImageUrl!)
-                                : null,
+                            isNetworkImage: useNetworkImage,
+                            showWatermark: _enableWatermark,
+                            networkImage:
+                                useNetworkImage && widget.resultImageUrl != null
+                                    ? NetworkImage(widget.resultImageUrl!)
+                                    : null,
                           ),
                         ),
                       );
@@ -335,152 +538,99 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
                         ],
                       ),
                       child: Stack(
-                        alignment: Alignment.bottomCenter,
                         children: [
-                          // 显示生成的结果图（优先使用本地下载文件）
-                          widget.resultImageFile != null
-                              ? Hero(
-                                  tag: 'ai_result_hero',
-                                  child: Image.file(
-                                    widget.resultImageFile!,
-                                    fit: BoxFit.contain,
-                                    width: double.infinity,
-                                    height: double.infinity,
-                                  ),
-                                )
-                              : Hero(
-                                  tag: 'ai_result_hero',
-                                  child: Image.network(
-                                    widget.resultImageUrl ?? '',
-                                    fit: BoxFit.contain,
-                                    width: double.infinity,
-                                    height: double.infinity,
-                                    loadingBuilder:
-                                        (context, child, loadingProgress) {
-                                      if (loadingProgress == null) return child;
-                                      return Center(
-                                        child: CircularProgressIndicator(
-                                          value: loadingProgress
-                                                      .expectedTotalBytes !=
-                                                  null
-                                              ? loadingProgress
-                                                      .cumulativeBytesLoaded /
-                                                  loadingProgress
-                                                      .expectedTotalBytes!
-                                              : null,
-                                          color: AppColors.primary,
-                                        ),
-                                      );
-                                    },
-                                    errorBuilder: (context, error, stackTrace) {
-                                      return Center(
-                                        child: Column(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.center,
-                                          children: [
-                                            Icon(Icons.error_outline,
-                                                size: 50, color: Colors.red),
-                                            const SizedBox(height: 16),
-                                            Text(
-                                              '图片加载失败',
-                                              style: TextStyle(
-                                                  fontSize: 16,
-                                                  color: AppColors.textDark),
-                                            ),
-                                            const SizedBox(height: 8),
-                                            Text(
-                                              '请检查网络连接后重试',
-                                              style: TextStyle(
-                                                  fontSize: 14,
-                                                  color: AppColors.textGrey),
-                                            ),
-                                            const SizedBox(height: 16),
-                                            ElevatedButton(
-                                              onPressed: () {
-                                                setState(() {
-                                                  // Trigger rebuild to retry image loading
-                                                });
-                                              },
-                                              child: const Text('重试'),
-                                            ),
-                                          ],
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                ),
-                          // 浮动操作栏 (点赞/收藏) 使用毛玻璃效果
-                          Container(
-                            margin: const EdgeInsets.only(bottom: 20),
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 20, vertical: 10),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(30),
-                              border: Border.all(
-                                color: Colors.white.withOpacity(0.6),
-                                width: 1.2,
+                          if (resultImageProvider != null)
+                            _ContainedImageWithWatermark(
+                              heroTag: 'ai_result_hero',
+                              imageProvider: resultImageProvider,
+                              showWatermark: _enableWatermark,
+                              watermarkText: _watermarkText,
+                              progressColor: AppColors.primary,
+                              errorIconColor: Colors.red,
+                              errorTextColor: AppColors.textDark,
+                              errorSubTextColor: AppColors.textGrey,
+                            )
+                          else
+                            const Center(
+                              child: Text(
+                                '未找到可预览的图片',
+                                style: TextStyle(color: AppColors.textGrey),
                               ),
-                              gradient: RadialGradient(
-                                radius: 1.8,
-                                center: Alignment.topCenter,
-                                colors: [
-                                  Colors.white.withOpacity(0.15),
-                                  Colors.white.withOpacity(0.3),
-                                  Colors.white.withOpacity(0.45),
-                                ],
-                                stops: const [0.0, 0.6, 1.0],
-                              ),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.05),
-                                  blurRadius: 10,
-                                  offset: const Offset(0, 4),
-                                )
-                              ],
                             ),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(30),
-                              child: BackdropFilter(
-                                filter:
-                                    ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    _buildIconAction(
-                                        Icons.favorite_border,
-                                        _isFavorite,
-                                        AppColors.favoriteActive, () {
-                                      setState(() {
-                                        _isFavorite = !_isFavorite;
-                                      });
-                                    }),
-                                    const SizedBox(width: 20),
-                                    _buildIconAction(Icons.thumb_up_outlined,
-                                        _isLiked, AppColors.likeActive, () {
-                                      setState(() {
-                                        if (_isDisliked) {
-                                          _isDisliked = false;
-                                        }
-                                        _isLiked = !_isLiked;
-                                      });
-                                    }),
-                                    const SizedBox(width: 20),
-                                    _buildIconAction(
-                                        Icons.thumb_down_outlined,
-                                        _isDisliked,
-                                        AppColors.dislikeActive, () {
-                                      setState(() {
-                                        if (_isLiked) {
-                                          _isLiked = false;
-                                        }
-                                        _isDisliked = !_isDisliked;
-                                      });
-                                    }),
+                          Positioned(
+                            left: 20,
+                            bottom: 20,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 20, vertical: 10),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(30),
+                                border: Border.all(
+                                  color: Colors.white.withOpacity(0.6),
+                                  width: 1.2,
+                                ),
+                                gradient: RadialGradient(
+                                  radius: 1.8,
+                                  center: Alignment.topCenter,
+                                  colors: [
+                                    Colors.white.withOpacity(0.15),
+                                    Colors.white.withOpacity(0.3),
+                                    Colors.white.withOpacity(0.45),
                                   ],
+                                  stops: const [0.0, 0.6, 1.0],
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.05),
+                                    blurRadius: 10,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ],
+                              ),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(30),
+                                child: BackdropFilter(
+                                  filter:
+                                      ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      _buildIconAction(
+                                          Icons.favorite_border,
+                                          _isFavorite,
+                                          AppColors.favoriteActive, () {
+                                        setState(() {
+                                          _isFavorite = !_isFavorite;
+                                        });
+                                      }),
+                                      const SizedBox(width: 20),
+                                      _buildIconAction(Icons.thumb_up_outlined,
+                                          _isLiked, AppColors.likeActive, () {
+                                        setState(() {
+                                          if (_isDisliked) {
+                                            _isDisliked = false;
+                                          }
+                                          _isLiked = !_isLiked;
+                                        });
+                                      }),
+                                      const SizedBox(width: 20),
+                                      _buildIconAction(
+                                          Icons.thumb_down_outlined,
+                                          _isDisliked,
+                                          AppColors.dislikeActive, () {
+                                        setState(() {
+                                          if (_isLiked) {
+                                            _isLiked = false;
+                                          }
+                                          _isDisliked = !_isDisliked;
+                                        });
+                                      }),
+                                    ],
+                                  ),
                                 ),
                               ),
                             ),
-                          )
+                          ),
                         ],
                       ),
                     ),
@@ -507,13 +657,57 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
                 ),
 
                 // 底部：保存按钮 - 使用毛玻璃效果
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(16),
+                          color: Colors.white.withOpacity(0.35),
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.6),
+                            width: 1,
+                          ),
+                        ),
+                        child: SwitchListTile.adaptive(
+                          value: _enableWatermark,
+                          title: const Text(
+                            '水印',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textDark,
+                            ),
+                          ),
+                          subtitle: const Text(
+                            _watermarkText,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppColors.textGrey,
+                            ),
+                          ),
+                          onChanged: (value) {
+                            setState(() {
+                              _enableWatermark = value;
+                            });
+                          },
+                          activeColor: AppColors.primary,
+                          contentPadding:
+                              const EdgeInsets.symmetric(horizontal: 14),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
                 Container(
                   height: 80,
                   padding: const EdgeInsets.all(20.0),
                   child: Stack(
                     alignment: Alignment.center,
                     children: [
-                      // 毛玻璃背景效果
                       ClipRRect(
                         borderRadius: BorderRadius.circular(25),
                         child: BackdropFilter(
@@ -541,8 +735,6 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
                           ),
                         ),
                       ),
-
-                      // 渐变色前景按钮
                       AnimatedContainer(
                         duration: const Duration(milliseconds: 300),
                         width: double.infinity,
@@ -573,6 +765,87 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
                           color: Colors.transparent,
                           child: InkWell(
                             onTap: () async {
+                              PermissionStatus status;
+                              if (Platform.isIOS) {
+                                // iOS 双兜底：优先请求 add-only，失败后回退到 photos。
+                                final addOnlyStatus =
+                                    await Permission.photosAddOnly.request();
+                                if (addOnlyStatus.isGranted ||
+                                    addOnlyStatus == PermissionStatus.limited) {
+                                  status = addOnlyStatus;
+                                } else if (addOnlyStatus.isPermanentlyDenied ||
+                                    addOnlyStatus ==
+                                        PermissionStatus.restricted) {
+                                  status = addOnlyStatus;
+                                } else {
+                                  status = await Permission.photos.request();
+                                }
+                              } else if (Platform.isAndroid) {
+                                // Android 13+ (API 33+) 使用 READ_MEDIA_IMAGES (Permission.photos)
+                                // Android 12 及以下 (API 32-) 使用 READ_EXTERNAL_STORAGE (Permission.storage)
+                                _cachedAndroidSdkInt ??=
+                                    (await DeviceInfoPlugin().androidInfo)
+                                        .version
+                                        .sdkInt;
+                                if (_cachedAndroidSdkInt! >= 33) {
+                                  status = await Permission.photos.request();
+                                } else {
+                                  status = await Permission.storage.request();
+                                }
+                              } else {
+                                // 桌面或其他不支持保存到相册的平台
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                          content: Text("当前平台不支持保存到相册")));
+                                }
+                                return;
+                              }
+
+                              if (status.isGranted ||
+                                  status == PermissionStatus.limited) {
+                                // 权限已授予，继续保存
+                              } else if (status.isPermanentlyDenied ||
+                                  status == PermissionStatus.restricted) {
+                                // 权限被永久拒绝或受限，引导用户到设置
+                                if (context.mounted) {
+                                  showDialog(
+                                    context: context,
+                                    builder: (context) {
+                                      return AlertDialog(
+                                        title: const Text('权限被拒绝'),
+                                        content:
+                                            const Text('相册权限已被拒绝，请前往设置开启。'),
+                                        actions: [
+                                          TextButton(
+                                            onPressed: () {
+                                              Navigator.of(context).pop();
+                                              openAppSettings();
+                                            },
+                                            child: const Text('去设置'),
+                                          ),
+                                          TextButton(
+                                            onPressed: () {
+                                              Navigator.of(context).pop();
+                                            },
+                                            child: const Text('取消'),
+                                          ),
+                                        ],
+                                      );
+                                    },
+                                  );
+                                }
+                                return;
+                              } else {
+                                // 权限被拒绝，但可以再次请求
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                          content: Text("需要相册权限才能保存图片")));
+                                }
+                                return;
+                              }
+
                               try {
                                 late Uint8List bytes;
 
@@ -614,17 +887,32 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
                                   }
                                 } else if (widget.resultImageUrl != null &&
                                     widget.resultImageUrl!.isNotEmpty) {
-                                  final response = await http
-                                      .get(Uri.parse(widget.resultImageUrl!));
-                                  if (response.statusCode == 200) {
-                                    bytes = response.bodyBytes;
-                                  } else {
-                                    if (context.mounted) {
-                                      ScaffoldMessenger.of(context)
-                                          .showSnackBar(const SnackBar(
-                                              content: Text("下载图片失败")));
+                                  final url = widget.resultImageUrl!;
+                                  if (_isLocalFilePath(url)) {
+                                    final file = _fileFromPath(url);
+                                    if (await file.exists()) {
+                                      bytes = await file.readAsBytes();
+                                    } else {
+                                      if (context.mounted) {
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(const SnackBar(
+                                                content: Text("未找到本地图片")));
+                                      }
+                                      return;
                                     }
-                                    return;
+                                  } else {
+                                    final response =
+                                        await http.get(Uri.parse(url));
+                                    if (response.statusCode == 200) {
+                                      bytes = response.bodyBytes;
+                                    } else {
+                                      if (context.mounted) {
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(const SnackBar(
+                                                content: Text("下载图片失败")));
+                                      }
+                                      return;
+                                    }
                                   }
                                 } else {
                                   if (context.mounted) {
@@ -635,18 +923,37 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
                                   return;
                                 }
 
-                                await Gal.putImageBytes(
-                                  bytes,
-                                  album: 'Peture',
-                                );
+                                if (_enableWatermark) {
+                                  bytes = await _addWatermarkToBytes(bytes);
+                                }
+
+                                // 保存到临时文件
+                                final tempDir = await getTemporaryDirectory();
+                                final tempPath =
+                                    '${tempDir.path}/ai_result_${DateTime.now().millisecondsSinceEpoch}.png';
+                                final tempFile = File(tempPath);
+                                await tempFile.writeAsBytes(bytes);
+
+                                try {
+                                  // 使用 Gal 插件保存图片到相册
+                                  await Gal.putImage(tempPath, album: 'Peture');
+                                } finally {
+                                  // 无论保存成功或失败都删除临时文件
+                                  if (await tempFile.exists()) {
+                                    await tempFile.delete();
+                                  }
+                                }
+
                                 if (context.mounted) {
                                   ScaffoldMessenger.of(context).showSnackBar(
                                       const SnackBar(content: Text("已保存到相册！")));
                                 }
                               } catch (e) {
+                                debugPrint('保存图片到相册时出错: $e');
                                 if (context.mounted) {
                                   ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(content: Text("保存出错: $e")));
+                                      const SnackBar(
+                                          content: Text("保存失败，请检查权限设置")));
                                 }
                               }
                             },
@@ -690,25 +997,8 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
           color: isActive ? activeColor : AppColors.textDark, size: 24),
     );
   }
-
-  // 获取 AssetImage 的字节数据
-  // ignore: unused_element
-  Future<Uint8List?> _getAssetImageData(AssetImage image) async {
-    final completer = Completer<ImageInfo>();
-    image
-        .resolve(const ImageConfiguration())
-        .addListener(ImageStreamListener((info, _) {
-      completer.complete(info);
-    }));
-
-    final imageInfo = await completer.future;
-    final byteData =
-        await imageInfo.image.toByteData(format: ImageByteFormat.png);
-    return byteData?.buffer.asUint8List();
-  }
 }
 
-/// 透明背景路由：让下层页面在预览时直接可见
 class TransparentImageRoute extends PageRouteBuilder {
   TransparentImageRoute({required WidgetBuilder builder})
       : super(
@@ -721,12 +1011,223 @@ class TransparentImageRoute extends PageRouteBuilder {
         );
 }
 
-/// 全屏图片页
-/// 特性：
-/// 1. 独立全屏黑色背景，只负责暗化，不参与缩放。
-/// 2. 图片层铺满全屏，InteractiveViewer 负责双指缩放，放大时覆盖全屏无死角。
-/// 3. 支持下滑整体缩小 + 背景渐显。
-/// 4. 隐藏状态栏。
+class _ContainedImageWithWatermark extends StatefulWidget {
+  final String heroTag;
+  final ImageProvider imageProvider;
+  final bool showWatermark;
+  final String watermarkText;
+  final Color progressColor;
+  final Color errorIconColor;
+  final Color errorTextColor;
+  final Color errorSubTextColor;
+
+  const _ContainedImageWithWatermark({
+    required this.heroTag,
+    required this.imageProvider,
+    required this.showWatermark,
+    required this.watermarkText,
+    required this.progressColor,
+    required this.errorIconColor,
+    required this.errorTextColor,
+    required this.errorSubTextColor,
+  });
+
+  @override
+  State<_ContainedImageWithWatermark> createState() =>
+      _ContainedImageWithWatermarkState();
+}
+
+class _ContainedImageWithWatermarkState
+    extends State<_ContainedImageWithWatermark> {
+  ImageStream? _imageStream;
+  ImageStreamListener? _listener;
+  double? _aspectRatio;
+  int _refreshTick = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _resolveAspectRatio();
+  }
+
+  Widget _buildWatermarkOverlay(BoxConstraints constraints) {
+    final imageSize = Size(constraints.maxWidth, constraints.maxHeight);
+    final metrics = _computeWatermarkMetrics(imageSize);
+    final maxTextWidth = (imageSize.width * 0.75) - (metrics.textPaddingH * 2);
+    final textFitScale = _computeWatermarkTextFitScale(
+      text: widget.watermarkText,
+      maxTextWidth: maxTextWidth,
+      fontSize: metrics.fontSize,
+      letterSpacing: metrics.letterSpacing,
+    );
+
+    return Positioned(
+      right: metrics.horizontalPadding,
+      bottom: metrics.verticalPadding,
+      child: IgnorePointer(
+        child: Container(
+          padding: EdgeInsets.symmetric(
+            horizontal: metrics.textPaddingH,
+            vertical: metrics.textPaddingV,
+          ),
+          decoration: BoxDecoration(
+            color: Colors.black.withOpacity(0.22),
+            borderRadius: BorderRadius.circular(metrics.borderRadius),
+          ),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: math.max(1, maxTextWidth),
+            ),
+            child: Text(
+              widget.watermarkText,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.85),
+                fontSize: metrics.fontSize * textFitScale,
+                fontWeight: FontWeight.w600,
+                letterSpacing: metrics.letterSpacing * textFitScale,
+                shadows: [
+                  Shadow(
+                    color: Colors.black.withOpacity(0.25),
+                    blurRadius: metrics.blurRadius * textFitScale,
+                    offset: metrics.shadowOffset * textFitScale,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  void didUpdateWidget(covariant _ContainedImageWithWatermark oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.imageProvider != widget.imageProvider) {
+      _resolveAspectRatio();
+    }
+  }
+
+  @override
+  void dispose() {
+    _removeImageListener();
+    super.dispose();
+  }
+
+  void _removeImageListener() {
+    if (_imageStream != null && _listener != null) {
+      _imageStream!.removeListener(_listener!);
+    }
+    _imageStream = null;
+    _listener = null;
+  }
+
+  void _resolveAspectRatio() {
+    _removeImageListener();
+    final stream = widget.imageProvider.resolve(const ImageConfiguration());
+    final listener = ImageStreamListener(
+      (ImageInfo info, bool syncCall) {
+        if (!mounted) return;
+        setState(() {
+          _aspectRatio = info.image.width / info.image.height;
+        });
+      },
+      onError: (Object exception, StackTrace? stackTrace) {
+        if (!mounted) return;
+        // 图片加载失败时设置兜底宽高比，使 build 退出 loading spinner
+        // 并转入 _buildImage() 的 errorBuilder 展示错误 UI
+        setState(() {
+          _aspectRatio = 1.0;
+        });
+      },
+    );
+
+    stream.addListener(listener);
+    _imageStream = stream;
+    _listener = listener;
+  }
+
+  Widget _buildImage() {
+    return Image(
+      key: ValueKey(_refreshTick),
+      image: widget.imageProvider,
+      fit: BoxFit.contain,
+      width: double.infinity,
+      height: double.infinity,
+      loadingBuilder: (context, child, loadingProgress) {
+        if (loadingProgress == null) return child;
+        return Center(
+          child: CircularProgressIndicator(
+            value: loadingProgress.expectedTotalBytes != null
+                ? loadingProgress.cumulativeBytesLoaded /
+                    loadingProgress.expectedTotalBytes!
+                : null,
+            color: widget.progressColor,
+          ),
+        );
+      },
+      errorBuilder: (context, error, stackTrace) {
+        return Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.error_outline, size: 50, color: widget.errorIconColor),
+              const SizedBox(height: 16),
+              Text(
+                '图片加载失败',
+                style: TextStyle(fontSize: 16, color: widget.errorTextColor),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '请检查网络连接后重试',
+                style: TextStyle(fontSize: 14, color: widget.errorSubTextColor),
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: () {
+                  widget.imageProvider.evict();
+                  setState(() {
+                    _refreshTick++;
+                  });
+                  _resolveAspectRatio();
+                },
+                child: const Text('重试'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ratio = _aspectRatio;
+    final Widget content = ratio == null
+        ? Center(
+            child: CircularProgressIndicator(color: widget.progressColor),
+          )
+        : Center(
+            child: AspectRatio(
+              aspectRatio: ratio,
+              child: LayoutBuilder(
+                builder: (context, constraints) => Stack(
+                  children: [
+                    Positioned.fill(child: _buildImage()),
+                    if (widget.showWatermark)
+                      _buildWatermarkOverlay(constraints),
+                  ],
+                ),
+              ),
+            ),
+          );
+
+    return Hero(tag: widget.heroTag, child: content);
+  }
+}
+
 class FullscreenImagePage extends StatefulWidget {
   final File imageFile;
   final String heroTag;
@@ -734,6 +1235,8 @@ class FullscreenImagePage extends StatefulWidget {
   final AssetImage? assetImage;
   final bool isNetworkImage;
   final NetworkImage? networkImage;
+  final bool showWatermark;
+  static const String watermarkText = '智宠合生 Peture AI 生成';
 
   const FullscreenImagePage({
     super.key,
@@ -743,6 +1246,7 @@ class FullscreenImagePage extends StatefulWidget {
     this.assetImage,
     this.isNetworkImage = false,
     this.networkImage,
+    this.showWatermark = false,
   });
 
   @override
@@ -789,20 +1293,21 @@ class _FullscreenImagePageState extends State<FullscreenImagePage>
   Widget build(BuildContext context) {
     final screenHeight = MediaQuery.of(context).size.height;
     final dragPercent = (dragOffsetY / screenHeight).clamp(0.0, 1.0);
-    // 缩放比例
     final scale = 1.0 - dragPercent * 0.4;
-    // 背景透明度
     final bgOpacity = (1.0 - dragPercent).clamp(0.0, 1.0);
+    final ImageProvider<Object> fullscreenImageProvider =
+        widget.isNetworkImage && widget.networkImage != null
+            ? widget.networkImage! as ImageProvider<Object>
+            : widget.isAssetImage && widget.assetImage != null
+                ? widget.assetImage! as ImageProvider<Object>
+                : FileImage(widget.imageFile) as ImageProvider<Object>;
 
     return Stack(
       children: [
-        // 1. 全屏黑色背景：固定不动，只变透明度
         Opacity(
           opacity: bgOpacity,
           child: Container(color: Colors.black),
         ),
-
-        // 2. 交互层：铺满全屏，确保放大时不会被裁剪
         Positioned.fill(
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
@@ -827,68 +1332,15 @@ class _FullscreenImagePageState extends State<FullscreenImagePage>
                 child: InteractiveViewer(
                   minScale: 1.0,
                   maxScale: 4.0,
-                  // 让 child 居中，但 InteractiveViewer 本身是占满全屏的
-                  child: Center(
-                    child: Hero(
-                      tag: widget.heroTag,
-                      child: widget.isNetworkImage &&
-                              widget.networkImage != null
-                          ? Image.network(
-                              widget.networkImage!.url,
-                              fit: BoxFit.contain,
-                              loadingBuilder:
-                                  (context, child, loadingProgress) {
-                                if (loadingProgress == null) return child;
-                                return Center(
-                                  child: CircularProgressIndicator(
-                                    value: loadingProgress.expectedTotalBytes !=
-                                            null
-                                        ? loadingProgress
-                                                .cumulativeBytesLoaded /
-                                            loadingProgress.expectedTotalBytes!
-                                        : null,
-                                    color: Colors.white,
-                                  ),
-                                );
-                              },
-                              errorBuilder: (context, error, stackTrace) {
-                                return Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(Icons.error_outline,
-                                        size: 50, color: Colors.white),
-                                    const SizedBox(height: 16),
-                                    Text(
-                                      '图片加载失败',
-                                      style: TextStyle(
-                                          fontSize: 16, color: Colors.white),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      '请检查网络连接后重试',
-                                      style: TextStyle(
-                                          fontSize: 14, color: Colors.white70),
-                                    ),
-                                    const SizedBox(height: 16),
-                                    ElevatedButton(
-                                      onPressed: () {
-                                        setState(() {
-                                          // 触发重建以重试图片加载
-                                        });
-                                      },
-                                      child: const Text('重试'),
-                                    ),
-                                  ],
-                                );
-                              },
-                            )
-                          : widget.isAssetImage && widget.assetImage != null
-                              ? Image(image: widget.assetImage!)
-                              : Image.file(
-                                  widget.imageFile,
-                                  fit: BoxFit.contain, // 初始完整显示
-                                ),
-                    ),
+                  child: _ContainedImageWithWatermark(
+                    heroTag: widget.heroTag,
+                    imageProvider: fullscreenImageProvider,
+                    showWatermark: widget.showWatermark,
+                    watermarkText: FullscreenImagePage.watermarkText,
+                    progressColor: Colors.white,
+                    errorIconColor: Colors.white,
+                    errorTextColor: Colors.white,
+                    errorSubTextColor: Colors.white70,
                   ),
                 ),
               ),
