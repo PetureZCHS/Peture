@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../shared/models/conversation.dart';
@@ -121,10 +123,35 @@ class SupabaseService {
     }
   }
 
-  /// 创建或更新用户资料
-  Future<bool> upsertUserProfile({String? nickname, String? avatarUrl, String? ownerNickname}) async {
+  String _formatProfileUpsertError(Object e) {
+    if (e is PostgrestException) {
+      final hint = e.hint;
+      final code = e.code;
+      final extra = [if (code != null) code, if (hint != null && hint.isNotEmpty) hint]
+          .join(' · ');
+      return extra.isEmpty ? e.message : '${e.message} ($extra)';
+    }
+    if (e is AuthException) return e.message;
+    return e.toString();
+  }
+
+  /// 创建或更新用户资料；失败时返回服务端/客户端错误说明（不仅限于网络问题）。
+  Future<({bool success, String? error})> upsertUserProfileWithError({
+    String? nickname,
+    String? avatarUrl,
+    String? ownerNickname,
+    String? gender,
+    String? birthDate,
+    String? province,
+    String? city,
+  }) async {
     final userId = await currentUserId;
-    if (userId == null) return false;
+    if (userId == null) {
+      return (
+        success: false,
+        error: '登录状态异常，请重新登录后再试',
+      );
+    }
 
     try {
       final data = {
@@ -134,14 +161,43 @@ class SupabaseService {
       if (nickname != null) data['nickname'] = nickname;
       if (avatarUrl != null) data['avatar_url'] = avatarUrl;
       if (ownerNickname != null) data['owner_nickname'] = ownerNickname;
+      if (gender != null) data['gender'] = gender;
+      if (birthDate != null) {
+        data['birth_date'] =
+            birthDate.contains('T') ? birthDate.split('T')[0] : birthDate;
+      }
+      if (province != null) data['province'] = province;
+      if (city != null) data['city'] = city;
 
       await _client.from('users_profiles').upsert(data);
 
-      return true;
-    } catch (e) {
-      debugPrint('更新用户资料失败: $e');
-      return false;
+      return (success: true, error: null);
+    } catch (e, st) {
+      debugPrint('更新用户资料失败: $e\n$st');
+      return (success: false, error: _formatProfileUpsertError(e));
     }
+  }
+
+  /// 创建或更新用户资料
+  Future<bool> upsertUserProfile({
+    String? nickname,
+    String? avatarUrl,
+    String? ownerNickname,
+    String? gender,
+    String? birthDate,
+    String? province,
+    String? city,
+  }) async {
+    final r = await upsertUserProfileWithError(
+      nickname: nickname,
+      avatarUrl: avatarUrl,
+      ownerNickname: ownerNickname,
+      gender: gender,
+      birthDate: birthDate,
+      province: province,
+      city: city,
+    );
+    return r.success;
   }
 
   /// 获取用户默认的主人昵称（宠物对主人的称呼）
@@ -169,7 +225,11 @@ class SupabaseService {
 
     try {
       // 确保用户资料存在（因为 pets 表有外键约束）
-      await _ensureUserProfileExists(userId);
+      final profileOk = await _ensureUserProfileExists(userId);
+      if (!profileOk) {
+        debugPrint('插入宠物失败: 无法创建或读取用户资料（请检查 users_profiles 权限/RLS）');
+        return null;
+      }
 
       // 创建插入数据，移除 id 字段让数据库自动生成
       final petData = Map<String, dynamic>.from(pet);
@@ -200,6 +260,13 @@ class SupabaseService {
         }
       }
 
+      // 未显式选择绝育状态时，用 false 占位，避免 boolean NOT NULL 列收到 null
+      if (!petData.containsKey('neuter_status') || petData['neuter_status'] == null) {
+        petData['neuter_status'] = false;
+      }
+      // 不向 PostgREST 发送 null，减少「违反非空约束」；缺省列走库端 default
+      petData.removeWhere((_, v) => v == null);
+
       final response =
           await _client.from('pets').insert(petData).select().single().timeout(
         const Duration(seconds: 10),
@@ -216,8 +283,8 @@ class SupabaseService {
     }
   }
 
-  /// 确保用户资料存在（如果不存在则创建）
-  Future<void> _ensureUserProfileExists(String userId) async {
+  /// 确保用户资料存在（如果不存在则创建）。无权限或网络失败时返回 false。
+  Future<bool> _ensureUserProfileExists(String userId) async {
     try {
       // 尝试获取用户资料
       final profile = await _client
@@ -238,9 +305,10 @@ class SupabaseService {
         });
         debugPrint('自动创建用户资料: $userId');
       }
+      return true;
     } catch (e) {
       debugPrint('确保用户资料存在失败: $e');
-      // 不抛出异常，让上层处理
+      return false;
     }
   }
 
@@ -2718,6 +2786,35 @@ class SupabaseService {
   // ============================================================
 
   static const String _communityBucket = 'post-images';
+  static const String _userAvatarBucket = 'user-avatars';
+  static const String _petAvatarBucket = 'pet-avatars';
+
+  /// 删除同一 Storage 目录下除 [keepObjectPath] 外的 `avatar_*` 文件，避免历史头像堆积。
+  Future<void> _removeOtherAvatarObjectsInFolder({
+    required String bucket,
+    required String folderPrefix,
+    required String keepObjectPath,
+  }) async {
+    try {
+      final items =
+          await _client.storage.from(bucket).list(path: folderPrefix);
+      final removePaths = <String>[];
+      for (final item in items) {
+        if (item.id == null) continue;
+        if (!item.name.startsWith('avatar_')) continue;
+        final objectPath = folderPrefix.isEmpty
+            ? item.name
+            : '$folderPrefix/${item.name}';
+        if (objectPath == keepObjectPath) continue;
+        removePaths.add(objectPath);
+      }
+      if (removePaths.isNotEmpty) {
+        await _client.storage.from(bucket).remove(removePaths);
+      }
+    } catch (e) {
+      debugPrint('清理 Storage 目录内旧头像失败: $e');
+    }
+  }
 
   /// 上传帖子图片到 Storage，返回公开 URL
   /// path 建议格式: {userId}/{postId}_{index}.jpg
@@ -2747,6 +2844,120 @@ class SupabaseService {
       return _client.storage.from(_communityBucket).getPublicUrl(path);
     } catch (e) {
       debugPrint('上传帖子图片失败: $e');
+      return null;
+    }
+  }
+
+  /// 上传用户头像到 Storage，返回带 cache busting 的 URL
+  Future<String?> uploadUserAvatar(File file) async {
+    final r = await uploadUserAvatarWithError(file);
+    return r.url;
+  }
+
+  /// 与 [uploadUserAvatar] 相同，但返回可读错误（便于排查 Storage RLS / 桶不存在 / 网络等）
+  Future<({String? url, String? error})> uploadUserAvatarWithError(
+    File file,
+  ) async {
+    final userId = await currentUserId;
+    if (userId == null) {
+      return (url: null, error: '未登录，无法上传头像');
+    }
+    if (!file.existsSync()) {
+      return (url: null, error: '头像文件不存在，请重新选择图片');
+    }
+    final path = '$userId/avatar_${DateTime.now().millisecondsSinceEpoch}.jpg';
+    try {
+      await _client.storage.from(_userAvatarBucket).upload(
+            path,
+            file,
+            fileOptions: const FileOptions(upsert: true),
+          );
+      final base = _client.storage.from(_userAvatarBucket).getPublicUrl(path);
+      await _removeOtherAvatarObjectsInFolder(
+        bucket: _userAvatarBucket,
+        folderPrefix: userId,
+        keepObjectPath: path,
+      );
+      return (
+        url: '${base.split('?').first}?t=${DateTime.now().millisecondsSinceEpoch}',
+        error: null,
+      );
+    } catch (e, st) {
+      debugPrint('上传用户头像失败: $e\n$st');
+      final msg = e.toString();
+      if (msg.contains('Bucket not found') || msg.contains('404')) {
+        return (
+          url: null,
+          error: 'Storage 中缺少 user-avatars 桶或名称不一致，请在 Supabase 控制台创建并配置策略',
+        );
+      }
+      if (msg.contains('JWT') ||
+          msg.contains('403') ||
+          msg.contains('row-level security') ||
+          msg.contains('Unauthorized')) {
+        return (
+          url: null,
+          error: '无权限上传到头像存储（请检查 user-avatars 的 Storage 策略）',
+        );
+      }
+      return (url: null, error: msg);
+    }
+  }
+
+  /// 下载用户头像到本地缓存文件，返回缓存路径
+  Future<String?> cacheUserAvatarFromPublicUrl(String? avatarPublicUrl) async {
+    if (avatarPublicUrl == null || avatarPublicUrl.isEmpty) return null;
+    final userId = await currentUserId;
+    if (userId == null) return null;
+    final uri = Uri.tryParse(avatarPublicUrl.split('?').first);
+    if (uri == null) return null;
+    const marker = '/object/public/user-avatars/';
+    final idx = uri.path.indexOf(marker);
+    if (idx == -1) return null;
+    final objectPath = Uri.decodeComponent(
+      uri.path.substring(idx + marker.length),
+    );
+    if (objectPath.isEmpty) return null;
+    try {
+      final bytes = await _client.storage.from(_userAvatarBucket).download(
+            objectPath,
+          );
+      final dir = await getApplicationSupportDirectory();
+      final out = File(p.join(dir.path, 'user_avatar_$userId.jpg'));
+      await out.writeAsBytes(bytes, flush: true);
+      return out.path;
+    } catch (e) {
+      debugPrint('下载用户头像失败: $e');
+      return null;
+    }
+  }
+
+  /// 上传宠物头像到 Storage，返回带 cache busting 的 URL
+  Future<String?> uploadPetAvatar({
+    required File file,
+    String? petId,
+  }) async {
+    final userId = await currentUserId;
+    if (userId == null) return null;
+    final identifier = petId ?? DateTime.now().millisecondsSinceEpoch.toString();
+    final path =
+        '$userId/$identifier/avatar_${DateTime.now().millisecondsSinceEpoch}.jpg';
+    try {
+      await _client.storage.from(_petAvatarBucket).upload(
+            path,
+            file,
+            fileOptions: const FileOptions(upsert: true),
+          );
+      final base = _client.storage.from(_petAvatarBucket).getPublicUrl(path);
+      final folderPrefix = '$userId/$identifier';
+      await _removeOtherAvatarObjectsInFolder(
+        bucket: _petAvatarBucket,
+        folderPrefix: folderPrefix,
+        keepObjectPath: path,
+      );
+      return '${base.split('?').first}?t=${DateTime.now().millisecondsSinceEpoch}';
+    } catch (e) {
+      debugPrint('上传宠物头像失败: $e');
       return null;
     }
   }

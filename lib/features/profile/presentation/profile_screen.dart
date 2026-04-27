@@ -3,7 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:path_provider/path_provider.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../../services/supabase_service.dart';
 import '../../../shared/models/pet.dart';
 import '../../home/presentation/home_screen.dart'; 
@@ -11,6 +11,8 @@ import 'settings_page.dart';
 import 'pet_profile_form_page.dart';
 import '../../../shared/utils/ui_helpers.dart';
 import '../../../shared/utils/user_avatar_helper.dart';
+import '../../../shared/utils/user_gender_mapper.dart';
+import '../../../shared/utils/avatar_image_helper.dart';
 
 // =========================================================
 // 全局设计系统 - 美学升级版
@@ -66,6 +68,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String _userNickname = '';
   String? _avatarPath;
   String? _avatarUrl; // Supabase Storage 的 URL
+  String _genderLabel = '未设置';
+  String _birthDateLabel = '未设置';
+  String _regionLabel = '未设置';
 
   @override
   void initState() {
@@ -77,17 +82,36 @@ class _ProfileScreenState extends State<ProfileScreen> {
     try {
       // 从 Supabase 加载昵称和头像 URL
       final profile = await _supabaseService.getUserProfile();
+      final avatarUrl = profile?['avatar_url'] as String?;
       if (mounted) {
         setState(() {
           _userNickname = profile?['nickname'] as String? ?? '';
-          _avatarUrl = profile?['avatar_url'] as String?;
+          _avatarUrl = avatarUrl;
+          _genderLabel =
+              UserGenderMapper.toDisplayLabel(profile?['gender'] as String?);
+          final birthDate = profile?['birth_date'] as String?;
+          _birthDateLabel =
+              (birthDate != null && birthDate.isNotEmpty) ? birthDate : '未设置';
+          final province = profile?['province'] as String?;
+          final city = profile?['city'] as String?;
+          final region = profile?['region'] as String?;
+          if (province != null &&
+              province.isNotEmpty &&
+              city != null &&
+              city.isNotEmpty) {
+            _regionLabel = '$province / $city';
+          } else if (region != null && region.isNotEmpty) {
+            _regionLabel = region;
+          } else {
+            _regionLabel = '未设置';
+          }
         });
       }
-      // 加载本地头像（如果有）
-      final localAvatar = await UserAvatarHelper.getCurrentUserAvatarPath();
-      if (mounted && localAvatar != null) {
-        setState(() => _avatarPath = localAvatar);
-      }
+      final localAvatar = await UserAvatarHelper.ensureCachedAvatarFile(
+        avatarUrl,
+        _supabaseService.cacheUserAvatarFromPublicUrl,
+      );
+      if (mounted) setState(() => _avatarPath = localAvatar);
     } catch (e) {
       debugPrint('加载用户资料失败: $e');
     }
@@ -115,6 +139,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             children: [
               const SizedBox(height: 60),
               _buildHeader(context),
+              const SizedBox(height: 14),
+              _buildProfileMetaCard(),
               const SizedBox(height: AppSpaces.sectionSpacing),
               PetProfileSection(onProfileUpdate: _updateNickname),
               const SizedBox(height: 120), // Bottom padding for nav bar
@@ -134,103 +160,112 @@ class _ProfileScreenState extends State<ProfileScreen> {
             _avatarUrl != null;
 
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        GestureDetector(
-          onTap: _showEditNicknameDialog,
-          child: Row(
-            children: [
-              // 头像（可点击更换）
-              GestureDetector(
-                onTap: _showChangeAvatarDialog,
-                child: Container(
-                  padding: const EdgeInsets.all(3),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: const LinearGradient(
-                      colors: [
-                        AppColors.primaryGradientStart,
-                        AppColors.primaryGradientEnd,
-                      ],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.primary.withOpacity(0.4),
-                        blurRadius: 16,
-                        offset: const Offset(0, 8),
-                      ),
-                    ],
-                  ),
+        Expanded(
+          child: GestureDetector(
+            onTap: _showEditNicknameDialog,
+            child: Row(
+              children: [
+                // 头像（可点击更换）
+                GestureDetector(
+                  onTap: _showChangeAvatarDialog,
                   child: Container(
-                    padding: const EdgeInsets.all(2),
-                    decoration: const BoxDecoration(
-                      color: Colors.white,
+                    padding: const EdgeInsets.all(3),
+                    decoration: BoxDecoration(
                       shape: BoxShape.circle,
+                      gradient: const LinearGradient(
+                        colors: [
+                          AppColors.primaryGradientStart,
+                          AppColors.primaryGradientEnd,
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.primary.withOpacity(0.4),
+                          blurRadius: 16,
+                          offset: const Offset(0, 8),
+                        ),
+                      ],
                     ),
-                    child: CircleAvatar(
-                      radius: 32,
-                      backgroundColor: AppColors.primary,
-                      backgroundImage: hasAvatar &&
-                              _avatarPath != null &&
-                              File(_avatarPath!).existsSync()
-                          ? FileImage(File(_avatarPath!))
-                          : (_avatarUrl != null
-                              ? NetworkImage(_avatarUrl!)
-                              : null) as ImageProvider?,
-                      child: !hasAvatar
-                          ? Text(
-                              avatarText,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 24,
-                              ),
-                            )
-                          : null,
+                    child: Container(
+                      padding: const EdgeInsets.all(2),
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                      ),
+                      child: CircleAvatar(
+                        key: ValueKey<String>(
+                          '${_avatarUrl ?? ''}|${_avatarPath ?? ''}',
+                        ),
+                        radius: 32,
+                        backgroundColor: AppColors.primary,
+                        backgroundImage: hasAvatar &&
+                                _avatarPath != null &&
+                                File(_avatarPath!).existsSync()
+                            ? FileImage(File(_avatarPath!))
+                            : (_avatarUrl != null
+                                ? NetworkImage(_avatarUrl!)
+                                : null) as ImageProvider?,
+                        child: !hasAvatar
+                            ? Text(
+                                avatarText,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 24,
+                                ),
+                              )
+                            : null,
+                      ),
                     ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 20),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    displayName,
-                    style: AppStyles.ownerId.copyWith(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.primaryText,
-                      letterSpacing: -0.5,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: AppColors.primary.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      '主人',
-                      style: AppStyles.ownerId.copyWith(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.primary,
+                const SizedBox(width: 20),
+                Flexible(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        displayName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppStyles.ownerId.copyWith(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.primaryText,
+                          letterSpacing: -0.5,
+                        ),
                       ),
-                    ),
+                      const SizedBox(height: 4),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          '主人',
+                          style: AppStyles.ownerId.copyWith(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.primary,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-            ],
+                ),
+              ],
+            ),
           ),
         ),
         IconButton(
-          icon:
-              const Icon(Icons.settings_outlined, color: AppColors.primaryText),
+          icon: const Icon(Icons.settings_outlined, color: AppColors.primaryText),
           onPressed: () {
             Navigator.push(
               context,
@@ -239,6 +274,51 @@ class _ProfileScreenState extends State<ProfileScreen> {
           },
         ),
       ],
+    );
+  }
+
+  Widget _buildProfileMetaCard() {
+    Widget item(String title, String value) {
+      return Expanded(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              title,
+              style: AppStyles.ownerId.copyWith(fontSize: 13),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              value,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: AppColors.primaryText,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.75),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.white.withOpacity(0.7)),
+      ),
+      child: Row(
+        children: [
+          item('性别', _genderLabel),
+          item('出生日期', _birthDateLabel),
+          item('地区', _regionLabel),
+        ],
+      ),
     );
   }
 
@@ -346,65 +426,94 @@ class _ProfileScreenState extends State<ProfileScreen> {
     try {
       final XFile? pickedFile = await _picker.pickImage(
         source: source,
-        maxWidth: 512,
-        maxHeight: 512,
-        imageQuality: 80,
+        maxWidth: 2048,
+        maxHeight: 2048,
+        imageQuality: 90,
       );
 
       if (pickedFile == null) {
         return;
       }
 
-      // 保存到本地
-      final Directory appDir = await getApplicationDocumentsDirectory();
-      final String avatarsDir = '${appDir.path}/avatars';
-      final Directory avatarDirectory = Directory(avatarsDir);
-      if (!await avatarDirectory.exists()) {
-        await avatarDirectory.create(recursive: true);
+      if (!mounted) return;
+      final cropped = await AvatarImageHelper.cropAndCompressAvatar(
+        context,
+        pickedFile.path,
+      );
+      if (cropped == null) {
+        return;
       }
 
-      final String fileName =
-          'avatar_${DateTime.now().millisecondsSinceEpoch}.jpg';
-      final String newPath = '$avatarsDir/$fileName';
-      await File(pickedFile.path).copy(newPath);
+      // 先本地生效，避免网络波动导致“改了但看起来没改”
+      final localFile = cropped;
+      var persistedPath = await UserAvatarHelper.persistAvatarFile(localFile.path);
+      if (persistedPath == null && localFile.existsSync()) {
+        persistedPath = await UserAvatarHelper.persistAvatarBytes(
+          await localFile.readAsBytes(),
+        );
+      }
+      persistedPath ??= localFile.path;
+      await UserAvatarHelper.saveUserAvatarPath(persistedPath);
+      if (mounted) {
+        setState(() {
+          _avatarPath = persistedPath;
+        });
+      }
 
-      // 删除旧头像
-      if (_avatarPath != null && await File(_avatarPath!).exists()) {
-        try {
-          await File(_avatarPath!).delete();
-        } catch (e) {
-          debugPrint('删除旧头像失败: $e');
+      final fileForUpload = File(persistedPath);
+      var upload = await _supabaseService.uploadUserAvatarWithError(
+        fileForUpload,
+      );
+      if (upload.url == null && _retryableSyncError(upload.error)) {
+        await Future<void>.delayed(const Duration(milliseconds: 600));
+        upload = await _supabaseService.uploadUserAvatarWithError(
+          fileForUpload,
+        );
+      }
+
+      String? avatarUrl = upload.url;
+      String? syncError = upload.error;
+      var success = false;
+
+      if (avatarUrl != null) {
+        final prof =
+            await _supabaseService.upsertUserProfileWithError(
+          avatarUrl: avatarUrl,
+        );
+        success = prof.success;
+        if (!prof.success) {
+          syncError = prof.error ?? '更新头像链接到资料失败';
         }
       }
 
-      // 上传到 Supabase Storage（可选，如果需要云端存储）
-      final userId = await _supabaseService.currentUserId;
-      String? avatarUrl;
-      if (userId != null) {
-        try {
-          final uploadPath = '$userId/avatar.jpg';
-          final url =
-              await _supabaseService.uploadPostImage(File(newPath), uploadPath);
-          avatarUrl = url;
-        } catch (e) {
-          debugPrint('上传头像到 Storage 失败: $e');
+      String? localPath = persistedPath;
+      if (avatarUrl != null) {
+        await UserAvatarHelper.setAvatarSourceUrlBasename(
+          avatarUrl.split('?').first,
+        );
+        // 上传文件即 persistedPath，避免 ensureCachedAvatarFile 先删本地再下载导致拍照等场景不刷新
+        localPath = persistedPath;
+        if (File(persistedPath).existsSync()) {
+          try {
+            await FileImage(File(persistedPath)).evict();
+          } catch (_) {}
         }
       }
-
-      // 保存到本地和 Supabase
-      await UserAvatarHelper.saveUserAvatarPath(newPath);
-      final success =
-          await _supabaseService.upsertUserProfile(avatarUrl: avatarUrl);
 
       if (mounted) {
         setState(() {
-          _avatarPath = newPath;
+          _avatarPath = localPath;
           if (avatarUrl != null) _avatarUrl = avatarUrl;
         });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(success ? '✅ 头像更换成功' : '⚠️ 头像已保存，但同步失败'),
+            content: Text(
+              success
+                  ? '✅ 头像更换成功'
+                  : '⚠️ 头像已保存，但同步失败${syncError != null ? '：$syncError' : ''}',
+            ),
             backgroundColor: success ? Colors.green : Colors.orange,
+            duration: Duration(seconds: success ? 2 : 6),
           ),
         );
       }
@@ -417,6 +526,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  bool _retryableSyncError(String? message) {
+    if (message == null) return false;
+    final s = message.toLowerCase();
+    return s.contains('socket') ||
+        s.contains('timeout') ||
+        s.contains('connection') ||
+        s.contains('network') ||
+        s.contains('failed host') ||
+        s.contains('temporar');
+  }
 }
 
 // =========================================================
@@ -888,7 +1007,9 @@ class _PetProfileCardState extends State<PetProfileCard>
                                   borderRadius: BorderRadius.circular(20),
                                   child: widget.pet.avatar != null &&
                                           widget.pet.avatar!.isNotEmpty
-                                      ? Image.network(
+                                      ? (widget.pet.avatar!.startsWith('http://') ||
+                                              widget.pet.avatar!.startsWith('https://')
+                                          ? Image.network(
                                           widget.pet.avatar!,
                                           width: 80,
                                           height: 80,
@@ -907,7 +1028,26 @@ class _PetProfileCardState extends State<PetProfileCard>
                                               ),
                                             );
                                           },
-                                        )
+                                        ) : Image.file(
+                                          File(widget.pet.avatar!),
+                                          width: 80,
+                                          height: 80,
+                                          fit: BoxFit.cover,
+                                          errorBuilder:
+                                              (context, error, stackTrace) {
+                                            return Container(
+                                              color: AppColors.petTypeColors[
+                                                      widget.pet.type] ??
+                                                  AppColors.petTypeColors['其他'],
+                                              child: Icon(
+                                                Icons.pets,
+                                                color: Colors.white
+                                                    .withOpacity(0.8),
+                                                size: 30,
+                                              ),
+                                            );
+                                          },
+                                        ))
                                       : Container(
                                           color: AppColors.petTypeColors[
                                                   widget.pet.type] ??
@@ -1035,6 +1175,7 @@ class PetProfileDetailsPage extends StatefulWidget {
 class _PetProfileDetailsPageState extends State<PetProfileDetailsPage> {
   late Pet _currentPet;
   final _supabaseService = SupabaseService();
+  bool _isSyncingProfile = false;
 
   @override
   void initState() {
@@ -1090,6 +1231,49 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage> {
     );
   }
 
+  Widget _buildPetAvatar() {
+    final avatar = _currentPet.avatar;
+    if (avatar != null && avatar.isNotEmpty) {
+      if (avatar.startsWith('http://') || avatar.startsWith('https://')) {
+        return ClipOval(
+          child: CachedNetworkImage(
+            imageUrl: avatar,
+            width: 120,
+            height: 120,
+            fit: BoxFit.cover,
+            errorWidget: (context, url, error) => _buildPetAvatarPlaceholder(),
+          ),
+        );
+      }
+      final file = File(avatar);
+      if (file.existsSync()) {
+        return ClipOval(
+          child: Image.file(
+            file,
+            width: 120,
+            height: 120,
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) =>
+                _buildPetAvatarPlaceholder(),
+          ),
+        );
+      }
+    }
+    return _buildPetAvatarPlaceholder();
+  }
+
+  Widget _buildPetAvatarPlaceholder() {
+    return Container(
+      width: 120,
+      height: 120,
+      decoration: BoxDecoration(
+        color: Colors.grey[200],
+        shape: BoxShape.circle,
+      ),
+      child: const Icon(Icons.pets, color: Colors.grey, size: 50),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -1102,9 +1286,11 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage> {
           stops: [0.0, 1.0],
         ),
       ),
-      child: Scaffold(
-        backgroundColor: Colors.transparent,
-        appBar: AppBar(
+      child: Stack(
+        children: [
+          Scaffold(
+            backgroundColor: Colors.transparent,
+            appBar: AppBar(
           title: Text(
             '${_currentPet.name} 的档案',
             style: AppStyles.sectionTitle.copyWith(fontSize: 20),
@@ -1123,6 +1309,7 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage> {
               icon: const Icon(Icons.edit, color: AppColors.primary),
               onPressed: () async {
                 final initialData = {
+                  'id': _currentPet.id,
                   'name': _currentPet.name,
                   'species': _currentPet.breed,
                   'birthDate': _currentPet.birthDate,
@@ -1177,6 +1364,7 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage> {
                     useCustomNickname: result['useCustomNickname'] ?? false,
                   );
 
+                  setState(() => _isSyncingProfile = true);
                   try {
                     final success = await _supabaseService.updatePet(
                       updatedPet.toMap(),
@@ -1197,20 +1385,23 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage> {
                         context,
                       ).showSnackBar(const SnackBar(content: Text('档案已更新')));
                     }
+                    DataChangeNotifier.markPetDataChanged();
                   } catch (e) {
                     if (context.mounted) {
                       ScaffoldMessenger.of(
                         context,
                       ).showSnackBar(const SnackBar(content: Text('更新失败，请重试')));
                     }
+                  } finally {
+                    if (mounted) setState(() => _isSyncingProfile = false);
                   }
                 }
               },
             ),
           ],
         ),
-        body: SingleChildScrollView(
-          child: Padding(
+            body: SingleChildScrollView(
+              child: Padding(
             padding: const EdgeInsets.symmetric(
               horizontal: AppSpaces.horizontalPadding,
             ),
@@ -1218,31 +1409,7 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage> {
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 const SizedBox(height: 20),
-                ClipOval(
-                  child: Image.network(
-                    'https://loremflickr.com/240/240/animal,${_currentPet.breed.toLowerCase()}',
-                    width: 120,
-                    height: 120,
-                    fit: BoxFit.cover,
-                    loadingBuilder: (context, child, progress) {
-                      return progress == null
-                          ? child
-                          : const Center(child: CircularProgressIndicator());
-                    },
-                    errorBuilder: (context, error, stackTrace) {
-                      return Container(
-                        width: 120,
-                        height: 120,
-                        color: Colors.grey[200],
-                        child: const Icon(
-                          Icons.pets,
-                          color: Colors.grey,
-                          size: 50,
-                        ),
-                      );
-                    },
-                  ),
-                ),
+                _buildPetAvatar(),
                 const SizedBox(height: 16),
                 Text(_currentPet.name, style: AppStyles.sectionTitle),
                 const SizedBox(height: 32),
@@ -1271,8 +1438,27 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage> {
                 const SizedBox(height: 50),
               ],
             ),
+              ),
+            ),
           ),
-        ),
+          if (_isSyncingProfile)
+            Positioned.fill(
+              child: AbsorbPointer(
+                child: Container(
+                  color: Colors.black26,
+                  alignment: Alignment.center,
+                  child: const Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircularProgressIndicator(),
+                      SizedBox(height: 12),
+                      Text('正在保存档案…'),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
