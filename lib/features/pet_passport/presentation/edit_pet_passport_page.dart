@@ -10,7 +10,15 @@ class EditPetPassportPage extends StatefulWidget {
   final Pet pet;
   final PetPassport? passport;
 
-  const EditPetPassportPage({super.key, required this.pet, this.passport});
+  /// 与账号昵称同步后的展示用主人名（占位「铲屎官」等会替换为此值），用于表单初始文案。
+  final String? suggestedOwnerDisplay;
+
+  const EditPetPassportPage({
+    super.key,
+    required this.pet,
+    this.passport,
+    this.suggestedOwnerDisplay,
+  });
 
   @override
   State<EditPetPassportPage> createState() => _EditPetPassportPageState();
@@ -32,7 +40,9 @@ class _EditPetPassportPageState extends State<EditPetPassportPage> {
   void initState() {
     super.initState();
     _ownerNameController = TextEditingController(
-      text: widget.passport?.ownerName ?? '铲屎官',
+      text: widget.suggestedOwnerDisplay ??
+          widget.passport?.ownerName ??
+          '宠物家长',
     );
     _bioController = TextEditingController(text: widget.passport?.bio ?? '');
     _selectedMbti = widget.passport?.mbtiType;
@@ -111,6 +121,7 @@ class _EditPetPassportPageState extends State<EditPetPassportPage> {
             _buildTextField(
               controller: _ownerNameController,
               label: '主人姓名',
+              hint: '默认与账号昵称一致，可改成展示用姓名',
               icon: Icons.person,
             ),
             const SizedBox(height: 16),
@@ -384,6 +395,7 @@ class _EditPetPassportPageState extends State<EditPetPassportPage> {
     required String label,
     required IconData icon,
     int maxLines = 1,
+    String? hint,
   }) {
     return Container(
       decoration: BoxDecoration(
@@ -402,6 +414,7 @@ class _EditPetPassportPageState extends State<EditPetPassportPage> {
         maxLines: maxLines,
         decoration: InputDecoration(
           labelText: label,
+          hintText: hint,
           prefixIcon: Icon(icon, color: const Color(0xFF5A8EFA)),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),

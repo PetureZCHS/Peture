@@ -36,6 +36,8 @@
 	<string>允许应用保存图片到相册</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>允许应用访问照片以便保存生成的图片</string>
+	<key>NSCameraUsageDescription</key>
+	<string>允许使用相机拍摄头像</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

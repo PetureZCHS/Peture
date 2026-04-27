@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../shared/utils/user_avatar_helper.dart';
+import '../../../shared/utils/avatar_image_helper.dart';
 import '../../../services/supabase_service.dart';
 
 /// 宠物档案表单页面 - 模仿截图设计
@@ -17,6 +18,8 @@ class PetProfileFormPage extends StatefulWidget {
 
 class _PetProfileFormPageState extends State<PetProfileFormPage> {
   File? _avatarFile;
+  /// 编辑模式下云端头像 URL（仅展示，未重新选择文件时保留）
+  String? _avatarUrl;
   String? _petName;
   String? _petType; // 宠物类型：狗狗/猫咪
   String? _petSpecies; // 品种
@@ -30,6 +33,7 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
 
   String? _ownerNickname; // 该宠物对主人的自定义称呼
   String _defaultOwnerNickname = '主人'; // 用户默认称呼
+  bool _isSaving = false;
 
   final Map<String, List<String>> _speciesOptions = {
     '猫咪': [
@@ -224,10 +228,14 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
         }
       }
 
-      // 如果有头像路径
+      // 如果有头像路径或 URL
       if (data['avatar'] != null) {
         final avatarPath = data['avatar'] as String;
-        if (File(avatarPath).existsSync()) {
+        final isRemote = avatarPath.startsWith('http://') ||
+            avatarPath.startsWith('https://');
+        if (isRemote) {
+          _avatarUrl = avatarPath;
+        } else if (File(avatarPath).existsSync()) {
           _avatarFile = File(avatarPath);
         }
       }
@@ -263,9 +271,15 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
     try {
       final picker = ImagePicker();
       final file = await picker.pickImage(source: ImageSource.gallery);
-      if (file != null) {
-        setState(() => _avatarFile = File(file.path));
-      }
+      if (file == null) return;
+      if (!mounted) return;
+      final cropped =
+          await AvatarImageHelper.cropAndCompressAvatar(context, file.path);
+      if (cropped == null) return;
+      setState(() {
+        _avatarFile = cropped;
+        _avatarUrl = null;
+      });
     } catch (e) {
       debugPrint('选择头像失败: $e');
     }
@@ -1816,7 +1830,7 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
     );
   }
 
-  void _savePetProfile() {
+  Future<void> _savePetProfile() async {
     if (_petName == null || _petName!.isEmpty) {
       ScaffoldMessenger.of(
         context,
@@ -1847,8 +1861,22 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
       typeForDb = petType;
     }
 
+    setState(() => _isSaving = true);
+    String? avatarValue = _avatarFile?.path ??
+        widget.initialData?['avatar'] as String?;
+    if (_avatarFile != null) {
+      final petId = widget.initialData?['id']?.toString();
+      final uploaded = await SupabaseService().uploadPetAvatar(
+        file: _avatarFile!,
+        petId: petId,
+      );
+      if (uploaded != null) {
+        avatarValue = uploaded;
+      }
+    }
+
     final result = {
-      'avatar': _avatarFile?.path,
+      'avatar': avatarValue,
       'name': _petName,
       'type': typeForDb, // 宠物类型：狗、猫
       'breed': _petSpecies, // 品种：边牧犬、布偶猫
@@ -1859,7 +1887,8 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
       'useCustomNickname': _ownerNickname != null && _ownerNickname!.isNotEmpty,
       'ownerNickname': _ownerNickname,
     };
-
+    if (!mounted) return;
+    setState(() => _isSaving = false);
     Navigator.pop(context, result);
   }
 
@@ -1944,12 +1973,20 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
                               radius: 60,
                               backgroundColor: Colors.white,
                               child: CircleAvatar(
+                                key: ValueKey<String>(
+                                  '${_avatarFile?.path ?? ''}|${_avatarUrl ?? ''}',
+                                ),
                                 radius: 58,
                                 backgroundColor: const Color(0xFFF8F8F8),
-                                backgroundImage: _avatarFile != null
-                                    ? FileImage(_avatarFile!)
-                                    : null,
-                                child: _avatarFile == null
+                                backgroundImage: (_avatarFile != null
+                                        ? FileImage(_avatarFile!)
+                                        : (_avatarUrl != null &&
+                                                _avatarUrl!.isNotEmpty
+                                            ? NetworkImage(_avatarUrl!)
+                                            : null)) as ImageProvider?,
+                                child: _avatarFile == null &&
+                                        (_avatarUrl == null ||
+                                            _avatarUrl!.isEmpty)
                                     ? const Icon(
                                         Icons.camera_alt,
                                         size: 42,
@@ -2096,14 +2133,20 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
                       ),
                       elevation: 0,
                     ),
-                    onPressed: _savePetProfile,
-                    child: const Text(
-                      '保存档案',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                    onPressed: _isSaving ? null : _savePetProfile,
+                    child: _isSaving
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text(
+                            '保存档案',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                   ),
                 ),
               ),
