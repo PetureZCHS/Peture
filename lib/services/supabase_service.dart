@@ -1,11 +1,13 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../models/conversation.dart';
-import '../models/pet_diary.dart';
-import '../models/fitness_course.dart';
+import '../shared/models/conversation.dart';
+import '../shared/models/pet_diary.dart';
+import '../shared/models/fitness_course.dart';
 
 /// Supabase 数据库服务类
 /// 用于替换 SQLite Helper，提供统一的数据访问接口
@@ -29,7 +31,7 @@ class SupabaseService {
         return leanCloudUserId;
       }
     } catch (e) {
-      print('获取 LeanCloud 用户 ID 失败: $e');
+      debugPrint('获取 LeanCloud 用户 ID 失败: $e');
     }
 
     return null;
@@ -59,7 +61,7 @@ class SupabaseService {
 
       return response;
     } catch (e) {
-      print('获取用户资料失败: $e');
+      debugPrint('获取用户资料失败: $e');
       return null;
     }
   }
@@ -94,7 +96,7 @@ class SupabaseService {
       }
       return (code: null, error: err ?? '获取失败');
     } catch (e) {
-      print('获取邀请码异常: $e');
+      debugPrint('获取邀请码异常: $e');
       return (code: null, error: '网络异常，请重试');
     }
   }
@@ -116,15 +118,40 @@ class SupabaseService {
       }
       return (success: false, error: err ?? '兑换失败');
     } catch (e) {
-      print('兑换邀请码异常: $e');
+      debugPrint('兑换邀请码异常: $e');
       return (success: false, error: '网络异常，请重试');
     }
   }
 
-  /// 创建或更新用户资料
-  Future<bool> upsertUserProfile({String? nickname, String? avatarUrl, String? ownerNickname}) async {
+  String _formatProfileUpsertError(Object e) {
+    if (e is PostgrestException) {
+      final hint = e.hint;
+      final code = e.code;
+      final extra = [if (code != null) code, if (hint != null && hint.isNotEmpty) hint]
+          .join(' · ');
+      return extra.isEmpty ? e.message : '${e.message} ($extra)';
+    }
+    if (e is AuthException) return e.message;
+    return e.toString();
+  }
+
+  /// 创建或更新用户资料；失败时返回服务端/客户端错误说明（不仅限于网络问题）。
+  Future<({bool success, String? error})> upsertUserProfileWithError({
+    String? nickname,
+    String? avatarUrl,
+    String? ownerNickname,
+    String? gender,
+    String? birthDate,
+    String? province,
+    String? city,
+  }) async {
     final userId = await currentUserId;
-    if (userId == null) return false;
+    if (userId == null) {
+      return (
+        success: false,
+        error: '登录状态异常，请重新登录后再试',
+      );
+    }
 
     try {
       final data = {
@@ -134,14 +161,43 @@ class SupabaseService {
       if (nickname != null) data['nickname'] = nickname;
       if (avatarUrl != null) data['avatar_url'] = avatarUrl;
       if (ownerNickname != null) data['owner_nickname'] = ownerNickname;
+      if (gender != null) data['gender'] = gender;
+      if (birthDate != null) {
+        data['birth_date'] =
+            birthDate.contains('T') ? birthDate.split('T')[0] : birthDate;
+      }
+      if (province != null) data['province'] = province;
+      if (city != null) data['city'] = city;
 
       await _client.from('users_profiles').upsert(data);
 
-      return true;
-    } catch (e) {
-      print('更新用户资料失败: $e');
-      return false;
+      return (success: true, error: null);
+    } catch (e, st) {
+      debugPrint('更新用户资料失败: $e\n$st');
+      return (success: false, error: _formatProfileUpsertError(e));
     }
+  }
+
+  /// 创建或更新用户资料
+  Future<bool> upsertUserProfile({
+    String? nickname,
+    String? avatarUrl,
+    String? ownerNickname,
+    String? gender,
+    String? birthDate,
+    String? province,
+    String? city,
+  }) async {
+    final r = await upsertUserProfileWithError(
+      nickname: nickname,
+      avatarUrl: avatarUrl,
+      ownerNickname: ownerNickname,
+      gender: gender,
+      birthDate: birthDate,
+      province: province,
+      city: city,
+    );
+    return r.success;
   }
 
   /// 获取用户默认的主人昵称（宠物对主人的称呼）
@@ -163,13 +219,17 @@ class SupabaseService {
   Future<String?> insertPet(Map<String, dynamic> pet) async {
     final userId = await currentUserId;
     if (userId == null) {
-      print('插入宠物失败: 用户未登录');
+      debugPrint('插入宠物失败: 用户未登录');
       return null;
     }
 
     try {
       // 确保用户资料存在（因为 pets 表有外键约束）
-      await _ensureUserProfileExists(userId);
+      final profileOk = await _ensureUserProfileExists(userId);
+      if (!profileOk) {
+        debugPrint('插入宠物失败: 无法创建或读取用户资料（请检查 users_profiles 权限/RLS）');
+        return null;
+      }
 
       // 创建插入数据，移除 id 字段让数据库自动生成
       final petData = Map<String, dynamic>.from(pet);
@@ -185,7 +245,7 @@ class SupabaseService {
           } else if (neuterStatusStr == '未绝育') {
             petData['neuter_status'] = false;
           } else {
-            print('警告: 未知的 neuter_status 值: $neuterStatusStr');
+            debugPrint('警告: 未知的 neuter_status 值: $neuterStatusStr');
             petData['neuter_status'] = null;
           }
         }
@@ -200,6 +260,13 @@ class SupabaseService {
         }
       }
 
+      // 未显式选择绝育状态时，用 false 占位，避免 boolean NOT NULL 列收到 null
+      if (!petData.containsKey('neuter_status') || petData['neuter_status'] == null) {
+        petData['neuter_status'] = false;
+      }
+      // 不向 PostgREST 发送 null，减少「违反非空约束」；缺省列走库端 default
+      petData.removeWhere((_, v) => v == null);
+
       final response =
           await _client.from('pets').insert(petData).select().single().timeout(
         const Duration(seconds: 10),
@@ -209,15 +276,15 @@ class SupabaseService {
       );
       return response['id'] as String?;
     } catch (e) {
-      print('插入宠物失败: $e');
-      print('用户ID: $userId');
-      print('宠物数据: $pet');
+      debugPrint('插入宠物失败: $e');
+      debugPrint('用户ID: $userId');
+      debugPrint('宠物数据: $pet');
       rethrow; // 重新抛出异常以便上层捕获
     }
   }
 
-  /// 确保用户资料存在（如果不存在则创建）
-  Future<void> _ensureUserProfileExists(String userId) async {
+  /// 确保用户资料存在（如果不存在则创建）。无权限或网络失败时返回 false。
+  Future<bool> _ensureUserProfileExists(String userId) async {
     try {
       // 尝试获取用户资料
       final profile = await _client
@@ -236,11 +303,12 @@ class SupabaseService {
           'created_at': DateTime.now().toIso8601String(),
           'updated_at': DateTime.now().toIso8601String(),
         });
-        print('自动创建用户资料: $userId');
+        debugPrint('自动创建用户资料: $userId');
       }
+      return true;
     } catch (e) {
-      print('确保用户资料存在失败: $e');
-      // 不抛出异常，让上层处理
+      debugPrint('确保用户资料存在失败: $e');
+      return false;
     }
   }
 
@@ -267,7 +335,7 @@ class SupabaseService {
         return mapped;
       }).toList();
     } catch (e) {
-      print('获取宠物列表失败: $e');
+      debugPrint('获取宠物列表失败: $e');
       return [];
     }
   }
@@ -293,7 +361,7 @@ class SupabaseService {
           } else if (neuterStatusStr == '未绝育') {
             updateData['neuter_status'] = false;
           } else {
-            print('警告: 未知的 neuter_status 值: $neuterStatusStr');
+            debugPrint('警告: 未知的 neuter_status 值: $neuterStatusStr');
             updateData['neuter_status'] = null;
           }
         }
@@ -322,7 +390,7 @@ class SupabaseService {
 
       return true;
     } catch (e) {
-      print('更新宠物失败: $e');
+      debugPrint('更新宠物失败: $e');
       rethrow; // 重新抛出异常以便上层捕获
     }
   }
@@ -337,7 +405,7 @@ class SupabaseService {
 
       return true;
     } catch (e) {
-      print('删除宠物失败: $e');
+      debugPrint('删除宠物失败: $e');
       return false;
     }
   }
@@ -367,7 +435,7 @@ class SupabaseService {
           .single();
       return response['id'] as String?;
     } catch (e) {
-      print('插入医疗记录失败: $e');
+      debugPrint('插入医疗记录失败: $e');
       return null;
     }
   }
@@ -386,7 +454,7 @@ class SupabaseService {
 
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
-      print('获取医疗记录失败: $e');
+      debugPrint('获取医疗记录失败: $e');
       return [];
     }
   }
@@ -408,7 +476,7 @@ class SupabaseService {
 
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
-      print('获取宠物医疗记录失败: $e');
+      debugPrint('获取宠物医疗记录失败: $e');
       return [];
     }
   }
@@ -433,7 +501,7 @@ class SupabaseService {
 
       return true;
     } catch (e) {
-      print('更新医疗记录失败: $e');
+      debugPrint('更新医疗记录失败: $e');
       return false;
     }
   }
@@ -452,7 +520,7 @@ class SupabaseService {
 
       return true;
     } catch (e) {
-      print('删除医疗记录失败: $e');
+      debugPrint('删除医疗记录失败: $e');
       return false;
     }
   }
@@ -482,7 +550,7 @@ class SupabaseService {
           .single();
       return response['id'] as String?;
     } catch (e) {
-      print('插入体重记录失败: $e');
+      debugPrint('插入体重记录失败: $e');
       return null;
     }
   }
@@ -501,7 +569,7 @@ class SupabaseService {
 
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
-      print('获取体重记录失败: $e');
+      debugPrint('获取体重记录失败: $e');
       return [];
     }
   }
@@ -523,7 +591,7 @@ class SupabaseService {
 
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
-      print('获取宠物体重记录失败: $e');
+      debugPrint('获取宠物体重记录失败: $e');
       return [];
     }
   }
@@ -548,7 +616,7 @@ class SupabaseService {
 
       return true;
     } catch (e) {
-      print('更新体重记录失败: $e');
+      debugPrint('更新体重记录失败: $e');
       return false;
     }
   }
@@ -567,7 +635,7 @@ class SupabaseService {
 
       return true;
     } catch (e) {
-      print('删除体重记录失败: $e');
+      debugPrint('删除体重记录失败: $e');
       return false;
     }
   }
@@ -599,7 +667,7 @@ class SupabaseService {
           .single();
       return response['id'] as String?;
     } catch (e) {
-      print('插入疫苗记录失败: $e');
+      debugPrint('插入疫苗记录失败: $e');
       return null;
     }
   }
@@ -618,7 +686,7 @@ class SupabaseService {
 
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
-      print('获取疫苗记录失败: $e');
+      debugPrint('获取疫苗记录失败: $e');
       return [];
     }
   }
@@ -646,7 +714,7 @@ class SupabaseService {
         return map;
       }).toList();
     } catch (e) {
-      print('获取宠物疫苗记录失败: $e');
+      debugPrint('获取宠物疫苗记录失败: $e');
       return [];
     }
   }
@@ -675,7 +743,7 @@ class SupabaseService {
 
       return true;
     } catch (e) {
-      print('更新疫苗记录失败: $e');
+      debugPrint('更新疫苗记录失败: $e');
       return false;
     }
   }
@@ -694,7 +762,7 @@ class SupabaseService {
 
       return true;
     } catch (e) {
-      print('删除疫苗记录失败: $e');
+      debugPrint('删除疫苗记录失败: $e');
       return false;
     }
   }
@@ -724,7 +792,7 @@ class SupabaseService {
           .single();
       return response['id'] as String?;
     } catch (e) {
-      print('插入每日提醒失败: $e');
+      debugPrint('插入每日提醒失败: $e');
       return null;
     }
   }
@@ -740,7 +808,7 @@ class SupabaseService {
 
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
-      print('获取每日提醒失败: $e');
+      debugPrint('获取每日提醒失败: $e');
       return [];
     }
   }
@@ -763,7 +831,7 @@ class SupabaseService {
       final response = await query;
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
-      print('获取宠物每日提醒失败: $e');
+      debugPrint('获取宠物每日提醒失败: $e');
       return [];
     }
   }
@@ -788,7 +856,7 @@ class SupabaseService {
 
       return true;
     } catch (e) {
-      print('更新每日提醒失败: $e');
+      debugPrint('更新每日提醒失败: $e');
       return false;
     }
   }
@@ -807,7 +875,7 @@ class SupabaseService {
 
       return true;
     } catch (e) {
-      print('删除每日提醒失败: $e');
+      debugPrint('删除每日提醒失败: $e');
       return false;
     }
   }
@@ -828,7 +896,7 @@ class SupabaseService {
           .order('start_date', ascending: false);
       return List<Map<String, dynamic>>.from(resp);
     } catch (e) {
-      print('获取用药提醒失败: $e');
+      debugPrint('获取用药提醒失败: $e');
       return [];
     }
   }
@@ -846,7 +914,7 @@ class SupabaseService {
           .order('start_date', ascending: false);
       return List<Map<String, dynamic>>.from(resp);
     } catch (e) {
-      print('获取宠物用药提醒失败: $e');
+      debugPrint('获取宠物用药提醒失败: $e');
       return [];
     }
   }
@@ -865,8 +933,72 @@ class SupabaseService {
           .single();
       return resp['id'] as String?;
     } catch (e) {
-      print('插入用药提醒失败: $e');
+      debugPrint('插入用药提醒失败: $e');
       return null;
+    }
+  }
+
+  // ============================================================
+  // 日记相关方法
+  // ============================================================
+
+  /// 插入日记
+  Future<String?> insertDiary_OLD(PetDiary diary) async {
+    final userId = await currentUserId;
+    if (userId == null) return null;
+
+    try {
+      // 确保用户资料存在
+      await _ensureUserProfileExists(userId);
+
+      // 移除 id 字段让数据库自动生成
+      final diaryData = diary.toMap();
+      diaryData.remove('id');
+      diaryData['user_id'] = userId;
+      
+      // 确保使用 created_at 字段名以匹配数据库
+      diaryData['created_at'] = diary.timestamp.toIso8601String();
+      diaryData.remove('timestamp'); // 移除可能导致错误的 timestamp 字段
+      
+      // 检查 pet_id 是否为空字符串，如果是这移除，或者设置为 null
+      if (diaryData['pet_id'] == null || (diaryData['pet_id'] is String && (diaryData['pet_id'] as String).isEmpty)) {
+        diaryData.remove('pet_id');
+      }
+
+      // 尝试插入 pet_diaries 表
+      final response = await _client
+          .from('pet_diaries')
+          .insert(diaryData)
+          .select()
+          .single();
+      return response['id'] as String?;
+    } catch (e) {
+      print('插入日记失败: $e');
+      return null;
+    }
+  }
+
+  /// 获取所有日记
+  /// [petId] 可选，若提供则只获取指定宠物的日记
+  Future<List<PetDiary>> getAllDiaries_OLD({String? petId}) async {
+    final userId = await currentUserId;
+    if (userId == null) return [];
+
+    try {
+      var query = _client.from('pet_diaries').select().eq('user_id', userId);
+
+      if (petId != null) {
+        query = query.eq('pet_id', petId);
+      }
+
+      final response = await query.order('created_at', ascending: false);
+      
+      return List<Map<String, dynamic>>.from(response)
+          .map((data) => PetDiary.fromMap(data))
+          .toList();
+    } catch (e) {
+      print('获取日记列表失败: $e');
+      return [];
     }
   }
 
@@ -886,7 +1018,7 @@ class SupabaseService {
           .eq('user_id', userId);
       return true;
     } catch (e) {
-      print('更新用药提醒失败: $e');
+      debugPrint('更新用药提醒失败: $e');
       return false;
     }
   }
@@ -902,7 +1034,7 @@ class SupabaseService {
           .eq('user_id', userId);
       return true;
     } catch (e) {
-      print('删除用药提醒失败: $e');
+      debugPrint('删除用药提醒失败: $e');
       return false;
     }
   }
@@ -919,7 +1051,7 @@ class SupabaseService {
           .order('injection_date', ascending: false);
       return List<Map<String, dynamic>>.from(resp);
     } catch (e) {
-      print('获取疫苗提醒失败: $e');
+      debugPrint('获取疫苗提醒失败: $e');
       return [];
     }
   }
@@ -937,7 +1069,7 @@ class SupabaseService {
           .order('injection_date', ascending: false);
       return List<Map<String, dynamic>>.from(resp);
     } catch (e) {
-      print('获取宠物疫苗提醒失败: $e');
+      debugPrint('获取宠物疫苗提醒失败: $e');
       return [];
     }
   }
@@ -956,7 +1088,7 @@ class SupabaseService {
           .single();
       return resp['id'] as String?;
     } catch (e) {
-      print('插入疫苗提醒失败: $e');
+      debugPrint('插入疫苗提醒失败: $e');
       return null;
     }
   }
@@ -977,7 +1109,7 @@ class SupabaseService {
           .eq('user_id', userId);
       return true;
     } catch (e) {
-      print('更新疫苗提醒失败: $e');
+      debugPrint('更新疫苗提醒失败: $e');
       return false;
     }
   }
@@ -993,7 +1125,7 @@ class SupabaseService {
           .eq('user_id', userId);
       return true;
     } catch (e) {
-      print('删除疫苗提醒失败: $e');
+      debugPrint('删除疫苗提醒失败: $e');
       return false;
     }
   }
@@ -1010,7 +1142,7 @@ class SupabaseService {
           .order('last_date', ascending: false);
       return List<Map<String, dynamic>>.from(resp);
     } catch (e) {
-      print('获取驱虫提醒失败: $e');
+      debugPrint('获取驱虫提醒失败: $e');
       return [];
     }
   }
@@ -1028,7 +1160,7 @@ class SupabaseService {
           .order('last_date', ascending: false);
       return List<Map<String, dynamic>>.from(resp);
     } catch (e) {
-      print('获取宠物驱虫提醒失败: $e');
+      debugPrint('获取宠物驱虫提醒失败: $e');
       return [];
     }
   }
@@ -1047,7 +1179,7 @@ class SupabaseService {
           .single();
       return resp['id'] as String?;
     } catch (e) {
-      print('插入驱虫提醒失败: $e');
+      debugPrint('插入驱虫提醒失败: $e');
       return null;
     }
   }
@@ -1068,7 +1200,7 @@ class SupabaseService {
           .eq('user_id', userId);
       return true;
     } catch (e) {
-      print('更新驱虫提醒失败: $e');
+      debugPrint('更新驱虫提醒失败: $e');
       return false;
     }
   }
@@ -1084,7 +1216,7 @@ class SupabaseService {
           .eq('user_id', userId);
       return true;
     } catch (e) {
-      print('删除驱虫提醒失败: $e');
+      debugPrint('删除驱虫提醒失败: $e');
       return false;
     }
   }
@@ -1119,7 +1251,7 @@ class SupabaseService {
           .single();
       return response['id'] as String?;
     } catch (e) {
-      print('插入对话失败: $e');
+      debugPrint('插入对话失败: $e');
       return null;
     }
   }
@@ -1140,7 +1272,7 @@ class SupabaseService {
           .map((map) => Conversation.fromMap(map))
           .toList();
     } catch (e) {
-      print('获取对话列表失败: $e');
+      debugPrint('获取对话列表失败: $e');
       return [];
     }
   }
@@ -1160,7 +1292,7 @@ class SupabaseService {
 
       return Conversation.fromMap(response);
     } catch (e) {
-      print('获取对话失败: $e');
+      debugPrint('获取对话失败: $e');
       return null;
     }
   }
@@ -1184,7 +1316,7 @@ class SupabaseService {
 
       return true;
     } catch (e) {
-      print('更新对话失败: $e');
+      debugPrint('更新对话失败: $e');
       return false;
     }
   }
@@ -1209,7 +1341,7 @@ class SupabaseService {
 
       return true;
     } catch (e) {
-      print('更新 Dify conversation_id 失败: $e');
+      debugPrint('更新 Dify conversation_id 失败: $e');
       return false;
     }
   }
@@ -1232,7 +1364,7 @@ class SupabaseService {
 
       return true;
     } catch (e) {
-      print('删除对话失败: $e');
+      debugPrint('删除对话失败: $e');
       return false;
     }
   }
@@ -1246,7 +1378,7 @@ class SupabaseService {
       await _client.from('conversations').delete().eq('user_id', userId);
       return true;
     } catch (e) {
-      print('删除所有对话失败: $e');
+      debugPrint('删除所有对话失败: $e');
       return false;
     }
   }
@@ -1281,7 +1413,7 @@ class SupabaseService {
           .single();
       return response['id'] as String?;
     } catch (e) {
-      print('插入聊天消息失败: $e');
+      debugPrint('插入聊天消息失败: $e');
       return null;
     }
   }
@@ -1303,7 +1435,7 @@ class SupabaseService {
 
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
-      print('获取聊天消息失败: $e');
+      debugPrint('获取聊天消息失败: $e');
       return [];
     }
   }
@@ -1322,7 +1454,7 @@ class SupabaseService {
 
       return true;
     } catch (e) {
-      print('删除聊天消息失败: $e');
+      debugPrint('删除聊天消息失败: $e');
       return false;
     }
   }
@@ -1342,7 +1474,7 @@ class SupabaseService {
       try {
         await _ensureUserProfileExists(userId);
       } catch (e) {
-        print('检查用户资料时出错（将继续保存日记）: $e');
+        debugPrint('检查用户资料时出错（将继续保存日记）: $e');
       }
 
       final diaryData = {
@@ -1351,32 +1483,35 @@ class SupabaseService {
         'content': diary.content,
         'style': diary.style,
         'created_at': diary.timestamp.toIso8601String(),
+        if (diary.petId != null) 'pet_id': diary.petId,
       };
 
       final response =
           await _client.from('pet_diaries').insert(diaryData).select().single();
       return response['id'] as String?;
     } catch (e) {
-      print('插入宠物日记失败: $e');
+      debugPrint('插入宠物日记失败: $e');
       return null;
     }
   }
 
   /// 获取所有宠物日记
-  Future<List<PetDiary>> getAllDiaries() async {
+  Future<List<PetDiary>> getAllDiaries({String? petId}) async {
     final userId = await currentUserId;
     if (userId == null) return [];
 
     try {
-      final response = await _client
-          .from('pet_diaries')
-          .select()
-          .eq('user_id', userId)
-          .order('created_at', ascending: false);
+      var query = _client.from('pet_diaries').select().eq('user_id', userId);
 
+      if (petId != null) {
+        query = query.eq('pet_id', petId);
+      }
+
+      final response = await query.order('created_at', ascending: false);
+      
       return (response as List).map((map) => PetDiary.fromMap(map)).toList();
     } catch (e) {
-      print('获取宠物日记失败: $e');
+      debugPrint('获取宠物日记失败: $e');
       return [];
     }
   }
@@ -1395,7 +1530,7 @@ class SupabaseService {
 
       return true;
     } catch (e) {
-      print('删除宠物日记失败: $e');
+      debugPrint('删除宠物日记失败: $e');
       return false;
     }
   }
@@ -1464,7 +1599,7 @@ class SupabaseService {
           await _client.from('daily_cost_items').insert(data).select().single();
       return response['id'] as String?;
     } catch (e) {
-      print('插入日常消费品记录失败: $e');
+      debugPrint('插入日常消费品记录失败: $e');
       return null;
     }
   }
@@ -1497,7 +1632,7 @@ class SupabaseService {
         return map;
       }).toList();
     } catch (e) {
-      print('获取日常消费品记录失败: $e');
+      debugPrint('获取日常消费品记录失败: $e');
       return [];
     }
   }
@@ -1533,7 +1668,7 @@ class SupabaseService {
 
       return true;
     } catch (e) {
-      print('更新日常消费品记录失败: $e');
+      debugPrint('更新日常消费品记录失败: $e');
       return false;
     }
   }
@@ -1551,7 +1686,7 @@ class SupabaseService {
 
       return true;
     } catch (e) {
-      print('删除日常消费品记录失败: $e');
+      debugPrint('删除日常消费品记录失败: $e');
       return false;
     }
   }
@@ -1585,7 +1720,7 @@ class SupabaseService {
           await _client.from('fitness_records').insert(data).select().single();
       return response['id'] as String?;
     } catch (e) {
-      print('插入健身记录失败: $e');
+      debugPrint('插入健身记录失败: $e');
       return null;
     }
   }
@@ -1618,7 +1753,7 @@ class SupabaseService {
         return map;
       }).toList();
     } catch (e) {
-      print('获取健身记录失败: $e');
+      debugPrint('获取健身记录失败: $e');
       return [];
     }
   }
@@ -1636,7 +1771,7 @@ class SupabaseService {
 
       return true;
     } catch (e) {
-      print('删除健身记录失败: $e');
+      debugPrint('删除健身记录失败: $e');
       return false;
     }
   }
@@ -1662,7 +1797,7 @@ class SupabaseService {
           await _client.from('health_plans').insert(data).select().single();
       return response['id'] as String?;
     } catch (e) {
-      print('插入健康计划失败: $e');
+      debugPrint('插入健康计划失败: $e');
       return null;
     }
   }
@@ -1687,7 +1822,7 @@ class SupabaseService {
         return map;
       }).toList();
     } catch (e) {
-      print('获取健康计划失败: $e');
+      debugPrint('获取健康计划失败: $e');
       return [];
     }
   }
@@ -1769,7 +1904,7 @@ class SupabaseService {
 
       return resultId;
     } catch (e) {
-      print('同步宠物护照失败: $e');
+      debugPrint('同步宠物护照失败: $e');
       return null;
     }
   }
@@ -1823,7 +1958,7 @@ class SupabaseService {
 
       return map;
     } catch (e) {
-      print('获取宠物护照失败: $e');
+      debugPrint('获取宠物护照失败: $e');
       return null;
     }
   }
@@ -1877,7 +2012,7 @@ class SupabaseService {
 
       return passports;
     } catch (e) {
-      print('获取所有宠物护照失败: $e');
+      debugPrint('获取所有宠物护照失败: $e');
       return [];
     }
   }
@@ -1891,7 +2026,7 @@ class SupabaseService {
       await _client.from('pet_diaries').delete().eq('user_id', userId);
       return true;
     } catch (e) {
-      print('删除所有宠物日记失败: $e');
+      debugPrint('删除所有宠物日记失败: $e');
       return false;
     }
   }
@@ -1974,7 +2109,7 @@ class SupabaseService {
 
       return response['id'] as String?;
     } catch (e) {
-      print('插入统一消费记录失败: $e');
+      debugPrint('插入统一消费记录失败: $e');
       return null;
     }
   }
@@ -1995,7 +2130,7 @@ class SupabaseService {
       // 转换字段名以匹配应用层
       return _convertUnifiedExpenseList(response);
     } catch (e) {
-      print('获取统一消费记录失败: $e');
+      debugPrint('获取统一消费记录失败: $e');
       return [];
     }
   }
@@ -2016,7 +2151,7 @@ class SupabaseService {
 
       return _convertUnifiedExpenseList(response);
     } catch (e) {
-      print('获取一次性支出失败: $e');
+      debugPrint('获取一次性支出失败: $e');
       return [];
     }
   }
@@ -2037,7 +2172,7 @@ class SupabaseService {
 
       return _convertUnifiedExpenseList(response);
     } catch (e) {
-      print('获取周期性成本失败: $e');
+      debugPrint('获取周期性成本失败: $e');
       return [];
     }
   }
@@ -2060,7 +2195,7 @@ class SupabaseService {
 
       return _convertUnifiedExpenseList(response);
     } catch (e) {
-      print('获取宠物消费记录失败: $e');
+      debugPrint('获取宠物消费记录失败: $e');
       return [];
     }
   }
@@ -2085,7 +2220,7 @@ class SupabaseService {
 
       return _convertUnifiedExpenseList(response);
     } catch (e) {
-      print('获取日期范围消费记录失败: $e');
+      debugPrint('获取日期范围消费记录失败: $e');
       return [];
     }
   }
@@ -2157,7 +2292,7 @@ class SupabaseService {
 
       return true;
     } catch (e) {
-      print('更新统一消费记录失败: $e');
+      debugPrint('更新统一消费记录失败: $e');
       return false;
     }
   }
@@ -2176,7 +2311,7 @@ class SupabaseService {
 
       return true;
     } catch (e) {
-      print('删除统一消费记录失败: $e');
+      debugPrint('删除统一消费记录失败: $e');
       return false;
     }
   }
@@ -2204,7 +2339,7 @@ class SupabaseService {
 
       return total;
     } catch (e) {
-      print('获取月度总支出失败: $e');
+      debugPrint('获取月度总支出失败: $e');
       return 0.0;
     }
   }
@@ -2232,7 +2367,7 @@ class SupabaseService {
 
       return total;
     } catch (e) {
-      print('获取年度总支出失败: $e');
+      debugPrint('获取年度总支出失败: $e');
       return 0.0;
     }
   }
@@ -2266,7 +2401,7 @@ class SupabaseService {
 
       return Map.fromEntries(sortedEntries);
     } catch (e) {
-      print('获取分类统计失败: $e');
+      debugPrint('获取分类统计失败: $e');
       return {};
     }
   }
@@ -2289,7 +2424,7 @@ class SupabaseService {
 
       return total;
     } catch (e) {
-      print('获取总支出失败: $e');
+      debugPrint('获取总支出失败: $e');
       return 0.0;
     }
   }
@@ -2356,12 +2491,12 @@ class SupabaseService {
       // 区分不同类型的错误
       if (e.toString().contains('network') ||
           e.toString().contains('timeout')) {
-        print('获取健身课程失败: 网络错误 - $e');
+        debugPrint('获取健身课程失败: 网络错误 - $e');
       } else if (e.toString().contains('permission') ||
           e.toString().contains('policy')) {
-        print('获取健身课程失败: 权限错误 - $e');
+        debugPrint('获取健身课程失败: 权限错误 - $e');
       } else {
-        print('获取健身课程失败: $e');
+        debugPrint('获取健身课程失败: $e');
       }
       return [];
     }
@@ -2372,7 +2507,7 @@ class SupabaseService {
     try {
       // 验证petType值
       if (!['dog', 'cat'].contains(petType)) {
-        print(
+        debugPrint(
             '获取宠物类型健身课程失败: Invalid petType: $petType. Must be either dog or cat');
         return [];
       }
@@ -2391,12 +2526,12 @@ class SupabaseService {
       // 区分不同类型的错误
       if (e.toString().contains('network') ||
           e.toString().contains('timeout')) {
-        print('获取宠物类型健身课程失败: 网络错误 - $e');
+        debugPrint('获取宠物类型健身课程失败: 网络错误 - $e');
       } else if (e.toString().contains('permission') ||
           e.toString().contains('policy')) {
-        print('获取宠物类型健身课程失败: 权限错误 - $e');
+        debugPrint('获取宠物类型健身课程失败: 权限错误 - $e');
       } else {
-        print('获取宠物类型健身课程失败: $e');
+        debugPrint('获取宠物类型健身课程失败: $e');
       }
       return [];
     }
@@ -2421,12 +2556,12 @@ class SupabaseService {
       // 区分不同类型的错误
       if (e.toString().contains('network') ||
           e.toString().contains('timeout')) {
-        print('获取增量健身课程失败: 网络错误 - $e');
+        debugPrint('获取增量健身课程失败: 网络错误 - $e');
       } else if (e.toString().contains('permission') ||
           e.toString().contains('policy')) {
-        print('获取增量健身课程失败: 权限错误 - $e');
+        debugPrint('获取增量健身课程失败: 权限错误 - $e');
       } else {
-        print('获取增量健身课程失败: $e');
+        debugPrint('获取增量健身课程失败: $e');
       }
       // 增量更新失败时，返回空列表（上层会降级到全量更新）
       return [];
@@ -2490,7 +2625,7 @@ class SupabaseService {
       // 数据验证
       // 验证必需字段
       if (data['course_id'] == null || (data['course_id'] as String).isEmpty) {
-        print('插入健身课程失败: course_id is required');
+        debugPrint('插入健身课程失败: course_id is required');
         return null;
       }
 
@@ -2499,7 +2634,7 @@ class SupabaseService {
         final intensity = data['intensity'] as String?;
         if (intensity != null &&
             !['low', 'medium', 'high'].contains(intensity)) {
-          print('插入健身课程失败: intensity must be low, medium, or high');
+          debugPrint('插入健身课程失败: intensity must be low, medium, or high');
           return null;
         }
       }
@@ -2508,7 +2643,7 @@ class SupabaseService {
       if (data.containsKey('pet_type')) {
         final petType = data['pet_type'] as String?;
         if (petType != null && !['dog', 'cat'].contains(petType)) {
-          print('插入健身课程失败: pet_type must be dog or cat');
+          debugPrint('插入健身课程失败: pet_type must be dog or cat');
           return null;
         }
       }
@@ -2521,18 +2656,18 @@ class SupabaseService {
       // 区分不同类型的错误
       if (e.toString().contains('network') ||
           e.toString().contains('timeout')) {
-        print('插入健身课程失败: 网络错误 - $e');
+        debugPrint('插入健身课程失败: 网络错误 - $e');
       } else if (e.toString().contains('permission') ||
           e.toString().contains('policy')) {
-        print('插入健身课程失败: 权限错误 - $e');
+        debugPrint('插入健身课程失败: 权限错误 - $e');
       } else if (e.toString().contains('duplicate') ||
           e.toString().contains('unique')) {
-        print('插入健身课程失败: 数据重复错误 - $e');
+        debugPrint('插入健身课程失败: 数据重复错误 - $e');
       } else if (e.toString().contains('validation') ||
           e.toString().contains('constraint')) {
-        print('插入健身课程失败: 数据验证错误 - $e');
+        debugPrint('插入健身课程失败: 数据验证错误 - $e');
       } else {
-        print('插入健身课程失败: $e');
+        debugPrint('插入健身课程失败: $e');
       }
       return null;
     }
@@ -2543,7 +2678,7 @@ class SupabaseService {
     try {
       final courseId = course['id'];
       if (courseId == null) {
-        print('更新健身课程失败: course id is required');
+        debugPrint('更新健身课程失败: course id is required');
         return false;
       }
 
@@ -2559,7 +2694,7 @@ class SupabaseService {
         final intensity = data['intensity'] as String?;
         if (intensity != null &&
             !['low', 'medium', 'high'].contains(intensity)) {
-          print('更新健身课程失败: intensity must be low, medium, or high');
+          debugPrint('更新健身课程失败: intensity must be low, medium, or high');
           return false;
         }
       }
@@ -2568,7 +2703,7 @@ class SupabaseService {
       if (data.containsKey('pet_type')) {
         final petType = data['pet_type'] as String?;
         if (petType != null && !['dog', 'cat'].contains(petType)) {
-          print('更新健身课程失败: pet_type must be dog or cat');
+          debugPrint('更新健身课程失败: pet_type must be dog or cat');
           return false;
         }
       }
@@ -2580,15 +2715,15 @@ class SupabaseService {
       // 区分不同类型的错误
       if (e.toString().contains('network') ||
           e.toString().contains('timeout')) {
-        print('更新健身课程失败: 网络错误 - $e');
+        debugPrint('更新健身课程失败: 网络错误 - $e');
       } else if (e.toString().contains('permission') ||
           e.toString().contains('policy')) {
-        print('更新健身课程失败: 权限错误 - $e');
+        debugPrint('更新健身课程失败: 权限错误 - $e');
       } else if (e.toString().contains('validation') ||
           e.toString().contains('constraint')) {
-        print('更新健身课程失败: 数据验证错误 - $e');
+        debugPrint('更新健身课程失败: 数据验证错误 - $e');
       } else {
-        print('更新健身课程失败: $e');
+        debugPrint('更新健身课程失败: $e');
       }
       return false;
     }
@@ -2611,12 +2746,12 @@ class SupabaseService {
       // 区分不同类型的错误
       if (e.toString().contains('network') ||
           e.toString().contains('timeout')) {
-        print('获取健身课程失败: 网络错误 - $e');
+        debugPrint('获取健身课程失败: 网络错误 - $e');
       } else if (e.toString().contains('permission') ||
           e.toString().contains('policy')) {
-        print('获取健身课程失败: 权限错误 - $e');
+        debugPrint('获取健身课程失败: 权限错误 - $e');
       } else {
-        print('获取健身课程失败: $e');
+        debugPrint('获取健身课程失败: $e');
       }
       return null;
     }
@@ -2635,12 +2770,12 @@ class SupabaseService {
       // 区分不同类型的错误
       if (e.toString().contains('network') ||
           e.toString().contains('timeout')) {
-        print('删除健身课程失败: 网络错误 - $e');
+        debugPrint('删除健身课程失败: 网络错误 - $e');
       } else if (e.toString().contains('permission') ||
           e.toString().contains('policy')) {
-        print('删除健身课程失败: 权限错误 - $e');
+        debugPrint('删除健身课程失败: 权限错误 - $e');
       } else {
-        print('删除健身课程失败: $e');
+        debugPrint('删除健身课程失败: $e');
       }
       return false;
     }
@@ -2651,6 +2786,35 @@ class SupabaseService {
   // ============================================================
 
   static const String _communityBucket = 'post-images';
+  static const String _userAvatarBucket = 'user-avatars';
+  static const String _petAvatarBucket = 'pet-avatars';
+
+  /// 删除同一 Storage 目录下除 [keepObjectPath] 外的 `avatar_*` 文件，避免历史头像堆积。
+  Future<void> _removeOtherAvatarObjectsInFolder({
+    required String bucket,
+    required String folderPrefix,
+    required String keepObjectPath,
+  }) async {
+    try {
+      final items =
+          await _client.storage.from(bucket).list(path: folderPrefix);
+      final removePaths = <String>[];
+      for (final item in items) {
+        if (item.id == null) continue;
+        if (!item.name.startsWith('avatar_')) continue;
+        final objectPath = folderPrefix.isEmpty
+            ? item.name
+            : '$folderPrefix/${item.name}';
+        if (objectPath == keepObjectPath) continue;
+        removePaths.add(objectPath);
+      }
+      if (removePaths.isNotEmpty) {
+        await _client.storage.from(bucket).remove(removePaths);
+      }
+    } catch (e) {
+      debugPrint('清理 Storage 目录内旧头像失败: $e');
+    }
+  }
 
   /// 上传帖子图片到 Storage，返回公开 URL
   /// path 建议格式: {userId}/{postId}_{index}.jpg
@@ -2664,7 +2828,7 @@ class SupabaseService {
       final url = _client.storage.from(_communityBucket).getPublicUrl(path);
       return url;
     } catch (e) {
-      print('上传帖子图片失败: $e');
+      debugPrint('上传帖子图片失败: $e');
       return null;
     }
   }
@@ -2679,7 +2843,121 @@ class SupabaseService {
           );
       return _client.storage.from(_communityBucket).getPublicUrl(path);
     } catch (e) {
-      print('上传帖子图片失败: $e');
+      debugPrint('上传帖子图片失败: $e');
+      return null;
+    }
+  }
+
+  /// 上传用户头像到 Storage，返回带 cache busting 的 URL
+  Future<String?> uploadUserAvatar(File file) async {
+    final r = await uploadUserAvatarWithError(file);
+    return r.url;
+  }
+
+  /// 与 [uploadUserAvatar] 相同，但返回可读错误（便于排查 Storage RLS / 桶不存在 / 网络等）
+  Future<({String? url, String? error})> uploadUserAvatarWithError(
+    File file,
+  ) async {
+    final userId = await currentUserId;
+    if (userId == null) {
+      return (url: null, error: '未登录，无法上传头像');
+    }
+    if (!file.existsSync()) {
+      return (url: null, error: '头像文件不存在，请重新选择图片');
+    }
+    final path = '$userId/avatar_${DateTime.now().millisecondsSinceEpoch}.jpg';
+    try {
+      await _client.storage.from(_userAvatarBucket).upload(
+            path,
+            file,
+            fileOptions: const FileOptions(upsert: true),
+          );
+      final base = _client.storage.from(_userAvatarBucket).getPublicUrl(path);
+      await _removeOtherAvatarObjectsInFolder(
+        bucket: _userAvatarBucket,
+        folderPrefix: userId,
+        keepObjectPath: path,
+      );
+      return (
+        url: '${base.split('?').first}?t=${DateTime.now().millisecondsSinceEpoch}',
+        error: null,
+      );
+    } catch (e, st) {
+      debugPrint('上传用户头像失败: $e\n$st');
+      final msg = e.toString();
+      if (msg.contains('Bucket not found') || msg.contains('404')) {
+        return (
+          url: null,
+          error: 'Storage 中缺少 user-avatars 桶或名称不一致，请在 Supabase 控制台创建并配置策略',
+        );
+      }
+      if (msg.contains('JWT') ||
+          msg.contains('403') ||
+          msg.contains('row-level security') ||
+          msg.contains('Unauthorized')) {
+        return (
+          url: null,
+          error: '无权限上传到头像存储（请检查 user-avatars 的 Storage 策略）',
+        );
+      }
+      return (url: null, error: msg);
+    }
+  }
+
+  /// 下载用户头像到本地缓存文件，返回缓存路径
+  Future<String?> cacheUserAvatarFromPublicUrl(String? avatarPublicUrl) async {
+    if (avatarPublicUrl == null || avatarPublicUrl.isEmpty) return null;
+    final userId = await currentUserId;
+    if (userId == null) return null;
+    final uri = Uri.tryParse(avatarPublicUrl.split('?').first);
+    if (uri == null) return null;
+    const marker = '/object/public/user-avatars/';
+    final idx = uri.path.indexOf(marker);
+    if (idx == -1) return null;
+    final objectPath = Uri.decodeComponent(
+      uri.path.substring(idx + marker.length),
+    );
+    if (objectPath.isEmpty) return null;
+    try {
+      final bytes = await _client.storage.from(_userAvatarBucket).download(
+            objectPath,
+          );
+      final dir = await getApplicationSupportDirectory();
+      final out = File(p.join(dir.path, 'user_avatar_$userId.jpg'));
+      await out.writeAsBytes(bytes, flush: true);
+      return out.path;
+    } catch (e) {
+      debugPrint('下载用户头像失败: $e');
+      return null;
+    }
+  }
+
+  /// 上传宠物头像到 Storage，返回带 cache busting 的 URL
+  Future<String?> uploadPetAvatar({
+    required File file,
+    String? petId,
+  }) async {
+    final userId = await currentUserId;
+    if (userId == null) return null;
+    final identifier = petId ?? DateTime.now().millisecondsSinceEpoch.toString();
+    final path =
+        '$userId/$identifier/avatar_${DateTime.now().millisecondsSinceEpoch}.jpg';
+    try {
+      await _client.storage.from(_petAvatarBucket).upload(
+            path,
+            file,
+            fileOptions: const FileOptions(upsert: true),
+          );
+      final base = _client.storage.from(_petAvatarBucket).getPublicUrl(path);
+      final folderPrefix = '$userId/$identifier';
+      await _removeOtherAvatarObjectsInFolder(
+        bucket: _petAvatarBucket,
+        folderPrefix: folderPrefix,
+        keepObjectPath: path,
+      );
+      return '${base.split('?').first}?t=${DateTime.now().millisecondsSinceEpoch}';
+    } catch (e) {
+      debugPrint('上传宠物头像失败: $e');
       return null;
     }
   }
@@ -2707,7 +2985,7 @@ class SupabaseService {
           .single();
       return res as Map<String, dynamic>?;
     } catch (e) {
-      print('创建社区帖子失败: $e');
+      debugPrint('创建社区帖子失败: $e');
       return null;
     }
   }
@@ -2742,7 +3020,7 @@ class SupabaseService {
       }
       return posts;
     } catch (e) {
-      print('拉取社区帖子列表失败: $e');
+      debugPrint('拉取社区帖子列表失败: $e');
       return [];
     }
   }
@@ -2764,7 +3042,7 @@ class SupabaseService {
       }
       return map;
     } catch (e) {
-      print('批量拉取用户资料失败: $e');
+      debugPrint('批量拉取用户资料失败: $e');
       return {};
     }
   }
@@ -2787,7 +3065,7 @@ class SupabaseService {
       data['author_avatar_url'] = profile?['avatar_url'];
       return data;
     } catch (e) {
-      print('获取社区帖子失败: $e');
+      debugPrint('获取社区帖子失败: $e');
       return null;
     }
   }
@@ -2817,7 +3095,7 @@ class SupabaseService {
           .single();
       return res as Map<String, dynamic>?;
     } catch (e) {
-      print('发表评论失败: $e');
+      debugPrint('发表评论失败: $e');
       return null;
     }
   }
@@ -2849,7 +3127,7 @@ class SupabaseService {
       }
       return comments;
     } catch (e) {
-      print('获取评论列表失败: $e');
+      debugPrint('获取评论列表失败: $e');
       return [];
     }
   }
@@ -2880,7 +3158,7 @@ class SupabaseService {
         return true;
       }
     } catch (e) {
-      print('点赞操作失败: $e');
+      debugPrint('点赞操作失败: $e');
       return false;
     }
   }
@@ -2928,7 +3206,7 @@ class SupabaseService {
         return true;
       }
     } catch (e) {
-      print('收藏操作失败: $e');
+      debugPrint('收藏操作失败: $e');
       return false;
     }
   }
@@ -2955,7 +3233,7 @@ class SupabaseService {
   Future<bool> toggleFollow(String followingId) async {
     final userId = await currentUserId;
     if (userId == null || userId == followingId) {
-      print('关注操作失败: userId=$userId, followingId=$followingId');
+      debugPrint('关注操作失败: userId=$userId, followingId=$followingId');
       return false;
     }
     try {
@@ -2972,7 +3250,7 @@ class SupabaseService {
             .delete()
             .eq('follower_id', userId)
             .eq('following_id', followingId);
-        print('取消关注成功: $followingId');
+        debugPrint('取消关注成功: $followingId');
         return false; // false = 已取消关注
       } else {
         // 未关注，执行关注
@@ -2980,11 +3258,11 @@ class SupabaseService {
           'follower_id': userId,
           'following_id': followingId,
         });
-        print('关注成功: $followingId');
+        debugPrint('关注成功: $followingId');
         return true; // true = 已关注
       }
     } catch (e) {
-      print('关注操作失败: $e');
+      debugPrint('关注操作失败: $e');
       return false;
     }
   }
@@ -3074,7 +3352,7 @@ class SupabaseService {
       }
       return posts;
     } catch (e) {
-      print('获取关注流失败: $e');
+      debugPrint('获取关注流失败: $e');
       return [];
     }
   }

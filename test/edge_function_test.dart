@@ -25,7 +25,7 @@ class _EdgeFunctionTestPageState extends State<EdgeFunctionTestPage> {
   // ⚠️ 替换为您的实际 anon key
   static const String _anonKey = 'YOUR_ANON_KEY_HERE';
   static const String _functionUrl =
-      'https://tcftpcvcldfudzxgemdh.supabase.co/functions/v1/chat';
+      'https://dyxbvsnnrzvozcokhlfw.supabase.co/functions/v1/chat';
 
   /// 测试阻塞模式（blocking）
   Future<void> _testBlocking() async {

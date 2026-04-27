@@ -1,8 +1,9 @@
 // 必需导入
-import '../data/fitness_courses_data.dart';
-import '../models/fitness_course.dart';
-import '../services/supabase_service.dart';
-import '../utils/fitness_cache_manager.dart';
+import 'package:flutter/foundation.dart';
+import '../shared/data/fitness_courses_data.dart';
+import '../shared/models/fitness_course.dart';
+import 'supabase_service.dart';
+import '../shared/utils/fitness_cache_manager.dart';
 
 /// 健身课程管理器
 /// 统一管理本地核心课程和云端扩展课程
@@ -79,7 +80,7 @@ class FitnessCoursesManager {
         return cached;
       }
       // 缓存也为空，返回空列表（至少还有核心课程可用）
-      print('获取扩展课程失败，且无缓存数据: $e');
+      debugPrint('获取扩展课程失败，且无缓存数据: $e');
       return [];
     }
   }
