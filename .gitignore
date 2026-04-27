@@ -127,6 +127,7 @@ web/plugins.js
 *.iws
 .idea/
 .vscode/
+!.vscode/launch.json
 *.swp
 *.swo
 *~
@@ -181,6 +182,9 @@ ios/Pods/Manifest.lock
 linux/flutter/ephemeral/.plugin_symlinks/
 windows/flutter/ephemeral/.plugin_symlinks/
 dify_chat.md
+
+# 本地下载的友盟 SDK 解压目录（工程已用 pub 依赖，勿提交）
+umeng_common_sdk-1.3.0/
 
 demo_reference/
 android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java

@@ -5,8 +5,10 @@ import 'package:intl/date_symbol_data_local.dart'; // 添加 intl 包
 import 'package:flutter_localizations/flutter_localizations.dart'; // 添加本地化支持
 import 'package:supabase_flutter/supabase_flutter.dart'; // ✅ 添加 Supabase
 import 'package:sentry_flutter/sentry_flutter.dart'; // ✅ 添加 Sentry
+import 'core/app_route_observer.dart';
 import 'features/auth/presentation/login_page.dart';
 import 'features/home/presentation/home_screen.dart';
+import 'services/analytics_service.dart';
 
 void main() async {
   // 确保 Flutter 框架初始化
@@ -49,6 +51,8 @@ void main() async {
         ),
       );
       debugPrint('✅ Supabase 初始化成功');
+      // 友盟 initCommon 若在 runApp 之前 await，原生启动屏会一直停到 SDK 返回（易卡死）
+      unawaited(AnalyticsService.tryInitIfConsented());
 
       // 启动根路由，根据登录状态自动切换
       runApp(const RootRouter());
@@ -106,6 +110,8 @@ class _RootRouterState extends State<RootRouter> {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
+      title: '智宠合生',
+      navigatorObservers: [appRouteObserver],
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
@@ -115,60 +121,54 @@ class _RootRouterState extends State<RootRouter> {
         Locale('zh', 'CN'), // 中文简体
         Locale('en', 'US'), // 英文
       ],
+      locale: const Locale('zh', 'CN'),
       home: _session != null ? const MyApp() : const LoginPage(),
     );
   }
 }
 
+/// 已登录后的主界面壳层：只能用 **一个** [MaterialApp]（在 [RootRouter] 里），
+/// 此处只包 [Theme] + [Material]，避免嵌套第二个 [MaterialApp] 导致 Navigator GlobalKey 冲突。
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    double appBarTextFontSize = 20;
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: '智宠合生',
-      theme: ThemeData(
-        useMaterial3: true,
-        brightness: Brightness.light,
-        scaffoldBackgroundColor: const Color(0xFFF7F7F7), // 浅灰色背景
-        primaryColor: const Color(0xFF007AFF), // 主题蓝色
-        fontFamily: '.SF Pro Text',
-        colorScheme: const ColorScheme.light(
-          primary: Color(0xFF007AFF), // 主要颜色 (按钮、高亮)
-          secondary: Color(0xFF5856D6), // 次要颜色
-          surface: Colors.white, // 卡片背景色
-          onSurface: Colors.black87, // 卡片上的文字颜色
+    const double appBarTextFontSize = 20;
+    final theme = ThemeData(
+      useMaterial3: true,
+      brightness: Brightness.light,
+      scaffoldBackgroundColor: const Color(0xFFF7F7F7),
+      primaryColor: const Color(0xFF007AFF),
+      fontFamily: '.SF Pro Text',
+      colorScheme: const ColorScheme.light(
+        primary: Color(0xFF007AFF),
+        secondary: Color(0xFF5856D6),
+        surface: Colors.white,
+        onSurface: Colors.black87,
+      ),
+      appBarTheme: AppBarTheme(
+        titleTextStyle: TextStyle(
+          fontSize: appBarTextFontSize,
+          color: Colors.black87,
         ),
-        appBarTheme: AppBarTheme(
-          titleTextStyle: TextStyle(
-            fontSize: appBarTextFontSize,
-            color: Colors.black87, // 浅色模式下标题为黑色
-          ),
-          iconTheme: const IconThemeData(color: Colors.black87), // 浅色模式下图标为黑色
-          backgroundColor: Colors.transparent, // 透明 AppBar 背景
-          elevation: 0,
-        ),
-        textButtonTheme: TextButtonThemeData(
-          style: TextButton.styleFrom(
-            foregroundColor: const Color(0xFF007AFF), // TextButton 默认文字颜色
-          ),
+        iconTheme: const IconThemeData(color: Colors.black87),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          foregroundColor: const Color(0xFF007AFF),
         ),
       ),
-      // 添加本地化支持
-      localizationsDelegates: const [
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-      ],
-      supportedLocales: const [
-        Locale('zh', 'CN'), // 中文简体
-        Locale('en', 'US'), // 英文
-      ],
-      locale: const Locale('zh', 'CN'), // 默认使用中文
+    );
 
-      home: const HomeScreen(),
+    return Theme(
+      data: theme,
+      child: Material(
+        color: theme.scaffoldBackgroundColor,
+        child: const HomeScreen(),
+      ),
     );
   }
 }

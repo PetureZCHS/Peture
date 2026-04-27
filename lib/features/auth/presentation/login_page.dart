@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import 'dart:ui';
 
 // 导入主应用文件
 import '../../../main.dart';
+import '../../../services/analytics_service.dart';
 // 导入邮箱登录页面
 import 'email_login_page.dart';
 // 导入手机号验证码登录页面
@@ -452,7 +455,7 @@ class _LoginBodyContent extends StatefulWidget {
 class _LoginBodyContentState extends State<_LoginBodyContent> {
   bool _agreedToTerms = false;
 
-  void _login() {
+  Future<void> _login() async {
     if (!_agreedToTerms) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -465,6 +468,7 @@ class _LoginBodyContentState extends State<_LoginBodyContent> {
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(builder: (context) => const MyApp()),
     );
+    unawaited(AnalyticsService.acceptConsentAndInit());
   }
 
   void _otherLogin(String method) {
@@ -483,7 +487,11 @@ class _LoginBodyContentState extends State<_LoginBodyContent> {
           style: TextStyle(fontSize: 14, color: Colors.grey),
         ),
         const SizedBox(height: 32),
-        _GradientLoginButton(onPressed: _login),
+        _GradientLoginButton(
+          onPressed: () {
+            _login();
+          },
+        ),
         const SizedBox(height: 16),
         _SecondaryLoginButton(
           text: '邮箱登录',
