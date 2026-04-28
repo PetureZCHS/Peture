@@ -18,7 +18,6 @@ import '../../../shared/utils/ui_helpers.dart';
 import 'loading_page.dart';
 import '../../moderation/data/moderation_client.dart';
 import '../../moderation/domain/moderation_scene.dart';
-import '../../moderation/domain/moderation_storage_buckets.dart';
 import '../../content_feedback/presentation/ai_generated_image_disclaimer.dart';
 import '../../moderation/utils/moderation_guard.dart';
 
@@ -697,7 +696,7 @@ class _PreparationPageState extends State<PreparationPage>
           fileToUpload.path != originalFile.path;
 
       final uploadFuture = supabase.storage
-          .from(ModerationStorageBuckets.aiImagesTemp)
+          .from('ai-wallpapers')
           .upload(
             filePath,
             fileToUpload,

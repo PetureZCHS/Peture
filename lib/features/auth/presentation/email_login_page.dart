@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../../main.dart'; 
 import 'email_register_page.dart'; 
 
 class EmailLoginPage extends StatefulWidget {
@@ -46,6 +45,13 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
 
   int _countdown = 0;
   Timer? _countdownTimer;
+
+  void _returnToRootAfterLogin() {
+    if (!mounted) return;
+    FocusScope.of(context).unfocus();
+    // 由 RootRouter 监听 AuthState 后自动切换到主页，避免手动 push MyApp 造成路由竞态。
+    Navigator.of(context).popUntil((route) => route.isFirst);
+  }
 
   @override
   void initState() {
@@ -128,23 +134,7 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
       debugPrint('User: ${response.user?.email}');
 
       if (response.user != null && mounted) {
-        // 隐藏键盘
-        FocusScope.of(context).unfocus();
-
-        // 直接跳转，不显示提示消息
-        if (mounted) {
-          Navigator.of(context).pushReplacement(
-            PageRouteBuilder(
-              pageBuilder: (context, animation, secondaryAnimation) =>
-                  const MyApp(),
-              transitionsBuilder:
-                  (context, animation, secondaryAnimation, child) {
-                return FadeTransition(opacity: animation, child: child);
-              },
-              transitionDuration: const Duration(milliseconds: 400),
-            ),
-          );
-        }
+        _returnToRootAfterLogin();
       }
     } on AuthException catch (e) {
       debugPrint('❌ 密码登录失败: ${e.message}');
@@ -264,23 +254,7 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
 
       if ((response.session != null || response.user != null) && mounted) {
         debugPrint('✅ 验证码登录成功: ${response.user?.email}');
-
-        // 隐藏键盘
-        FocusScope.of(context).unfocus();
-
-        if (mounted) {
-          Navigator.of(context).pushReplacement(
-            PageRouteBuilder(
-              pageBuilder: (context, animation, secondaryAnimation) =>
-                  const MyApp(),
-              transitionsBuilder:
-                  (context, animation, secondaryAnimation, child) {
-                return FadeTransition(opacity: animation, child: child);
-              },
-              transitionDuration: const Duration(milliseconds: 400),
-            ),
-          );
-        }
+        _returnToRootAfterLogin();
       } else {
         _showMessage('验证码验证失败，请重试');
       }

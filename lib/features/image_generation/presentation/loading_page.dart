@@ -1,17 +1,13 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
-import '../../../app_navigator.dart';
 import 'dart:io';
 import 'dart:async';
 import 'dart:ui';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../shared/utils/ui_helpers.dart';
 import 'result_page.dart';
-import '../../moderation/data/moderation_client.dart';
-import '../../moderation/domain/moderation_scene.dart';
 import '../../content_feedback/presentation/ai_generated_image_disclaimer.dart';
-import '../../moderation/presentation/moderation_dialog.dart';
 
 class AppColors {
   static const Color background = Color(0xFFF2F2F7);
@@ -79,7 +75,6 @@ class _LoadingPageState extends State<LoadingPage>
   bool _isTimeout = false; // 添加超时标志
   String? _generatedImageUrl; // 存储生成的图片URL（备用）
   File? _generatedImageFile; // 存储下载到本地的生成图片文件
-  String? _generatedStoragePath;
 
   @override
   void initState() {
@@ -197,7 +192,6 @@ class _LoadingPageState extends State<LoadingPage>
         _handleLoadingError('服务端未返回图片路径');
         return;
       }
-      _generatedStoragePath = path;
 
       // 下载文件到临时目录供 ResultPage 极速加载
       final supabase = Supabase.instance.client;
@@ -226,48 +220,7 @@ class _LoadingPageState extends State<LoadingPage>
 
   void _onTaskComplete() async {
     if (!mounted) return;
-
-    final moderationClient = ModerationClient();
-    if (_generatedImageFile != null) {
-      final bytes = await _generatedImageFile!.readAsBytes();
-      final outputCheck = await moderationClient.moderateImageByBytes(
-        scene: ModerationScene.imageOutput,
-        bytes: bytes,
-      );
-      if (!outputCheck.passed) {
-        _abortTaskPipeline();
-        final rootCtx = AppNavigator.rootKey.currentContext;
-        if (rootCtx != null) {
-          await showModerationBlockedDialog(rootCtx, result: outputCheck);
-        } else if (mounted) {
-          _handleLoadingError(
-            outputCheck.traceId.isEmpty
-                ? '生成结果未通过内容审核，请重试'
-                : '生成结果未通过内容审核（traceId: ${outputCheck.traceId}）',
-          );
-        }
-        return;
-      }
-    } else if (_generatedStoragePath != null && _generatedStoragePath!.isNotEmpty) {
-      final outputCheck = await moderationClient.moderateImageByStoragePath(
-        scene: ModerationScene.imageOutput,
-        storagePath: _generatedStoragePath!,
-      );
-      if (!outputCheck.passed) {
-        _abortTaskPipeline();
-        final rootCtx = AppNavigator.rootKey.currentContext;
-        if (rootCtx != null) {
-          await showModerationBlockedDialog(rootCtx, result: outputCheck);
-        } else if (mounted) {
-          _handleLoadingError(
-            outputCheck.traceId.isEmpty
-                ? '生成结果未通过内容审核，请重试'
-                : '生成结果未通过内容审核（traceId: ${outputCheck.traceId}）',
-          );
-        }
-        return;
-      }
-    }
+    // 业务策略：生图结果不再做 output 审核拦截，避免第三方审核抖动影响正常出图。
     try {
       await _progressController.animateTo(1.0,
           duration: const Duration(milliseconds: 500), curve: Curves.easeOut);
