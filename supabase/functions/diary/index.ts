@@ -1,4 +1,9 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createTraceId } from "../_shared/trace.ts";
+import { executeTextModeration } from "../_shared/moderation_provider.ts";
+import { writeModerationLog } from "../_shared/moderation_logger.ts";
+import { requireUserFromRequest } from "../_shared/auth.ts";
+
 const apiKey =
   Deno.env.get("DIFY_DIARY_V4_API_KEY") ??
   Deno.env.get("DIFY_DIARY_API_KEY");
@@ -22,6 +27,8 @@ Deno.serve(async (req)=>{
       headers: corsHeaders,
     });
   }
+  const traceId = createTraceId();
+  let requestUserId = "";
   let body;
   try {
     body = await req.json();
@@ -31,7 +38,35 @@ Deno.serve(async (req)=>{
       headers: corsHeaders,
     });
   }
-  const { inputs, user, response_mode } = body ?? {};
+  const auth = await requireUserFromRequest(req);
+  if ("error" in auth) {
+    return auth.error;
+  }
+  requestUserId = auth.userId;
+
+  const { inputs, response_mode } = body ?? {};
+  const inputQuery = (inputs?.query ?? "").toString();
+  const inputModerationExec = await executeTextModeration("diary_input", inputQuery, traceId);
+  const inputModeration = inputModerationExec.result;
+  await writeModerationLog({
+    userId: requestUserId,
+    scene: "diary_input",
+    traceId,
+    result: inputModeration,
+    contentExcerpt: inputQuery,
+    provider: inputModerationExec.provider,
+    providerResponse: inputModerationExec.providerResponse,
+  });
+  if (!inputModeration.passed) {
+    return new Response(JSON.stringify(inputModeration), {
+      status: 200,
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "application/json",
+      },
+    });
+  }
+
   const mode = response_mode === "streaming" ? "streaming" : "blocking";
   if (!apiKey) {
     return new Response("Missing DIFY_DIARY_V4_API_KEY", {
@@ -46,7 +81,7 @@ Deno.serve(async (req)=>{
   const payload = {
     inputs,
     response_mode: mode,
-    user: user || "anon"
+    user: requestUserId
   };
   if (mode === "streaming") {
     // 上游以 SSE 返回，函数作为反向代理原样转发事件流
@@ -70,10 +105,66 @@ Deno.serve(async (req)=>{
       "Cache-Control": "no-cache, no-transform",
       "Connection": "keep-alive"
     });
-    // 通过 TransformStream 将上游 ReadableStream 原样回传
-    const { readable, writable } = new TransformStream();
-    upstream.body.pipeTo(writable);
-    return new Response(readable, {
+    let outputBuffer = "";
+    let blocked = false;
+    const moderatedStream = upstream.body.pipeThrough(new TransformStream({
+      async transform(chunk, controller) {
+        if (blocked) return;
+        const text = new TextDecoder().decode(chunk);
+        const lines = text.split("\n");
+        for (const rawLine of lines) {
+          const line = rawLine.trim();
+          if (!line.startsWith("data:")) continue;
+          try {
+            const eventData = JSON.parse(line.slice(5).trim());
+            const piece = eventData?.event === "text_chunk"
+              ? eventData?.data?.text?.toString?.() ?? ""
+              : "";
+            if (piece) {
+              outputBuffer += piece;
+              const outputModerationExec = await executeTextModeration("diary_output", outputBuffer, traceId);
+              const outputModeration = outputModerationExec.result;
+              if (!outputModeration.passed) {
+                blocked = true;
+                await writeModerationLog({
+                  userId: requestUserId,
+                  scene: "diary_output",
+                  traceId,
+                  result: outputModeration,
+                  contentExcerpt: outputBuffer,
+                  provider: outputModerationExec.provider,
+                  providerResponse: outputModerationExec.providerResponse,
+                });
+                const safePayload =
+                  `data: ${JSON.stringify({ event: "text_chunk", data: { text: `该内容未通过审核（traceId: ${traceId}）` } })}\n\n` +
+                  `data: ${JSON.stringify({ event: "workflow_finished", data: {} })}\n\n`;
+                controller.enqueue(new TextEncoder().encode(safePayload));
+                return;
+              }
+            }
+          } catch {
+            // noop
+          }
+        }
+        controller.enqueue(chunk);
+      },
+      async flush() {
+        if (!blocked && outputBuffer) {
+          const outputModerationExec = await executeTextModeration("diary_output", outputBuffer, traceId);
+          const outputModeration = outputModerationExec.result;
+          await writeModerationLog({
+            userId: requestUserId,
+            scene: "diary_output",
+            traceId,
+            result: outputModeration,
+            contentExcerpt: outputBuffer,
+            provider: outputModerationExec.provider,
+            providerResponse: outputModerationExec.providerResponse,
+          });
+        }
+      },
+    }));
+    return new Response(moderatedStream, {
       status: upstream.status,
       headers: sseHeaders
     });
@@ -84,7 +175,42 @@ Deno.serve(async (req)=>{
       headers: baseHeaders,
       body: JSON.stringify(payload)
     });
-    return new Response(await resp.text(), {
+    const respText = await resp.text();
+    let respJson: Record<string, unknown> | null = null;
+    try {
+      respJson = JSON.parse(respText);
+    } catch {
+      // noop
+    }
+    const outputText = ((respJson?.data as Record<string, unknown> | undefined)?.outputs as Record<string, unknown> | undefined)?.text?.toString?.() ?? "";
+    if (outputText) {
+      const outputModerationExec = await executeTextModeration("diary_output", outputText, traceId);
+      const outputModeration = outputModerationExec.result;
+      await writeModerationLog({
+        userId: requestUserId,
+        scene: "diary_output",
+        traceId,
+        result: outputModeration,
+        contentExcerpt: outputText,
+        provider: outputModerationExec.provider,
+        providerResponse: outputModerationExec.providerResponse,
+      });
+      if (!outputModeration.passed && respJson) {
+        const data = (respJson.data as Record<string, unknown> | undefined) ?? {};
+        const outputs = (data.outputs as Record<string, unknown> | undefined) ?? {};
+        outputs.text = `该内容未通过审核（traceId: ${traceId}）`;
+        data.outputs = outputs;
+        respJson.data = data;
+        return new Response(JSON.stringify(respJson), {
+          status: resp.status,
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "application/json",
+          }
+        });
+      }
+    }
+    return new Response(respText, {
       status: resp.status,
       headers: {
         ...corsHeaders,

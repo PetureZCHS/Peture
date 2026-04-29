@@ -74,10 +74,6 @@ export async function executeTextModeration(
   content: string,
   traceId: string,
 ): Promise<ModerationExecution> {
-  // 业务策略：AI 回复与日记生成正文不做文本审核（不调用易盾，也不走本地关键词）。
-  if (scene === "ai_output" || scene === "diary_output") {
-    return { result: passedResult(scene, traceId), provider: "output_text_bypassed_by_policy" };
-  }
   const outputEnabled = (Deno.env.get("ENABLE_OUTPUT_MODERATION") ?? "true").toLowerCase() === "true";
   if (!outputEnabled && (scene === "ai_output" || scene === "diary_output" || scene === "image_output")) {
     return { result: passedResult(scene, traceId), provider: "output_disabled_by_flag" };
