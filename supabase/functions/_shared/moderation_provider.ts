@@ -53,7 +53,12 @@ function bytesToBase64(bytes: Uint8Array): string {
 }
 
 async function loadImageBase64(storagePath: string): Promise<string | null> {
-  const buckets = ["ai-images-temp", "avatars-temp", "ai-images", "avatars"];
+  const buckets = [
+    "ai-images-temp",
+    "user-avatars-temp",
+    "ai-images",
+    "user-avatars",
+  ];
   for (const bucket of buckets) {
     const { data, error } = await serviceClient.storage.from(bucket).download(storagePath);
     if (!error && data) {

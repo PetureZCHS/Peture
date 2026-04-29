@@ -11,7 +11,7 @@ import '../shared/models/fitness_course.dart';
 /// 用于替换 SQLite Helper，提供统一的数据访问接口
 class SupabaseService {
   static final SupabaseClient _client = Supabase.instance.client;
-  static const String _avatarsTempBucket = 'avatars-temp';
+  static const String _avatarsTempBucket = 'user-avatars-temp';
 
   /// 获取当前用户ID
   /// 优先从 Supabase Auth 获取，如果不存在则从 SharedPreferences 获取 LeanCloud 用户 ID
