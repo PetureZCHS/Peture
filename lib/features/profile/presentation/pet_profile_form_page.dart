@@ -2,6 +2,10 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:flutter_image_compress/flutter_image_compress.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
+import 'package:uuid/uuid.dart';
 import '../../../shared/utils/user_avatar_helper.dart';
 import '../../../shared/utils/avatar_image_helper.dart';
 import '../../../services/supabase_service.dart';
@@ -17,9 +21,12 @@ class PetProfileFormPage extends StatefulWidget {
 }
 
 class _PetProfileFormPageState extends State<PetProfileFormPage> {
+  String? _petId;
   File? _avatarFile;
+  File? _lifePhotoFile;
   /// 编辑模式下云端头像 URL（仅展示，未重新选择文件时保留）
   String? _avatarUrl;
+  String? _lifePhotoUrl;
   String? _petName;
   String? _petType; // 宠物类型：狗狗/猫咪
   String? _petSpecies; // 品种
@@ -202,6 +209,7 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
   void _loadInitialData() {
     final data = widget.initialData!;
     setState(() {
+      _petId = data['id']?.toString();
       _petName = data['name'] as String?;
       _petSpecies = data['species'] as String?;
       _gender = data['gender'] as String?;
@@ -237,6 +245,18 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
           _avatarUrl = avatarPath;
         } else if (File(avatarPath).existsSync()) {
           _avatarFile = File(avatarPath);
+        }
+      }
+
+      if (data['lifePhoto'] != null || data['life_photo'] != null) {
+        final lifePath =
+            (data['lifePhoto'] ?? data['life_photo']) as String;
+        final isRemote =
+            lifePath.startsWith('http://') || lifePath.startsWith('https://');
+        if (isRemote) {
+          _lifePhotoUrl = lifePath;
+        } else if (File(lifePath).existsSync()) {
+          _lifePhotoFile = File(lifePath);
         }
       }
 
@@ -282,6 +302,40 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
       });
     } catch (e) {
       debugPrint('选择头像失败: $e');
+    }
+  }
+
+  Future<void> _pickLifePhoto() async {
+    try {
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 2048,
+        maxHeight: 2048,
+        imageQuality: 90,
+      );
+      if (picked == null) return;
+
+      final tempDir = await getTemporaryDirectory();
+      final targetPath = p.join(
+        tempDir.path,
+        '${const Uuid().v4()}_lifephoto.jpg',
+      );
+      final compressed = await FlutterImageCompress.compressAndGetFile(
+        picked.path,
+        targetPath,
+        quality: 85,
+        format: CompressFormat.jpeg,
+        minWidth: 1024,
+        minHeight: 1024,
+      );
+
+      setState(() {
+        _lifePhotoFile = File(compressed?.path ?? picked.path);
+        _lifePhotoUrl = null;
+      });
+    } catch (e) {
+      debugPrint('选择生活照失败: $e');
     }
   }
 
@@ -1731,6 +1785,7 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
     required String placeholder,
     String? value,
     required VoidCallback onTap,
+    Widget? trailing,
     bool isFirst = false,
     bool isLast = false,
   }) {
@@ -1765,29 +1820,88 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
                   ),
                 ),
               ),
-              Row(
-                children: [
-                  Text(
-                    value ?? placeholder,
-                    style: TextStyle(
-                      fontSize: 15,
-                      color: value != null
-                          ? Colors.black87
-                          : const Color(0xFFCCCCCC),
-                    ),
+              trailing ??
+                  Row(
+                    children: [
+                      Text(
+                        value ?? placeholder,
+                        style: TextStyle(
+                          fontSize: 15,
+                          color: value != null
+                              ? Colors.black87
+                              : const Color(0xFFCCCCCC),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      const Icon(
+                        Icons.arrow_forward_ios,
+                        size: 14,
+                        color: Color(0xFFCCCCCC),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 8),
-                  const Icon(
-                    Icons.arrow_forward_ios,
-                    size: 14,
-                    color: Color(0xFFCCCCCC),
-                  ),
-                ],
-              ),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildLifePhotoTrailing() {
+    final hasLifePhoto =
+        _lifePhotoFile != null || (_lifePhotoUrl != null && _lifePhotoUrl!.isNotEmpty);
+
+    Widget thumb;
+    if (_lifePhotoFile != null && _lifePhotoFile!.existsSync()) {
+      thumb = Image.file(
+        _lifePhotoFile!,
+        width: 44,
+        height: 44,
+        fit: BoxFit.cover,
+      );
+    } else if (_lifePhotoUrl != null && _lifePhotoUrl!.isNotEmpty) {
+      thumb = Image.network(
+        _lifePhotoUrl!,
+        width: 44,
+        height: 44,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) => Container(
+          width: 44,
+          height: 44,
+          color: const Color(0xFFF2F3F7),
+          child: const Icon(Icons.photo, color: Color(0xFFB8BEC9), size: 20),
+        ),
+      );
+    } else {
+      thumb = Container(
+        width: 44,
+        height: 44,
+        color: const Color(0xFFF2F3F7),
+        child: const Icon(Icons.photo, color: Color(0xFFB8BEC9), size: 20),
+      );
+    }
+
+    return Row(
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(10),
+          child: thumb,
+        ),
+        const SizedBox(width: 10),
+        if (!hasLifePhoto)
+          const Padding(
+            padding: EdgeInsets.only(right: 6),
+            child: Text(
+              '未添加',
+              style: TextStyle(fontSize: 14, color: Color(0xFFCCCCCC)),
+            ),
+          ),
+        const Icon(
+          Icons.arrow_forward_ios,
+          size: 14,
+          color: Color(0xFFCCCCCC),
+        ),
+      ],
     );
   }
 
@@ -1838,6 +1952,9 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
       return;
     }
 
+    final petId = _petId ?? const Uuid().v4();
+    _petId = petId;
+
     // 保存逻辑，返回数据给上一页
     // 根据品种自动推断宠物类型（如果用户没有明确选择）
     String? petType = _petType;
@@ -1862,21 +1979,36 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
     }
 
     setState(() => _isSaving = true);
-    String? avatarValue = _avatarFile?.path ??
-        widget.initialData?['avatar'] as String?;
+    // 仅保留已有头像值；新选择本地文件时，只有上传成功才更新为远程 URL。
+    String? avatarValue = widget.initialData?['avatar'] as String?;
     if (_avatarFile != null) {
-      final petId = widget.initialData?['id']?.toString();
       final uploaded = await SupabaseService().uploadPetAvatar(
         file: _avatarFile!,
         petId: petId,
       );
-      if (uploaded != null) {
+      if (uploaded != null && uploaded.isNotEmpty) {
         avatarValue = uploaded;
       }
     }
 
+    String? lifePhotoValue =
+        (widget.initialData?['life_photo'] ?? widget.initialData?['lifePhoto'])
+            as String?;
+    if (_lifePhotoFile != null) {
+      final uploaded = await SupabaseService().uploadPetLifePhoto(
+        file: _lifePhotoFile!,
+        petId: petId,
+      );
+      if (uploaded != null && uploaded.isNotEmpty) {
+        lifePhotoValue = uploaded;
+      }
+    }
+
     final result = {
+      'id': petId,
       'avatar': avatarValue,
+      'life_photo': lifePhotoValue,
+      'lifePhoto': lifePhotoValue,
       'name': _petName,
       'type': typeForDb, // 宠物类型：狗、猫
       'breed': _petSpecies, // 品种：边牧犬、布偶猫
@@ -1997,24 +2129,6 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
                             ),
                           ),
                         ),
-                        const SizedBox(height: 16),
-                        Text(
-                          _petName != null && _petName!.isNotEmpty
-                              ? _petName!
-                              : '请输入爱宠昵称',
-                          style: TextStyle(
-                            fontSize: _petName != null && _petName!.isNotEmpty
-                                ? 16
-                                : 13,
-                            color: _petName != null && _petName!.isNotEmpty
-                                ? Colors.black87
-                                : Colors.grey.shade400,
-                            letterSpacing: 0.3,
-                            fontWeight: _petName != null && _petName!.isNotEmpty
-                                ? FontWeight.w500
-                                : FontWeight.normal,
-                          ),
-                        ),
                       ],
                     ),
                   ),
@@ -2080,7 +2194,7 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
                         _FormRow(
                           label: '我的称呼',
                           onTap: _showNicknameEditor,
-                          isLast: true,
+                          isLast: false,
                           child: Text(
                             _ownerNickname ?? _defaultOwnerNickname,
                             textAlign: TextAlign.right,
@@ -2089,6 +2203,13 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
                               color: Colors.black87,
                             ),
                           ),
+                        ),
+                        _buildListItem(
+                          label: '生活照',
+                          placeholder: '请选择生活照',
+                          trailing: _buildLifePhotoTrailing(),
+                          onTap: _pickLifePhoto,
+                          isLast: true,
                         ),
                       ],
                     ),

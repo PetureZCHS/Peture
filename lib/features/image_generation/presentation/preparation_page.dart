@@ -18,16 +18,24 @@ import '../../../shared/utils/ui_helpers.dart';
 import 'loading_page.dart';
 
 class AppColors {
-  static const Color background = Color(0xFFF2F2F7);
+  static const Color background = Color(0xFFFAF5FF);
   static const Color surface = Color(0xFFFFFFFF);
-  static const Color primary = Color(0xFF5D5FEF);
+  static const Color primary = Color(0xFF7C3AED);
+  static const Color secondary = Color(0xFF6366F1);
+  static const Color accent = Color(0xFFEC4899);
   static const Color textDark = Color(0xFF1D1D1F);
-  static const Color textGrey = Color(0xFF8E8E93);
-  static const Color textLight = Color(0xFFAEAEB2);
+  static const Color textGrey = Color(0xFF6B7280);
+  static const Color textLight = Color(0xFF9CA3AF);
 
-  static const Color orb1 = Color(0xFFC4E0E5);
-  static const Color orb2 = Color(0xFFE2D1F9);
-  static const Color orb3 = Color(0xFFFFDFC4);
+  static const Color orb1 = Color(0xFFD8B4FE);
+  static const Color orb2 = Color(0xFFA78BFA);
+  static const Color orb3 = Color(0xFFF9A8D4);
+
+  static const List<Color> primaryGradient = [
+    Color(0xFF7C3AED),
+    Color(0xFF6366F1),
+    Color(0xFFEC4899),
+  ];
 }
 
 class FadePageRoute extends PageRouteBuilder {
@@ -890,9 +898,37 @@ class _PreparationPageState extends State<PreparationPage>
       backgroundColor: AppColors.background,
       extendBodyBehindAppBar: true,
       appBar: AppBar(
-        title: const Text("Peture AI 图像实验室"),
+        title: const Text(
+          "AI 图像实验室",
+          style: TextStyle(
+            fontWeight: FontWeight.w700,
+            fontSize: 18,
+            letterSpacing: 0.5,
+          ),
+        ),
+        centerTitle: true,
         backgroundColor: Colors.transparent,
         elevation: 0,
+        scrolledUnderElevation: 0,
+        leading: const BackButton(color: AppColors.textDark),
+        flexibleSpace: ClipRect(
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    AppColors.background.withOpacity(0.85),
+                    AppColors.background.withOpacity(0.4),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+        foregroundColor: AppColors.textDark,
       ),
       body: Stack(
         children: [
@@ -972,7 +1008,7 @@ class _PreparationPageState extends State<PreparationPage>
                     width: double.infinity,
                     margin: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(24),
                       boxShadow: [
                         BoxShadow(
                           color: Colors.black.withOpacity(0.05),
@@ -982,12 +1018,12 @@ class _PreparationPageState extends State<PreparationPage>
                       ],
                     ),
                     child: ClipRRect(
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(24),
                       child: BackdropFilter(
                         filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
                         child: Container(
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(16),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(24),
                             border: Border.all(
                               color: Colors.white.withOpacity(0.6),
                               width: 1.2,
@@ -1017,16 +1053,14 @@ class _PreparationPageState extends State<PreparationPage>
                                       child: Icon(
                                         Icons.add_photo_alternate_outlined,
                                         size: 40,
-                                        color: const Color(0xFF5D5FEF)
-                                            .withOpacity(0.7),
+                                        color: AppColors.primary.withOpacity(0.7),
                                       ),
                                     ),
                                     const SizedBox(height: 16),
                                     Text(
                                       "选择宠物生活照",
                                       style: TextStyle(
-                                        color: const Color(0xFF8E8E93)
-                                            .withOpacity(0.9),
+                                        color: AppColors.textGrey.withOpacity(0.9),
                                         fontSize: 16,
                                         fontWeight: FontWeight.w500,
                                       ),
@@ -1035,7 +1069,7 @@ class _PreparationPageState extends State<PreparationPage>
                                     const Text(
                                       "尽量包含宠物全身",
                                       style: TextStyle(
-                                        color: Color(0xFFAEAEB2),
+                                        color: AppColors.textLight,
                                         fontSize: 12,
                                       ),
                                     ),
@@ -1043,7 +1077,7 @@ class _PreparationPageState extends State<PreparationPage>
                                     const Text(
                                       "确保面部清晰可见",
                                       style: TextStyle(
-                                        color: Color(0xFFAEAEB2),
+                                        color: AppColors.textLight,
                                         fontSize: 12,
                                       ),
                                     ),
@@ -1111,7 +1145,7 @@ class _PreparationPageState extends State<PreparationPage>
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.w800,
-                        color: Color(0xFF1D1D1F),
+                        color: AppColors.textDark,
                         height: 1.2,
                       ),
                     ),
@@ -1242,17 +1276,14 @@ class _PreparationPageState extends State<PreparationPage>
                                   !_isStartingTask &&
                                   _uploadStatus != UploadStatus.uploading)
                               ? const LinearGradient(
-                                  colors: [
-                                    Color(0xFF5D5FEF),
-                                    Color(0xFF8B77FF)
-                                  ],
+                                  colors: AppColors.primaryGradient,
                                   begin: Alignment.centerLeft,
                                   end: Alignment.centerRight,
                                 )
                               : const LinearGradient(
                                   colors: [
-                                    Color(0xFFC0C0C0),
-                                    Color(0xFFA0A0A0)
+                                    Color(0xFF9CA3AF),
+                                    Color(0xFF9CA3AF)
                                   ],
                                   begin: Alignment.centerLeft,
                                   end: Alignment.centerRight,
@@ -1260,7 +1291,7 @@ class _PreparationPageState extends State<PreparationPage>
                           boxShadow: [
                             BoxShadow(
                               color: (_selectedImage != null)
-                                  ? const Color(0xFF5D5FEF).withOpacity(0.3)
+                                  ? AppColors.primary.withOpacity(0.3)
                                   : Colors.grey.withOpacity(0.3),
                               blurRadius: 15,
                               spreadRadius: -1,
@@ -1509,14 +1540,14 @@ class _PreparationPageState extends State<PreparationPage>
             : Matrix4.identity(),
         transformAlignment: Alignment.center,
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(20),
           border: isSelected
-              ? Border.all(color: const Color(0xFF5D5FEF), width: 2)
+              ? Border.all(color: AppColors.primary, width: 2)
               : Border.all(color: Colors.white.withOpacity(0.6), width: 1.2),
           boxShadow: isSelected
               ? [
                   BoxShadow(
-                    color: const Color(0xFF5D5FEF).withOpacity(0.2),
+                    color: AppColors.primary.withOpacity(0.2),
                     blurRadius: 12,
                     offset: const Offset(0, 6),
                   ),
@@ -1530,12 +1561,12 @@ class _PreparationPageState extends State<PreparationPage>
                 ],
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(20),
           child: BackdropFilter(
             filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
             child: Container(
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(20),
                 gradient: RadialGradient(
                   radius: 2.0,
                   center: Alignment.topCenter,
@@ -1552,7 +1583,7 @@ class _PreparationPageState extends State<PreparationPage>
                   Expanded(
                     child: ClipRRect(
                       borderRadius:
-                          const BorderRadius.vertical(top: Radius.circular(10)),
+                          const BorderRadius.vertical(top: Radius.circular(18)),
                       child: _buildPresetImage(preset),
                     ),
                   ),
@@ -1560,21 +1591,35 @@ class _PreparationPageState extends State<PreparationPage>
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(vertical: 6),
                     decoration: BoxDecoration(
-                      color: isSelected
-                          ? const Color(0xFF5D5FEF)
-                          : Colors.transparent,
+                      color: isSelected ? AppColors.primary : Colors.transparent,
                       borderRadius: const BorderRadius.vertical(
-                          bottom: Radius.circular(12)),
+                          bottom: Radius.circular(20)),
                     ),
-                    child: Text(
-                      preset.name,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color:
-                            isSelected ? Colors.white : const Color(0xFF1D1D1F),
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                      ),
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        Text(
+                          preset.name,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color:
+                                isSelected ? Colors.white : AppColors.textDark,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        if (isSelected)
+                          const Positioned(
+                            right: 10,
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                color: AppColors.accent,
+                                shape: BoxShape.circle,
+                              ),
+                              child: SizedBox(width: 6, height: 6),
+                            ),
+                          ),
+                      ],
                     ),
                   ),
                 ],
@@ -1602,20 +1647,18 @@ class _PreparationPageState extends State<PreparationPage>
         height: 46,
         padding: const EdgeInsets.symmetric(vertical: 5),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(20),
           color: isSelected
-              ? const Color(0xFF5D5FEF)
+              ? AppColors.primary
               : Colors.white.withOpacity(0.65),
           border: Border.all(
-            color: isSelected
-                ? const Color(0xFF5D5FEF)
-                : Colors.white.withOpacity(0.9),
+            color: isSelected ? AppColors.primary : Colors.white.withOpacity(0.9),
             width: 1.2,
           ),
           boxShadow: [
             BoxShadow(
               color: isSelected
-                  ? const Color(0xFF5D5FEF).withOpacity(0.34)
+                  ? AppColors.primary.withOpacity(0.34)
                   : Colors.black.withOpacity(0.05),
               blurRadius: isSelected ? 12 : 6,
               spreadRadius: isSelected ? -1 : 0,
@@ -1640,7 +1683,7 @@ class _PreparationPageState extends State<PreparationPage>
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                color: isSelected ? Colors.white : const Color(0xFF1D1D1F),
+                color: isSelected ? Colors.white : AppColors.textDark,
                 fontWeight: FontWeight.w700,
                 fontSize: 11,
                 height: 1.0,
@@ -1654,7 +1697,7 @@ class _PreparationPageState extends State<PreparationPage>
                 textAlign: TextAlign.center,
                 maxLines: 1,
                 style: TextStyle(
-                  color: isSelected ? Colors.white : const Color(0xFF1D1D1F),
+                  color: isSelected ? Colors.white : AppColors.textDark,
                   fontWeight: FontWeight.w800,
                   fontSize: 12,
                   height: 1.0,
@@ -1698,7 +1741,7 @@ class _PreparationPageState extends State<PreparationPage>
             : '暂无示例图';
 
     return Container(
-      color: const Color(0xFFE5E5EA),
+      color: Colors.grey.shade200,
       alignment: Alignment.center,
       padding: const EdgeInsets.symmetric(horizontal: 6),
       child: Column(
@@ -1706,7 +1749,7 @@ class _PreparationPageState extends State<PreparationPage>
         children: [
           const Icon(
             Icons.image_not_supported_outlined,
-            color: Color(0xFF8E8E93),
+            color: AppColors.textGrey,
             size: 20,
           ),
           const SizedBox(height: 4),
@@ -1716,7 +1759,7 @@ class _PreparationPageState extends State<PreparationPage>
             overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.center,
             style: const TextStyle(
-              color: Color(0xFF636366),
+              color: AppColors.textGrey,
               fontSize: 10,
               fontWeight: FontWeight.w600,
             ),
@@ -1728,7 +1771,7 @@ class _PreparationPageState extends State<PreparationPage>
             overflow: TextOverflow.ellipsis,
             textAlign: TextAlign.center,
             style: const TextStyle(
-              color: Color(0xFF8E8E93),
+              color: AppColors.textGrey,
               fontSize: 9,
             ),
           ),
@@ -1744,7 +1787,7 @@ class _PreparationPageState extends State<PreparationPage>
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         color: const Color(0xFFFFF1F0).withOpacity(0.92),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(
           color: const Color(0xFFFFC1BD),
           width: 1,

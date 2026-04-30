@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
-import 'dart:math'; // 用于生成随机角度
-import 'package:confetti/confetti.dart'; // 必须导入 confetti 包
+import 'dart:math';
+import 'dart:ui';
+import 'package:confetti/confetti.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../invitation/presentation/invitation_code_page.dart';
@@ -9,6 +10,7 @@ import '../../invitation/presentation/my_invitation_code_page.dart';
 import '../../auth/presentation/login_page.dart';
 import 'account_settings_page.dart';
 import 'change_password_page.dart';
+import '../../../shared/utils/ui_helpers.dart';
 
 // ==========================================
 // 1. 主设置页面框架 (SettingsPage)
@@ -18,25 +20,67 @@ class SettingsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 假设 _AppSettingsState 中有这些变量，为了独立运行，这里直接取值
-    // 您实际代码中保留原来的即可
-    const Color backgroundColor = Color(0xFFF2F2F7);
-
     return Scaffold(
-      backgroundColor: backgroundColor,
+      backgroundColor: AppColors.background,
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
-        backgroundColor: backgroundColor.withOpacity(0.8),
+        backgroundColor: AppColors.background.withOpacity(0.85),
         elevation: 0,
         centerTitle: true,
-        title: const Text('设置',
-            style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-        leading: IconButton(
-          icon: const Icon(
-            Icons.arrow_back_ios_new,
-            color: Colors.black,
-            size: 22,
+        flexibleSpace: ClipRRect(
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+            child: Container(
+              color: Colors.transparent,
+            ),
           ),
-          onPressed: () => Navigator.of(context).pop(),
+        ),
+        title: ShaderMask(
+          shaderCallback: (bounds) => const LinearGradient(
+            colors: [Color(0xFF5A8EFA), Color(0xFF8B77FF)],
+          ).createShader(bounds),
+          child: const Text(
+            '设置',
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1.2,
+              color: Colors.white,
+              shadows: [
+                Shadow(
+                  blurRadius: 8,
+                  color: Color(0x405A8EFA),
+                  offset: Offset(0, 2),
+                ),
+              ],
+            ),
+          ),
+        ),
+        leading: Container(
+          margin: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.5),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: Colors.white.withOpacity(0.6),
+              width: 1,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.04),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: IconButton(
+            icon: const Icon(
+              Icons.arrow_back_ios_new_rounded,
+              color: Color(0xFF1D1D1F),
+              size: 18,
+            ),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
         ),
       ),
       body: const AppSettings(),
@@ -54,265 +98,86 @@ class AppSettings extends StatefulWidget {
   State<AppSettings> createState() => _AppSettingsState();
 }
 
-class _AppSettingsState extends State<AppSettings> {
+class _AppSettingsState extends State<AppSettings>
+    with SingleTickerProviderStateMixin {
   bool _notificationsEnabled = true;
+  late AnimationController _shimmerController;
 
   // --- 样式常量 ---
-  static const Color _cardColor = Colors.white;
-  static const Color _iconBlue = Color(0xFF0A84FF);
   static const Color _logoutButtonTextColor = Color(0xFFE53935);
-  static const Color _logoutButtonBackgroundColor = Color(0xFFFFEBEE);
 
-  static const TextStyle _sectionTitleStyle = TextStyle(
-    color: Color(0xFF6D6D72),
-    fontSize: 13,
-    fontWeight: FontWeight.w400,
-  );
+  // 图标渐变配置
+  static const List<LinearGradient> _iconGradients = [
+    LinearGradient(
+      colors: [Color(0xFF5A8EFA), Color(0xFF8B77FF)],
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+    ),
+    LinearGradient(
+      colors: [Color(0xFF43E97B), Color(0xFF38F9D7)],
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+    ),
+    LinearGradient(
+      colors: [Color(0xFFFFA726), Color(0xFFFF7043)],
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+    ),
+    LinearGradient(
+      colors: [Color(0xFFEC407A), Color(0xFFAB47BC)],
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+    ),
+  ];
 
-  static const TextStyle _tileTitleStyle = TextStyle(
-    fontSize: 17,
-    color: Colors.black,
-    fontWeight: FontWeight.w400,
-  );
+  @override
+  void initState() {
+    super.initState();
+    _shimmerController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2500),
+    )..repeat();
+  }
 
-  static const TextStyle _tileSubtitleStyle = TextStyle(
-    fontSize: 15,
-    color: Color(0xFF8A8A8E),
-    fontWeight: FontWeight.w400,
-  );
-
-  static const TextStyle _logoutTextStyle = TextStyle(
-    fontSize: 17,
-    fontWeight: FontWeight.w500,
-  );
+  @override
+  void dispose() {
+    _shimmerController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
+    final topPadding = MediaQuery.of(context).padding.top + kToolbarHeight - 20;
     return ListView(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+      padding: EdgeInsets.only(left: 20.0, right: 20.0, top: topPadding),
       children: [
-        const SizedBox(height: 16),
 
         // ==============================================
         // [入口] 高级会员订阅入口
         // ==============================================
-        GestureDetector(
-          onTap: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                fullscreenDialog: true,
-                builder: (context) => const SubscriptionPage(),
-              ),
-            );
-          },
-          child: Container(
-            margin: const EdgeInsets.only(bottom: 8),
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF6C5DD3), Color(0xFF8B80F8)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFF6C5DD3).withOpacity(0.3),
-                  blurRadius: 12,
-                  offset: const Offset(0, 6),
-                ),
-              ],
-            ),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.diamond_outlined,
-                      color: Colors.white, size: 28),
-                ),
-                const SizedBox(width: 16),
-                const Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        "升级到 Pro 版",
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      SizedBox(height: 4),
-                      Text(
-                        "解锁无限AI问诊与多宠物档案",
-                        style: TextStyle(
-                          color: Colors.white70,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const Icon(Icons.arrow_forward_ios,
-                    color: Colors.white70, size: 16),
-              ],
-            ),
-          ),
-        ),
+        _buildSubscriptionCard(),
+
+        const SizedBox(height: 16),
 
         // ==============================================
         // [入口] 我的邀请码（仅对 739319163@qq.com 开放）
         // ==============================================
-        GestureDetector(
-          onTap: () async {
-            final email = Supabase.instance.client.auth.currentUser?.email
-                    ?.trim()
-                    .toLowerCase() ??
-                '';
-            if (email == '739319163@qq.com') {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                    builder: (context) => const MyInvitationCodePage()),
-              );
-            } else {
-              if (!context.mounted) return;
-              showDialog(
-                context: context,
-                builder: (ctx) => _WarmTipDialog(message: '该功能暂未对小主们开放'),
-              );
-            }
-          },
-          child: Container(
-            margin: const EdgeInsets.only(bottom: 8),
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFFFFB6C1), Color(0xFFF8C4CC)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFFFFB6C1).withOpacity(0.3),
-                  blurRadius: 12,
-                  offset: const Offset(0, 6),
-                ),
-              ],
-            ),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.3),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.confirmation_number_rounded,
-                      color: Colors.white, size: 28),
-                ),
-                const SizedBox(width: 16),
-                const Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        "我的邀请码",
-                        style: TextStyle(
-                            color: Color(0xFF8B4545),
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold),
-                      ),
-                      SizedBox(height: 4),
-                      Text(
-                        "一人一码，分享好友兑换终身会员",
-                        style:
-                            TextStyle(color: Color(0xFFB85C5C), fontSize: 13),
-                      ),
-                    ],
-                  ),
-                ),
-                const Icon(Icons.arrow_forward_ios,
-                    color: Color(0xFFB85C5C), size: 16),
-              ],
-            ),
-          ),
-        ),
+        _buildMyInvitationCard(),
+
+        const SizedBox(height: 12),
 
         // ==============================================
         // [入口] 输入邀请码（兑换终身会员）
         // ==============================================
-        GestureDetector(
-          onTap: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                  builder: (context) => const InvitationCodePage()),
-            );
-          },
-          child: Container(
-            margin: const EdgeInsets.only(bottom: 8),
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Color(0xFFF8C4CC), width: 1.5),
-              boxShadow: [
-                BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2)),
-              ],
-            ),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFB6C1).withOpacity(0.2),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.card_giftcard_rounded,
-                      color: Color(0xFFE8919E), size: 28),
-                ),
-                const SizedBox(width: 16),
-                const Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        "输入邀请码",
-                        style: TextStyle(
-                            color: Colors.black87,
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold),
-                      ),
-                      SizedBox(height: 4),
-                      Text(
-                        "兑换终身会员权益",
-                        style: TextStyle(color: Colors.grey, fontSize: 13),
-                      ),
-                    ],
-                  ),
-                ),
-                const Icon(Icons.arrow_forward_ios,
-                    color: Colors.grey, size: 16),
-              ],
-            ),
-          ),
-        ),
+        _buildEnterInvitationCard(),
 
         // === 账户区域 ===
-        _buildSectionTitle('账户'),
-        _buildSettingsCard(
+        _buildSectionHeader('账户', Icons.person_outline),
+        _buildGlassCard(
           children: [
-            _buildSettingsTile(
+            _buildPremiumSettingsTile(
               icon: Icons.person_outline,
-              iconColor: _iconBlue,
+              gradientIndex: 0,
               title: '编辑个人资料',
               onTap: () {
                 Navigator.of(context).push(
@@ -322,10 +187,10 @@ class _AppSettingsState extends State<AppSettings> {
                 );
               },
             ),
-            _buildDivider(),
-            _buildSettingsTile(
+            _buildPremiumDivider(),
+            _buildPremiumSettingsTile(
               icon: Icons.lock_outline,
-              iconColor: _iconBlue,
+              gradientIndex: 0,
               title: '修改密码',
               onTap: () {
                 Navigator.of(context).push(
@@ -339,28 +204,27 @@ class _AppSettingsState extends State<AppSettings> {
         ),
 
         // === 通用区域 ===
-        _buildSectionTitle('通用'),
-        _buildSettingsCard(
+        _buildSectionHeader('通用', Icons.settings_outlined),
+        _buildGlassCard(
           children: [
-            _buildSettingsTile(
+            _buildPremiumSettingsTile(
               icon: Icons.notifications_none_outlined,
-              iconColor: _iconBlue,
+              gradientIndex: 1,
               title: '通知设置',
               onTap: null,
-              trailing: CupertinoSwitch(
+              trailing: _buildCustomSwitch(
                 value: _notificationsEnabled,
                 onChanged: (bool value) {
                   setState(() {
                     _notificationsEnabled = value;
                   });
                 },
-                activeColor: _iconBlue,
               ),
             ),
-            _buildDivider(),
-            _buildSettingsTile(
+            _buildPremiumDivider(),
+            _buildPremiumSettingsTile(
               icon: Icons.palette_outlined,
-              iconColor: _iconBlue,
+              gradientIndex: 2,
               title: '外观',
               subtitle: '跟随系统',
               onTap: () async {
@@ -371,45 +235,764 @@ class _AppSettingsState extends State<AppSettings> {
         ),
 
         // === 退出登录按钮 ===
-        const SizedBox(height: 32),
-        _buildLogoutButton(context),
         const SizedBox(height: 40),
+        _buildPremiumLogoutButton(context),
+        const SizedBox(height: 48),
       ],
     );
   }
 
-  // --- 辅助构建方法 ---
-  Widget _buildSectionTitle(String title) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16.0, 24.0, 16.0, 8.0),
-      child: Text(title, style: _sectionTitleStyle),
-    );
-  }
-
-  Widget _buildSettingsCard({required List<Widget> children}) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(12),
-      child: Column(children: children),
-    );
-  }
-
-  Widget _buildDivider() {
-    return const Padding(
-      padding: EdgeInsets.only(left: 64.0),
-      child: Divider(height: 0.5, thickness: 0.5, color: Color(0xFFDCDCDC)),
-    );
-  }
-
-  Widget _buildLogoutButton(BuildContext context) {
-    return TextButton(
-      onPressed: () => _signOut(context),
-      style: TextButton.styleFrom(
-        backgroundColor: _logoutButtonBackgroundColor,
-        foregroundColor: _logoutButtonTextColor,
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+  // ==========================================
+  // 订阅卡片 - 带闪光动画效果
+  // ==========================================
+  Widget _buildSubscriptionCard() {
+    return GestureDetector(
+      onTap: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            fullscreenDialog: true,
+            builder: (context) => const SubscriptionPage(),
+          ),
+        );
+      },
+      child: Container(
+        height: 110,
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFF5A8EFA), Color(0xFF8B77FF)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF5A8EFA).withOpacity(0.35),
+              blurRadius: 20,
+              offset: const Offset(0, 8),
+              spreadRadius: 0,
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: Stack(
+            children: [
+              // 装饰性圆形
+              Positioned(
+                right: -30,
+                top: -30,
+                child: Container(
+                  width: 120,
+                  height: 120,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white.withOpacity(0.08),
+                  ),
+                ),
+              ),
+              Positioned(
+                left: -20,
+                bottom: -40,
+                child: Container(
+                  width: 100,
+                  height: 100,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white.withOpacity(0.05),
+                  ),
+                ),
+              ),
+              // 闪光动画层
+              AnimatedBuilder(
+                animation: _shimmerController,
+                builder: (context, child) {
+                  return Positioned.fill(
+                    child: ShaderMask(
+                      shaderCallback: (bounds) {
+                        final gradient = LinearGradient(
+                          colors: [
+                            Colors.transparent,
+                            Colors.white.withOpacity(0.08),
+                            Colors.transparent,
+                          ],
+                          stops: const [0.0, 0.5, 1.0],
+                          begin: Alignment.centerLeft,
+                          end: Alignment.centerRight,
+                          transform: _SlideGradientTransform(
+                            percent: _shimmerController.value,
+                          ),
+                        );
+                        return gradient.createShader(bounds);
+                      },
+                      blendMode: BlendMode.srcATop,
+                      child: Container(
+                        color: Colors.transparent,
+                      ),
+                    ),
+                  );
+                },
+              ),
+              // 内容
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 56,
+                      height: 56,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            Colors.white.withOpacity(0.3),
+                            Colors.white.withOpacity(0.1),
+                          ],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.4),
+                          width: 1.5,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.white.withOpacity(0.2),
+                            blurRadius: 12,
+                            spreadRadius: 2,
+                          ),
+                        ],
+                      ),
+                      child: const Icon(
+                        Icons.diamond_rounded,
+                        color: Colors.white,
+                        size: 28,
+                        shadows: [
+                          Shadow(
+                            color: Color(0x40000000),
+                            blurRadius: 4,
+                            offset: Offset(0, 1),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            "升级到 Pro 版",
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 20,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.5,
+                              shadows: [
+                                Shadow(
+                                  color: Color(0x66000000),
+                                  blurRadius: 6,
+                                  offset: Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                          ),
+                          SizedBox(height: 6),
+                          Text(
+                            "解锁无限 AI 问诊与多宠物档案",
+                            style: TextStyle(
+                              color: Color(0xD9FFFFFF),
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                              shadows: [
+                                Shadow(
+                                  color: Color(0x66000000),
+                                  blurRadius: 4,
+                                  offset: Offset(0, 1),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.25),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.4),
+                          width: 1,
+                        ),
+                      ),
+                      child: const Text(
+                        'PRO',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 1,
+                          shadows: [
+                            Shadow(
+                              color: Color(0x66000000),
+                              blurRadius: 4,
+                              offset: Offset(0, 1),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
-      child: const Text('退出登录', style: _logoutTextStyle),
+    );
+  }
+
+  // ==========================================
+  // 我的邀请码卡片 - 玻璃拟态风格
+  // ==========================================
+  Widget _buildMyInvitationCard() {
+    return GestureDetector(
+      onTap: () async {
+        final email = Supabase.instance.client.auth.currentUser?.email
+                ?.trim()
+                .toLowerCase() ??
+            '';
+        if (email == '739319163@qq.com') {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+                builder: (context) => const MyInvitationCodePage()),
+          );
+        } else {
+          if (!context.mounted) return;
+          showDialog(
+            context: context,
+            builder: (ctx) => _WarmTipDialog(message: '该功能暂未对小主们开放'),
+          );
+        }
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          gradient: LinearGradient(
+            colors: [
+              const Color(0xFFFFF8E1).withOpacity(0.7),
+              const Color(0xFFFFECB3).withOpacity(0.5),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          border: Border.all(
+            color: const Color(0xFFFFB300).withOpacity(0.4),
+            width: 1,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFFFFB300).withOpacity(0.15),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+            child: Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.4),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 52,
+                    height: 52,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFFFFB300), Color(0xFFFF8F00)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFFFFB300).withOpacity(0.4),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: const Icon(
+                      Icons.card_giftcard_rounded,
+                      color: Colors.white,
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          "我的邀请码",
+                          style: TextStyle(
+                            color: Color(0xFF8B6914),
+                            fontSize: 17,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        SizedBox(height: 4),
+                        Text(
+                          "一人一码，分享好友兑换终身会员",
+                          style: TextStyle(
+                            color: Color(0xFFB8860B),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFB300).withOpacity(0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.arrow_forward_ios_rounded,
+                      color: Color(0xFF8B6914),
+                      size: 14,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ==========================================
+  // 输入邀请码卡片 - 玻璃拟态风格
+  // ==========================================
+  Widget _buildEnterInvitationCard() {
+    return GestureDetector(
+      onTap: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+              builder: (context) => const InvitationCodePage()),
+        );
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          gradient: LinearGradient(
+            colors: [
+              const Color(0xFFE3F2FD).withOpacity(0.7),
+              const Color(0xFFBBDEFB).withOpacity(0.5),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          border: Border.all(
+            color: const Color(0xFF5A8EFA).withOpacity(0.4),
+            width: 1,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF5A8EFA).withOpacity(0.12),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+            child: Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.4),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 52,
+                    height: 52,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF5A8EFA), Color(0xFF8B77FF)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF5A8EFA).withOpacity(0.4),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: const Icon(
+                      Icons.keyboard_rounded,
+                      color: Colors.white,
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          "输入邀请码",
+                          style: TextStyle(
+                            color: Color(0xFF1D1D1F),
+                            fontSize: 17,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        SizedBox(height: 4),
+                        Text(
+                          "兑换终身会员权益",
+                          style: TextStyle(
+                            color: Color(0xFF8E8E93),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF5A8EFA).withOpacity(0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.arrow_forward_ios_rounded,
+                      color: Color(0xFF5A8EFA),
+                      size: 14,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ==========================================
+  // 玻璃拟态卡片容器
+  // ==========================================
+  Widget _buildGlassCard({required List<Widget> children}) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        gradient: LinearGradient(
+          colors: [
+            Colors.white.withOpacity(0.65),
+            Colors.white.withOpacity(0.55),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.5),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.1),
+            ),
+            child: Column(children: children),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ==========================================
+  // 高级设置项 - 带渐变图标
+  // ==========================================
+  Widget _buildPremiumSettingsTile({
+    required IconData icon,
+    required int gradientIndex,
+    required String title,
+    String? subtitle,
+    Widget? trailing,
+    required VoidCallback? onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        splashColor: const Color(0xFF5A8EFA).withOpacity(0.1),
+        highlightColor: const Color(0xFF5A8EFA).withOpacity(0.05),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 14.0),
+          child: Row(
+            children: [
+              // 渐变图标容器
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  gradient: _iconGradients[gradientIndex % _iconGradients.length],
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: _getGradientColor(gradientIndex).withOpacity(0.3),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
+                ),
+                child: Icon(
+                  icon,
+                  color: Colors.white,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        color: Color(0xFF1D1D1F),
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.2,
+                      ),
+                    ),
+                    if (subtitle != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle,
+                        style: const TextStyle(
+                          color: Color(0xFF8E8E93),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              if (trailing != null)
+                trailing
+              else if (onTap != null)
+                Icon(
+                  Icons.arrow_forward_ios_rounded,
+                  color: const Color(0xFF8E8E93).withOpacity(0.4),
+                  size: 16,
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Color _getGradientColor(int index) {
+    switch (index % 4) {
+      case 0:
+        return const Color(0xFF5A8EFA);
+      case 1:
+        return const Color(0xFF43E97B);
+      case 2:
+        return const Color(0xFFFFA726);
+      case 3:
+        return const Color(0xFFEC407A);
+      default:
+        return const Color(0xFF5A8EFA);
+    }
+  }
+
+  // ==========================================
+  // 自定义开关 - 使用主题色
+  // ==========================================
+  Widget _buildCustomSwitch({
+    required bool value,
+    required ValueChanged<bool> onChanged,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: CupertinoSwitch(
+        value: value,
+        onChanged: onChanged,
+        activeColor: const Color(0xFF5A8EFA),
+        trackColor: Colors.grey.withOpacity(0.3),
+      ),
+    );
+  }
+
+  // ==========================================
+  // 分隔线
+  // ==========================================
+  Widget _buildPremiumDivider() {
+    return Padding(
+      padding: const EdgeInsets.only(left: 70.0),
+      child: Container(
+        height: 0.5,
+        color: Colors.grey.withOpacity(0.1),
+      ),
+    );
+  }
+
+  // ==========================================
+  // 区域标题 - 带图标和装饰
+  // ==========================================
+  Widget _buildSectionHeader(String title, IconData icon) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4.0, 28.0, 4.0, 12.0),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF5A8EFA), Color(0xFF8B77FF)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(
+              icon,
+              color: Colors.white,
+              size: 14,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            title.toUpperCase(),
+            style: const TextStyle(
+              color: Color(0xFF5A8EFA),
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1.5,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Container(
+              height: 1,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    const Color(0xFF5A8EFA).withOpacity(0.3),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ==========================================
+  // 高级退出登录按钮 - 玻璃拟态胶囊
+  // ==========================================
+  Widget _buildPremiumLogoutButton(BuildContext context) {
+    return GestureDetector(
+      onTap: () => _signOut(context),
+      child: Container(
+        height: 56,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(28),
+          gradient: LinearGradient(
+            colors: [
+              Colors.white.withOpacity(0.5),
+              Colors.white.withOpacity(0.4),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          border: Border.all(
+            color: _logoutButtonTextColor.withOpacity(0.3),
+            width: 1,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: _logoutButtonTextColor.withOpacity(0.1),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
+            ),
+            BoxShadow(
+              color: Colors.white.withOpacity(0.5),
+              blurRadius: 8,
+              offset: const Offset(0, -2),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(28),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.1),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.logout_rounded,
+                    color: _logoutButtonTextColor.withOpacity(0.9),
+                    size: 20,
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    '退出登录',
+                    style: TextStyle(
+                      color: _logoutButtonTextColor.withOpacity(0.9),
+                      fontSize: 17,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -418,17 +1001,27 @@ class _AppSettingsState extends State<AppSettings> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('确认退出'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.logout_rounded, color: Color(0xFFE53935)),
+            SizedBox(width: 10),
+            Text('确认退出'),
+          ],
+        ),
         content: const Text('您确定要退出登录吗？'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('取消'),
+            child: const Text('取消', style: TextStyle(color: Color(0xFF8E8E93))),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
+              backgroundColor: const Color(0xFFE53935),
               foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
             onPressed: () => Navigator.pop(context, true),
             child: const Text('退出'),
@@ -443,7 +1036,6 @@ class _AppSettingsState extends State<AppSettings> {
         await supabase.auth.signOut();
 
         if (context.mounted) {
-          // 返回登录页面并清除所有路由栈
           Navigator.of(context).pushAndRemoveUntil(
             MaterialPageRoute(builder: (context) => const LoginPage()),
             (route) => false,
@@ -458,58 +1050,22 @@ class _AppSettingsState extends State<AppSettings> {
       }
     }
   }
+}
 
-  Widget _buildSettingsTile({
-    required IconData icon,
-    required Color iconColor,
-    required String title,
-    String? subtitle,
-    Widget? trailing,
-    required VoidCallback? onTap,
-  }) {
-    return Material(
-      color: _cardColor,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-          child: Row(
-            children: [
-              Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                  color: iconColor,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(icon, color: Colors.white, size: 20),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(title, style: _tileTitleStyle),
-                    if (subtitle != null) ...[
-                      const SizedBox(height: 2),
-                      Text(subtitle, style: _tileSubtitleStyle),
-                    ],
-                  ],
-                ),
-              ),
-              if (trailing != null)
-                trailing
-              else if (onTap != null)
-                const Icon(
-                  Icons.arrow_forward_ios,
-                  color: Color(0xFFC7C7CC),
-                  size: 16,
-                ),
-            ],
-          ),
-        ),
-      ),
+// ==========================================
+// 闪光动画变换器
+// ==========================================
+class _SlideGradientTransform extends GradientTransform {
+  final double percent;
+
+  const _SlideGradientTransform({required this.percent});
+
+  @override
+  Matrix4? transform(Rect bounds, {TextDirection? textDirection}) {
+    return Matrix4.translationValues(
+      bounds.width * 2 * (percent - 0.5),
+      0,
+      0,
     );
   }
 }
@@ -587,7 +1143,7 @@ class SubscriptionPage extends StatefulWidget {
 class _SubscriptionPageState extends State<SubscriptionPage> {
   // 0 = 年度, 1 = 月度
   int _selectedPlanIndex = 0;
-  bool _isLoading = false; // 控制支付中的加载状态
+  bool _isLoading = false;
 
   // 礼花控制器
   late ConfettiController _confettiController;
@@ -599,7 +1155,6 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
   @override
   void initState() {
     super.initState();
-    // 初始化礼花控制器，设置持续时间
     _confettiController =
         ConfettiController(duration: const Duration(seconds: 3));
   }
@@ -613,26 +1168,23 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
   // --- 模拟支付成功逻辑 ---
   Future<void> _handlePurchase() async {
     setState(() {
-      _isLoading = true; // 开始加载
+      _isLoading = true;
     });
     final supabase = Supabase.instance.client;
     await supabase.functions.invoke('recharge-test', body: {'amount': 1});
-    // 1. 模拟网络请求延迟 (2秒)
     await Future.delayed(const Duration(seconds: 2));
 
     if (!mounted) return;
 
     setState(() {
-      _isLoading = false; // 结束加载
+      _isLoading = false;
     });
 
-    // 2. 播放礼花
     _confettiController.play();
 
-    // 3. 显示成功弹窗
     showDialog(
       context: context,
-      barrierDismissible: false, // 必须点击按钮才能关闭
+      barrierDismissible: false,
       builder: (BuildContext context) {
         return Dialog(
           shape:
@@ -642,7 +1194,6 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // 动态缩放的成功图标
                 TweenAnimationBuilder(
                   tween: Tween<double>(begin: 0, end: 1),
                   duration: const Duration(milliseconds: 500),
@@ -678,10 +1229,9 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
                   width: double.infinity,
                   child: ElevatedButton(
                     onPressed: () {
-                      Navigator.of(context).pop(); // 关弹窗
-                      // 安全检查，确保页面栈不为空再执行pop
+                      Navigator.of(context).pop();
                       if (Navigator.of(context).canPop()) {
-                        Navigator.of(context).pop(); // 关订阅页，回设置页
+                        Navigator.of(context).pop();
                       }
                     },
                     style: ElevatedButton.styleFrom(
@@ -707,13 +1257,9 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      // 使用 Stack 确保礼花层 (ConfettiWidget) 在最上面
       body: Stack(
-        alignment: Alignment.topCenter, // 礼花从顶部发射
+        alignment: Alignment.topCenter,
         children: [
-          // ---------------------------------------------------------
-          // 1. 页面主要内容
-          // ---------------------------------------------------------
           Column(
             children: [
               Expanded(
@@ -778,10 +1324,6 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
               ),
             ],
           ),
-
-          // ---------------------------------------------------------
-          // 2. 顶部关闭按钮
-          // ---------------------------------------------------------
           Positioned(
             top: MediaQuery.of(context).padding.top + 10,
             right: 16,
@@ -797,10 +1339,6 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
               ),
             ),
           ),
-
-          // ---------------------------------------------------------
-          // 3. 底部悬浮按钮 (支付入口)
-          // ---------------------------------------------------------
           Positioned(
             left: 0,
             right: 0,
@@ -825,7 +1363,7 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
                     width: double.infinity,
                     height: 56,
                     child: ElevatedButton(
-                      onPressed: _isLoading ? null : _handlePurchase, // 加载时禁用
+                      onPressed: _isLoading ? null : _handlePurchase,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: brandColor,
                         foregroundColor: Colors.white,
@@ -868,24 +1406,19 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
               ),
             ),
           ),
-
-          // ---------------------------------------------------------
-          // 4. 礼花层 (Confetti Widget) - 放在 Stack 最上层
-          // ---------------------------------------------------------
-          // 放在这里，确保它能覆盖在页面所有内容之上
           Align(
             alignment: Alignment.topCenter,
             child: ConfettiWidget(
               confettiController: _confettiController,
-              blastDirection: pi / 2, // 向下发射 (pi/2)
-              maxBlastForce: 5, // 最大速度
-              minBlastForce: 2, // 最小速度
-              emissionFrequency: 0.05, // 发射频率
-              numberOfParticles: 20, // 粒子数量
-              gravity: 0.1, // 重力
+              blastDirection: pi / 2,
+              maxBlastForce: 5,
+              minBlastForce: 2,
+              emissionFrequency: 0.05,
+              numberOfParticles: 20,
+              gravity: 0.1,
               colors: const [
-                Color(0xFF6C5DD3), // 品牌紫
-                Color(0xFFFFCF5C), // 品牌黄
+                Color(0xFF6C5DD3),
+                Color(0xFFFFCF5C),
                 Colors.blue,
                 Colors.pink,
                 Colors.green,
@@ -896,8 +1429,6 @@ class _SubscriptionPageState extends State<SubscriptionPage> {
       ),
     );
   }
-
-  // --- 辅助组件保持不变 ---
 
   Widget _buildHeaderImage() {
     return SizedBox(

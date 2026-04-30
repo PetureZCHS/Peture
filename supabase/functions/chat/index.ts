@@ -1,8 +1,13 @@
 // Setup type definitions for built-in Supabase Runtime APIs
 // 设置 Supabase Runtime API 的类型定义
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-// Dify API configuration / Dify API 配置
-const DIFY_API_KEY = Deno.env.get('DIFY_API_KEY');
+import { executeTextModeration } from "../_shared/moderation_provider.ts";
+import { createTraceId } from "../_shared/trace.ts";
+import { writeModerationError, writeModerationLog } from "../_shared/moderation_logger.ts";
+import { requireUserFromRequest } from "../_shared/auth.ts";
+
+// 兼容历史命名：优先 DIFY_CHAT_API_KEY，回退 DIFY_API_KEY
+const DIFY_API_KEY = Deno.env.get('DIFY_CHAT_API_KEY') ?? Deno.env.get('DIFY_API_KEY');
 const DIFY_BASE_URL = 'https://api.dify.ai/v1';
 Deno.serve(async (req)=>{
   // CORS headers 配置
@@ -16,13 +21,34 @@ Deno.serve(async (req)=>{
       headers: corsHeaders
     });
   }
+  const traceId = createTraceId();
+  let requestUserId = "";
   try {
+    const auth = await requireUserFromRequest(req);
+    if ("error" in auth) {
+      return auth.error;
+    }
+    requestUserId = auth.userId;
+    if (!DIFY_API_KEY?.trim()) {
+      return new Response(
+        JSON.stringify({
+          error: "服务端未配置 Dify API Key，请在 Supabase Edge Functions Secrets 中设置 DIFY_CHAT_API_KEY（或兼容的 DIFY_API_KEY）",
+          errorCode: "DIFY_API_KEY_MISSING",
+          status: 503,
+          code: "config_error",
+        }),
+        {
+          status: 503,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
     // Parse request body / 解析请求体
     const requestBody = await req.json();
     // Validate required fields / 验证必填字段
-    if (!requestBody.query || !requestBody.user) {
+    if (!requestBody.query) {
       return new Response(JSON.stringify({
-        error: 'Missing required fields: query and user are required'
+        error: 'Missing required field: query'
       }), {
         status: 400,
         headers: {
@@ -31,8 +57,29 @@ Deno.serve(async (req)=>{
         }
       });
     }
+    requestBody.user = requestUserId;
     // Default to streaming mode / 默认使用流式模式
     const responseMode = requestBody.response_mode || 'streaming';
+    const inputModerationExec = await executeTextModeration("ai_input", String(requestBody.query), traceId);
+    const inputModeration = inputModerationExec.result;
+    await writeModerationLog({
+      userId: requestUserId,
+      scene: "ai_input",
+      traceId,
+      result: inputModeration,
+      contentExcerpt: String(requestBody.query),
+      provider: inputModerationExec.provider,
+      providerResponse: inputModerationExec.providerResponse,
+    });
+    if (!inputModeration.passed) {
+      return new Response(JSON.stringify(inputModeration), {
+        status: 200,
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'application/json'
+        }
+      });
+    }
     // Prepare request to Dify API / 准备发送到 Dify API 的请求
     const difyResponse = await fetch(`${DIFY_BASE_URL}/chat-messages`, {
       method: 'POST',
@@ -48,6 +95,14 @@ Deno.serve(async (req)=>{
     // Handle API errors / 处理 API 错误
     if (!difyResponse.ok) {
       const errorData = await difyResponse.json();
+      await writeModerationError({
+        traceId,
+        userId: requestUserId,
+        scene: "ai_output",
+        errorCode: "MODERATION_PROVIDER_ERROR",
+        errorMessage: errorData.message || "Dify API request failed",
+        contextJson: { status: difyResponse.status, code: errorData.code },
+      });
       return new Response(JSON.stringify({
         error: errorData.message || 'Dify API request failed',
         status: difyResponse.status,
@@ -65,7 +120,78 @@ Deno.serve(async (req)=>{
     // SSE（服务器推送事件）格式，用于实时输出
     if (responseMode === 'streaming') {
       const stream = difyResponse.body;
-      return new Response(stream, {
+      if (!stream) {
+        return new Response(JSON.stringify({
+          error: "Upstream stream unavailable",
+          traceId,
+        }), {
+          status: 502,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      let outputBuffer = "";
+      let blocked = false;
+      const moderatedStream = stream.pipeThrough(new TransformStream({
+        async transform(chunk, controller) {
+          if (blocked) return;
+          const text = new TextDecoder().decode(chunk);
+          const lines = text.split("\n");
+          for (const rawLine of lines) {
+            const line = rawLine.trim();
+            if (!line.startsWith("data:")) continue;
+            try {
+              const eventData = JSON.parse(line.slice(5).trim());
+              const answer = eventData?.answer?.toString?.() ?? "";
+              if (answer) {
+                outputBuffer += answer;
+                const outputModerationExec = await executeTextModeration("ai_output", outputBuffer, traceId);
+                const outputModeration = outputModerationExec.result;
+                if (!outputModeration.passed) {
+                  blocked = true;
+                  await writeModerationLog({
+                    userId: requestUserId,
+                    scene: "ai_output",
+                    traceId,
+                    result: outputModeration,
+                    contentExcerpt: outputBuffer,
+                    provider: outputModerationExec.provider,
+                    providerResponse: outputModerationExec.providerResponse,
+                  });
+                  // 勿伪装成 Dify 的 message/answer：客户端会把 answer 当增量拼接，导致「正常半句 + 拦截句」粘在一起
+                  const safePayload =
+                    `data: ${JSON.stringify({
+                      event: "moderation_intercept",
+                      message: `该回复因内容审核未通过，已被拦截（traceId: ${traceId}）`,
+                      traceId,
+                    })}\n\n` +
+                    `data: ${JSON.stringify({ event: "message_end" })}\n\n`;
+                  controller.enqueue(new TextEncoder().encode(safePayload));
+                  return;
+                }
+              }
+            } catch (_e) {
+              // noop
+            }
+          }
+          controller.enqueue(chunk);
+        },
+        async flush() {
+          if (!blocked && outputBuffer) {
+            const outputModerationExec = await executeTextModeration("ai_output", outputBuffer, traceId);
+            const outputModeration = outputModerationExec.result;
+            await writeModerationLog({
+              userId: requestUserId,
+              scene: "ai_output",
+              traceId,
+              result: outputModeration,
+              contentExcerpt: outputBuffer,
+              provider: outputModerationExec.provider,
+              providerResponse: outputModerationExec.providerResponse,
+            });
+          }
+        }
+      }));
+      return new Response(moderatedStream, {
         headers: {
           ...corsHeaders,
           'Content-Type': 'text/event-stream',
@@ -77,6 +203,23 @@ Deno.serve(async (req)=>{
     // Handle blocking response / 处理阻塞模式响应
     // Returns complete result after execution / 等待执行完毕后返回完整结果
     const data = await difyResponse.json();
+    const outputText = data?.answer?.toString?.() ?? "";
+    if (outputText) {
+      const outputModerationExec = await executeTextModeration("ai_output", outputText, traceId);
+      const outputModeration = outputModerationExec.result;
+      await writeModerationLog({
+        userId: requestUserId,
+        scene: "ai_output",
+        traceId,
+        result: outputModeration,
+        contentExcerpt: outputText,
+        provider: outputModerationExec.provider,
+        providerResponse: outputModerationExec.providerResponse,
+      });
+      if (!outputModeration.passed) {
+        data.answer = `该回复因内容审核未通过，已被拦截（traceId: ${traceId}）`;
+      }
+    }
     return new Response(JSON.stringify(data), {
       headers: {
         ...corsHeaders,
@@ -86,6 +229,14 @@ Deno.serve(async (req)=>{
   } catch (error) {
     // Error handling and logging / 错误处理和日志记录
     console.error('Error:', error);
+    await writeModerationError({
+      traceId,
+      userId: requestUserId || undefined,
+      scene: "ai_output",
+      errorCode: "MODERATION_PROVIDER_ERROR",
+      errorMessage: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
     return new Response(JSON.stringify({
       error: error.message || 'Internal server error',
       details: error.toString()
@@ -125,5 +276,5 @@ Deno.serve(async (req)=>{
  * })
  * 
  * Environment Setup / 环境配置:
- * supabase secrets set DIFY_API_KEY=your_dify_api_key
+ * supabase secrets set DIFY_CHAT_API_KEY=your_dify_api_key
  */

@@ -7,7 +7,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 
-/// 全屏圆形裁剪：顶部返回 + 标题，底部「完成」，避免系统原生 uCrop 与挖孔/状态栏抢点击。
+/// 全屏头像裁剪：圆形遮罩辅助对齐，但实际导出为方形区域。
 class AvatarCropPage extends StatefulWidget {
   const AvatarCropPage({super.key, required this.imagePath});
 
@@ -144,7 +144,8 @@ class _AvatarCropPageState extends State<AvatarCropPage> {
                   canScale: true,
                   canMove: true,
                   forceInsideCropArea: true,
-                  clipShapeOnCrop: true,
+                  // 保留方形完整区域，避免圆形透明区在 JPEG 中变黑。
+                  clipShapeOnCrop: false,
                 ),
               ),
             ),

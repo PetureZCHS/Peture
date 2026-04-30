@@ -231,9 +231,11 @@ class SupabaseService {
         return null;
       }
 
-      // 创建插入数据，移除 id 字段让数据库自动生成
+      // 创建插入数据；如果上层已经生成了 id，则保留它，方便头像路径与宠物记录对齐
       final petData = Map<String, dynamic>.from(pet);
-      petData.remove('id'); // 移除 id，让数据库使用默认值生成 UUID
+      if (petData['id'] == null || petData['id'].toString().isEmpty) {
+        petData.remove('id');
+      }
       petData['user_id'] = userId;
 
       // 处理 neuter_status：将字符串转换为布尔值
@@ -2787,7 +2789,7 @@ class SupabaseService {
 
   static const String _communityBucket = 'post-images';
   static const String _userAvatarBucket = 'user-avatars';
-  static const String _petAvatarBucket = 'pet-avatars';
+  
 
   /// 删除同一 Storage 目录下除 [keepObjectPath] 外的 `avatar_*` 文件，避免历史头像堆积。
   Future<void> _removeOtherAvatarObjectsInFolder({
@@ -2813,6 +2815,30 @@ class SupabaseService {
       }
     } catch (e) {
       debugPrint('清理 Storage 目录内旧头像失败: $e');
+    }
+  }
+
+  /// 删除同一 Storage 目录下除 [keepObjectPath] 外的 `lifephoto_*` 文件
+  Future<void> _removeOtherLifephotoObjectsInFolder({
+    required String bucket,
+    required String folderPrefix,
+    required String keepObjectPath,
+  }) async {
+    try {
+      final items = await _client.storage.from(bucket).list(path: folderPrefix);
+      final removePaths = <String>[];
+      for (final item in items) {
+        if (item.id == null) continue;
+        if (!item.name.startsWith('lifephoto_')) continue;
+        final objectPath = folderPrefix.isEmpty ? item.name : '$folderPrefix/${item.name}';
+        if (objectPath == keepObjectPath) continue;
+        removePaths.add(objectPath);
+      }
+      if (removePaths.isNotEmpty) {
+        await _client.storage.from(bucket).remove(removePaths);
+      }
+    } catch (e) {
+      debugPrint('清理 Storage 目录内旧生活照失败: $e');
     }
   }
 
@@ -2935,29 +2961,88 @@ class SupabaseService {
   /// 上传宠物头像到 Storage，返回带 cache busting 的 URL
   Future<String?> uploadPetAvatar({
     required File file,
-    String? petId,
+    required String petId,
   }) async {
     final userId = await currentUserId;
     if (userId == null) return null;
-    final identifier = petId ?? DateTime.now().millisecondsSinceEpoch.toString();
+    if (petId.isEmpty) return null;
     final path =
-        '$userId/$identifier/avatar_${DateTime.now().millisecondsSinceEpoch}.jpg';
+        '$userId/$petId/avatar_${DateTime.now().millisecondsSinceEpoch}.jpg';
     try {
-      await _client.storage.from(_petAvatarBucket).upload(
+      // 将宠物头像存放在 user-avatars 桶下，目录格式为 <userId>/<petId>/
+      await _client.storage.from(_userAvatarBucket).upload(
             path,
             file,
             fileOptions: const FileOptions(upsert: true),
           );
-      final base = _client.storage.from(_petAvatarBucket).getPublicUrl(path);
-      final folderPrefix = '$userId/$identifier';
+      final base = _client.storage.from(_userAvatarBucket).getPublicUrl(path);
+      final folderPrefix = '$userId/$petId';
       await _removeOtherAvatarObjectsInFolder(
-        bucket: _petAvatarBucket,
+        bucket: _userAvatarBucket,
         folderPrefix: folderPrefix,
         keepObjectPath: path,
       );
-      return '${base.split('?').first}?t=${DateTime.now().millisecondsSinceEpoch}';
+      final publicUrl =
+          '${base.split('?').first}?t=${DateTime.now().millisecondsSinceEpoch}';
+
+      try {
+        await _client
+            .from('pets')
+            .update({
+              'avatar': publicUrl,
+              'updated_at': DateTime.now().toUtc().toIso8601String(),
+            })
+            .eq('id', petId);
+      } catch (e) {
+        debugPrint('保存宠物 avatar 到 pets 表失败: $e');
+      }
+
+      return publicUrl;
     } catch (e) {
       debugPrint('上传宠物头像失败: $e');
+      return null;
+    }
+  }
+
+  /// 上传宠物生活照到 Storage，返回带 cache busting 的 URL
+  Future<String?> uploadPetLifePhoto({
+    required File file,
+    required String petId,
+  }) async {
+    final userId = await currentUserId;
+    if (userId == null) return null;
+    if (petId.isEmpty) return null;
+    final path = '$userId/$petId/lifephoto_${DateTime.now().millisecondsSinceEpoch}.jpg';
+    try {
+      await _client.storage.from(_userAvatarBucket).upload(
+            path,
+            file,
+            fileOptions: const FileOptions(upsert: true),
+          );
+      final base = _client.storage.from(_userAvatarBucket).getPublicUrl(path);
+      final folderPrefix = '$userId/$petId';
+      await _removeOtherLifephotoObjectsInFolder(
+        bucket: _userAvatarBucket,
+        folderPrefix: folderPrefix,
+        keepObjectPath: path,
+      );
+      final publicUrl = '${base.split('?').first}?t=${DateTime.now().millisecondsSinceEpoch}';
+
+      try {
+        await _client
+            .from('pets')
+            .update({
+              'life_photo': publicUrl,
+              'updated_at': DateTime.now().toUtc().toIso8601String(),
+            })
+            .eq('id', petId);
+      } catch (e) {
+        debugPrint('保存宠物 life_photo 到 pets 表失败: $e');
+      }
+
+      return publicUrl;
+    } catch (e) {
+      debugPrint('上传宠物生活照失败: $e');
       return null;
     }
   }

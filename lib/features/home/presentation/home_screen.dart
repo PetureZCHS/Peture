@@ -1,11 +1,17 @@
+import 'dart:async';
 import 'dart:ui';
 import 'dart:math' as math;
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/physics.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
+import 'package:path_provider/path_provider.dart';
 import '../../image_generation/presentation/preparation_page.dart'
     hide AppColors;
+import '../../image_generation/presentation/result_page.dart' hide AppColors;
+import '../../image_generation/presentation/loading_page.dart' hide AppColors;
+import 'package:supabase_flutter/supabase_flutter.dart';
 // import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
 
 // --- 您的页面引用 (保持不变) ---
@@ -40,10 +46,13 @@ class SearchResult {
 /// 全局数据变更通知器，用于跨页面通知数据刷新需求
 class DataChangeNotifier {
   static bool petDataChanged = false;
+  static final ValueNotifier<int> petDataRefreshNotifier =
+      ValueNotifier<int>(0);
 
   /// 标记宠物数据已变更，需要刷新
   static void markPetDataChanged() {
     petDataChanged = true;
+    petDataRefreshNotifier.value++;
   }
 
   /// 检查并重置标记
@@ -167,6 +176,74 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     HapticFeedback.mediumImpact();
   }
 
+  Future<void> _openResultPageForTest() async {
+    try {
+      // 使用工程内已声明的资产图，避免手写字节导致平台解码差异
+      final ByteData data = await rootBundle.load('assets/logo.png');
+      final Uint8List imageBytes = data.buffer.asUint8List();
+
+      final Directory tempDir = await getTemporaryDirectory();
+      final int ts = DateTime.now().millisecondsSinceEpoch;
+
+      final File original = File('${tempDir.path}/result_test_original_$ts.png');
+      await original.writeAsBytes(imageBytes, flush: true);
+
+      final File generated = File('${tempDir.path}/result_test_generated_$ts.png');
+      await generated.writeAsBytes(imageBytes, flush: true);
+
+      if (!mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => ResultPage(
+            originalImage: original,
+            resultImageFile: generated,
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('打开测试结果页失败: $e')),
+      );
+    }
+  }
+
+  Future<void> _openLoadingPageForTest() async {
+    try {
+      // 使用工程内已声明的资产图
+      final ByteData data = await rootBundle.load('assets/logo.png');
+      final Uint8List imageBytes = data.buffer.asUint8List();
+
+      final Directory tempDir = await getTemporaryDirectory();
+      final int ts = DateTime.now().millisecondsSinceEpoch;
+
+      final File original = File('${tempDir.path}/loading_test_original_$ts.png');
+      await original.writeAsBytes(imageBytes, flush: true);
+
+      if (!mounted) return;
+
+      // 创建一个永远不会完成的 Future，让加载页一直保持加载状态
+      final Completer<FunctionResponse> completer = Completer<FunctionResponse>();
+
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => LoadingPage(
+            originalImage: original,
+            uploadedFileName: 'test_$ts.png',
+            style: 'test_style',
+            generationFuture: completer.future,
+            expectedDurationSeconds: 120,
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('打开测试加载页失败: $e')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final Widget homePageContent = AnimatedSwitcher(
@@ -199,6 +276,32 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       extendBody: true,
       resizeToAvoidBottomInset: false,
       backgroundColor: AppColors.background,
+      floatingActionButton: _currentIndex == 0
+          ? Padding(
+              padding: const EdgeInsets.only(bottom: 88),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  FloatingActionButton.extended(
+                    heroTag: 'home_loading_test_fab',
+                    onPressed: _openLoadingPageForTest,
+                    icon: const Icon(Icons.hourglass_top_rounded),
+                    label: const Text('测试加载页'),
+                    backgroundColor: Colors.orangeAccent,
+                  ),
+                  const SizedBox(height: 12),
+                  FloatingActionButton.extended(
+                    heroTag: 'home_result_test_fab',
+                    onPressed: _openResultPageForTest,
+                    icon: const Icon(Icons.bug_report_rounded),
+                    label: const Text('测试结果页'),
+                  ),
+                ],
+              ),
+            )
+          : null,
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       body: Stack(
         children: [
           // 内容层
