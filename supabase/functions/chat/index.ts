@@ -9,6 +9,21 @@ import { requireUserFromRequest } from "../_shared/auth.ts";
 // 兼容历史命名：优先 DIFY_CHAT_API_KEY，回退 DIFY_API_KEY
 const DIFY_API_KEY = Deno.env.get('DIFY_CHAT_API_KEY') ?? Deno.env.get('DIFY_API_KEY');
 const DIFY_BASE_URL = 'https://api.dify.ai/v1';
+const OUTPUT_AUDIT_MIN_CHARS = Number(Deno.env.get("OUTPUT_AUDIT_MIN_CHARS") ?? "100");
+const OUTPUT_AUDIT_MAX_INTERVAL_MS = Number(Deno.env.get("OUTPUT_AUDIT_MAX_INTERVAL_MS") ?? "800");
+const OUTPUT_AUDIT_TAIL_CONTEXT = Number(Deno.env.get("OUTPUT_AUDIT_TAIL_CONTEXT") ?? "40");
+const OUTPUT_AUDIT_PUNCTUATION_MIN_CHARS = Number(Deno.env.get("OUTPUT_AUDIT_PUNCTUATION_MIN_CHARS") ?? "30");
+
+function shouldTriggerOutputAudit(pendingSegment: string, lastAuditAt: number): boolean {
+  if (!pendingSegment) return false;
+  if (pendingSegment.length >= OUTPUT_AUDIT_MIN_CHARS) return true;
+  if (Date.now() - lastAuditAt >= OUTPUT_AUDIT_MAX_INTERVAL_MS) return true;
+  const lastChar = pendingSegment[pendingSegment.length - 1] ?? "";
+  if (/[\n。！？!?；;]/.test(lastChar) && pendingSegment.length >= OUTPUT_AUDIT_PUNCTUATION_MIN_CHARS) {
+    return true;
+  }
+  return false;
+}
 Deno.serve(async (req)=>{
   // CORS headers 配置
   const corsHeaders = {
@@ -130,6 +145,8 @@ Deno.serve(async (req)=>{
         });
       }
       let outputBuffer = "";
+      let pendingSegment = "";
+      let lastAuditAt = Date.now();
       let blocked = false;
       const moderatedStream = stream.pipeThrough(new TransformStream({
         async transform(chunk, controller) {
@@ -144,29 +161,39 @@ Deno.serve(async (req)=>{
               const answer = eventData?.answer?.toString?.() ?? "";
               if (answer) {
                 outputBuffer += answer;
-                const outputModerationExec = await executeTextModeration("ai_output", outputBuffer, traceId);
-                const outputModeration = outputModerationExec.result;
-                if (!outputModeration.passed) {
-                  blocked = true;
-                  await writeModerationLog({
-                    userId: requestUserId,
-                    scene: "ai_output",
-                    traceId,
-                    result: outputModeration,
-                    contentExcerpt: outputBuffer,
-                    provider: outputModerationExec.provider,
-                    providerResponse: outputModerationExec.providerResponse,
-                  });
-                  // 勿伪装成 Dify 的 message/answer：客户端会把 answer 当增量拼接，导致「正常半句 + 拦截句」粘在一起
-                  const safePayload =
-                    `data: ${JSON.stringify({
-                      event: "moderation_intercept",
-                      message: `该回复因内容审核未通过，已被拦截（traceId: ${traceId}）`,
+                pendingSegment += answer;
+                if (shouldTriggerOutputAudit(pendingSegment, lastAuditAt)) {
+                  const prefixLength = outputBuffer.length - pendingSegment.length;
+                  const contextPrefix = prefixLength > 0
+                    ? outputBuffer.slice(0, prefixLength).slice(-OUTPUT_AUDIT_TAIL_CONTEXT)
+                    : "";
+                  const sampleForAudit = `${contextPrefix}${pendingSegment}`;
+                  const outputModerationExec = await executeTextModeration("ai_output", sampleForAudit, traceId);
+                  const outputModeration = outputModerationExec.result;
+                  lastAuditAt = Date.now();
+                  if (!outputModeration.passed) {
+                    blocked = true;
+                    await writeModerationLog({
+                      userId: requestUserId,
+                      scene: "ai_output",
                       traceId,
-                    })}\n\n` +
-                    `data: ${JSON.stringify({ event: "message_end" })}\n\n`;
-                  controller.enqueue(new TextEncoder().encode(safePayload));
-                  return;
+                      result: outputModeration,
+                      contentExcerpt: outputBuffer,
+                      provider: outputModerationExec.provider,
+                      providerResponse: outputModerationExec.providerResponse,
+                    });
+                    // 勿伪装成 Dify 的 message/answer：客户端会把 answer 当增量拼接，导致「正常半句 + 拦截句」粘在一起
+                    const safePayload =
+                      `data: ${JSON.stringify({
+                        event: "moderation_intercept",
+                        message: `该回复因内容审核未通过，已被拦截（traceId: ${traceId}）`,
+                        traceId,
+                      })}\n\n` +
+                      `data: ${JSON.stringify({ event: "message_end" })}\n\n`;
+                    controller.enqueue(new TextEncoder().encode(safePayload));
+                    return;
+                  }
+                  pendingSegment = "";
                 }
               }
             } catch (_e) {

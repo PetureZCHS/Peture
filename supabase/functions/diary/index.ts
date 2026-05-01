@@ -8,6 +8,21 @@ const apiKey =
   Deno.env.get("DIFY_DIARY_V4_API_KEY") ??
   Deno.env.get("DIFY_DIARY_API_KEY");
 const DIFY_API = "https://api.dify.ai/v1/workflows/run";
+const OUTPUT_AUDIT_MIN_CHARS = Number(Deno.env.get("OUTPUT_AUDIT_MIN_CHARS") ?? "100");
+const OUTPUT_AUDIT_MAX_INTERVAL_MS = Number(Deno.env.get("OUTPUT_AUDIT_MAX_INTERVAL_MS") ?? "800");
+const OUTPUT_AUDIT_TAIL_CONTEXT = Number(Deno.env.get("OUTPUT_AUDIT_TAIL_CONTEXT") ?? "40");
+const OUTPUT_AUDIT_PUNCTUATION_MIN_CHARS = Number(Deno.env.get("OUTPUT_AUDIT_PUNCTUATION_MIN_CHARS") ?? "30");
+
+function shouldTriggerOutputAudit(pendingSegment: string, lastAuditAt: number): boolean {
+  if (!pendingSegment) return false;
+  if (pendingSegment.length >= OUTPUT_AUDIT_MIN_CHARS) return true;
+  if (Date.now() - lastAuditAt >= OUTPUT_AUDIT_MAX_INTERVAL_MS) return true;
+  const lastChar = pendingSegment[pendingSegment.length - 1] ?? "";
+  if (/[\n。！？!?；;]/.test(lastChar) && pendingSegment.length >= OUTPUT_AUDIT_PUNCTUATION_MIN_CHARS) {
+    return true;
+  }
+  return false;
+}
 
 Deno.serve(async (req)=>{
   // CORS headers 配置
@@ -106,6 +121,8 @@ Deno.serve(async (req)=>{
       "Connection": "keep-alive"
     });
     let outputBuffer = "";
+    let pendingSegment = "";
+    let lastAuditAt = Date.now();
     let blocked = false;
     const moderatedStream = upstream.body.pipeThrough(new TransformStream({
       async transform(chunk, controller) {
@@ -122,24 +139,34 @@ Deno.serve(async (req)=>{
               : "";
             if (piece) {
               outputBuffer += piece;
-              const outputModerationExec = await executeTextModeration("diary_output", outputBuffer, traceId);
-              const outputModeration = outputModerationExec.result;
-              if (!outputModeration.passed) {
-                blocked = true;
-                await writeModerationLog({
-                  userId: requestUserId,
-                  scene: "diary_output",
-                  traceId,
-                  result: outputModeration,
-                  contentExcerpt: outputBuffer,
-                  provider: outputModerationExec.provider,
-                  providerResponse: outputModerationExec.providerResponse,
-                });
-                const safePayload =
-                  `data: ${JSON.stringify({ event: "text_chunk", data: { text: `该内容未通过审核（traceId: ${traceId}）` } })}\n\n` +
-                  `data: ${JSON.stringify({ event: "workflow_finished", data: {} })}\n\n`;
-                controller.enqueue(new TextEncoder().encode(safePayload));
-                return;
+              pendingSegment += piece;
+              if (shouldTriggerOutputAudit(pendingSegment, lastAuditAt)) {
+                const prefixLength = outputBuffer.length - pendingSegment.length;
+                const contextPrefix = prefixLength > 0
+                  ? outputBuffer.slice(0, prefixLength).slice(-OUTPUT_AUDIT_TAIL_CONTEXT)
+                  : "";
+                const sampleForAudit = `${contextPrefix}${pendingSegment}`;
+                const outputModerationExec = await executeTextModeration("diary_output", sampleForAudit, traceId);
+                const outputModeration = outputModerationExec.result;
+                lastAuditAt = Date.now();
+                if (!outputModeration.passed) {
+                  blocked = true;
+                  await writeModerationLog({
+                    userId: requestUserId,
+                    scene: "diary_output",
+                    traceId,
+                    result: outputModeration,
+                    contentExcerpt: outputBuffer,
+                    provider: outputModerationExec.provider,
+                    providerResponse: outputModerationExec.providerResponse,
+                  });
+                  const safePayload =
+                    `data: ${JSON.stringify({ event: "text_chunk", data: { text: `该内容未通过审核（traceId: ${traceId}）` } })}\n\n` +
+                    `data: ${JSON.stringify({ event: "workflow_finished", data: {} })}\n\n`;
+                  controller.enqueue(new TextEncoder().encode(safePayload));
+                  return;
+                }
+                pendingSegment = "";
               }
             }
           } catch {
