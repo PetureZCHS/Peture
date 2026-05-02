@@ -24,6 +24,59 @@ function shouldTriggerOutputAudit(pendingSegment: string, lastAuditAt: number): 
   return false;
 }
 
+const REQUIRED_INPUT_FIELDS = ["query", "style", "nickname", "species", "breed", "owner_title"] as const;
+
+function stripThinkingBlocks(text: string): string {
+  return text.replace(/<think>[\s\S]*?<\/think>/gi, "");
+}
+
+const OPEN_THINK = "<think>";
+const CLOSE_THINK = "</think>";
+const OPEN_THINK_LEN = OPEN_THINK.length;
+const CLOSE_THINK_LEN = CLOSE_THINK.length;
+
+function createThinkingStreamSanitizer() {
+  let inThink = false;
+  let carry = "";
+  return (chunk: string): string => {
+    const text = carry + chunk;
+    const lower = text.toLowerCase();
+    let i = 0;
+    let visible = "";
+    carry = "";
+    while (i < text.length) {
+      if (inThink) {
+        const closeIdx = lower.indexOf(CLOSE_THINK, i);
+        if (closeIdx === -1) {
+          // Preserve possible partial close tag at tail.
+          const keep = Math.min(CLOSE_THINK_LEN - 1, text.length - i);
+          carry = text.slice(text.length - keep);
+          return visible;
+        }
+        i = closeIdx + CLOSE_THINK_LEN;
+        inThink = false;
+        continue;
+      }
+      const openIdx = lower.indexOf(OPEN_THINK, i);
+      if (openIdx === -1) {
+        // Emit only the safe part; preserve possible partial open tag.
+        const safeEnd = text.length - (OPEN_THINK_LEN - 1);
+        if (safeEnd > i) {
+          visible += text.slice(i, safeEnd);
+          carry = text.slice(safeEnd);
+        } else {
+          carry = text.slice(i);
+        }
+        return visible;
+      }
+      visible += text.slice(i, openIdx);
+      i = openIdx + OPEN_THINK_LEN;
+      inThink = true;
+    }
+    return visible;
+  };
+}
+
 Deno.serve(async (req)=>{
   // CORS headers 配置
   const corsHeaders = {
@@ -60,6 +113,30 @@ Deno.serve(async (req)=>{
   requestUserId = auth.userId;
 
   const { inputs, response_mode } = body ?? {};
+  if (!inputs || typeof inputs !== "object") {
+    return new Response(JSON.stringify({ error: "Missing required 'inputs' object in request body." }), {
+      status: 400,
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "application/json",
+      },
+    });
+  }
+  const missingFields = REQUIRED_INPUT_FIELDS.filter((field) => {
+    const value = (inputs as Record<string, unknown>)[field];
+    return value === undefined || value === null;
+  });
+  if (missingFields.length > 0) {
+    return new Response(JSON.stringify({
+      error: `Missing required parameters in inputs: ${missingFields.join(", ")}`,
+    }), {
+      status: 400,
+      headers: {
+        ...corsHeaders,
+        "Content-Type": "application/json",
+      },
+    });
+  }
   const inputQuery = (inputs?.query ?? "").toString();
   const inputModerationExec = await executeTextModeration("diary_input", inputQuery, traceId);
   const inputModeration = inputModerationExec.result;
@@ -120,71 +197,103 @@ Deno.serve(async (req)=>{
       "Cache-Control": "no-cache, no-transform",
       "Connection": "keep-alive"
     });
-    let outputBuffer = "";
+    let rawOutputBuffer = "";
+    let visibleOutputBuffer = "";
     let pendingSegment = "";
     let lastAuditAt = Date.now();
+    let sseBuffer = "";
+    const sanitizeChunk = createThinkingStreamSanitizer();
     let blocked = false;
+    const allowedEvents = new Set(["text_chunk", "workflow_finished", "error"]);
     const moderatedStream = upstream.body.pipeThrough(new TransformStream({
       async transform(chunk, controller) {
         if (blocked) return;
-        const text = new TextDecoder().decode(chunk);
-        const lines = text.split("\n");
-        for (const rawLine of lines) {
-          const line = rawLine.trim();
-          if (!line.startsWith("data:")) continue;
+        sseBuffer += new TextDecoder().decode(chunk);
+        while (sseBuffer.includes("\n\n")) {
+          const endIndex = sseBuffer.indexOf("\n\n");
+          const message = sseBuffer.slice(0, endIndex);
+          sseBuffer = sseBuffer.slice(endIndex + 2);
+          const line = message.trim();
+          if (!line.startsWith("data:")) {
+            continue;
+          }
+          const dataString = line.slice(5).trim();
+          if (!dataString || dataString === "[DONE]") {
+            controller.enqueue(new TextEncoder().encode(`${message}\n\n`));
+            continue;
+          }
           try {
-            const eventData = JSON.parse(line.slice(5).trim());
-            const piece = eventData?.event === "text_chunk"
-              ? eventData?.data?.text?.toString?.() ?? ""
-              : "";
-            if (piece) {
-              outputBuffer += piece;
-              pendingSegment += piece;
-              if (shouldTriggerOutputAudit(pendingSegment, lastAuditAt)) {
-                const prefixLength = outputBuffer.length - pendingSegment.length;
-                const contextPrefix = prefixLength > 0
-                  ? outputBuffer.slice(0, prefixLength).slice(-OUTPUT_AUDIT_TAIL_CONTEXT)
-                  : "";
-                const sampleForAudit = `${contextPrefix}${pendingSegment}`;
-                const outputModerationExec = await executeTextModeration("diary_output", sampleForAudit, traceId);
-                const outputModeration = outputModerationExec.result;
-                lastAuditAt = Date.now();
-                if (!outputModeration.passed) {
-                  blocked = true;
-                  await writeModerationLog({
-                    userId: requestUserId,
-                    scene: "diary_output",
-                    traceId,
-                    result: outputModeration,
-                    contentExcerpt: outputBuffer,
-                    provider: outputModerationExec.provider,
-                    providerResponse: outputModerationExec.providerResponse,
-                  });
-                  const safePayload =
-                    `data: ${JSON.stringify({ event: "text_chunk", data: { text: `该内容未通过审核（traceId: ${traceId}）` } })}\n\n` +
-                    `data: ${JSON.stringify({ event: "workflow_finished", data: {} })}\n\n`;
-                  controller.enqueue(new TextEncoder().encode(safePayload));
-                  return;
+            const eventData = JSON.parse(dataString);
+            const eventName = eventData?.event?.toString?.() ?? "";
+            if (!allowedEvents.has(eventName)) {
+              continue;
+            }
+            if (eventName === "text_chunk") {
+              const piece = eventData?.data?.text?.toString?.() ?? "";
+              if (piece) {
+                rawOutputBuffer += piece;
+                const sanitizedDelta = sanitizeChunk(piece);
+                if (sanitizedDelta) {
+                  visibleOutputBuffer += sanitizedDelta;
+                  pendingSegment += sanitizedDelta;
                 }
-                pendingSegment = "";
+                if (shouldTriggerOutputAudit(pendingSegment, lastAuditAt)) {
+                  const prefixLength = visibleOutputBuffer.length - pendingSegment.length;
+                  const contextPrefix = prefixLength > 0
+                    ? visibleOutputBuffer.slice(0, prefixLength).slice(-OUTPUT_AUDIT_TAIL_CONTEXT)
+                    : "";
+                  const sampleForAudit = `${contextPrefix}${pendingSegment}`;
+                  const outputModerationExec = await executeTextModeration("diary_output", sampleForAudit, traceId);
+                  const outputModeration = outputModerationExec.result;
+                  lastAuditAt = Date.now();
+                  if (!outputModeration.passed) {
+                    blocked = true;
+                    await writeModerationLog({
+                      userId: requestUserId,
+                      scene: "diary_output",
+                      traceId,
+                      result: outputModeration,
+                      contentExcerpt: visibleOutputBuffer,
+                      provider: outputModerationExec.provider,
+                      providerResponse: outputModerationExec.providerResponse,
+                    });
+                    const safePayload =
+                      `data: ${JSON.stringify({ event: "text_chunk", data: { text: `该内容未通过审核（traceId: ${traceId}）` } })}\n\n` +
+                      `data: ${JSON.stringify({ event: "workflow_finished", data: {} })}\n\n`;
+                    controller.enqueue(new TextEncoder().encode(safePayload));
+                    return;
+                  }
+                  pendingSegment = "";
+                }
+                eventData.data = { ...(eventData.data ?? {}), text: sanitizedDelta };
               }
             }
+            if (eventName === "workflow_finished") {
+              const outputs = (eventData?.data?.outputs as Record<string, unknown> | undefined) ?? {};
+              const outputText = outputs?.text?.toString?.() ?? "";
+              if (outputText) {
+                const sanitizedText = stripThinkingBlocks(outputText);
+                eventData.data = { ...(eventData.data ?? {}), outputs: { ...outputs, text: sanitizedText } };
+              }
+            }
+            if (eventName !== "text_chunk" || ((eventData?.data?.text?.toString?.() ?? "").length > 0)) {
+              controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(eventData)}\n\n`));
+            }
           } catch {
-            // noop
+            // ignore malformed json event
           }
         }
-        controller.enqueue(chunk);
       },
       async flush() {
-        if (!blocked && outputBuffer) {
-          const outputModerationExec = await executeTextModeration("diary_output", outputBuffer, traceId);
+        if (!blocked && visibleOutputBuffer) {
+          const outputModerationExec = await executeTextModeration("diary_output", visibleOutputBuffer, traceId);
           const outputModeration = outputModerationExec.result;
           await writeModerationLog({
             userId: requestUserId,
             scene: "diary_output",
             traceId,
             result: outputModeration,
-            contentExcerpt: outputBuffer,
+            contentExcerpt: visibleOutputBuffer,
             provider: outputModerationExec.provider,
             providerResponse: outputModerationExec.providerResponse,
           });

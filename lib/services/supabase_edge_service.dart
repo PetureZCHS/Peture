@@ -371,7 +371,7 @@ class PetDiaryEdgeService {
 
       final accessToken = session.accessToken;
 
-      // ✅ 根据 diary-v4 Edge Function 要求构建请求体
+      // ✅ 根据 diary-test / diary-v4 Edge Function 要求构建请求体
       final inputs = {
         'query': query,
         'style': style,
@@ -471,17 +471,17 @@ class PetDiaryEdgeService {
                   break;
 
                 case 'workflow_finished':
-                  // 工作流完成，获取最终文本
+                  // 工作流完成：仅作为结束信号；只有在 text_chunk 缺失时才用 outputs.text 兜底
                   final data = json['data'] as Map<String, dynamic>?;
                   if (data != null && data.containsKey('outputs')) {
                     final outputs = data['outputs'] as Map<String, dynamic>?;
                     if (outputs != null && outputs.containsKey('text')) {
                       final text = outputs['text'] as String;
 
-                      if (text != accumulatedText) {
-                        final delta = text.substring(accumulatedText.length);
+                      if (accumulatedText.isEmpty && text.isNotEmpty) {
+                        final delta = text;
                         accumulatedText = text;
-                        debugPrint('   ✍️ 完整文本: ${text.length} 字符');
+                        debugPrint('   ✍️ workflow_finished 兜底文本: ${text.length} 字符');
                         yield DiaryContentEvent(
                           delta: delta,
                           fullText: accumulatedText,
@@ -490,30 +490,6 @@ class PetDiaryEdgeService {
                     }
                   }
                   yield DiaryDoneEvent(accumulatedText);
-                  break;
-
-                case 'node_finished':
-                  // 节点完成，可能包含部分输出
-                  // 如果已经通过 text_chunk 接收了内容，则跳过（避免重复）
-                  final data = json['data'] as Map<String, dynamic>?;
-                  if (data != null && data.containsKey('outputs')) {
-                    final outputs = data['outputs'] as Map<String, dynamic>?;
-                    if (outputs != null && outputs.containsKey('text')) {
-                      final text = outputs['text'] as String;
-
-                      // 只有当 node_finished 的文本比已累积的文本更长时才处理
-                      // 这样可以避免与 text_chunk 重复
-                      if (text.length > accumulatedText.length) {
-                        final delta = text.substring(accumulatedText.length);
-                        accumulatedText = text;
-                        debugPrint('   ✍️ 增量文本: ${delta.length} 字符');
-                        yield DiaryContentEvent(
-                          delta: delta,
-                          fullText: accumulatedText,
-                        );
-                      }
-                    }
-                  }
                   break;
 
                 case 'error':
