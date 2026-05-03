@@ -635,8 +635,9 @@ class _SkeuomorphicClickerDeviceState extends State<SkeuomorphicClickerDevice>
     final baseWidth = 360.0;
     final availableWidth = screenSize.width - 32;
     final availableHeight = screenSize.height * 0.68;
-    final scaleByWidth = (availableWidth / baseWidth).clamp(0.55, 1.15);
-    final scaleByHeight = (availableHeight / 560).clamp(0.55, 1.15);
+    // scale 上限设为 1.0：大屏不放大，只在小屏时缩小，避免放大后顶部溢出
+    final scaleByWidth = (availableWidth / baseWidth).clamp(0.55, 1.0);
+    final scaleByHeight = (availableHeight / 560).clamp(0.55, 1.0);
     final scale = math.min(scaleByWidth, scaleByHeight);
 
     // 预构建设备主体，以便在动画中复用，避免每帧重绘整个UI
@@ -645,8 +646,10 @@ class _SkeuomorphicClickerDeviceState extends State<SkeuomorphicClickerDevice>
     // 判断是否显示蓄力状态：正在长按 或 有蓄力进度
     final showDamageState = _isLongPressing || _smashProgress > 0;
 
+    // alignment: topCenter 保证缩放锚点在顶部，不会向上溢出
     return Transform.scale(
       scale: scale,
+      alignment: Alignment.topCenter,
       child: SizedBox(
         width: baseWidth,
         child: _isDestroyed

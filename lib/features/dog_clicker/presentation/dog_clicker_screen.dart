@@ -1896,86 +1896,89 @@ class _DogClickerScreenState extends State<DogClickerScreen>
           ),
 
           // 内容层 - 简化为直接显示设备
-          SafeArea(
-            child: Center(
-              child: SingleChildScrollView(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    // 如果没有项目，显示空状态引导
-                    if (_filterOptions.isEmpty) ...[
-                      _buildEmptyState(),
-                    ] else ...[
-                      // 新手提示（呼吸感文字）
-                      if (!_pendingConfirmation && !_showFailureMessage)
-                        _buildTrainingTip(),
-                      // 待确认状态提示
-                      if (_pendingConfirmation) _buildConfirmationTip(),
-                      // 失败提示
-                      if (_showFailureMessage)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 24),
-                          child: _buildFailureTip(),
-                        ),
-                      const SizedBox(height: 12),
-                      // 拟物化响片设备（包含项目选择和统计）
-                      SkeuomorphicClickerDevice(
-                        successCount: _clickCount,
-                        failCount: _failCount,
-                        unconfirmedCount: _unconfirmedCount,
-                        totalSuccessCount: _totalSuccessCount,
-                        totalFailCount: _totalFailureCount,
-                        currentProject: _filterOptions.isEmpty ? '默认训练' : _filterOptions[_selectedFilterIndex],
-                        projects: _filterOptions,
-                        selectedIndex: _selectedFilterIndex,
-                        // 新流程的回调
-                        onClick: _handleClickerClick,
-                        onConfirmSuccess: _handleConfirmSuccess,
-                        onConfirmFail: _handleConfirmFail,
-                        onSkipConfirm: _handleSkipConfirm,
-                        pendingConfirmation: _pendingConfirmation,
-                        // 保留旧的回调用于兼容
-                        onSuccess: _playClickSound,
-                        onFail: () async {
-                          setState(() => _failCount++);
-                          await HapticFeedback.lightImpact();
-                          await _saveFailureCount();
-                          // 更新显示失败提示
-                          setState(() => _showFailureMessage = true);
-                          _failureMessageTimer?.cancel();
-                          _failureMessageTimer = Timer(const Duration(seconds: 4), () {
-                            if (mounted) {
-                              setState(() => _showFailureMessage = false);
-                            }
-                          });
-                        },
+          // 注意：extendBodyBehindAppBar=true，需手动计入状态栏+AppBar高度
+          Builder(
+            builder: (context) {
+              final topPadding = MediaQuery.of(context).padding.top + kToolbarHeight;
+              return Center(
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.fromLTRB(12.0, topPadding + 8, 12.0, 24),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      // 如果没有项目，显示空状态引导
+                      if (_filterOptions.isEmpty) ...[
+                        _buildEmptyState(),
+                      ] else ...[
+                        // 新手提示（呼吸感文字）
+                        if (!_pendingConfirmation && !_showFailureMessage)
+                          _buildTrainingTip(),
+                        // 待确认状态提示
+                        if (_pendingConfirmation) _buildConfirmationTip(),
+                        // 失败提示
+                        if (_showFailureMessage)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 24),
+                            child: _buildFailureTip(),
+                          ),
+                        const SizedBox(height: 12),
+                        // 拟物化响片设备（包含项目选择和统计）
+                        SkeuomorphicClickerDevice(
+                          successCount: _clickCount,
+                          failCount: _failCount,
+                          unconfirmedCount: _unconfirmedCount,
+                          totalSuccessCount: _totalSuccessCount,
+                          totalFailCount: _totalFailureCount,
+                          currentProject: _filterOptions.isEmpty ? '默认训练' : _filterOptions[_selectedFilterIndex],
+                          projects: _filterOptions,
+                          selectedIndex: _selectedFilterIndex,
+                          // 新流程的回调
+                          onClick: _handleClickerClick,
+                          onConfirmSuccess: _handleConfirmSuccess,
+                          onConfirmFail: _handleConfirmFail,
+                          onSkipConfirm: _handleSkipConfirm,
+                          pendingConfirmation: _pendingConfirmation,
+                          // 保留旧的回调用于兼容
+                          onSuccess: _playClickSound,
+                          onFail: () async {
+                            setState(() => _failCount++);
+                            await HapticFeedback.lightImpact();
+                            await _saveFailureCount();
+                            // 更新显示失败提示
+                            setState(() => _showFailureMessage = true);
+                            _failureMessageTimer?.cancel();
+                            _failureMessageTimer = Timer(const Duration(seconds: 4), () {
+                              if (mounted) {
+                                setState(() => _showFailureMessage = false);
+                              }
+                            });
+                          },
 
-                        onProjectChanged: (index) {
-                          // 如果正在待确认状态，先取消
-                          if (_pendingConfirmation) {
-                            _handleSkipConfirm();
-                          }
-                          // 切换项目也清除失败提示
-                          setState(() {
-                            _showFailureMessage = false;
-                            _selectedFilterIndex = index;
-                            _updateCurrentCounts();
-                          });
-                        },
-                        onAddProject: _showAddProjectDialog,
-                        onDeleteProject: _deleteCustomProject,
-                        onReset: _showResetConfirmDialog,
-                        onShowStats: _showDetailedStatistics,
-                        isCoolingDown: _isCoolingDown,
-                      ),
-                      const SizedBox(height: 16),
+                          onProjectChanged: (index) {
+                            // 如果正在待确认状态，先取消
+                            if (_pendingConfirmation) {
+                              _handleSkipConfirm();
+                            }
+                            // 切换项目也清除失败提示
+                            setState(() {
+                              _showFailureMessage = false;
+                              _selectedFilterIndex = index;
+                              _updateCurrentCounts();
+                            });
+                          },
+                          onAddProject: _showAddProjectDialog,
+                          onDeleteProject: _deleteCustomProject,
+                          onReset: _showResetConfirmDialog,
+                          onShowStats: _showDetailedStatistics,
+                          isCoolingDown: _isCoolingDown,
+                        ),
+                        const SizedBox(height: 16),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
-              ),
-            ),
+              );
+            },
           ),
         ],
       ),
