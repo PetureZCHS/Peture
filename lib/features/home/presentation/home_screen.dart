@@ -276,32 +276,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       extendBody: true,
       resizeToAvoidBottomInset: false,
       backgroundColor: AppColors.background,
-      floatingActionButton: _currentIndex == 0
-          ? Padding(
-              padding: const EdgeInsets.only(bottom: 88),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  FloatingActionButton.extended(
-                    heroTag: 'home_loading_test_fab',
-                    onPressed: _openLoadingPageForTest,
-                    icon: const Icon(Icons.hourglass_top_rounded),
-                    label: const Text('测试加载页'),
-                    backgroundColor: Colors.orangeAccent,
-                  ),
-                  const SizedBox(height: 12),
-                  FloatingActionButton.extended(
-                    heroTag: 'home_result_test_fab',
-                    onPressed: _openResultPageForTest,
-                    icon: const Icon(Icons.bug_report_rounded),
-                    label: const Text('测试结果页'),
-                  ),
-                ],
-              ),
-            )
-          : null,
-      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+
       body: Stack(
         children: [
           // 内容层

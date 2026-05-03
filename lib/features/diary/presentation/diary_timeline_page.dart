@@ -1,6 +1,9 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import '../../../services/ai_image_cache_service.dart';
 import '../../../shared/models/pet_diary.dart';
 import '../../../services/supabase_service.dart';
 import 'diary_detail_page.dart';
@@ -374,6 +377,11 @@ class _DiaryTimelinePageState extends State<DiaryTimelinePage> {
                             color: Colors.black87,
                           ),
                         ),
+                        // AI 生成配图缩略图
+                        if (diary.aiImg != null && diary.aiImg!.isNotEmpty) ...[
+                          const SizedBox(height: 12),
+                          _buildAiImageThumbnail(diary.aiImg!),
+                        ],
                       ],
                     ),
                   ),
@@ -383,6 +391,106 @@ class _DiaryTimelinePageState extends State<DiaryTimelinePage> {
           ),
         ],
       ),
+    );
+  }
+
+  final AiImageCacheService _imageCacheService = AiImageCacheService();
+
+  /// 构建 AI 配图缩略图（16:9 宽高比，完整展示图片）
+  /// 使用本地缓存避免重复下载
+  Widget _buildAiImageThumbnail(String aiImgPath) {
+    debugPrint('📷 Timeline AI Image Path: $aiImgPath');
+
+    // 如果已经是完整 URL，使用 Image.network
+    if (aiImgPath.startsWith('http')) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: AspectRatio(
+          aspectRatio: 16 / 9,
+          child: Image.network(
+            aiImgPath,
+            width: double.infinity,
+            fit: BoxFit.contain,
+            errorBuilder: (context, error, stackTrace) {
+              debugPrint('❌ Timeline Image.network error: $error');
+              return Container(
+                decoration: BoxDecoration(
+                  color: Colors.grey[200],
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Center(
+                  child: Icon(Icons.image_not_supported, color: Colors.grey[400]),
+                ),
+              );
+            },
+          ),
+        ),
+      );
+    }
+
+    // 使用缓存服务加载图片
+    return FutureBuilder<Uint8List?>(
+      future: _imageCacheService.getImageBytes(aiImgPath),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return AspectRatio(
+            aspectRatio: 16 / 9,
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Center(
+                child: SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            ),
+          );
+        }
+
+        final imageBytes = snapshot.data;
+        if (imageBytes == null || imageBytes.isEmpty) {
+          return AspectRatio(
+            aspectRatio: 16 / 9,
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.grey[200],
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Center(
+                child: Icon(Icons.image_not_supported, color: Colors.grey[400]),
+              ),
+            ),
+          );
+        }
+
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: AspectRatio(
+            aspectRatio: 16 / 9,
+            child: Image.memory(
+              imageBytes,
+              width: double.infinity,
+              fit: BoxFit.contain,
+              errorBuilder: (context, error, stackTrace) {
+                debugPrint('❌ Timeline Image.memory error: $error');
+                return Container(
+                  decoration: BoxDecoration(
+                    color: Colors.grey[200],
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Center(
+                    child: Icon(Icons.image_not_supported, color: Colors.grey[400]),
+                  ),
+                );
+              },
+            ),
+          ),
+        );
+      },
     );
   }
 

@@ -86,13 +86,19 @@ serve(async (req: Request) => {
         { status: 400, headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) } }
       );
     }
-    const { file_name } = body;
+    const { file_name, bucket = 'ai-wallpapers', path: customPath } = body;
     if (!file_name) {
       return new Response(
         JSON.stringify({ error: "Missing file_name in request body." }),
         { status: 400, headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) } }
       );
     }
+
+    // 验证 bucket 白名单，防止安全漏洞
+    const ALLOWED_BUCKETS = ['ai-wallpapers', 'user-avatars'];
+    const targetBucket = typeof bucket === 'string' && ALLOWED_BUCKETS.includes(bucket)
+      ? bucket
+      : 'ai-wallpapers';
 
     // 校验 file_name 格式：仅允许字母、数字、连字符、下划线和单个点（用于扩展名），
     // 且扩展名只能是 jpg/jpeg/png/webp，最大长度 200 字符，防止路径遍历攻击
@@ -134,10 +140,13 @@ serve(async (req: Request) => {
     const userId = user.id;
 
     // 为该图片生成一个有效期为 5 分钟的签名 URL
-    const imagePath = `${userId}/original/${file_name}`;
+    const imagePath =
+      typeof customPath === 'string' && customPath.length > 0
+        ? customPath
+        : `${userId}/original/${file_name}`;
     const { data: signedData, error: signError } = await supabase
       .storage
-      .from("ai-wallpapers")
+      .from(targetBucket)
       .createSignedUrl(imagePath, 60 * 5);
 
     if (signError || !signedData?.signedUrl) {

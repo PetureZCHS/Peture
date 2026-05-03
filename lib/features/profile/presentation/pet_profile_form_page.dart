@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
@@ -6,6 +8,7 @@ import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../shared/utils/user_avatar_helper.dart';
 import '../../../shared/utils/avatar_image_helper.dart';
 import '../../../services/supabase_service.dart';
@@ -41,6 +44,7 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
   String? _ownerNickname; // 该宠物对主人的自定义称呼
   String _defaultOwnerNickname = '主人'; // 用户默认称呼
   bool _isSaving = false;
+  String? _lifePhotoPrecheckReason; // 生活照预检查失败原因
 
   final Map<String, List<String>> _speciesOptions = {
     '猫咪': [
@@ -333,9 +337,68 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
       setState(() {
         _lifePhotoFile = File(compressed?.path ?? picked.path);
         _lifePhotoUrl = null;
+        _lifePhotoPrecheckReason = null; // 清除之前的预检查结果
       });
     } catch (e) {
       debugPrint('选择生活照失败: $e');
+    }
+  }
+
+  /// 图片质量预检查 - 调用 img-gen-precheck Edge Function
+  Future<({bool pass, String reason})> _precheckLifePhoto({
+    required String fileName,
+    required String bucket,
+    required String path,
+  }) async {
+    final supabase = Supabase.instance.client;
+    try {
+      final response = await supabase.functions.invoke(
+        'img-gen-precheck',
+        body: {
+          'file_name': fileName,
+          'bucket': bucket,
+          'path': path,
+        },
+      );
+
+      dynamic payload = response.data;
+      if (payload is String && payload.isNotEmpty) {
+        payload = jsonDecode(payload);
+      }
+
+      if (payload is! Map) {
+        return (pass: false, reason: '图片检测服务返回了无效结果，请稍后重试');
+      }
+
+      final bool pass = payload['pass'] == true;
+      final String reason = (payload['reason'] as String? ?? '').trim();
+
+      if (pass) {
+        return (pass: true, reason: '');
+      }
+
+      return (pass: false, reason: reason.isNotEmpty ? reason : '图片不符合生成要求，请更换后重试');
+    } on SocketException {
+      return (pass: false, reason: '图片检测失败：网络连接异常，请检查网络后重试');
+    } on TimeoutException {
+      return (pass: false, reason: '图片检测超时，请稍后再试');
+    } on FunctionException catch (e) {
+      debugPrint('❌ 生活照预检函数调用失败: $e');
+      final message = e.toString().toLowerCase();
+      if (message.contains('401') || message.contains('403') ||
+          message.contains('unauthorized') || message.contains('forbidden')) {
+        return (pass: false, reason: '登录状态已失效，请重新登录后重试');
+      }
+      if (message.contains('timeout')) {
+        return (pass: false, reason: '图片检测超时，请稍后再试');
+      }
+      if (message.contains('network') || message.contains('fetch')) {
+        return (pass: false, reason: '图片检测失败：网络连接异常，请检查网络后重试');
+      }
+      return (pass: false, reason: '图片检测服务暂时不可用，请稍后重试');
+    } catch (e, st) {
+      debugPrint('❌ 生活照预检异常: $e\n$st');
+      return (pass: false, reason: '图片检测失败，请检查网络后重试');
     }
   }
 
@@ -1995,12 +2058,54 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
         (widget.initialData?['life_photo'] ?? widget.initialData?['lifePhoto'])
             as String?;
     if (_lifePhotoFile != null) {
-      final uploaded = await SupabaseService().uploadPetLifePhoto(
+      // 1. 先上传到 Storage（不更新数据库）
+      final uploadResult = await SupabaseService().uploadPetLifePhotoToStorage(
         file: _lifePhotoFile!,
         petId: petId,
       );
-      if (uploaded != null && uploaded.isNotEmpty) {
-        lifePhotoValue = uploaded;
+      if (uploadResult == null) {
+        if (mounted) {
+          setState(() => _isSaving = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('生活照上传失败，请重试')),
+          );
+        }
+        return;
+      }
+
+      // 2. 预检查
+      final fileName = uploadResult.path.split('/').last;
+      final precheckResult = await _precheckLifePhoto(
+        fileName: fileName,
+        bucket: 'user-avatars',
+        path: uploadResult.path,
+      );
+
+      if (!precheckResult.pass) {
+        // 预检查不通过，删除已上传的文件
+        await SupabaseService().removeStorageObject(
+          bucket: 'user-avatars',
+          path: uploadResult.path,
+        );
+        if (mounted) {
+          setState(() {
+            _isSaving = false;
+            _lifePhotoPrecheckReason = precheckResult.reason;
+          });
+        }
+        return;
+      }
+
+      // 3. 预检查通过，更新数据库
+      lifePhotoValue = uploadResult.url;
+      try {
+        await Supabase.instance.client.from('pets').upsert({
+          'id': petId,
+          'life_photo': lifePhotoValue,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        });
+      } catch (e) {
+        debugPrint('保存 life_photo 到 pets 表失败: $e');
       }
     }
 
@@ -2208,9 +2313,49 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
                           label: '生活照',
                           placeholder: '请选择生活照',
                           trailing: _buildLifePhotoTrailing(),
-                          onTap: _pickLifePhoto,
+                          onTap: () {
+                            setState(() => _lifePhotoPrecheckReason = null); // 清除之前的预检查结果
+                            _pickLifePhoto();
+                          },
                           isLast: true,
                         ),
+                        // 生活照预检查失败提示
+                        if (_lifePhotoPrecheckReason != null && _lifePhotoPrecheckReason!.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+                            child: Container(
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFFF3E0),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: const Color(0xFFFFB74D),
+                                  width: 1,
+                                ),
+                              ),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Icon(
+                                    Icons.info_outline,
+                                    color: Color(0xFFF57C00),
+                                    size: 20,
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      _lifePhotoPrecheckReason!,
+                                      style: const TextStyle(
+                                        fontSize: 13,
+                                        color: Color(0xFFE65100),
+                                        height: 1.5,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
                       ],
                     ),
                   ),

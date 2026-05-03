@@ -1087,53 +1087,6 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
     );
   }
 
-  // 区域标题 - 带图标和装饰
-  Widget _buildSectionHeader(String title, IconData icon) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20.0, 0, 20.0, 12.0),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(
-              gradient: _primaryGradient,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(
-              icon,
-              color: Colors.white,
-              size: 14,
-            ),
-          ),
-          const SizedBox(width: 10),
-          Text(
-            title.toUpperCase(),
-            style: const TextStyle(
-              color: Color(0xFF5A8EFA),
-              fontSize: 12,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 1.5,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Container(
-              height: 1,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    const Color(0xFF5A8EFA).withOpacity(0.3),
-                    Colors.transparent,
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   // 玻璃拟态卡片容器
   Widget _buildGlassCard({required List<Widget> children}) {
     return Container(

@@ -28,7 +28,6 @@ class _PetPassportPageState extends State<PetPassportPage>
   bool _isLoading = true;
   int _selectedPetIndex = 0;
   late AnimationController _flipController;
-  late AnimationController _floatController;
   late AnimationController _shimmerController;
   bool _isFlipped = false;
   bool _isPressed = false;
@@ -56,10 +55,6 @@ class _PetPassportPageState extends State<PetPassportPage>
       vsync: this,
       duration: const Duration(milliseconds: 600),
     );
-    _floatController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 3000),
-    )..repeat(reverse: true);
     _shimmerController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 800),
@@ -137,7 +132,6 @@ class _PetPassportPageState extends State<PetPassportPage>
       _petDataRefreshListener,
     );
     _flipController.dispose();
-    _floatController.dispose();
     _shimmerController.dispose();
     super.dispose();
   }
@@ -468,17 +462,14 @@ class _PetPassportPageState extends State<PetPassportPage>
                 onTapUp: _onTapUp,
                 onTapCancel: _onTapCancel,
                 child: AnimatedBuilder(
-                  animation: Listenable.merge([_flipController, _floatController]),
+                  animation: _flipController,
                   builder: (context, child) {
                     final angle = _flipController.value * math.pi;
-                    final floatOffset = math.sin(_floatController.value * 2 * math.pi) * 4;
                     final scale = _isPressed ? 0.97 : 1.0;
                     
                     final shadowOpacity = 0.2 + (_flipController.value - 0.5).abs() * 0.1;
                     
-                    return Transform.translate(
-                      offset: Offset(0, floatOffset),
-                      child: Transform.scale(
+                    return Transform.scale(
                         scale: scale,
                         child: Container(
                           decoration: BoxDecoration(
@@ -502,10 +493,9 @@ class _PetPassportPageState extends State<PetPassportPage>
                                     alignment: Alignment.center,
                                     child: _buildEnhancedPassportBack(),
                                   ),
-                          ),
-                        ),
-                      ),
-                    );
+                           ),
+                         ),
+                       );
                   },
                 ),
               ),
@@ -665,13 +655,9 @@ class _PetPassportPageState extends State<PetPassportPage>
   }
 
   Widget _buildEnhancedHint() {
-    return AnimatedBuilder(
-      animation: _floatController,
-      builder: (context, child) {
-        final opacity = 0.6 + math.sin(_floatController.value * math.pi) * 0.2;
-        return Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Container(
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
             decoration: BoxDecoration(
               color: Colors.white.withOpacity(0.8),
@@ -694,14 +680,14 @@ class _PetPassportPageState extends State<PetPassportPage>
                     Icon(
                       Icons.touch_app,
                       size: 18,
-                      color: const Color(0xFF667eea).withOpacity(opacity),
+                      color: const Color(0xFF667eea).withOpacity(0.7),
                     ),
                     const SizedBox(width: 8),
                     Text(
                       '点击卡片查看背面',
                       style: TextStyle(
                         fontSize: 14,
-                        color: Colors.grey[600]?.withOpacity(opacity),
+                        color: Colors.grey[600]?.withOpacity(0.7),
                         fontWeight: FontWeight.w500,
                       ),
                     ),
@@ -711,8 +697,6 @@ class _PetPassportPageState extends State<PetPassportPage>
             ),
           ),
         );
-      },
-    );
   }
 
   Widget _buildEnhancedPassportFront() {
@@ -1300,53 +1284,46 @@ class _PetPassportPageState extends State<PetPassportPage>
             // Content
             Padding(
               padding: const EdgeInsets.all(24.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Decorative header with stamp
-                  _buildBackHeader(),
-                  const SizedBox(height: 20),
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Decorative header with stamp
+                    _buildBackHeader(),
+                    const SizedBox(height: 14),
 
-                  // Interest tags with gradient styling
-                  _buildSectionTitleWithIcon(Icons.local_offer, '兴趣标签'),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: (passport?.interestTags ?? []).map((tag) {
-                      return _buildGradientTag(tag);
-                    }).toList(),
-                  ),
-
-                  const SizedBox(height: 20),
-
-                  // Achievements grid with enhanced badges
-                  _buildSectionTitleWithIcon(Icons.emoji_events, '成就徽章'),
-                  const SizedBox(height: 12),
-                  Expanded(
-                    child: GridView.builder(
-                      physics: const NeverScrollableScrollPhysics(),
-                      gridDelegate:
-                          const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 3,
-                        crossAxisSpacing: 10,
-                        mainAxisSpacing: 10,
-                        childAspectRatio: 0.85,
-                      ),
-                      itemCount: (passport?.achievements.length ?? 0).clamp(0, 6),
-                      itemBuilder: (context, index) {
-                        final achievement = passport!.achievements[index];
-                        return _buildEnhancedAchievementBadge(achievement);
-                      },
+                    // Interest tags with gradient styling
+                    _buildSectionTitleWithIcon(Icons.local_offer, '兴趣标签'),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: (passport?.interestTags ?? []).map((tag) {
+                        return _buildGradientTag(tag);
+                      }).toList(),
                     ),
-                  ),
 
-                  const SizedBox(height: 16),
+                    const SizedBox(height: 14),
 
-                  // Social stats with glassmorphism
-                  _buildEnhancedSocialStats(passport),
-                ],
+                    // Achievements grid with enhanced badges
+                    _buildSectionTitleWithIcon(Icons.emoji_events, '成就徽章'),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: (passport?.achievements ?? [])
+                          .take(6)
+                          .map((a) => _buildEnhancedAchievementBadge(a))
+                          .toList(),
+                    ),
+
+                    const SizedBox(height: 10),
+
+                    // Social stats with glassmorphism
+                    _buildEnhancedSocialStats(passport),
+                  ],
+                ),
               ),
             ),
           ],
@@ -1454,8 +1431,10 @@ class _PetPassportPageState extends State<PetPassportPage>
   Widget _buildEnhancedAchievementBadge(Achievement achievement) {
     final gradientColors = _getAchievementGradient(achievement.iconName);
     
-    return Container(
-      decoration: BoxDecoration(
+    return SizedBox(
+      width: 80,
+      child: Container(
+        decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.1),
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
@@ -1503,6 +1482,7 @@ class _PetPassportPageState extends State<PetPassportPage>
             overflow: TextOverflow.ellipsis,
           ),
         ],
+      ),
       ),
     );
   }

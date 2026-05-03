@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../shared/models/conversation.dart';
 import '../shared/models/pet_diary.dart';
 import '../shared/models/fitness_course.dart';
+import 'avatar_cache_service.dart';
 
 /// Supabase 数据库服务类
 /// 用于替换 SQLite Helper，提供统一的数据访问接口
@@ -1486,6 +1487,7 @@ class SupabaseService {
         'style': diary.style,
         'created_at': diary.timestamp.toIso8601String(),
         if (diary.petId != null) 'pet_id': diary.petId,
+        if (diary.aiImg != null && diary.aiImg!.isNotEmpty) 'ai_img': diary.aiImg,
       };
 
       final response =
@@ -2904,6 +2906,11 @@ class SupabaseService {
         folderPrefix: userId,
         keepObjectPath: path,
       );
+      
+      // 清除用户头像缓存（旧头像已失效）
+      await AvatarCacheService().clearCacheByType(AvatarType.user);
+      debugPrint('🗑️ 用户头像上传成功，已清除旧缓存');
+      
       return (
         url: '${base.split('?').first}?t=${DateTime.now().millisecondsSinceEpoch}',
         error: null,
@@ -2997,6 +3004,10 @@ class SupabaseService {
         debugPrint('保存宠物 avatar 到 pets 表失败: $e');
       }
 
+      // 清除该宠物的头像缓存（旧头像已失效）
+      await AvatarCacheService().clearCacheByType(AvatarType.pet);
+      debugPrint('🗑️ 宠物头像上传成功，已清除旧缓存');
+
       return publicUrl;
     } catch (e) {
       debugPrint('上传宠物头像失败: $e');
@@ -3044,6 +3055,45 @@ class SupabaseService {
     } catch (e) {
       debugPrint('上传宠物生活照失败: $e');
       return null;
+    }
+  }
+
+  /// 仅上传生活照到 Storage，不更新数据库（用于预检查场景）
+  /// 返回 {url: 公共URL, path: storage路径}，预检查失败时调用方可自行删除
+  Future<({String url, String path})?> uploadPetLifePhotoToStorage({
+    required File file,
+    required String petId,
+  }) async {
+    final userId = await currentUserId;
+    if (userId == null) return null;
+    if (petId.isEmpty) return null;
+    final path = '$userId/$petId/lifephoto_${DateTime.now().millisecondsSinceEpoch}.jpg';
+    try {
+      await _client.storage.from(_userAvatarBucket).upload(
+            path,
+            file,
+            fileOptions: const FileOptions(upsert: true),
+          );
+      final base = _client.storage.from(_userAvatarBucket).getPublicUrl(path);
+      final publicUrl = '${base.split('?').first}?t=${DateTime.now().millisecondsSinceEpoch}';
+      return (url: publicUrl, path: path);
+    } catch (e) {
+      debugPrint('上传宠物生活照到 Storage 失败: $e');
+      return null;
+    }
+  }
+
+  /// 删除 Storage 中的文件（用于预检查失败时清理）
+  Future<bool> removeStorageObject({
+    required String bucket,
+    required String path,
+  }) async {
+    try {
+      await _client.storage.from(bucket).remove([path]);
+      return true;
+    } catch (e) {
+      debugPrint('删除 Storage 文件失败: $e');
+      return false;
     }
   }
 

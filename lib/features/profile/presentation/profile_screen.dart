@@ -1556,7 +1556,7 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage>
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          '添加生活照',
+                          '请到编辑页面添加生活照',
                           style: TextStyle(
                             color: Colors.grey[500],
                             fontSize: 14,
@@ -1577,15 +1577,6 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage>
     return Container(
       color: const Color(0xFFF2F3F7),
       child: const Icon(Icons.broken_image, color: Color(0xFFB8BEC9), size: 40),
-    );
-  }
-
-  Widget _buildLifePhotoThumbPlaceholder() {
-    return Container(
-      width: 44,
-      height: 44,
-      color: const Color(0xFFF2F3F7),
-      child: const Icon(Icons.photo, color: Color(0xFFB8BEC9), size: 20),
     );
   }
 
@@ -1669,7 +1660,7 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage>
     try {
       final success = await _supabaseService.updatePet(updatedPet.toMap());
       if (!success) {
-        if (context.mounted) {
+        if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('更新失败，请检查网络连接')),
           );
@@ -1679,14 +1670,14 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage>
       setState(() {
         _currentPet = updatedPet;
       });
-      if (context.mounted) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('档案已更新')),
         );
       }
       DataChangeNotifier.markPetDataChanged();
     } catch (e) {
-      if (context.mounted) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('更新失败，请重试')),
         );

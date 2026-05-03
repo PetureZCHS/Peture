@@ -8,12 +8,15 @@ import 'package:path/path.dart' as path;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../../../services/supabase_service.dart';
+import '../../../shared/models/pet.dart';
 import '../../../shared/utils/ui_helpers.dart';
 import 'loading_page.dart';
 
@@ -159,8 +162,13 @@ class _PreparationPageState extends State<PreparationPage>
   static const String _lastSelectedIndexKeyPrefix =
       'img_gen_last_selected_index_v1_1_4';
 
+  final SupabaseService _supabaseService = SupabaseService();
+
   File? _selectedImage;
   int _selectedStyleIndex = 0;
+
+  List<Pet> _pets = const [];
+  Pet? _selectedPet;
 
   late final ScrollController _styleScrollController;
 
@@ -168,11 +176,14 @@ class _PreparationPageState extends State<PreparationPage>
   double _uploadProgress = 0.0;
   String _uploadError = '';
 
+  bool _isLoadingPets = false;
+  bool _isPetSelectorExpanded = false;
   bool _isStartingTask = false;
   bool _isPrecheckingImage = false;
   bool _isLoadingStyles = true;
   String _selectedAspectRatio = _defaultAspectRatio;
   int _styleLoadEpoch = 0;
+  int _petImageLoadEpoch = 0;
   final Map<String, int> _lastSelectedIndexByAspectRatio = {
     _defaultAspectRatio: 0,
   };
@@ -194,6 +205,7 @@ class _PreparationPageState extends State<PreparationPage>
     _styleScrollController = ScrollController();
 
     unawaited(_initializeStyleSelectionAndLoad());
+    unawaited(_loadPets());
 
     if (widget.initialSelectedImage != null) {
       _selectedImage = widget.initialSelectedImage;
@@ -210,6 +222,144 @@ class _PreparationPageState extends State<PreparationPage>
           });
         }
       });
+    }
+  }
+
+  Future<void> _loadPets() async {
+    if (!mounted) return;
+    setState(() => _isLoadingPets = true);
+
+    try {
+      final petsData = await _supabaseService.getAllPets();
+      if (!mounted) return;
+      setState(() {
+        _pets = petsData.map((data) => Pet.fromMap(data)).toList();
+        _isLoadingPets = false;
+      });
+    } catch (e) {
+      debugPrint('加载宠物列表失败: $e');
+      if (mounted) {
+        setState(() => _isLoadingPets = false);
+      }
+    }
+  }
+
+  Future<void> _onPetSelected(Pet pet) async {
+    final int epoch = ++_petImageLoadEpoch;
+    setState(() {
+      _selectedPet = pet;
+      _isPetSelectorExpanded = false;
+      _uploadError = '';
+    });
+
+    final lifePhoto = pet.lifePhoto?.trim();
+    if (lifePhoto == null || lifePhoto.isEmpty) {
+      if (!mounted || epoch != _petImageLoadEpoch) return;
+      setState(() {
+        _selectedImage = null;
+      });
+      return;
+    }
+
+    final resolvedFile = await _resolvePetLifePhotoFile(
+      petId: pet.id ?? pet.name,
+      source: lifePhoto,
+    );
+
+    if (!mounted || epoch != _petImageLoadEpoch) return;
+
+    setState(() {
+      _selectedImage = resolvedFile;
+    });
+  }
+
+  bool _isRemoteSource(String source) {
+    return source.startsWith('http://') || source.startsWith('https://');
+  }
+
+  bool _isLocalFilePath(String? source) {
+    if (source == null || source.isEmpty) return false;
+    return !_isRemoteSource(source);
+  }
+
+  File _fileFromPath(String source) {
+    return source.startsWith('file://')
+        ? File(Uri.parse(source).toFilePath())
+        : File(source);
+  }
+
+  Future<String?> _downloadToTempFileFromUrl(String url, String petId) async {
+    try {
+      final res = await http.get(Uri.parse(url));
+      if (res.statusCode != 200) return null;
+
+      final dir = await getTemporaryDirectory();
+      final cacheDir = Directory(path.join(dir.path, 'ai_pet_lifephoto_cache'));
+      if (!await cacheDir.exists()) {
+        await cacheDir.create(recursive: true);
+      }
+
+      final targetPath = path.join(
+        cacheDir.path,
+        '${petId}_${DateTime.now().millisecondsSinceEpoch}.jpg',
+      );
+      final file = File(targetPath);
+      await file.writeAsBytes(res.bodyBytes, flush: true);
+      return file.path;
+    } catch (e) {
+      debugPrint('下载宠物生活照失败: $e');
+      return null;
+    }
+  }
+
+  Future<File?> _resolvePetLifePhotoFile({
+    required String petId,
+    required String source,
+  }) async {
+    try {
+      if (_isLocalFilePath(source)) {
+        final file = _fileFromPath(source);
+        if (await file.exists()) {
+          return file;
+        }
+      }
+
+      if (_isRemoteSource(source)) {
+        final baseDir = await getApplicationDocumentsDirectory();
+        final lifePhotoDir = Directory(
+          path.join(baseDir.path, 'ai_pet_lifephoto_cache'),
+        );
+        if (!await lifePhotoDir.exists()) {
+          await lifePhotoDir.create(recursive: true);
+        }
+
+        final cachedPath = path.join(
+          lifePhotoDir.path,
+          '${petId}_${source.hashCode}.jpg',
+        );
+        final cachedFile = File(cachedPath);
+        if (await cachedFile.exists()) {
+          return cachedFile;
+        }
+
+        final downloadedPath = await _downloadToTempFileFromUrl(source, petId);
+        if (downloadedPath == null) return null;
+
+        final downloadedFile = File(downloadedPath);
+        if (!await downloadedFile.exists()) return null;
+
+        try {
+          await downloadedFile.copy(cachedPath);
+          return cachedFile;
+        } catch (_) {
+          return downloadedFile;
+        }
+      }
+
+      return null;
+    } catch (e) {
+      debugPrint('解析宠物生活照失败: $e');
+      return null;
     }
   }
 
@@ -632,7 +782,21 @@ class _PreparationPageState extends State<PreparationPage>
 
   void _onImageAreaTap() {
     if (_selectedImage == null) {
-      _pickImage();
+      // No image selected yet
+      if (_selectedPet == null) {
+        // No pet selected, allow picking
+        _pickImage();
+      } else {
+        // Pet selected
+        final lifePhoto = _selectedPet!.lifePhoto?.trim();
+        if (lifePhoto == null || lifePhoto.isEmpty) {
+          // Pet has no life photo, allow picking
+          _pickImage();
+        } else {
+          // Pet has life photo but still loading (or failed). Ignore tap.
+          // Optionally show a message.
+        }
+      }
     } else {
       Navigator.of(context).push(
         TransparentImageRoute(
@@ -1000,232 +1164,268 @@ class _PreparationPageState extends State<PreparationPage>
           SafeArea(
             child: Column(
               children: [
-                const SizedBox(height: 20),
-                GestureDetector(
-                  onTap: _onImageAreaTap,
-                  child: Container(
-                    height: 200,
-                    width: double.infinity,
-                    margin: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(24),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.05),
-                          blurRadius: 15,
-                          offset: const Offset(0, 8),
+                Expanded(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      children: [
+                        const SizedBox(height: 20),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                          child: _buildPetSelector(),
                         ),
-                      ],
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(24),
-                      child: BackdropFilter(
-                        filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-                        child: Container(
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(24),
-                            border: Border.all(
-                              color: Colors.white.withOpacity(0.6),
-                              width: 1.2,
-                            ),
-                            gradient: RadialGradient(
-                              radius: 1.8,
-                              center: Alignment.topCenter,
-                              colors: [
-                                AppColors.surface.withOpacity(0.15),
-                                AppColors.surface.withOpacity(0.3),
-                                AppColors.surface.withOpacity(0.45),
-                              ],
-                              stops: const [0.0, 0.6, 1.0],
-                            ),
-                          ),
-                          child: _selectedImage == null
-                              ? Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Container(
-                                      padding: const EdgeInsets.all(16),
-                                      decoration: BoxDecoration(
-                                        color:
-                                            AppColors.primary.withOpacity(0.1),
-                                        shape: BoxShape.circle,
+                        if (_selectedPet != null) ...[
+                          const SizedBox(height: 12),
+                          GestureDetector(
+                            onTap: _onImageAreaTap,
+                            child: Container(
+                              height: 200,
+                              width: double.infinity,
+                              margin:
+                                  const EdgeInsets.symmetric(horizontal: 16),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(24),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.05),
+                                    blurRadius: 15,
+                                    offset: const Offset(0, 8),
+                                  ),
+                                ],
+                              ),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(24),
+                                child: BackdropFilter(
+                                  filter:
+                                      ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(24),
+                                      border: Border.all(
+                                        color: Colors.white.withOpacity(0.6),
+                                        width: 1.2,
                                       ),
-                                      child: Icon(
-                                        Icons.add_photo_alternate_outlined,
-                                        size: 40,
-                                        color: AppColors.primary.withOpacity(0.7),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 16),
-                                    Text(
-                                      "选择宠物生活照",
-                                      style: TextStyle(
-                                        color: AppColors.textGrey.withOpacity(0.9),
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w500,
+                                      gradient: RadialGradient(
+                                        radius: 1.8,
+                                        center: Alignment.topCenter,
+                                        colors: [
+                                          AppColors.surface.withOpacity(0.15),
+                                          AppColors.surface.withOpacity(0.3),
+                                          AppColors.surface.withOpacity(0.45),
+                                        ],
+                                        stops: const [0.0, 0.6, 1.0],
                                       ),
                                     ),
-                                    const SizedBox(height: 8),
-                                    const Text(
-                                      "尽量包含宠物全身",
-                                      style: TextStyle(
-                                        color: AppColors.textLight,
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    const Text(
-                                      "确保面部清晰可见",
-                                      style: TextStyle(
-                                        color: AppColors.textLight,
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                  ],
-                                )
-                              : Stack(
-                                  children: [
-                                    Positioned.fill(
-                                      child: Hero(
-                                        tag: 'pet_photo_hero',
-                                        child: Image.file(
-                                          _selectedImage!,
-                                          fit: BoxFit.contain,
-                                        ),
-                                      ),
-                                    ),
-                                    Positioned(
-                                      right: 8,
-                                      bottom: 8,
-                                      child: GestureDetector(
-                                        onTap: () async {
-                                          await _pickImage();
-                                        },
-                                        child: Container(
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 10, vertical: 4),
-                                          decoration: BoxDecoration(
-                                            color:
-                                                Colors.black.withOpacity(0.5),
-                                            borderRadius:
-                                                BorderRadius.circular(12),
-                                          ),
-                                          child: const Row(
-                                            mainAxisSize: MainAxisSize.min,
+                                    child: _selectedImage == null
+                                        ? Column(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.center,
                                             children: [
-                                              Icon(Icons.refresh,
-                                                  size: 14,
-                                                  color: Colors.white),
-                                              SizedBox(width: 4),
+                                              Container(
+                                                padding:
+                                                    const EdgeInsets.all(16),
+                                                decoration: BoxDecoration(
+                                                  color: AppColors.primary
+                                                      .withOpacity(0.1),
+                                                  shape: BoxShape.circle,
+                                                ),
+                                                child: Icon(
+                                                  Icons
+                                                      .add_photo_alternate_outlined,
+                                                  size: 40,
+                                                  color: AppColors.primary
+                                                      .withOpacity(0.7),
+                                                ),
+                                              ),
+                                              const SizedBox(height: 16),
                                               Text(
-                                                "重新选择",
+                                                (_selectedPet!.lifePhoto ==
+                                                            null ||
+                                                        _selectedPet!
+                                                            .lifePhoto!.isEmpty)
+                                                    ? '您还未上传${_selectedPet!.name}的生活照\n请上传'
+                                                    : '正在载入 ${_selectedPet!.name} 的生活照',
+                                                textAlign: TextAlign.center,
                                                 style: TextStyle(
-                                                  color: Colors.white,
-                                                  fontSize: 11,
+                                                  color: AppColors.textGrey
+                                                      .withOpacity(0.9),
+                                                  fontSize: 16,
+                                                  fontWeight: FontWeight.w500,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 8),
+                                              const Text(
+                                                "尽量包含宠物全身",
+                                                style: TextStyle(
+                                                  color: AppColors.textLight,
+                                                  fontSize: 12,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 2),
+                                              const Text(
+                                                "确保面部清晰可见",
+                                                style: TextStyle(
+                                                  color: AppColors.textLight,
+                                                  fontSize: 12,
+                                                ),
+                                              ),
+                                            ],
+                                          )
+                                        : Stack(
+                                            children: [
+                                              Positioned.fill(
+                                                child: Hero(
+                                                  tag: 'pet_photo_hero',
+                                                  child: Image.file(
+                                                    _selectedImage!,
+                                                    fit: BoxFit.contain,
+                                                  ),
+                                                ),
+                                              ),
+                                              Positioned(
+                                                right: 8,
+                                                bottom: 8,
+                                                child: GestureDetector(
+                                                  onTap: () async {
+                                                    await _pickImage();
+                                                  },
+                                                  child: Container(
+                                                    padding: const EdgeInsets
+                                                        .symmetric(
+                                                        horizontal: 10,
+                                                        vertical: 4),
+                                                    decoration: BoxDecoration(
+                                                      color: Colors.black
+                                                          .withOpacity(0.5),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                              12),
+                                                    ),
+                                                    child: const Row(
+                                                      mainAxisSize:
+                                                          MainAxisSize.min,
+                                                      children: [
+                                                        Icon(Icons.refresh,
+                                                            size: 14,
+                                                            color:
+                                                                Colors.white),
+                                                        SizedBox(width: 4),
+                                                        Text(
+                                                          "重新选择",
+                                                          style: TextStyle(
+                                                            color: Colors.white,
+                                                            fontSize: 11,
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
                                                 ),
                                               ),
                                             ],
                                           ),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
+                                  ),
                                 ),
+                              ),
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 24),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              "选择样式",
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.textDark,
+                                height: 1.3,
+                              ),
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                  ),
-                ),
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 16.0),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      "选择样式",
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.textDark,
-                        height: 1.2,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: _buildAspectRatioButton(
-                          label: '头像\n1:1',
-                          value: '1:1',
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: _buildAspectRatioButton(
-                          label: '书封 / 手机壁纸\n9:16',
-                          value: '9:16',
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: _buildAspectRatioButton(
-                          label: '电脑壁纸\n16:9',
-                          value: '16:9',
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 26),
-                SizedBox(
-                  height: _styleListHeightForAspectRatio(_selectedAspectRatio),
-                  child: _isLoadingStyles && _styles.isEmpty
-                      ? const Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
+                        const SizedBox(height: 16),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                          child: Row(
                             children: [
-                              CircularProgressIndicator(),
-                              SizedBox(height: 10),
-                              Text(
-                                '正在从云端载入样式，请等待',
-                                style: TextStyle(
-                                  color: AppColors.textGrey,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w500,
+                              Expanded(
+                                child: _buildAspectRatioButton(
+                                  label: '头像\n1:1',
+                                  value: '1:1',
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: _buildAspectRatioButton(
+                                  label: '书封 / 手机壁纸\n9:16',
+                                  value: '9:16',
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: _buildAspectRatioButton(
+                                  label: '电脑壁纸\n16:9',
+                                  value: '16:9',
                                 ),
                               ),
                             ],
                           ),
-                        )
-                      : _styles.isEmpty
-                          ? const Center(
-                              child: Text(
-                                '暂无可用风格',
-                                style: TextStyle(
-                                  color: AppColors.textGrey,
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            )
-                          : ListView.separated(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 16, vertical: 8),
-                              scrollDirection: Axis.horizontal,
-                              itemCount: _styles.length,
-                              separatorBuilder: (_, __) =>
-                                  const SizedBox(width: 12),
-                              itemBuilder: (ctx, index) {
-                                final isSelected = _selectedStyleIndex == index;
-                                return _buildTechStyleCard(index, isSelected);
-                              },
-                              controller: _styleScrollController,
-                            ),
+                        ),
+                        const SizedBox(height: 26),
+                        SizedBox(
+                          height: _styleListHeightForAspectRatio(
+                              _selectedAspectRatio),
+                          child: _isLoadingStyles && _styles.isEmpty
+                              ? const Center(
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      CircularProgressIndicator(),
+                                      SizedBox(height: 10),
+                                      Text(
+                                        '正在从云端载入样式，请等待',
+                                        style: TextStyle(
+                                          color: AppColors.textGrey,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                )
+                              : _styles.isEmpty
+                                  ? const Center(
+                                      child: Text(
+                                        '暂无可用风格',
+                                        style: TextStyle(
+                                          color: AppColors.textGrey,
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    )
+                                  : ListView.separated(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 16, vertical: 8),
+                                      scrollDirection: Axis.horizontal,
+                                      itemCount: _styles.length,
+                                      separatorBuilder: (_, __) =>
+                                          const SizedBox(width: 12),
+                                      itemBuilder: (ctx, index) {
+                                        final isSelected =
+                                            _selectedStyleIndex == index;
+                                        return _buildTechStyleCard(
+                                            index, isSelected);
+                                      },
+                                      controller: _styleScrollController,
+                                    ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-                const Spacer(),
                 if (_uploadError.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.symmetric(
@@ -1313,6 +1513,21 @@ class _PreparationPageState extends State<PreparationPage>
                                     _uploadStatus != UploadStatus.uploading &&
                                     !_isStartingTask)
                                 ? () async {
+                                    // 网络检查
+                                    try {
+                                      await InternetAddress.lookup('google.com')
+                                          .timeout(const Duration(seconds: 3));
+                                    } catch (_) {
+                                      if (mounted) {
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(
+                                          const SnackBar(
+                                              content: Text('无网络连接，请检查网络设置。')),
+                                        );
+                                      }
+                                      return;
+                                    }
+
                                     final uploadedFileName =
                                         await _uploadImageToSupabaseStorage(
                                             _selectedImage!);
@@ -1591,7 +1806,8 @@ class _PreparationPageState extends State<PreparationPage>
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(vertical: 6),
                     decoration: BoxDecoration(
-                      color: isSelected ? AppColors.primary : Colors.transparent,
+                      color:
+                          isSelected ? AppColors.primary : Colors.transparent,
                       borderRadius: const BorderRadius.vertical(
                           bottom: Radius.circular(20)),
                     ),
@@ -1631,6 +1847,359 @@ class _PreparationPageState extends State<PreparationPage>
     );
   }
 
+  Widget _buildPetSelector() {
+    if (_isLoadingPets) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.72),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.white.withOpacity(0.9), width: 1.2),
+        ),
+        child: const Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            SizedBox(width: 10),
+            Text(
+              '正在加载主角列表',
+              style: TextStyle(
+                color: AppColors.textGrey,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (_pets.isEmpty) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.72),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.white.withOpacity(0.9), width: 1.2),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: AppColors.primary.withOpacity(0.08),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.pets_rounded,
+                color: AppColors.primary.withOpacity(0.7),
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Text(
+                '还没有可选主角，先去宠物资料里添加一只吧',
+                style: TextStyle(
+                  color: AppColors.textDark,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final hasSelectedPet = _selectedPet != null;
+
+    return Column(
+      children: [
+        GestureDetector(
+          onTap: () {
+            setState(() {
+              _isPetSelectorExpanded = !_isPetSelectorExpanded;
+            });
+          },
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: _isPetSelectorExpanded
+                  ? Colors.white.withOpacity(0.9)
+                  : Colors.white.withOpacity(0.72),
+              borderRadius: BorderRadius.only(
+                topLeft: const Radius.circular(20),
+                topRight: const Radius.circular(20),
+                bottomLeft: Radius.circular(_isPetSelectorExpanded ? 6 : 20),
+                bottomRight: Radius.circular(_isPetSelectorExpanded ? 6 : 20),
+              ),
+              border: Border.all(
+                color: _isPetSelectorExpanded
+                    ? AppColors.primary.withOpacity(0.25)
+                    : Colors.white.withOpacity(0.9),
+                width: 1.2,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 15,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                if (!hasSelectedPet) ...[
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade200,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.pets,
+                      color: Colors.grey.shade400,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Text(
+                      '选择主角',
+                      style: TextStyle(
+                        color: AppColors.textDark,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ] else ...[
+                  _buildPetAvatar(_selectedPet!),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _selectedPet!.name,
+                          style: const TextStyle(
+                            color: AppColors.textDark,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          _selectedPet!.lifePhoto != null &&
+                                  _selectedPet!.lifePhoto!.isNotEmpty
+                              ? '已切换到生活照作为默认原图'
+                              : '该主角暂时没有生活照',
+                          style: TextStyle(
+                            color: AppColors.textGrey.withOpacity(0.85),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                AnimatedRotation(
+                  turns: _isPetSelectorExpanded ? 0.5 : 0,
+                  duration: const Duration(milliseconds: 200),
+                  child: Icon(
+                    Icons.keyboard_arrow_down_rounded,
+                    color: _isPetSelectorExpanded
+                        ? AppColors.primary
+                        : AppColors.textLight,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        AnimatedSize(
+          duration: const Duration(milliseconds: 260),
+          curve: Curves.easeInOut,
+          child: Container(
+            height: _isPetSelectorExpanded ? null : 0,
+            constraints: const BoxConstraints(maxHeight: 280),
+            clipBehavior: Clip.antiAlias,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.88),
+              borderRadius: const BorderRadius.only(
+                bottomLeft: Radius.circular(20),
+                bottomRight: Radius.circular(20),
+              ),
+              border: Border.all(
+                color: AppColors.primary.withOpacity(0.12),
+                width: 1.0,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.04),
+                  blurRadius: 15,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: ListView.separated(
+              shrinkWrap: true,
+              padding: const EdgeInsets.all(10),
+              itemCount: _pets.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 8),
+              itemBuilder: (context, index) {
+                final pet = _pets[index];
+                final isSelected = _selectedPet?.id == pet.id;
+                return _buildPetSelectorItem(pet: pet, isSelected: isSelected);
+              },
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPetSelectorItem({
+    required Pet pet,
+    required bool isSelected,
+  }) {
+    return InkWell(
+      onTap: () => _onPetSelected(pet),
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color:
+              isSelected ? AppColors.primary.withOpacity(0.08) : Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isSelected
+                ? AppColors.primary.withOpacity(0.22)
+                : Colors.grey.withOpacity(0.12),
+            width: 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            _buildPetAvatar(pet),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          pet.name,
+                          style: const TextStyle(
+                            color: AppColors.textDark,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      if (isSelected)
+                        const Icon(
+                          Icons.check_circle_rounded,
+                          color: AppColors.primary,
+                          size: 18,
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    [pet.type, pet.breed, pet.gender]
+                        .where((item) => item.trim().isNotEmpty)
+                        .join(' · '),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: AppColors.textGrey.withOpacity(0.9),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    pet.lifePhoto != null && pet.lifePhoto!.isNotEmpty
+                        ? '点击后会自动把生活照作为原图'
+                        : '您还未上传生活照',
+                    style: TextStyle(
+                      color: pet.lifePhoto != null && pet.lifePhoto!.isNotEmpty
+                          ? AppColors.textGrey.withOpacity(0.75)
+                          : AppColors.accent.withOpacity(0.9),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPetAvatar(Pet pet) {
+    final avatar = pet.avatar;
+    final fallback = Container(
+      width: 44,
+      height: 44,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: AppColors.primary.withOpacity(0.08),
+      ),
+      child: Icon(
+        Icons.pets_rounded,
+        color: AppColors.primary.withOpacity(0.7),
+        size: 22,
+      ),
+    );
+
+    if (avatar == null || avatar.isEmpty) {
+      return fallback;
+    }
+
+    if (_isRemoteSource(avatar)) {
+      return ClipOval(
+        child: Image.network(
+          avatar,
+          width: 44,
+          height: 44,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => fallback,
+        ),
+      );
+    }
+
+    final file = _fileFromPath(avatar);
+    if (file.existsSync()) {
+      return ClipOval(
+        child: Image.file(
+          file,
+          width: 44,
+          height: 44,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => fallback,
+        ),
+      );
+    }
+
+    return fallback;
+  }
+
   Widget _buildAspectRatioButton({
     required String label,
     required String value,
@@ -1648,11 +2217,11 @@ class _PreparationPageState extends State<PreparationPage>
         padding: const EdgeInsets.symmetric(vertical: 5),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(20),
-          color: isSelected
-              ? AppColors.primary
-              : Colors.white.withOpacity(0.65),
+          color:
+              isSelected ? AppColors.primary : Colors.white.withOpacity(0.65),
           border: Border.all(
-            color: isSelected ? AppColors.primary : Colors.white.withOpacity(0.9),
+            color:
+                isSelected ? AppColors.primary : Colors.white.withOpacity(0.9),
             width: 1.2,
           ),
           boxShadow: [
@@ -1689,8 +2258,7 @@ class _PreparationPageState extends State<PreparationPage>
                 height: 1.0,
               ),
             ),
-            if (ratio.isNotEmpty)
-              const SizedBox(height: 2),
+            if (ratio.isNotEmpty) const SizedBox(height: 2),
             if (ratio.isNotEmpty)
               Text(
                 ratio,
