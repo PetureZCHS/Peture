@@ -8,6 +8,10 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "Authorization, x-client-info, content-type",
 };
 
+/**
+ * 用户 JWT：若冷静期已结束（effective_at <= now），则立即执行硬删并删除 Auth。
+ * 冷静期未结束时不应调用（由客户端在登录后清空字段撤回）。
+ */
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: corsHeaders });
@@ -21,7 +25,7 @@ Deno.serve(async (req: Request) => {
 
   const authHeader = req.headers.get("Authorization");
   if (!authHeader) {
-    return new Response(JSON.stringify({ error: "未登录", code: "UNAUTHORIZED" }), {
+    return new Response(JSON.stringify({ error: "未登录" }), {
       status: 401,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
@@ -36,19 +40,47 @@ Deno.serve(async (req: Request) => {
   } = await verifyClient.auth.getUser(token);
 
   if (userError || !user) {
-    return new Response(JSON.stringify({ error: "用户无效", code: "INVALID_USER" }), {
+    return new Response(JSON.stringify({ error: "用户无效" }), {
       status: 401,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 
   const admin = createServiceRoleClient();
+  const { data: profile, error: pErr } = await admin
+    .from("users_profiles")
+    .select("account_deletion_effective_at")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (pErr) {
+    return new Response(JSON.stringify({ error: pErr.message }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  const effective = profile?.account_deletion_effective_at as string | null | undefined;
+  if (effective == null) {
+    return new Response(JSON.stringify({ success: true, action: "noop" }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  const due = Date.parse(effective) <= Date.now();
+  if (!due) {
+    return new Response(
+      JSON.stringify({ success: false, code: "GRACE_STILL_ACTIVE" }),
+      { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
+  }
+
   const purged = await purgeUserBusinessData(admin, user.id);
   if (!purged.ok) {
     return new Response(
       JSON.stringify({
-        error: "删除业务数据失败",
-        code: "PURGE_FAILED",
+        error: "purge_failed",
         step: purged.step,
         message: purged.message,
       }),
@@ -56,17 +88,16 @@ Deno.serve(async (req: Request) => {
     );
   }
 
-  const { error: deleteError } = await admin.auth.admin.deleteUser(user.id);
-  if (deleteError) {
-    console.error("delete auth.users failed:", deleteError);
-    return new Response(JSON.stringify({ error: "删除认证账户失败", code: "DELETE_AUTH_FAILED" }), {
+  const { error: delAuth } = await admin.auth.admin.deleteUser(user.id);
+  if (delAuth) {
+    return new Response(JSON.stringify({ error: delAuth.message }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 
-  return new Response(JSON.stringify({ success: true }), {
+  return new Response(JSON.stringify({ success: true, action: "deleted" }), {
     status: 200,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
-  });
+  );
 });

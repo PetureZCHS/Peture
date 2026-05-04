@@ -29,6 +29,13 @@ class PasswordValidationResult {
       );
 }
 
+/// 与 [evaluateAppPassword] / [isAppPasswordValid] 对齐的说明文案，供注册、修改密码等页面展示。
+const String appPasswordRulesUserDescription =
+    '新密码需满足：\n'
+    '· 至少 8 位\n'
+    '· 不可全部为同一字符重复组成（如 88888888、aaaaaaaa）\n'
+    '· 至少包含两类字符：大写英文、小写英文、数字、符号';
+
 /// 与 [EmailPasswordSetupPage] 规则对齐：至少 8 位，且字符种类不为「弱」；
 /// 并拒绝单一字符重复（如 `666666`、`aaaaaa`）。
 PasswordValidationResult evaluateAppPassword(String password) {

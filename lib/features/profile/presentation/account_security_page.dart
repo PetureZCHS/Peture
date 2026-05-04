@@ -70,7 +70,7 @@ class AccountSecurityPage extends StatelessWidget {
                   icon: Icons.lock_outline_rounded,
                   iconColor: _iconBlue,
                   title: '修改密码',
-                  subtitle: '需验证当前密码；成功后须重新登录，其他设备将下线',
+                  subtitle: '更新登录密码',
                   onTap: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(

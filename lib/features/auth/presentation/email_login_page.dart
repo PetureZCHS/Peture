@@ -2,8 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../../main.dart'; 
-import 'email_register_page.dart'; 
+import '../../../main.dart';
+import 'email_register_page.dart';
 
 class EmailLoginPage extends StatefulWidget {
   const EmailLoginPage({
@@ -43,6 +43,9 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
 
   // 登录模式：true = 邮箱验证码登录（默认），false = 密码登录
   bool _useOtpLogin = true;
+
+  /// 是否同意《用户协议与隐私政策》（含友盟等统计说明）
+  bool _agreedToTerms = false;
 
   int _countdown = 0;
   Timer? _countdownTimer;
@@ -105,8 +108,15 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
     });
   }
 
+  bool _ensureTermsAccepted() {
+    if (_agreedToTerms) return true;
+    _showMessage('请先阅读并同意《用户协议与隐私政策》');
+    return false;
+  }
+
   // 邮箱登录（只使用密码登录）
   Future<void> _emailLogin() async {
+    if (!_ensureTermsAccepted()) return;
     // 仅在“密码登录”模式下使用
     if (!_formKey.currentState!.validate()) {
       return;
@@ -131,7 +141,7 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
         // 隐藏键盘
         FocusScope.of(context).unfocus();
 
-        // 直接跳转，不显示提示消息
+        // 先跳转，友盟 initCommon 勿 await（原生侧可能耗时，会卡住登录转圈）
         if (mounted) {
           Navigator.of(context).pushReplacement(
             PageRouteBuilder(
@@ -181,6 +191,8 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
 
   // 发送邮箱验证码（用于登录）
   Future<void> _sendLoginCode() async {
+    if (!_ensureTermsAccepted()) return;
+
     final email = _emailController.text.trim();
 
     if (email.isEmpty) {
@@ -242,6 +254,7 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
 
   // 验证验证码并登录
   Future<void> _verifyCodeAndLogin() async {
+    if (!_ensureTermsAccepted()) return;
     if (!_formKey.currentState!.validate()) {
       return;
     }
@@ -597,7 +610,40 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
                   ),
                 ],
 
-                const SizedBox(height: 32),
+                const SizedBox(height: 24),
+
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Checkbox(
+                      value: _agreedToTerms,
+                      onChanged: _isLoading
+                          ? null
+                          : (v) => setState(() => _agreedToTerms = v ?? false),
+                      visualDensity: VisualDensity.compact,
+                      activeColor: const Color(0xFF5D5FEF),
+                    ),
+                    const Text('我已阅读并同意',
+                        style: TextStyle(fontSize: 13, color: Colors.grey)),
+                    GestureDetector(
+                      onTap: _isLoading
+                          ? null
+                          : () => _showMessage('请阅读《用户协议与隐私政策》全文',
+                              isError: false),
+                      child: const Text(
+                        '《用户协议与隐私政策》',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Color(0xFF5D5FEF),
+                          fontWeight: FontWeight.bold,
+                          decoration: TextDecoration.underline,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 24),
 
                 // 登录按钮
                 SizedBox(

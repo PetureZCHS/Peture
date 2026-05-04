@@ -2,7 +2,28 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:async';
 import 'email_login_page.dart';
-import '../../../shared/utils/password_policy.dart';
+
+/// 密码强度等级
+enum PasswordStrength {
+  weak, // 弱：只有单一种类（大写/小写/数字）
+  medium, // 中：有两种种类
+  strong, // 强：有三种种类（大写+小写+数字）
+}
+
+/// 密码强度检测结果
+class _PasswordStrengthResult {
+  final PasswordStrength strength;
+  final String message;
+  final Color color;
+  final bool isValid; // 是否满足注册要求（强度≥中 且 长度≥8）
+
+  _PasswordStrengthResult({
+    required this.strength,
+    required this.message,
+    required this.color,
+    required this.isValid,
+  });
+}
 
 /// 用户注册页面
 ///
@@ -664,14 +685,72 @@ class _EmailPasswordSetupPageState extends State<EmailPasswordSetupPage> {
   bool _isLoading = false;
   String? _errorMessage;
 
-  PasswordValidationResult get _passwordStrength =>
-      evaluateAppPassword(_passwordController.text);
+  _PasswordStrengthResult get _passwordStrength =>
+      _evaluatePassword(_passwordController.text);
 
   @override
   void dispose() {
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();
+  }
+
+  /// 评估密码强度（允许包含特殊符号）
+  _PasswordStrengthResult _evaluatePassword(String password) {
+    if (password.isEmpty) {
+      return _PasswordStrengthResult(
+        strength: PasswordStrength.weak,
+        message: '',
+        color: Colors.grey,
+        isValid: false,
+      );
+    }
+
+    // 检查包含的字符类型：大写、小写、数字、特殊字符
+    bool hasUpperCase = password.contains(RegExp(r'[A-Z]'));
+    bool hasLowerCase = password.contains(RegExp(r'[a-z]'));
+    bool hasDigit = password.contains(RegExp(r'[0-9]'));
+    bool hasSpecial = password.contains(RegExp(r'[^A-Za-z0-9]'));
+
+    int typeCount = 0;
+    if (hasUpperCase) typeCount++;
+    if (hasLowerCase) typeCount++;
+    if (hasDigit) typeCount++;
+    if (hasSpecial) typeCount++;
+
+    PasswordStrength strength;
+    String message;
+    Color color;
+
+    if (typeCount <= 1) {
+      strength = PasswordStrength.weak;
+      message = '弱：建议同时包含字母、数字或符号中的至少两种';
+      color = Colors.red;
+    } else if (typeCount == 2) {
+      strength = PasswordStrength.medium;
+      message = '中：密码强度良好';
+      color = Colors.orange;
+    } else {
+      strength = PasswordStrength.strong;
+      message = '强：密码强度优秀';
+      color = Colors.green;
+    }
+
+    bool isValid = strength != PasswordStrength.weak && password.length >= 8;
+    if (!isValid && password.length < 8) {
+      message = '密码长度至少8位，建议混合使用字母、数字和符号';
+    }
+
+    return _PasswordStrengthResult(
+      strength: strength,
+      message: message,
+      color: color,
+      isValid: isValid,
+    );
+  }
+
+  bool _isValidPassword(String password) {
+    return _evaluatePassword(password).isValid;
   }
 
   Future<void> _submitPassword() async {
@@ -690,8 +769,8 @@ class _EmailPasswordSetupPageState extends State<EmailPasswordSetupPage> {
       return;
     }
 
-    if (!isAppPasswordValid(password)) {
-      final result = evaluateAppPassword(password);
+    if (!_isValidPassword(password)) {
+      final result = _evaluatePassword(password);
       setState(() {
         _errorMessage = result.message.isNotEmpty
             ? result.message
@@ -719,8 +798,8 @@ class _EmailPasswordSetupPageState extends State<EmailPasswordSetupPage> {
         UserAttributes(password: password),
       );
 
-      // 设置完成后登出并吊销其他端刷新令牌，让用户用新密码重新登录
-      await _supabase.auth.signOut(scope: SignOutScope.global);
+      // 设置完成后主动登出，让用户用新密码或验证码重新登录
+      await _supabase.auth.signOut();
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -862,8 +941,8 @@ class _EmailPasswordSetupPageState extends State<EmailPasswordSetupPage> {
                     if (value == null || value.isEmpty) {
                       return '请输入密码';
                     }
-                    if (!isAppPasswordValid(value)) {
-                      final result = evaluateAppPassword(value);
+                    if (!_isValidPassword(value)) {
+                      final result = _evaluatePassword(value);
                       return result.message.isNotEmpty
                           ? result.message
                           : '密码长度至少8位，建议混合使用字母、数字和符号';

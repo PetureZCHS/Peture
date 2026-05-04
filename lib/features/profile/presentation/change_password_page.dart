@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../core/auth_pending_email_login.dart';
+import '../../../core/root_navigator_key.dart';
+import '../../auth/presentation/login_page.dart';
 import '../../../shared/utils/password_policy.dart';
 import '../../../shared/utils/ui_helpers.dart';
-import '../../auth/presentation/email_login_page.dart';
 
 class ChangePasswordPage extends StatefulWidget {
   const ChangePasswordPage({super.key});
@@ -24,7 +26,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
   bool _obscureConfirm = true;
 
   PasswordValidationResult get _newStrength =>
-      evaluateAppPassword(_newPasswordController.text);
+      evaluateAppPassword(_newPasswordController.text.trim());
 
   @override
   void dispose() {
@@ -75,7 +77,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
       return;
     }
 
-    final oldPwd = _oldPasswordController.text;
+    final oldPwd = _oldPasswordController.text.trim();
     final newPwd = _newPasswordController.text.trim();
 
     if (oldPwd == newPwd) {
@@ -97,31 +99,66 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
         UserAttributes(password: newPwd),
       );
 
+      if (!mounted) return;
+      setState(() => _isSubmitting = false);
+
+      // 必须在 signOut 之前提示：登出后 RootRouter 会立刻切走，子页面 context 上的 SnackBar/Navigator 会失效。
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) {
+          return AlertDialog(
+            icon: Icon(
+              Icons.check_circle_rounded,
+              color: Colors.green.shade600,
+              size: 52,
+            ),
+            title: const Text('密码已更新'),
+            content: const Text(
+              '请使用新密码重新登录。\n\n'
+              '你在其他设备上的登录状态已失效，这是为了保障账号安全。',
+              style: TextStyle(height: 1.45, fontSize: 15),
+            ),
+            actions: [
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('去登录'),
+              ),
+            ],
+          );
+        },
+      );
+
+      if (!mounted) return;
+      AuthPendingEmailLogin.armAfterPasswordChanged(email);
+
       try {
         await Supabase.instance.client.auth.signOut(
           scope: SignOutScope.global,
         );
       } catch (_) {
-        await Supabase.instance.client.auth.signOut();
+        try {
+          await Supabase.instance.client.auth.signOut();
+        } catch (e2) {
+          AuthPendingEmailLogin.clear();
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('密码已更新，但退出登录失败，请手动退出后再登录：$e2'),
+            ),
+          );
+          return;
+        }
       }
 
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('密码已更新，请使用新密码重新登录。其他设备会话已失效。'),
-          backgroundColor: Colors.green,
-        ),
-      );
-
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(
-          builder: (_) => EmailLoginPage(
-            initialEmail: email,
-            initialMessage: '密码已更新，请使用新密码重新登录',
-          ),
-        ),
-        (route) => false,
-      );
+      // 强制回到根登录栈，避免嵌套 Navigator 仍停留在「已登录」界面；并再次 arm 邮箱供新 [LoginPage] 接力。
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        AuthPendingEmailLogin.armAfterPasswordChanged(email);
+        rootNavigatorKey.currentState?.pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const LoginPage()),
+          (route) => false,
+        );
+      });
     } on AuthException catch (e) {
       if (!mounted) return;
       final code = e.message.toLowerCase();
@@ -180,7 +217,8 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
           children: [
             Text(
-              '为保护账号安全，修改前需验证当前登录密码。密码规则与注册时一致。',
+              '$appPasswordRulesUserDescription\n\n'
+              '修改成功后须使用新密码重新登录，其他设备上的登录将一并退出。',
               style: GoogleFonts.lato(
                 fontSize: 14,
                 height: 1.45,
@@ -229,7 +267,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                         ),
                       ),
                       validator: (value) {
-                        if ((value ?? '').isEmpty) {
+                        if ((value ?? '').trim().isEmpty) {
                           return '请输入当前密码';
                         }
                         return null;
@@ -268,7 +306,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                         return null;
                       },
                     ),
-                    if (_newPasswordController.text.isNotEmpty) ...[
+                    if (_newPasswordController.text.trim().isNotEmpty) ...[
                       const SizedBox(height: 10),
                       ClipRRect(
                         borderRadius: BorderRadius.circular(4),
