@@ -21,6 +21,8 @@ if (-not (Get-Command npx -ErrorAction SilentlyContinue)) {
 $names = @(
   "chat",
   "delete-my-account",
+  "finalize-deletion-if-overdue",
+  "purge-due-account-deletions",
   "diary",
   "get-or-create-invitation-code",
   "img-gen-start",
