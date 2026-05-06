@@ -1,7 +1,81 @@
 import 'dart:io';
+import 'dart:math' as math;
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+
+// ========== 水印配置 ==========
+const String _shareWatermarkText = '智宠合生 Peture AI 生成';
+
+class _ShareWatermarkMetrics {
+  final double horizontalPadding;
+  final double verticalPadding;
+  final double textPaddingH;
+  final double textPaddingV;
+  final double fontSize;
+  final double letterSpacing;
+  final double blurRadius;
+  final Offset shadowOffset;
+  final double borderRadius;
+
+  const _ShareWatermarkMetrics({
+    required this.horizontalPadding,
+    required this.verticalPadding,
+    required this.textPaddingH,
+    required this.textPaddingV,
+    required this.fontSize,
+    required this.letterSpacing,
+    required this.blurRadius,
+    required this.shadowOffset,
+    required this.borderRadius,
+  });
+}
+
+_ShareWatermarkMetrics _computeShareWatermarkMetrics(Size imageSize) {
+  final ratio = imageSize.width / math.max(1.0, imageSize.height);
+  final isSixteenByNine = (ratio - (16 / 9)).abs() <= 0.03;
+  final scale = (imageSize.shortestSide / 1080.0).clamp(0.2, 1.5).toDouble();
+  final fontBoost = isSixteenByNine ? 2.0 : 1.0;
+  return _ShareWatermarkMetrics(
+    horizontalPadding: 24.0 * scale,
+    verticalPadding: 16.0 * scale,
+    textPaddingH: 14.0 * scale,
+    textPaddingV: 8.0 * scale,
+    fontSize: 30.0 * scale * fontBoost,
+    letterSpacing: 0.4 * scale,
+    blurRadius: 6.0 * scale,
+    shadowOffset: Offset(0, 1.5 * scale),
+    borderRadius: 14.0 * scale,
+  );
+}
+
+double _computeShareWatermarkTextFitScale({
+  required String text,
+  required double maxTextWidth,
+  required double fontSize,
+  required double letterSpacing,
+}) {
+  final safeMaxWidth = math.max(1.0, maxTextWidth);
+  final painter = TextPainter(
+    text: TextSpan(
+      text: text,
+      style: TextStyle(
+        fontSize: fontSize,
+        fontWeight: FontWeight.w600,
+        letterSpacing: letterSpacing,
+      ),
+    ),
+    textDirection: ui.TextDirection.ltr,
+    maxLines: 1,
+  )..layout();
+
+  if (painter.width <= safeMaxWidth) {
+    return 1.0;
+  }
+
+  return (safeMaxWidth / painter.width).clamp(0.45, 1.0);
+}
 
 enum ShareCardStyle {
   minimal, // 极简艺术 (Art Gallery)
@@ -333,12 +407,78 @@ class PetDiaryShareCard extends StatelessWidget {
 
     if (imageProvider == null) return const SizedBox();
 
+    // Promote to non-null for use inside the LayoutBuilder closure
+    final ImageProvider nonNullImageProvider = imageProvider;
+
     return ClipRRect(
       borderRadius: BorderRadius.circular(16),
-      child: Image(
-        image: imageProvider,
-        fit: BoxFit.cover,
-        width: double.infinity,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return Stack(
+            children: [
+              Image(
+                image: nonNullImageProvider,
+                fit: BoxFit.cover,
+                width: double.infinity,
+              ),
+              // 水印 overlay — 模仿 diary_detail_page.dart 中 _ContainedImageWithWatermark 的定位逻辑
+              _buildShareWatermarkOverlay(constraints),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  /// 构建分享卡片中的水印覆盖层
+  Widget _buildShareWatermarkOverlay(BoxConstraints constraints) {
+    final imageSize = Size(constraints.maxWidth, constraints.maxHeight);
+    final metrics = _computeShareWatermarkMetrics(imageSize);
+    final maxTextWidth = (imageSize.width * 0.75) - (metrics.textPaddingH * 2);
+    final textFitScale = _computeShareWatermarkTextFitScale(
+      text: _shareWatermarkText,
+      maxTextWidth: maxTextWidth,
+      fontSize: metrics.fontSize,
+      letterSpacing: metrics.letterSpacing,
+    );
+
+    return Positioned(
+      right: metrics.horizontalPadding,
+      bottom: metrics.verticalPadding,
+      child: IgnorePointer(
+        child: Container(
+          padding: EdgeInsets.symmetric(
+            horizontal: metrics.textPaddingH,
+            vertical: metrics.textPaddingV,
+          ),
+          decoration: BoxDecoration(
+            color: Colors.black.withOpacity(0.22),
+            borderRadius: BorderRadius.circular(metrics.borderRadius),
+          ),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: math.max(1, maxTextWidth),
+            ),
+            child: Text(
+              _shareWatermarkText,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.85),
+                fontSize: metrics.fontSize * textFitScale,
+                fontWeight: FontWeight.w600,
+                letterSpacing: metrics.letterSpacing * textFitScale,
+                shadows: [
+                  Shadow(
+                    color: Colors.black.withOpacity(0.25),
+                    blurRadius: metrics.blurRadius * textFitScale,
+                    offset: metrics.shadowOffset * textFitScale,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

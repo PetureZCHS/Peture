@@ -188,6 +188,7 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
   bool _isSaved = false; // 标记是否已保存
+  bool _isSaving = false; // 标记是否正在保存中
   bool _isGenerating = false; // 是否正在生成
   bool _showLoading = true; // 是否显示加载动画
   String _generatedContent = ''; // 生成的内容
@@ -214,7 +215,11 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
   
   // 分享相关
   final GlobalKey _globalKey = GlobalKey();
+  final GlobalKey _imageWithWatermarkKey = GlobalKey();
   ShareCardStyle _currentShareStyle = ShareCardStyle.minimal;
+  
+  // 日记ID（用于保存后更新图片）
+  String? _diaryId;
 
   @override
   void initState() {
@@ -471,6 +476,11 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
       });
       _imageMessageTimer?.cancel();
       _autoScrollToBottom();
+      
+      // If diary was already saved, update it with the new image path
+      if (_isSaved && _diaryId != null) {
+        await _updateDiaryImagePath(_diaryId!, path);
+      }
     } on FunctionException catch (fe, st) {
       debugPrint('⟡ FunctionException(status=${fe.status}) details=${fe.details} reason=${fe.reasonPhrase}');
       debugPrint(st.toString());
@@ -754,6 +764,10 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
       return;
     }
 
+    setState(() {
+      _isSaving = true;
+    });
+
     try {
       final diary = PetDiary(
         petId: widget.petId,
@@ -781,6 +795,7 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
       if (mounted) {
         setState(() {
           _isSaved = true;
+          _diaryId = diaryId;
         });
         // 保存成功后只更新按钮状态，不显示 SnackBar
       }
@@ -798,6 +813,31 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
           ),
         );
       }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
+    }
+  }
+
+  /// 更新日记的AI配图路径
+  Future<void> _updateDiaryImagePath(String diaryId, String aiImgPath) async {
+    try {
+      final userId = Supabase.instance.client.auth.currentUser?.id;
+      if (userId == null) return;
+
+      await Supabase.instance.client
+          .from('pet_diaries')
+          .update({
+            'ai_img': aiImgPath,
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', diaryId)
+          .eq('user_id', userId);
+    } catch (e) {
+      debugPrint('更新日记图片路径失败: $e');
     }
   }
 
@@ -896,7 +936,7 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
 
                   const SizedBox(height: 32),
 
-                  // AI 生成图片区域 - 在保存/编辑按钮上方
+                  // AI 生成配图区域 - 在保存/编辑按钮上方
                   if (!_showLoading) _buildAiImageSection(),
 
                   if (!_showLoading && !_isGenerating && !_isImageGenerating) const SizedBox(height: 16),
@@ -1062,9 +1102,6 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
                                       height: 50,
                                       child: ElevatedButton.icon(
                                         onPressed: () async {
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            const SnackBar(content: Text('正在保存到相册...')),
-                                          );
                                           await _captureAndSaveToGallery(inDialogContext: ctx);
                                         },
                                         icon: const Icon(Icons.download, color: Colors.blue),
@@ -1207,10 +1244,10 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
     }
   }
 
-  Future<void> _saveGeneratedDiaryImageToGallery() async {
+
+  Future<void> _saveImageWithWatermarkToGallery() async {
     try {
-      final file = _generatedDiaryImageFile;
-      if (file == null) {
+      if (_generatedDiaryImageFile == null) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('图片尚未生成')),
@@ -1218,20 +1255,39 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
         }
         return;
       }
-      final bytes = await file.readAsBytes();
-      await Gal.putImageBytes(bytes);
 
-      _isImageSavedToGallery = true;
+      final boundary = _imageWithWatermarkKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+      if (boundary == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('无法获取图片边界')),
+          );
+        }
+        return;
+      }
+
+      // Capture at pixelRatio 3.0 for high quality
+      final image = await boundary.toImage(pixelRatio: 3.0);
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      if (byteData == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('图片编码失败')),
+          );
+        }
+        return;
+      }
+
+      final pngBytes = byteData.buffer.asUint8List();
+      await Gal.putImageBytes(pngBytes);
+
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('图片已保存到相册'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        setState(() {
+          _isImageSavedToGallery = true;
+        });
       }
     } catch (e) {
-      debugPrint('保存日记图片失败: $e');
+      debugPrint('保存带水印图片失败: $e');
       if (mounted) {
         String message = '保存失败，请检查相册权限';
         if (e is GalException) {
@@ -1278,14 +1334,10 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
         Navigator.pop(inDialogContext);
       }
 
-      _isImageSavedToGallery = true;
       if (mounted) {
-         ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('图片已保存到相册'),
-              backgroundColor: Colors.green,
-            ),
-         );
+        setState(() {
+          _isImageSavedToGallery = true;
+        });
       }
     } catch (e) {
       debugPrint('保存失败: $e');
@@ -1835,22 +1887,30 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
             height: 54,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(16),
-              gradient: _isSaved
+              gradient: _isSaving
                   ? const LinearGradient(
-                      colors: [Color(0xFF4CAF50), Color(0xFF66BB6A)],
+                      colors: [Color(0xFFB0B8C9), Color(0xFF9CA3B0)],
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                     )
-                  : const LinearGradient(
-                      colors: [Color(0xFF7B95FF), Color(0xFF9B7FFF)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
+                  : _isSaved
+                      ? const LinearGradient(
+                          colors: [Color(0xFF4CAF50), Color(0xFF66BB6A)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        )
+                      : const LinearGradient(
+                          colors: [Color(0xFF7B95FF), Color(0xFF9B7FFF)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
               boxShadow: [
                 BoxShadow(
-                  color: (_isSaved
-                          ? const Color(0xFF4CAF50)
-                          : const Color(0xFF7B95FF))
+                  color: (_isSaving
+                          ? const Color(0xFF9CA3B0)
+                          : _isSaved
+                              ? const Color(0xFF4CAF50)
+                              : const Color(0xFF7B95FF))
                       .withOpacity(0.4),
                   blurRadius: 16,
                   offset: const Offset(0, 6),
@@ -1860,19 +1920,28 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
             child: Material(
               color: Colors.transparent,
               child: InkWell(
-                onTap: (_isSaved || _isGenerating) ? null : _saveDiary,
+                onTap: (_isSaved || _isGenerating || _isSaving) ? null : _saveDiary,
                 borderRadius: BorderRadius.circular(16),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(
-                      _isSaved ? Icons.check_circle : Icons.bookmark_outline,
-                      color: Colors.white,
-                      size: 22,
-                    ),
+                    _isSaving
+                        ? const SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.5,
+                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                            ),
+                          )
+                        : Icon(
+                            _isSaved ? Icons.check_circle : Icons.bookmark_outline,
+                            color: Colors.white,
+                            size: 22,
+                          ),
                     const SizedBox(width: 8),
                     Text(
-                      _isSaved ? '已保存' : '保存日记',
+                      _isSaving ? '正在保存' : (_isSaved ? '已保存' : '保存日记'),
                       style: const TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
@@ -1940,7 +2009,7 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // 流式输出过程中不显示 AI 生成图片按钮
+        // 流式输出过程中不显示 AI 生成配图按钮
         if (_showGenerateImageButton && !_isGenerating)
           Container(
             height: 68,
@@ -2049,7 +2118,7 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
                                     Icon(Icons.auto_awesome, color: Colors.white, size: 20),
                                     SizedBox(width: 8),
                                     Text(
-                                      'AI 生成图片',
+                                      'AI 生成配图',
                                       style: TextStyle(
                                         fontWeight: FontWeight.w800,
                                         color: Colors.white,
@@ -2084,7 +2153,7 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
               onPressed: _generateDiaryImage,
               icon: const Icon(Icons.refresh, color: Colors.white),
               label: const Text(
-                '重试生成',
+                '重试 AI 生成配图',
                 style: TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.w700,
@@ -2406,40 +2475,46 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
               child: AspectRatio(
                 aspectRatio: 16 / 9,
                 child: LayoutBuilder(
-                  builder: (context, constraints) => Stack(
-                    children: [
-                      Positioned.fill(
-                        child: Image.file(
-                          _generatedDiaryImageFile!,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) {
-                            return Container(
-                              color: const Color(0xFFF3F4F6),
-                              alignment: Alignment.center,
-                              child: const Text('图片加载失败'),
-                            );
-                          },
-                        ),
-                      ),
-                      _buildWatermarkOverlay(constraints),
-                      // 添加点击提示图标
-                      Positioned(
-                        right: 12,
-                        top: 12,
-                        child: Container(
-                          padding: const EdgeInsets.all(6),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withOpacity(0.4),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Icon(
-                            Icons.zoom_in,
-                            color: Colors.white,
-                            size: 16,
+                  builder: (context, constraints) => RepaintBoundary(
+                    key: _imageWithWatermarkKey,
+                    child: Stack(
+                      children: [
+                        Positioned.fill(
+                          child: Hero(
+                            tag: 'diary_generated_image',
+                            child: Image.file(
+                              _generatedDiaryImageFile!,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) {
+                                return Container(
+                                  color: const Color(0xFFF3F4F6),
+                                  alignment: Alignment.center,
+                                  child: const Text('图片加载失败'),
+                                );
+                              },
+                            ),
                           ),
                         ),
-                      ),
-                    ],
+                        _buildWatermarkOverlay(constraints),
+                        // 添加点击提示图标
+                        Positioned(
+                          right: 12,
+                          top: 12,
+                          child: Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withOpacity(0.4),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Icon(
+                              Icons.zoom_in,
+                              color: Colors.white,
+                              size: 16,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -2452,7 +2527,7 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 ElevatedButton.icon(
-                  onPressed: _isImageSavedToGallery ? null : _saveGeneratedDiaryImageToGallery,
+                  onPressed: _isImageSavedToGallery ? null : _saveImageWithWatermarkToGallery,
                   icon: Icon(
                     _isImageSavedToGallery ? Icons.check : Icons.download_rounded,
                     size: 16,
@@ -2546,7 +2621,39 @@ class _TransparentImageRoute extends PageRouteBuilder {
           opaque: false,
           barrierColor: Colors.transparent,
           transitionDuration: const Duration(milliseconds: 200),
-          reverseTransitionDuration: const Duration(milliseconds: 200),
+          reverseTransitionDuration: const Duration(milliseconds: 180),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            // Enter: fade + scale up
+            final enterAnimation = CurvedAnimation(
+              parent: animation,
+              curve: Curves.easeOutCubic,
+            );
+
+            // Check if we're exiting (secondary animation is running)
+            if (secondaryAnimation.value > 0) {
+              final exitProgress = 1.0 - secondaryAnimation.value;
+              return Opacity(
+                opacity: exitProgress,
+                child: Transform.scale(
+                  scale: 0.95 + (0.05 * exitProgress),
+                  child: child,
+                ),
+              );
+            }
+
+            // Entering animation
+            final progress = enterAnimation.value;
+            final opacity = progress;
+            final scale = 0.9 + (0.1 * progress);
+
+            return Opacity(
+              opacity: opacity,
+              child: Transform.scale(
+                scale: scale,
+                child: child,
+              ),
+            );
+          },
         );
 }
 
@@ -2637,9 +2744,12 @@ class _FullscreenImagePageState extends State<_FullscreenImagePage>
                 child: InteractiveViewer(
                   minScale: 1.0,
                   maxScale: 4.0,
-                  child: _FullscreenImageWithWatermark(
-                    imageFile: widget.imageFile,
-                    heroTag: widget.heroTag,
+                  child: Hero(
+                    tag: widget.heroTag,
+                    child: _FullscreenImageWithWatermark(
+                      imageFile: widget.imageFile,
+                      heroTag: widget.heroTag,
+                    ),
                   ),
                 ),
               ),
@@ -2651,8 +2761,8 @@ class _FullscreenImagePageState extends State<_FullscreenImagePage>
   }
 }
 
-/// 全屏预览图片组件 - 带水印
-class _FullscreenImageWithWatermark extends StatelessWidget {
+/// 全屏预览图片组件 - 带水印（模仿 result_page.dart 的 _ContainedImageWithWatermark）
+class _FullscreenImageWithWatermark extends StatefulWidget {
   final File imageFile;
   final String heroTag;
 
@@ -2662,40 +2772,104 @@ class _FullscreenImageWithWatermark extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    return Hero(
-      tag: heroTag,
-      child: Container(
-        color: Colors.black,
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            return Stack(
-              fit: StackFit.expand,
-              children: [
-                Center(
-                  child: Image.file(
-                    imageFile,
-                    fit: BoxFit.contain,
-                    errorBuilder: (context, error, stackTrace) {
-                      return const Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.error_outline, color: Colors.white, size: 50),
-                            SizedBox(height: 16),
-                            Text('图片加载失败', style: TextStyle(color: Colors.white)),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
-                ),
-                _buildWatermarkOverlay(constraints),
-              ],
-            );
-          },
-        ),
-      ),
+  State<_FullscreenImageWithWatermark> createState() => _FullscreenImageWithWatermarkState();
+}
+
+class _FullscreenImageWithWatermarkState extends State<_FullscreenImageWithWatermark> {
+  ImageStream? _imageStream;
+  ImageStreamListener? _listener;
+  double? _aspectRatio;
+  int _refreshTick = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _resolveAspectRatio();
+  }
+
+  @override
+  void didUpdateWidget(covariant _FullscreenImageWithWatermark oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.imageFile.path != widget.imageFile.path) {
+      _resolveAspectRatio();
+    }
+  }
+
+  @override
+  void dispose() {
+    _removeImageListener();
+    super.dispose();
+  }
+
+  void _removeImageListener() {
+    if (_imageStream != null && _listener != null) {
+      _imageStream!.removeListener(_listener!);
+    }
+    _imageStream = null;
+    _listener = null;
+  }
+
+  void _resolveAspectRatio() {
+    _removeImageListener();
+    final provider = FileImage(widget.imageFile);
+    final stream = provider.resolve(const ImageConfiguration());
+    final listener = ImageStreamListener(
+      (ImageInfo info, bool syncCall) {
+        if (!mounted) return;
+        setState(() {
+          _aspectRatio = info.image.width / info.image.height;
+        });
+      },
+      onError: (Object exception, StackTrace? stackTrace) {
+        if (!mounted) return;
+        setState(() {
+          _aspectRatio = 1.0;
+        });
+      },
+    );
+    stream.addListener(listener);
+    _imageStream = stream;
+    _listener = listener;
+  }
+
+  Widget _buildImage() {
+    return Image.file(
+      widget.imageFile,
+      key: ValueKey(_refreshTick),
+      fit: BoxFit.contain,
+      width: double.infinity,
+      height: double.infinity,
+      errorBuilder: (context, error, stackTrace) {
+        return Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error_outline, size: 50, color: Colors.white),
+              const SizedBox(height: 16),
+              const Text(
+                '图片加载失败',
+                style: TextStyle(fontSize: 16, color: Colors.white),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                '请检查网络连接后重试',
+                style: TextStyle(fontSize: 14, color: Colors.white70),
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: () {
+                  FileImage(widget.imageFile).evict();
+                  setState(() {
+                    _refreshTick++;
+                  });
+                  _resolveAspectRatio();
+                },
+                child: const Text('重试'),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -2749,6 +2923,30 @@ class _FullscreenImageWithWatermark extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ratio = _aspectRatio;
+    final Widget content = ratio == null
+        ? const Center(
+            child: CircularProgressIndicator(color: Colors.white),
+          )
+        : Center(
+            child: AspectRatio(
+              aspectRatio: ratio,
+              child: LayoutBuilder(
+                builder: (context, constraints) => Stack(
+                  children: [
+                    Positioned.fill(child: _buildImage()),
+                    _buildWatermarkOverlay(constraints),
+                  ],
+                ),
+              ),
+            ),
+          );
+
+    return content;
   }
 }
 

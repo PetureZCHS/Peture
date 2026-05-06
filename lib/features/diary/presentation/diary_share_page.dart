@@ -140,8 +140,13 @@ Widget _buildWatermarkOverlay(BoxConstraints constraints) {
 
 class DiarySharePage extends StatefulWidget {
   final PetDiary diary;
+  final String? petType;
 
-  const DiarySharePage({super.key, required this.diary});
+  const DiarySharePage({
+    super.key,
+    required this.diary,
+    this.petType,
+  });
 
   @override
   State<DiarySharePage> createState() => _DiarySharePageState();
@@ -184,6 +189,15 @@ class _DiarySharePageState extends State<DiarySharePage>
   void initState() {
     super.initState();
     _loadAiImage();
+    // 根据宠物类型设置默认贴纸
+    if (widget.petType != null) {
+      final type = widget.petType!.toLowerCase();
+      if (type == '狗' || type == 'dog') {
+        _selectedSticker = '🐶';
+      } else if (type == '猫' || type == 'cat') {
+        _selectedSticker = '🐱';
+      }
+    }
   }
 
   final AiImageCacheService _imageCacheService = AiImageCacheService();

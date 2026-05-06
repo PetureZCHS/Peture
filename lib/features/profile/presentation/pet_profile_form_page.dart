@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:path/path.dart' as p;
@@ -37,7 +38,7 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
   String? _gender; // 弟弟/妹妹/未知
   String? _neuterStatus; // 已绝育/未绝育
   double? _weight; // kg
-  String? _userAvatarPath; // 用户头像路径
+// 用户头像路径
 
   // 主人昵称相关
 
@@ -283,7 +284,6 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
       final avatarPath = await UserAvatarHelper.getCurrentUserAvatarPath();
       if (mounted && avatarPath != null) {
         setState(() {
-          _userAvatarPath = avatarPath;
         });
       }
     } catch (e) {
@@ -2131,58 +2131,36 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF5F6F9),
-      body: Column(
-        children: [
-          // 自定义顶部返回按钮和用户头像
-          Container(
-            color: const Color(0xFFF5F6F9),
-            child: SafeArea(
-              bottom: false,
-              child: Padding(
-                padding: const EdgeInsets.only(
-                  left: 8,
-                  right: 16,
-                  top: 0,
-                  bottom: 4,
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    IconButton(
-                      icon: const Icon(
-                        Icons.arrow_back_ios,
-                        color: Colors.black87,
-                        size: 20,
-                      ),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                    // 用户头像
-                    if (_userAvatarPath != null &&
-                        File(_userAvatarPath!).existsSync())
-                      CircleAvatar(
-                        radius: 18,
-                        backgroundImage: FileImage(File(_userAvatarPath!)),
-                      )
-                    else
-                      CircleAvatar(
-                        radius: 18,
-                        backgroundColor: const Color(0xFF5A8EFA),
-                        child: Text(
-                          'U',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.dark.copyWith(
+        statusBarColor: Colors.transparent,
+      ),
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF5F6F9),
+        appBar: AppBar(
+          backgroundColor: const Color(0xFFF5F6F9),
+          elevation: 0,
+          centerTitle: true,
+          systemOverlayStyle: SystemUiOverlayStyle.dark,
+          leading: IconButton(
+            icon: const Icon(
+              Icons.arrow_back_ios,
+              color: Colors.black87,
+              size: 20,
+            ),
+            onPressed: () => Navigator.pop(context),
+          ),
+          title: const Text(
+            '编辑宠物档案',
+            style: TextStyle(
+              color: Colors.black87,
+              fontSize: 17,
+              fontWeight: FontWeight.w600,
             ),
           ),
+        ),
+      body: Column(
+        children: [
           Expanded(
             child: SingleChildScrollView(
               child: Column(
@@ -2370,49 +2348,74 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
             padding: const EdgeInsets.all(20),
             child: SafeArea(
               top: false,
-              child: SizedBox(
-                width: double.infinity,
-                child: Container(
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF6B9EFF), Color(0xFF4E7EFF)],
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                    ),
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF5A8EFA).withOpacity(0.3),
-                        blurRadius: 12,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.transparent,
-                      foregroundColor: Colors.white,
-                      shadowColor: Colors.transparent,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      elevation: 0,
-                    ),
-                    onPressed: _isSaving ? null : _savePetProfile,
-                    child: _isSaving
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Text(
-                            '保存档案',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
+                child: SizedBox(
+                  width: double.infinity,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      gradient: _isSaving
+                          ? const LinearGradient(
+                              colors: [Color(0xFFB0C4DE), Color(0xFF9CAFC9)],
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                            )
+                          : const LinearGradient(
+                              colors: [Color(0xFF6B9EFF), Color(0xFF4E7EFF)],
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
                             ),
-                          ),
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: _isSaving
+                          ? []
+                          : [
+                              BoxShadow(
+                                color: const Color(0xFF5A8EFA).withOpacity(0.3),
+                                blurRadius: 12,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                    ),
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.transparent,
+                        foregroundColor: _isSaving ? const Color(0xFFF0F4F8) : Colors.white,
+                        shadowColor: Colors.transparent,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        elevation: 0,
+                        disabledBackgroundColor: Colors.transparent,
+                      ),
+                      onPressed: _isSaving ? null : _savePetProfile,
+                      child: _isSaving
+                          ? Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: const [
+                                SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2.5,
+                                    valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFF0F4F8)),
+                                  ),
+                                ),
+                                SizedBox(width: 10),
+                                Text(
+                                  '保存中…',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            )
+                          : const Text(
+                              '保存档案',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
                   ),
                 ),
               ),
@@ -2420,7 +2423,8 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
           ),
         ],
       ),
-    );
+    ),
+  );
   }
 }
 

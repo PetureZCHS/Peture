@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -1689,21 +1690,25 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage>
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      // 🎨 全新设计：现代柔和渐变背景
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            Color(0xFFF0F4F8), // 浅蓝灰，干净清爽
-            Colors.white,
-            Color(0xFFFAFBFC),
-          ],
-          stops: [0.0, 0.5, 1.0],
-        ),
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.dark.copyWith(
+        statusBarColor: Colors.transparent,
       ),
-      child: Stack(
+      child: Container(
+        // 🎨 全新设计：现代柔和渐变背景
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Color(0xFFF0F4F8), // 浅蓝灰，干净清爽
+              Colors.white,
+              Color(0xFFFAFBFC),
+            ],
+            stops: [0.0, 0.5, 1.0],
+          ),
+        ),
+        child: Stack(
         children: [
           Scaffold(
             backgroundColor: Colors.transparent,
@@ -1718,6 +1723,7 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage>
               ),
               backgroundColor: Colors.transparent,
               elevation: 0,
+              systemOverlayStyle: SystemUiOverlayStyle.dark,
               leading: IconButton(
                 icon: const Icon(
                   Icons.arrow_back_ios_new_rounded,
@@ -1972,7 +1978,8 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage>
             ),
         ],
       ),
-    );
+    ),
+  );
   }
 }
 

@@ -11,6 +11,12 @@ class AnalyticsService {
   static Future<void> init() async {
     if (_isInitialized) return;
 
+    // Web 平台不支持友盟 SDK，直接返回
+    if (kIsWeb) {
+      debugPrint('AnalyticsService: Web 平台跳过友盟初始化');
+      return;
+    }
+
     // 默认值为友盟控制台 Android AppKey，本地可直接 flutter run；发布前可用 dart-define 覆盖。
     const androidKey = String.fromEnvironment(
       'UMENG_ANDROID_KEY',

@@ -82,57 +82,6 @@ double _computeWatermarkTextFitScale({
   return (safeMaxWidth / painter.width).clamp(0.45, 1.0);
 }
 
-Widget _buildWatermarkOverlay(BoxConstraints constraints) {
-  final imageSize = Size(constraints.maxWidth, constraints.maxHeight);
-  final metrics = _computeWatermarkMetrics(imageSize);
-  final maxTextWidth = (imageSize.width * 0.75) - (metrics.textPaddingH * 2);
-  final textFitScale = _computeWatermarkTextFitScale(
-    text: _watermarkText,
-    maxTextWidth: maxTextWidth,
-    fontSize: metrics.fontSize,
-    letterSpacing: metrics.letterSpacing,
-  );
-
-  return Positioned(
-    right: metrics.horizontalPadding,
-    bottom: metrics.verticalPadding,
-    child: IgnorePointer(
-      child: Container(
-        padding: EdgeInsets.symmetric(
-          horizontal: metrics.textPaddingH,
-          vertical: metrics.textPaddingV,
-        ),
-        decoration: BoxDecoration(
-          color: Colors.black.withOpacity(0.22),
-          borderRadius: BorderRadius.circular(metrics.borderRadius),
-        ),
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            maxWidth: math.max(1, maxTextWidth),
-          ),
-          child: Text(
-            _watermarkText,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.85),
-              fontSize: metrics.fontSize * textFitScale,
-              fontWeight: FontWeight.w600,
-              letterSpacing: metrics.letterSpacing * textFitScale,
-              shadows: [
-                Shadow(
-                  color: Colors.black.withOpacity(0.25),
-                  blurRadius: metrics.blurRadius * textFitScale,
-                  offset: metrics.shadowOffset * textFitScale,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    ),
-  );
-}
 
 class DiaryDetailPage extends StatelessWidget {
   final PetDiary diary;
@@ -165,7 +114,10 @@ class DiaryDetailPage extends StatelessWidget {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) => DiarySharePage(diary: diary),
+                  builder: (context) => DiarySharePage(
+                  diary: diary,
+                  petType: diary.petType,
+                ),
                 ),
               );
             },
@@ -548,11 +500,15 @@ class _AuthenticatedImageState extends State<_AuthenticatedImage> {
       onTap: _showFullscreenImage,
       child: ClipRRect(
         borderRadius: widget.borderRadius,
-        child: _ContainedImageWithWatermark(
-          heroTag: 'ai_image_${widget.path}',
-          imageBytes: _imageBytes!,
+        child: SizedBox(
           height: widget.height,
-          borderRadius: widget.borderRadius,
+          width: double.infinity,
+          child: _ContainedImageWithWatermark(
+            heroTag: 'ai_image_${widget.path}',
+            imageBytes: _imageBytes!,
+            containerHeight: widget.height,
+            borderRadius: widget.borderRadius,
+          ),
         ),
       ),
     );
@@ -560,50 +516,156 @@ class _AuthenticatedImageState extends State<_AuthenticatedImage> {
 }
 
 /// 带水印的图片组件（用于 Hero 动画）
-/// 确保图片和水印作为整体参与 Hero 动画
-class _ContainedImageWithWatermark extends StatelessWidget {
+/// 与 result_page.dart 保持一致，确保全屏和缩略图使用相同的 watermark 定位逻辑
+class _ContainedImageWithWatermark extends StatefulWidget {
   final String heroTag;
   final Uint8List imageBytes;
-  final double height;
+  final double containerHeight;
   final BorderRadius borderRadius;
 
   const _ContainedImageWithWatermark({
     required this.heroTag,
     required this.imageBytes,
-    required this.height,
+    required this.containerHeight,
     required this.borderRadius,
   });
 
   @override
-  Widget build(BuildContext context) {
-    return Hero(
-      tag: heroTag,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          return Stack(
-            children: [
-              Image.memory(
-                imageBytes,
-                width: double.infinity,
-                height: height,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) {
-                  return Container(
-                    height: height,
-                    decoration: BoxDecoration(
-                      color: Colors.grey[200],
-                      borderRadius: borderRadius,
-                    ),
-                    child: Center(
-                      child: Icon(Icons.image_not_supported, color: Colors.grey[400]),
-                    ),
-                  );
-                },
-              ),
-              _buildWatermarkOverlay(constraints),
-            ],
-          );
+  State<_ContainedImageWithWatermark> createState() =>
+      _ContainedImageWithWatermarkState();
+}
+
+class _ContainedImageWithWatermarkState
+    extends State<_ContainedImageWithWatermark> {
+  double? _aspectRatio;
+
+  @override
+  void initState() {
+    super.initState();
+    _resolveAspectRatio();
+  }
+
+  void _resolveAspectRatio() {
+    final image = Image.memory(widget.imageBytes);
+    final stream = image.image.resolve(const ImageConfiguration());
+    stream.addListener(
+      ImageStreamListener(
+        (ImageInfo info, bool _) {
+          if (mounted) {
+            setState(() {
+              _aspectRatio = info.image.width / info.image.height;
+            });
+          }
         },
+        onError: (_, __) {
+          // Use default aspect ratio on error
+        },
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // 如果还没解析出宽高比，先显示图片，等解析完成后再用 AspectRatio
+    if (_aspectRatio == null) {
+      return Hero(
+        tag: widget.heroTag,
+        child: Image.memory(
+          widget.imageBytes,
+          fit: BoxFit.contain,
+          errorBuilder: (context, error, stackTrace) {
+            return Container(
+              height: widget.containerHeight,
+              decoration: BoxDecoration(
+                color: Colors.grey[200],
+                borderRadius: widget.borderRadius,
+              ),
+              child: Center(
+                child: Icon(Icons.image_not_supported, color: Colors.grey[400]),
+              ),
+            );
+          },
+        ),
+      );
+    }
+
+    return Hero(
+      tag: widget.heroTag,
+      child: Center(
+        child: AspectRatio(
+          aspectRatio: _aspectRatio!,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final imageSize = Size(constraints.maxWidth, constraints.maxHeight);
+              final metrics = _computeWatermarkMetrics(imageSize);
+              final maxTextWidth = (imageSize.width * 0.75) - (metrics.textPaddingH * 2);
+              final textFitScale = _computeWatermarkTextFitScale(
+                text: _watermarkText,
+                maxTextWidth: maxTextWidth,
+                fontSize: metrics.fontSize,
+                letterSpacing: metrics.letterSpacing,
+              );
+
+              return Stack(
+                children: [
+                  Positioned.fill(
+                    child: Image.memory(
+                      widget.imageBytes,
+                      fit: BoxFit.contain,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Container(
+                          color: Colors.grey[200],
+                          child: Center(
+                            child: Icon(Icons.image_not_supported, color: Colors.grey[400]),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  Positioned(
+                    right: metrics.horizontalPadding,
+                    bottom: metrics.verticalPadding,
+                    child: IgnorePointer(
+                      child: Container(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: metrics.textPaddingH,
+                          vertical: metrics.textPaddingV,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.22),
+                          borderRadius: BorderRadius.circular(metrics.borderRadius),
+                        ),
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxWidth: math.max(1, maxTextWidth),
+                          ),
+                          child: Text(
+                            _watermarkText,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: Colors.white.withOpacity(0.85),
+                              fontSize: metrics.fontSize * textFitScale,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: metrics.letterSpacing * textFitScale,
+                              shadows: [
+                                Shadow(
+                                  color: Colors.black.withOpacity(0.25),
+                                  blurRadius: metrics.blurRadius * textFitScale,
+                                  offset: metrics.shadowOffset * textFitScale,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
       ),
     );
   }
@@ -747,6 +809,7 @@ class _FullscreenImageViewerState extends State<_FullscreenImageViewer>
 }
 
 /// 全屏图片带水印组件（用于 Hero 动画）
+/// 与 result_page.dart 中的 _ContainedImageWithWatermark 保持一致
 class _FullscreenImageWithWatermark extends StatelessWidget {
   final String heroTag;
   final Uint8List imageBytes;
@@ -762,21 +825,75 @@ class _FullscreenImageWithWatermark extends StatelessWidget {
   Widget build(BuildContext context) {
     return Hero(
       tag: heroTag,
-      child: AspectRatio(
-        aspectRatio: aspectRatio,
-        child: LayoutBuilder(
-          builder: (context, constraints) => Stack(
-            children: [
-              Positioned.fill(
-                child: Image.memory(
-                  imageBytes,
-                  fit: BoxFit.contain,
-                  width: double.infinity,
-                  height: double.infinity,
-                ),
-              ),
-              _buildWatermarkOverlay(constraints),
-            ],
+      child: Center(
+        child: AspectRatio(
+          aspectRatio: aspectRatio,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final imageSize = Size(constraints.maxWidth, constraints.maxHeight);
+              final metrics = _computeWatermarkMetrics(imageSize);
+              final maxTextWidth =
+                  (imageSize.width * 0.75) - (metrics.textPaddingH * 2);
+              final textFitScale = _computeWatermarkTextFitScale(
+                text: _watermarkText,
+                maxTextWidth: maxTextWidth,
+                fontSize: metrics.fontSize,
+                letterSpacing: metrics.letterSpacing,
+              );
+
+              return Stack(
+                children: [
+                  // 图片填满容器，水印基于容器尺寸定位
+                  // 与缩略图视图 _ContainedImageWithWatermark 保持一致
+                  Positioned.fill(
+                    child: Image.memory(
+                      imageBytes,
+                      fit: BoxFit.contain,
+                    ),
+                  ),
+                  Positioned(
+                    right: metrics.horizontalPadding,
+                    bottom: metrics.verticalPadding,
+                    child: IgnorePointer(
+                      child: Container(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: metrics.textPaddingH,
+                          vertical: metrics.textPaddingV,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.22),
+                          borderRadius:
+                              BorderRadius.circular(metrics.borderRadius),
+                        ),
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxWidth: math.max(1, maxTextWidth),
+                          ),
+                          child: Text(
+                            _watermarkText,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: Colors.white.withOpacity(0.85),
+                              fontSize: metrics.fontSize * textFitScale,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: metrics.letterSpacing * textFitScale,
+                              shadows: [
+                                Shadow(
+                                  color: Colors.black.withOpacity(0.25),
+                                  blurRadius: metrics.blurRadius * textFitScale,
+                                  offset: metrics.shadowOffset * textFitScale,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
         ),
       ),

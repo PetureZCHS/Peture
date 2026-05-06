@@ -256,7 +256,7 @@ class _AppSettingsState extends State<AppSettings>
         );
       },
       child: Container(
-        height: 110,
+        constraints: const BoxConstraints(minHeight: 100),
         decoration: BoxDecoration(
           gradient: const LinearGradient(
             colors: [Color(0xFF5A8EFA), Color(0xFF8B77FF)],
@@ -400,9 +400,11 @@ class _AppSettingsState extends State<AppSettings>
                           SizedBox(height: 6),
                           Text(
                             "解锁无限 AI 问诊与多宠物档案",
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               color: Color(0xD9FFFFFF),
-                              fontSize: 13,
+                              fontSize: MediaQuery.of(context).size.width < 380 ? 11.5 : 13,
                               fontWeight: FontWeight.w500,
                               shadows: [
                                 Shadow(

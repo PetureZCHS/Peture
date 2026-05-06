@@ -56,7 +56,8 @@ class FadePageRoute extends PageRouteBuilder {
 }
 
 class LoadingPage extends StatefulWidget {
-  final File originalImage;
+  final File? originalImage;
+  final String? originalImageUrl; // Web 平台使用 URL
   final String uploadedFileName;
   final String style;
   final Future<FunctionResponse> generationFuture;
@@ -64,7 +65,8 @@ class LoadingPage extends StatefulWidget {
 
   const LoadingPage({
     super.key,
-    required this.originalImage,
+    this.originalImage,
+    this.originalImageUrl,
     required this.uploadedFileName,
     required this.style,
     required this.generationFuture,
@@ -281,6 +283,7 @@ class _LoadingPageState extends State<LoadingPage>
         FadePageRoute(
           page: ResultPage(
             originalImage: widget.originalImage,
+            originalImageUrl: widget.originalImageUrl,
             resultImageFile: _generatedImageFile,
             resultImageUrl: _generatedImageUrl,
           ),

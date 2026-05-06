@@ -96,9 +96,20 @@ serve(async (req: Request) => {
 
     // 验证 bucket 白名单，防止安全漏洞
     const ALLOWED_BUCKETS = ['ai-wallpapers', 'user-avatars'];
-    const targetBucket = typeof bucket === 'string' && ALLOWED_BUCKETS.includes(bucket)
-      ? bucket
-      : 'ai-wallpapers';
+    let targetBucket: string;
+    if (typeof bucket === 'string' && bucket.length > 0) {
+      // 如果客户端显式传了 bucket，必须在白名单中，否则拒绝请求
+      if (!ALLOWED_BUCKETS.includes(bucket)) {
+        return new Response(
+          JSON.stringify({ error: "Invalid bucket. Allowed buckets: ai-wallpapers, user-avatars." }),
+          { status: 400, headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) } }
+        );
+      }
+      targetBucket = bucket;
+    } else {
+      // 未指定时默认使用 ai-wallpapers
+      targetBucket = 'ai-wallpapers';
+    }
 
     // 校验 file_name 格式：仅允许字母、数字、连字符、下划线和单个点（用于扩展名），
     // 且扩展名只能是 jpg/jpeg/png/webp，最大长度 200 字符，防止路径遍历攻击
@@ -140,10 +151,89 @@ serve(async (req: Request) => {
     const userId = user.id;
 
     // 为该图片生成一个有效期为 5 分钟的签名 URL
-    const imagePath =
-      typeof customPath === 'string' && customPath.length > 0
-        ? customPath
-        : `${userId}/original/${file_name}`;
+    // 按 bucket 实现更严格的路径规则：
+    // - user-avatars: 只允许 `<userId>/<petId>/lifephoto_<ts>.jpg`
+    // - ai-wallpapers: 只允许 `<userId>/original/<ts>_<uuid>.jpg`
+    const MAX_PATH_LENGTH = 300;
+    const FILE_EXT_PATTERN = "(jpg|jpeg|png|webp)";
+    // 严格 UUID (36 chars with hyphens) pattern: 8-4-4-4-12
+    const UUID36 = '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}';
+    const WALLPAPER_FILE_RE = new RegExp(`^\\d+_${UUID36}\\.${FILE_EXT_PATTERN}$`, "i");
+    const AVATAR_SUFFIX_RE = new RegExp(`^[a-zA-Z0-9_\\-]+/lifephoto_\\d+\\.${FILE_EXT_PATTERN}$`, "i");
+
+    let imagePath: string;
+
+    // 通用安全检查
+    const invalidTraversal = (p: string) => p.includes("..") || p.startsWith("/") || p.length > MAX_PATH_LENGTH;
+
+    if (targetBucket === 'ai-wallpapers') {
+      if (typeof customPath === 'string' && customPath.length > 0) {
+        if (!customPath.startsWith(`${userId}/original/`)) {
+          return new Response(
+            JSON.stringify({ error: "Invalid path: ai-wallpapers path must start with <userId>/original/." }),
+            { status: 400, headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) } }
+          );
+        }
+        if (invalidTraversal(customPath)) {
+          return new Response(
+            JSON.stringify({ error: "Invalid path format." }),
+            { status: 400, headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) } }
+          );
+        }
+        const suffix = customPath.slice(`${userId}/original/`.length);
+        if (!WALLPAPER_FILE_RE.test(suffix)) {
+          return new Response(
+            JSON.stringify({ error: "Invalid wallpaper filename. Expected <ts>_<uuid>.<ext>." }),
+            { status: 400, headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) } }
+          );
+        }
+        imagePath = customPath;
+      } else {
+        // 默认路径：userId/original/file_name，要求 file_name 符合 <ts>_<uuid>.<ext>
+        if (!WALLPAPER_FILE_RE.test(file_name)) {
+          return new Response(
+            JSON.stringify({ error: "Invalid file_name for ai-wallpapers. Expected <ts>_<uuid>.<ext>." }),
+            { status: 400, headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) } }
+          );
+        }
+        imagePath = `${userId}/original/${file_name}`;
+      }
+    } else if (targetBucket === 'user-avatars') {
+      if (typeof customPath === 'string' && customPath.length > 0) {
+        if (!customPath.startsWith(`${userId}/`)) {
+          return new Response(
+            JSON.stringify({ error: "Invalid path: user-avatars path must start with your user id." }),
+            { status: 400, headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) } }
+          );
+        }
+        if (invalidTraversal(customPath)) {
+          return new Response(
+            JSON.stringify({ error: "Invalid path format." }),
+            { status: 400, headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) } }
+          );
+        }
+        const suffix = customPath.slice(`${userId}/`.length);
+        if (!AVATAR_SUFFIX_RE.test(suffix)) {
+          return new Response(
+            JSON.stringify({ error: "Invalid avatar path. Expected <userId>/<petId>/lifephoto_<ts>.<ext>." }),
+            { status: 400, headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) } }
+          );
+        }
+        imagePath = customPath;
+      } else {
+        // 对于 user-avatars 强制要求客户端提供完整 path，避免服务端猜测或签发到不安全位置
+        return new Response(
+          JSON.stringify({ error: "Missing path for user-avatars. Provide path: <userId>/<petId>/lifephoto_<ts>.<ext>." }),
+          { status: 400, headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) } }
+        );
+      }
+    } else {
+      // 不应到达：targetBucket 只能是白名单里的值
+      return new Response(
+        JSON.stringify({ error: "Unsupported bucket." }),
+        { status: 400, headers: { "Content-Type": "application/json", ...getCorsHeaders(origin) } }
+      );
+    }
     const { data: signedData, error: signError } = await supabase
       .storage
       .from(targetBucket)

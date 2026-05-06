@@ -946,7 +946,7 @@ class SupabaseService {
   // ============================================================
 
   /// 插入日记
-  Future<String?> insertDiary_OLD(PetDiary diary) async {
+  Future<String?> insertDiaryOld(PetDiary diary) async {
     final userId = await currentUserId;
     if (userId == null) return null;
 
@@ -976,14 +976,14 @@ class SupabaseService {
           .single();
       return response['id'] as String?;
     } catch (e) {
-      print('插入日记失败: $e');
+      debugPrint('插入日记失败: $e');
       return null;
     }
   }
 
   /// 获取所有日记
   /// [petId] 可选，若提供则只获取指定宠物的日记
-  Future<List<PetDiary>> getAllDiaries_OLD({String? petId}) async {
+  Future<List<PetDiary>> getAllDiariesOld({String? petId}) async {
     final userId = await currentUserId;
     if (userId == null) return [];
 
@@ -1000,7 +1000,7 @@ class SupabaseService {
           .map((data) => PetDiary.fromMap(data))
           .toList();
     } catch (e) {
-      print('获取日记列表失败: $e');
+      debugPrint('获取日记列表失败: $e');
       return [];
     }
   }
@@ -1505,7 +1505,7 @@ class SupabaseService {
     if (userId == null) return [];
 
     try {
-      var query = _client.from('pet_diaries').select().eq('user_id', userId);
+      var query = _client.from('pet_diaries').select('*, pets(type)').eq('user_id', userId);
 
       if (petId != null) {
         query = query.eq('pet_id', petId);

@@ -2,6 +2,7 @@ import 'package:gal/gal.dart';
 import 'package:share_plus/share_plus.dart';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
@@ -139,13 +140,15 @@ class FadePageRoute extends PageRouteBuilder {
 }
 
 class ResultPage extends StatefulWidget {
-  final File originalImage;
+  final File? originalImage;
+  final String? originalImageUrl; // Web 平台使用 URL
   final String? resultImageUrl;
   final File? resultImageFile;
 
   const ResultPage(
       {super.key,
-      required this.originalImage,
+      this.originalImage,
+      this.originalImageUrl,
       this.resultImageFile,
       this.resultImageUrl});
 
@@ -527,14 +530,19 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
                 // 紧凑原图预览
                 GestureDetector(
                   onTap: () {
-                    Navigator.of(context).push(
-                      TransparentImageRoute(
-                        builder: (_) => FullscreenImagePage(
-                          imageFile: widget.originalImage,
-                          heroTag: 'pet_photo_hero',
+                    // Web 平台暂时不支持全屏查看网络图片
+                    if (kIsWeb) return;
+                    
+                    if (widget.originalImage != null) {
+                      Navigator.of(context).push(
+                        TransparentImageRoute(
+                          builder: (_) => FullscreenImagePage(
+                            imageFile: widget.originalImage!,
+                            heroTag: 'pet_photo_hero',
+                          ),
                         ),
-                      ),
-                    );
+                      );
+                    }
                   },
                   child: Container(
                     height: 56,
@@ -599,12 +607,25 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
                                 tag: 'pet_photo_hero',
                                 child: ClipRRect(
                                   borderRadius: BorderRadius.circular(10),
-                                  child: Image.file(
-                                    widget.originalImage,
-                                    height: 40,
-                                    width: 40,
-                                    fit: BoxFit.cover,
-                                  ),
+                                  child: widget.originalImageUrl != null
+                                      ? Image.network(
+                                          widget.originalImageUrl!,
+                                          height: 40,
+                                          width: 40,
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (_, __, ___) => Container(
+                                            height: 40,
+                                            width: 40,
+                                            color: Colors.grey[300],
+                                            child: const Icon(Icons.pets, size: 20),
+                                          ),
+                                        )
+                                      : Image.file(
+                                          widget.originalImage!,
+                                          height: 40,
+                                          width: 40,
+                                          fit: BoxFit.cover,
+                                        ),
                                 ),
                               ),
                             ],
@@ -931,6 +952,17 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
                                   color: Colors.transparent,
                                   child: InkWell(
                                     onTap: () async {
+                                      // Web 平台不支持保存到相册
+                                      if (kIsWeb) {
+                                        if (context.mounted) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            const SnackBar(
+                                              content: Text("当前平台不支持保存到相册，请在手机上使用")),
+                                          );
+                                        }
+                                        return;
+                                      }
+
                                       PermissionStatus status;
                                       if (Platform.isIOS) {
                                         // iOS 双兜底：优先请求 add-only，失败后回退到 photos。
