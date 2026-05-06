@@ -135,3 +135,11 @@ sentry:
   upload_source_maps: true
   project: flutter
   org: zchs-db
+
+hooks:
+  user_defines:
+    sqlite3:
+      source: system
+      name: sqlite3
+      name_android: sqlite
+      name_windows: winsqlite3
