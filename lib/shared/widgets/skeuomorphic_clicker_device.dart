@@ -34,6 +34,8 @@ class SkeuomorphicClickerDevice extends StatefulWidget {
   final VoidCallback onShowStats; // 显示详细统计
   final bool isCoolingDown;
   final bool pendingConfirmation; // 是否处于待确认状态
+  final Map<String, int>? projectSuccessCounts; // 各项目的成功次数
+  final Map<String, int>? projectFailCounts; // 各项目的失败次数
 
   const SkeuomorphicClickerDevice({
     super.key,
@@ -58,6 +60,8 @@ class SkeuomorphicClickerDevice extends StatefulWidget {
     required this.onShowStats,
     required this.isCoolingDown,
     this.pendingConfirmation = false,
+    this.projectSuccessCounts,
+    this.projectFailCounts,
   });
 
   @override
@@ -124,6 +128,7 @@ class _SkeuomorphicClickerDeviceState extends State<SkeuomorphicClickerDevice>
   static const double _shakeDecayRate = 0.02; // 摇晃累积衰减速率
 
   bool _isPressed = false;
+  bool _isProjectGridExpanded = false; // 项目网格是否展开（项目>=4时）
 
   @override
   void initState() {
@@ -630,8 +635,9 @@ class _SkeuomorphicClickerDeviceState extends State<SkeuomorphicClickerDevice>
     final baseWidth = 360.0;
     final availableWidth = screenSize.width - 32;
     final availableHeight = screenSize.height * 0.68;
-    final scaleByWidth = (availableWidth / baseWidth).clamp(0.55, 1.15);
-    final scaleByHeight = (availableHeight / 560).clamp(0.55, 1.15);
+    // scale 上限设为 1.0：大屏不放大，只在小屏时缩小，避免放大后顶部溢出
+    final scaleByWidth = (availableWidth / baseWidth).clamp(0.55, 1.0);
+    final scaleByHeight = (availableHeight / 560).clamp(0.55, 1.0);
     final scale = math.min(scaleByWidth, scaleByHeight);
 
     // 预构建设备主体，以便在动画中复用，避免每帧重绘整个UI
@@ -640,8 +646,10 @@ class _SkeuomorphicClickerDeviceState extends State<SkeuomorphicClickerDevice>
     // 判断是否显示蓄力状态：正在长按 或 有蓄力进度
     final showDamageState = _isLongPressing || _smashProgress > 0;
 
+    // alignment: topCenter 保证缩放锚点在顶部，不会向上溢出
     return Transform.scale(
       scale: scale,
+      alignment: Alignment.topCenter,
       child: SizedBox(
         width: baseWidth,
         child: _isDestroyed
@@ -1550,8 +1558,92 @@ class _SkeuomorphicClickerDeviceState extends State<SkeuomorphicClickerDevice>
 
   /// 训练项目选择器（嵌入设备屏幕上方）
   Widget _buildProjectSelector() {
+    // 项目少于4个时，保持单行横向滚动
+    if (widget.projects.length < 4) {
+      return _buildCompactSelector();
+    }
+
+    // 项目>=4个时，使用可展开的双行网格布局
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOutCubic,
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Color(0xFF1E1E1E),
+            Color(0xFF151515),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF3A3A3A), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.5),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+          BoxShadow(
+            color: Colors.white.withOpacity(0.03),
+            blurRadius: 1,
+            offset: const Offset(0, -1),
+          ),
+        ],
+      ),
+      child: AnimatedSize(
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOutCubic,
+        child: _isProjectGridExpanded
+            ? _buildExpandedGridSelector()
+            : _buildCollapsedGridSelector(),
+      ),
+    );
+  }
+
+  /// 根据项目名称获取对应的emoji图标
+  String _getProjectEmoji(String projectName) {
+    final emojiMap = {
+      '坐下': '🪑',
+      '握手': '🤝',
+      '趴下': '🐕',
+      '转圈': '🔄',
+      '等待': '⏱️',
+      '过来': '👋',
+      '喂食': '🍖',
+    };
+    return emojiMap[projectName] ?? '🎯';
+  }
+
+  /// 获取项目的成功次数
+  int _getProjectSuccess(String projectName) {
+    if (widget.projectSuccessCounts != null &&
+        widget.projectSuccessCounts!.containsKey(projectName)) {
+      return widget.projectSuccessCounts![projectName]!;
+    }
+    // 回退到当前项目的计数
+    if (projectName == widget.currentProject) {
+      return widget.successCount;
+    }
+    return 0;
+  }
+
+  /// 获取项目的失败次数
+  int _getProjectFail(String projectName) {
+    if (widget.projectFailCounts != null &&
+        widget.projectFailCounts!.containsKey(projectName)) {
+      return widget.projectFailCounts![projectName]!;
+    }
+    if (projectName == widget.currentProject) {
+      return widget.failCount;
+    }
+    return 0;
+  }
+
+  /// 紧凑单行选择器（项目数量 < 4）
+  Widget _buildCompactSelector() {
     return Container(
-      height: 40,
+      height: 44,
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           begin: Alignment.topCenter,
@@ -1578,7 +1670,6 @@ class _SkeuomorphicClickerDeviceState extends State<SkeuomorphicClickerDevice>
       ),
       child: Row(
         children: [
-          // 项目滚动列表
           Expanded(
             child: ListView.builder(
               scrollDirection: Axis.horizontal,
@@ -1587,14 +1678,10 @@ class _SkeuomorphicClickerDeviceState extends State<SkeuomorphicClickerDevice>
               itemBuilder: (context, index) {
                 final isSelected = widget.selectedIndex == index;
                 final projectName = widget.projects[index];
-                final isDefaultProject =
-                    ['喂食', '握手', '坐下'].contains(projectName);
 
                 return GestureDetector(
                   onTap: () => widget.onProjectChanged(index),
-                  onLongPress: isDefaultProject
-                      ? null
-                      : () {
+                  onLongPress: () {
                           HapticFeedback.mediumImpact();
                           _showDeleteProjectDialog(projectName);
                         },
@@ -1602,7 +1689,7 @@ class _SkeuomorphicClickerDeviceState extends State<SkeuomorphicClickerDevice>
                     duration: const Duration(milliseconds: 200),
                     margin: const EdgeInsets.only(right: 8),
                     padding: EdgeInsets.symmetric(
-                        horizontal: (isSelected && !isDefaultProject) ? 8 : 14,
+                        horizontal: isSelected ? 8 : 14,
                         vertical: 5),
                     decoration: BoxDecoration(
                       gradient: isSelected
@@ -1619,7 +1706,7 @@ class _SkeuomorphicClickerDeviceState extends State<SkeuomorphicClickerDevice>
                                 const Color(0xFF222222),
                               ],
                             ),
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(10),
                       border: Border.all(
                         color: isSelected
                             ? const Color(0xFF6FE085)
@@ -1653,7 +1740,7 @@ class _SkeuomorphicClickerDeviceState extends State<SkeuomorphicClickerDevice>
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(
-                            projectName,
+                            '${_getProjectEmoji(projectName)} $projectName',
                             style: TextStyle(
                               color: isSelected
                                   ? Colors.white
@@ -1673,7 +1760,7 @@ class _SkeuomorphicClickerDeviceState extends State<SkeuomorphicClickerDevice>
                                   : null,
                             ),
                           ),
-                          if (isSelected == true && !isDefaultProject)
+                          if (isSelected == true)
                             Padding(
                               padding: const EdgeInsets.only(left: 4.0),
                               child: GestureDetector(
@@ -1696,12 +1783,11 @@ class _SkeuomorphicClickerDeviceState extends State<SkeuomorphicClickerDevice>
               },
             ),
           ),
-          // 添加按钮
           GestureDetector(
             onTap: widget.onAddProject,
             child: Container(
               width: 40,
-              height: 40,
+              height: 44,
               decoration: BoxDecoration(
                 border: const Border(
                   left: BorderSide(color: Color(0xFF3A3A3A), width: 1.5),
@@ -1710,6 +1796,10 @@ class _SkeuomorphicClickerDeviceState extends State<SkeuomorphicClickerDevice>
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [Color(0xFF252525), Color(0xFF1A1A1A)],
+                ),
+                borderRadius: const BorderRadius.only(
+                  topRight: Radius.circular(12),
+                  bottomRight: Radius.circular(12),
                 ),
               ),
               child: const Icon(
@@ -1720,6 +1810,396 @@ class _SkeuomorphicClickerDeviceState extends State<SkeuomorphicClickerDevice>
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  /// 折叠状态的项目选择器（项目数量 >= 4）
+  Widget _buildCollapsedGridSelector() {
+    final currentProject = widget.projects[widget.selectedIndex];
+    final success = _getProjectSuccess(currentProject);
+    final total = success + _getProjectFail(currentProject);
+
+    return Container(
+      height: 48,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      child: Row(
+        children: [
+          // 当前选中项目标签
+          Expanded(
+            child: GestureDetector(
+              onLongPress: () {
+                      HapticFeedback.mediumImpact();
+                      _showDeleteProjectDialog(currentProject);
+                    },
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Color(0xFF5ACC6D), Color(0xFF3DAA52)],
+                  ),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: const Color(0xFF6FE085),
+                    width: 1.5,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF4CAF50).withOpacity(0.4),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                    const BoxShadow(
+                      color: Color(0xFF2D7D38),
+                      blurRadius: 1,
+                      offset: Offset(0, 1),
+                      spreadRadius: -1,
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      '${_getProjectEmoji(currentProject)} $currentProject',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.5,
+                        shadows: [
+                          Shadow(
+                            color: Colors.black45,
+                            offset: Offset(0, 1),
+                            blurRadius: 2,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        '✓ $success',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    if (total > 0) ...[
+                      const SizedBox(width: 6),
+                      SizedBox(
+                        width: 40,
+                        height: 4,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(2),
+                          child: LinearProgressIndicator(
+                            value: total > 0 ? success / total : 0,
+                            backgroundColor: Colors.white.withOpacity(0.15),
+                            valueColor: const AlwaysStoppedAnimation<Color>(
+                                Colors.white),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          // 展开按钮
+          GestureDetector(
+            onTap: () {
+              HapticFeedback.lightImpact();
+              setState(() => _isProjectGridExpanded = true);
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color(0xFF2A2A2A),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFF404040)),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    '展开',
+                    style: TextStyle(
+                      color: Color(0xFFAAAAAA),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  SizedBox(width: 2),
+                  Icon(
+                    Icons.keyboard_arrow_down_rounded,
+                    color: Color(0xFFAAAAAA),
+                    size: 16,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          // 添加按钮
+          GestureDetector(
+            onTap: widget.onAddProject,
+            child: Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: const Color(0xFF2A2A2A),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFF404040)),
+              ),
+              child: const Icon(
+                Icons.add_rounded,
+                color: Color(0xFF5ACC6D),
+                size: 20,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 展开状态的双行网格选择器（项目数量 >= 4）
+  Widget _buildExpandedGridSelector() {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // 顶部栏：收起按钮 + 添加按钮
+          Row(
+            children: [
+              GestureDetector(
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  setState(() => _isProjectGridExpanded = false);
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF2A2A2A),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFF404040)),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        '收起',
+                        style: TextStyle(
+                          color: Color(0xFFAAAAAA),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      SizedBox(width: 2),
+                      Icon(
+                        Icons.keyboard_arrow_up_rounded,
+                        color: Color(0xFFAAAAAA),
+                        size: 16,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const Spacer(),
+              GestureDetector(
+                onTap: widget.onAddProject,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF252525),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFF404040)),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.add_rounded,
+                        color: Color(0xFF5ACC6D),
+                        size: 16,
+                      ),
+                      SizedBox(width: 4),
+                      Text(
+                        '添加',
+                        style: TextStyle(
+                          color: Color(0xFF5ACC6D),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          // 项目网格
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final crossAxisCount = constraints.maxWidth > 300 ? 3 : 2;
+              final cardWidth = (constraints.maxWidth - (crossAxisCount - 1) * 8) / crossAxisCount;
+              return Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: List.generate(widget.projects.length, (index) {
+                  return SizedBox(
+                    width: cardWidth,
+                    child: _buildProjectGridCard(index),
+                  );
+                }),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 网格中的项目卡片
+  Widget _buildProjectGridCard(int index) {
+    final projectName = widget.projects[index];
+    final isSelected = widget.selectedIndex == index;
+    final success = _getProjectSuccess(projectName);
+    final fail = _getProjectFail(projectName);
+    final total = success + fail;
+    final successRate = total > 0 ? success / total : 0.0;
+
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.lightImpact();
+        widget.onProjectChanged(index);
+      },
+      onLongPress: () {
+              HapticFeedback.mediumImpact();
+              _showDeleteProjectDialog(projectName);
+            },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          gradient: isSelected
+              ? const LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Color(0xFF2E2E2E),
+                    Color(0xFF222222),
+                  ],
+                )
+              : const LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Color(0xFF282828),
+                    Color(0xFF1E1E1E),
+                  ],
+                ),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected
+                ? const Color(0xFF5ACC6D)
+                : const Color(0xFF404040),
+            width: isSelected ? 2 : 1,
+          ),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: const Color(0xFF4CAF50).withOpacity(0.25),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.3),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Emoji 图标
+            Text(
+              _getProjectEmoji(projectName),
+              style: const TextStyle(fontSize: 22),
+            ),
+            const SizedBox(height: 4),
+            // 项目名称
+            Text(
+              projectName,
+              style: TextStyle(
+                color: isSelected ? Colors.white : const Color(0xFFBBBBBB),
+                fontSize: 11,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                letterSpacing: 0.3,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 4),
+            // 成功次数标签
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? const Color(0xFF4CAF50).withOpacity(0.2)
+                    : const Color(0xFF3A3A3A),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(
+                '✓ $success',
+                style: TextStyle(
+                  color: isSelected
+                      ? const Color(0xFF8EE89E)
+                      : const Color(0xFF999999),
+                  fontSize: 9,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            const SizedBox(height: 4),
+            // 迷你进度条
+            SizedBox(
+              width: double.infinity,
+              height: 3,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(1.5),
+                child: LinearProgressIndicator(
+                  value: successRate,
+                  backgroundColor: const Color(0xFF333333),
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    isSelected ? const Color(0xFF5ACC6D) : const Color(0xFF666666),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

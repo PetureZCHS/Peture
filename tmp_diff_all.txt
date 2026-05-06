@@ -1,631 +1,510 @@
-diff --git a/lib/features/lost_pet/presentation/lost_pet_rescue_page.dart b/lib/features/lost_pet/presentation/lost_pet_rescue_page.dart
-index 9cdd342..9f25a9b 100644
---- a/lib/features/lost_pet/presentation/lost_pet_rescue_page.dart
-+++ b/lib/features/lost_pet/presentation/lost_pet_rescue_page.dart
-@@ -26,6 +26,7 @@ class _LostPetRescuePageState extends State<LostPetRescuePage>
-     with SingleTickerProviderStateMixin {
-   final _formKey = GlobalKey<FormState>();
-   final GlobalKey _posterKey = GlobalKey();
-+  final GlobalKey _a4PosterKey = GlobalKey();
-   late TabController _tabController;
+diff --git a/lib/features/dog_clicker/presentation/dog_clicker_screen.dart b/lib/features/dog_clicker/presentation/dog_clicker_screen.dart
+index 8487da5..e0ba1c3 100644
+--- a/lib/features/dog_clicker/presentation/dog_clicker_screen.dart
++++ b/lib/features/dog_clicker/presentation/dog_clicker_screen.dart
+@@ -108,7 +108,6 @@ class _DogClickerScreenState extends State<DogClickerScreen>
+         _projectSounds = soundsMap.map(
+           (key, value) => MapEntry(key, value.toString()),
+         );
+-      }
  
-   // Services
-@@ -41,7 +42,6 @@ class _LostPetRescuePageState extends State<LostPetRescuePage>
-   bool _includeTime = true;
+       setState(() {
+         // 只使用用户自定义的项目
+@@ -140,7 +139,6 @@ class _DogClickerScreenState extends State<DogClickerScreen>
+         // 更新当前项目的计数
+         _updateCurrentCounts();
+         _isLoading = false;
+-      });
+     } catch (e) {
+       debugPrint('加载训练数据失败: $e');
+       setState(() => _isLoading = false);
+@@ -149,7 +147,16 @@ class _DogClickerScreenState extends State<DogClickerScreen>
  
-   // Controllers
--  final _nameController = TextEditingController();
-   final _speciesController = TextEditingController(text: '猫'); // Default to Cat
-   final _descriptionController = TextEditingController();
-   final _timeController = TextEditingController();
-@@ -52,7 +52,7 @@ class _LostPetRescuePageState extends State<LostPetRescuePage>
-   LostPetMaterials? _generatedMaterials;
-   File? _selectedImage;
-   bool _isGenerating = false;
--
-+  
-   @override
-   void initState() {
-     super.initState();
-@@ -83,7 +83,6 @@ class _LostPetRescuePageState extends State<LostPetRescuePage>
-     setState(() {
-       _selectedPet = pet;
-       if (pet != null) {
--        _nameController.text = pet.name;
-         _speciesController.text = pet.type;
-         // 自动填充外貌特征：品种、性别、年龄等
-         final descriptionParts = <String>[];
-@@ -175,7 +174,6 @@ class _LostPetRescuePageState extends State<LostPetRescuePage>
-   @override
-   void dispose() {
-     _tabController.dispose();
--    _nameController.dispose();
-     _speciesController.dispose();
-     _descriptionController.dispose();
-     _timeController.dispose();
-@@ -202,14 +200,21 @@ class _LostPetRescuePageState extends State<LostPetRescuePage>
-       await Future.delayed(const Duration(milliseconds: 50));
- 
-       // 1. Capture Image
--      final boundary = _posterKey.currentContext?.findRenderObject()
-+      // 始终使用 A4 版本的 Key 进行高分辨率输出
-+      final boundary = _a4PosterKey.currentContext?.findRenderObject()
-           as RenderRepaintBoundary?;
-       if (boundary == null) {
-         throw Exception('无法获取渲染边界');
-       }
- 
--      // Use a slightly lower pixel ratio to avoid memory issues, but still high quality
--      ui.Image image = await boundary.toImage(pixelRatio: 2.0);
-+      // Use a high pixel ratio to ensure high-definition output (approx 2480x3508 for A4)
-+      // Calculate needed scale to reach ~2480px width (standard A4 at 300dpi)
-+      double logicalWidth = boundary.size.width;
-+      double pixelRatio = 2480 / logicalWidth;
-+      // Cap pixel ratio to avoid absurd sizes and out-of-memory errors (2480 width is around 6x on a standard phone)
-+      pixelRatio = pixelRatio.clamp(4.0, 8.0);
-+
-+      ui.Image image = await boundary.toImage(pixelRatio: pixelRatio);
-       ByteData? byteData =
-           await image.toByteData(format: ui.ImageByteFormat.png);
- 
-@@ -274,11 +279,15 @@ class _LostPetRescuePageState extends State<LostPetRescuePage>
-     try {
-       await Future.delayed(const Duration(milliseconds: 50));
- 
--      final boundary = _posterKey.currentContext?.findRenderObject()
-+      final boundary = _a4PosterKey.currentContext?.findRenderObject()
-           as RenderRepaintBoundary?;
-       if (boundary == null) throw Exception('无法获取渲染边界');
- 
--      ui.Image image = await boundary.toImage(pixelRatio: 2.0);
-+      double logicalWidth = boundary.size.width;
-+      double pubPixelRatio = 2480 / logicalWidth;
-+      pubPixelRatio = pubPixelRatio.clamp(2.0, 4.0);
-+
-+      ui.Image image = await boundary.toImage(pixelRatio: pubPixelRatio);
-       ByteData? byteData =
-           await image.toByteData(format: ui.ImageByteFormat.png);
-       if (byteData == null) throw Exception('图片数据为空');
-@@ -314,9 +323,16 @@ class _LostPetRescuePageState extends State<LostPetRescuePage>
-   }
- 
-   void _generate() {
-+    if (_selectedPet == null) {
-+      ScaffoldMessenger.of(context).showSnackBar(
-+        const SnackBar(content: Text('请先选择宠物')),
-+      );
+   /// 更新当前选中项目的计数
+   void _updateCurrentCounts() {
+-    final currentOption = _filterOptions[_selectedFilterIndex];
++    if (_filterOptions.isEmpty) {
++      _clickCount = 0;
++      _failCount = 0;
++      _unconfirmedCount = 0;
 +      return;
 +    }
-+
-     if (_formKey.currentState!.validate()) {
-       final info = LostPetInfo(
--        name: _nameController.text,
-+        name: _selectedPet!.name,
-         species: _speciesController.text,
-         description: _descriptionController.text,
-         lostTime: _timeController.text,
-@@ -464,13 +480,6 @@ class _LostPetRescuePageState extends State<LostPetRescuePage>
-                             color: AppColors.textDark)),
-                     const SizedBox(height: 20),
-                     _buildPetSelector(),
--                    const SizedBox(height: 20),
--                    _buildModernTextField(
--                        label: '宠物名字',
--                        controller: _nameController,
--                        icon: Icons.pets_rounded,
--                        hint: '例如：咪咪',
--                        readOnly: _selectedPet != null),
-                     _buildDateTimePicker(),
-                     _buildModernTextField(
-                         label: '走失地点',
-@@ -1093,14 +1102,11 @@ class _LostPetRescuePageState extends State<LostPetRescuePage>
++    if (_selectedFilterIndex < 0 || _selectedFilterIndex >= _filterOptions.length) {
++      _selectedFilterIndex = 0;
++    }
++    final currentOption = _filterOptions.isEmpty ? '默认训练' : _filterOptions[_selectedFilterIndex];
+     _clickCount = _successCounts[currentOption] ?? 0;
+     _failCount = _failureCounts[currentOption] ?? 0;
+     _unconfirmedCount = _unconfirmedCounts[currentOption] ?? 0;
+@@ -159,7 +166,7 @@ class _DogClickerScreenState extends State<DogClickerScreen>
+   Future<void> _saveSuccessCount() async {
+     try {
+       final prefs = await SharedPreferences.getInstance();
+-      final currentOption = _filterOptions[_selectedFilterIndex];
++      final currentOption = _filterOptions.isEmpty ? '默认训练' : _filterOptions[_selectedFilterIndex];
+ 
+       // 更新总计数
+       _totalSuccessCount++;
+@@ -180,7 +187,7 @@ class _DogClickerScreenState extends State<DogClickerScreen>
+   Future<void> _saveFailureCount() async {
+     try {
+       final prefs = await SharedPreferences.getInstance();
+-      final currentOption = _filterOptions[_selectedFilterIndex];
++      final currentOption = _filterOptions.isEmpty ? '默认训练' : _filterOptions[_selectedFilterIndex];
+ 
+       // 更新总计数
+       _totalFailureCount++;
+@@ -240,7 +247,6 @@ class _DogClickerScreenState extends State<DogClickerScreen>
+         _successCounts[projectName] = 0;
+         _failureCounts[projectName] = 0;
+         _updateCurrentCounts();
+-      });
+ 
+       if (mounted) {
+         ScaffoldMessenger.of(context).showSnackBar(
+@@ -254,7 +260,6 @@ class _DogClickerScreenState extends State<DogClickerScreen>
+             duration: const Duration(seconds: 4),
            ),
-           const SizedBox(height: 24),
+         );
+-      }
+     } catch (e) {
+       debugPrint('删除项目记录失败: $e');
+     }
+@@ -266,7 +271,6 @@ class _DogClickerScreenState extends State<DogClickerScreen>
+     try {
+       if (projectName.trim().isEmpty) {
+         return;
+-      }
  
--          SizedBox(
--            height: 500, // Fixed height for tab view content
--            child: TabBarView(
--              controller: _tabController,
--              children: [
--                // Copywriting Tab
--                SingleChildScrollView(
--                  child: Column(
-+          AnimatedBuilder(
-+              animation: _tabController,
-+              builder: (context, _) {
-+                if (_tabController.index == 0) {
-+                  return Column(
-                     children: [
-                       _buildPlatformCard('朋友圈文案', m.wechatMomentsText,
-                           const Color(0xFF07C160), Icons.chat_bubble_rounded),
-@@ -1112,16 +1118,31 @@ class _LostPetRescuePageState extends State<LostPetRescuePage>
-                       _buildPlatformCard('短消息/群发', m.shortMessageText,
-                           const Color(0xFF007AFF), Icons.message_rounded),
-                     ],
--                  ),
--                ),
--                // Poster Tab
--                SingleChildScrollView(
--                  child: Column(
-+                  );
-+                } else {
-+                  return Column(
-                     children: [
-+                      // 始终展示手机版预览画面
-                       RepaintBoundary(
-                         key: _posterKey,
--                        child: _buildPosterPreview(m),
-+                        child: _buildPosterLayout(m, isA4: false),
-                       ),
-+
-+                      // 在后台隐式渲染 A4 版本用于无损拍照保存，不展示给用户
-+                      SizedBox(
-+                          width: 0,
-+                          height: 0,
-+                          child: OverflowBox(
-+                            minWidth: 794,
-+                            maxWidth: 794,
-+                            minHeight: 1123,
-+                            maxHeight: 1123,
-+                            child: RepaintBoundary(
-+                              key: _a4PosterKey,
-+                              child: _buildPosterLayout(m, isA4: true),
-+                            ),
-+                          ),
-+                        ),
-                       const SizedBox(height: 24),
-                       Row(
-                         children: [
-@@ -1183,11 +1204,9 @@ class _LostPetRescuePageState extends State<LostPetRescuePage>
-                       ),
-                       const SizedBox(height: 20),
-                     ],
--                  ),
--                ),
--              ],
--            ),
--          ),
-+                  );
-+                }
-+              }),
+       // 检查项目是否已存在
+       if (_filterOptions.contains(projectName)) {
+@@ -283,7 +287,6 @@ class _DogClickerScreenState extends State<DogClickerScreen>
+           );
+         }
+         return;
+-      }
  
-           const SizedBox(height: 40),
-         ],
-@@ -1254,11 +1273,12 @@ class _LostPetRescuePageState extends State<LostPetRescuePage>
+       final prefs = await SharedPreferences.getInstance();
+ 
+@@ -309,7 +312,6 @@ class _DogClickerScreenState extends State<DogClickerScreen>
+           _selectedFilterIndex = 0;
+           _updateCurrentCounts();
+         }
+-      });
+ 
+       if (mounted) {
+         ScaffoldMessenger.of(context).showSnackBar(
+@@ -322,7 +324,6 @@ class _DogClickerScreenState extends State<DogClickerScreen>
+             ),
+           ),
+         );
+-      }
+     } catch (e) {
+       debugPrint('添加自定义项目失败: $e');
+     }
+@@ -358,7 +359,6 @@ class _DogClickerScreenState extends State<DogClickerScreen>
+           _selectedFilterIndex = 0;
+           _updateCurrentCounts();
+         }
+-      });
+ 
+       if (mounted) {
+         ScaffoldMessenger.of(context).showSnackBar(
+@@ -371,7 +371,6 @@ class _DogClickerScreenState extends State<DogClickerScreen>
+             ),
+           ),
+         );
+-      }
+     } catch (e) {
+       debugPrint('删除自定义项目失败: $e');
+     }
+@@ -760,7 +759,7 @@ class _DogClickerScreenState extends State<DogClickerScreen>
+                     gridDelegate:
+                         const SliverGridDelegateWithFixedCrossAxisCount(
+                       crossAxisCount: 2,
+-                      childAspectRatio: 1.3,
++                      childAspectRatio: 0.9,
+                       crossAxisSpacing: 12,
+                       mainAxisSpacing: 12,
+                     ),
+@@ -1078,7 +1077,7 @@ class _DogClickerScreenState extends State<DogClickerScreen>
+ 
+   /// 显示重置确认对话框
+   void _showResetConfirmDialog() {
+-    final currentProject = _filterOptions[_selectedFilterIndex];
++    final currentProject = _filterOptions.isEmpty ? '默认训练' : _filterOptions[_selectedFilterIndex];
+ 
+     showDialog(
+       context: context,
+@@ -1200,7 +1199,7 @@ class _DogClickerScreenState extends State<DogClickerScreen>
+ 
+   /// 重置当前项目数据
+   Future<void> _resetCurrentProjectData() async {
+-    final currentProject = _filterOptions[_selectedFilterIndex];
++    final currentProject = _filterOptions.isEmpty ? '默认训练' : _filterOptions[_selectedFilterIndex];
+     await _deleteProjectRecord(currentProject);
+ 
+     setState(() {
+@@ -1640,22 +1639,16 @@ class _DogClickerScreenState extends State<DogClickerScreen>
+         _isCoolingDown = true;
+         _pendingConfirmation = true; // 进入待确认状态
+         _showFailureMessage = false; // 点击新响片时清除之前的失败提示
+-      });
+ 
+       // 250ms 后解除冷却
+       Future.delayed(const Duration(milliseconds: 250), () {
+         if (mounted) {
+           setState(() => _isCoolingDown = false);
+         }
+-      });
+ 
+-      final currentOption = _filterOptions[_selectedFilterIndex];
+-      final soundPath = _projectSounds[currentOption];
++      final currentOption = _filterOptions.isEmpty ? '默认训练' : _filterOptions[_selectedFilterIndex];
++      final soundPath = _projectSounds[currentOption] ?? 'mp3/1.mp3';
+ 
+-      if (soundPath == null) {
+-        debugPrint('项目 $currentOption 没有配置音效');
+-        return;
+-      }
+ 
+       // 停止当前播放（如果有），确保快速重播
+       await _audioPlayer.stop();
+@@ -1706,7 +1699,6 @@ class _DogClickerScreenState extends State<DogClickerScreen>
+         setState(() {
+           _showFailureMessage = false;
+         });
+-      }
+     });
+ 
+     await _saveFailureCount();
+@@ -1732,7 +1724,7 @@ class _DogClickerScreenState extends State<DogClickerScreen>
+   Future<void> _saveUnconfirmedCount() async {
+     try {
+       final prefs = await SharedPreferences.getInstance();
+-      final currentOption = _filterOptions[_selectedFilterIndex];
++      final currentOption = _filterOptions.isEmpty ? '默认训练' : _filterOptions[_selectedFilterIndex];
+ 
+       // 更新总计数
+       _totalUnconfirmedCount++;
+@@ -1764,15 +1756,10 @@ class _DogClickerScreenState extends State<DogClickerScreen>
+         if (mounted) {
+           setState(() => _isCoolingDown = false);
+         }
+-      });
+ 
+-      final currentOption = _filterOptions[_selectedFilterIndex];
+-      final soundPath = _projectSounds[currentOption];
++      final currentOption = _filterOptions.isEmpty ? '默认训练' : _filterOptions[_selectedFilterIndex];
++      final soundPath = _projectSounds[currentOption] ?? 'mp3/1.mp3';
+ 
+-      if (soundPath == null) {
+-        debugPrint('项目 $currentOption 没有配置音效');
+-        return;
+-      }
+ 
+       // 停止当前播放（如果有），确保快速重播
+       await _audioPlayer.stop();
+@@ -1785,7 +1772,6 @@ class _DogClickerScreenState extends State<DogClickerScreen>
+       // 增加点击计数并保存
+       setState(() {
+         _clickCount++;
+-      });
+       await _saveSuccessCount();
+     } catch (e) {
+       debugPrint('播放音效失败: $e');
+@@ -1793,7 +1779,6 @@ class _DogClickerScreenState extends State<DogClickerScreen>
+       await HapticFeedback.mediumImpact();
+       setState(() {
+         _clickCount++;
+-      });
+       await _saveSuccessCount();
+     }
+   }
+@@ -1902,8 +1887,7 @@ class _DogClickerScreenState extends State<DogClickerScreen>
+                       // 新手提示（呼吸感文字）
+                       if (!_pendingConfirmation && !_showFailureMessage)
+                         _buildTrainingTip(),
+-                      // 待确认状态提示
+-                      if (_pendingConfirmation) _buildConfirmationTip(),
++                      // 待确认状态提示被移除，避免重复
+                       // 失败提示
+                       if (_showFailureMessage)
+                         Padding(
+@@ -1918,7 +1902,7 @@ class _DogClickerScreenState extends State<DogClickerScreen>
+                         unconfirmedCount: _unconfirmedCount,
+                         totalSuccessCount: _totalSuccessCount,
+                         totalFailCount: _totalFailureCount,
+-                        currentProject: _filterOptions[_selectedFilterIndex],
++                        currentProject: _filterOptions.isEmpty ? '默认训练' : _filterOptions[_selectedFilterIndex],
+                         projects: _filterOptions,
+                         selectedIndex: _selectedFilterIndex,
+                         // 新流程的回调
+@@ -2025,7 +2009,6 @@ class _DogClickerScreenState extends State<DogClickerScreen>
+             ),
+           ),
+         );
+-      },
      );
    }
  
--  Widget _buildPosterPreview(LostPetMaterials m) {
-+  Widget _buildPosterLayout(LostPetMaterials m, {required bool isA4}) {
-     final bool hasReward = _rewardController.text.isNotEmpty;
- 
-     return Container(
--      width: double.infinity,
-+      width: isA4 ? 794 : double.infinity,
-+      height: isA4 ? 1123 : null,
-       decoration: BoxDecoration(
-         color: Colors.white,
-         borderRadius: BorderRadius.circular(12),
-@@ -1272,6 +1292,7 @@ class _LostPetRescuePageState extends State<LostPetRescuePage>
-       clipBehavior: Clip.antiAlias,
-       child: Column(
-         crossAxisAlignment: CrossAxisAlignment.stretch,
-+        mainAxisSize: MainAxisSize.min,
-         children: [
-           // 1. Header Banner
-           Container(
-@@ -1279,12 +1300,12 @@ class _LostPetRescuePageState extends State<LostPetRescuePage>
-             decoration: const BoxDecoration(
-               color: Color(0xFFD32F2F), // Strong Red
-             ),
--            child: const Text(
-+            child: Text(
-               '寻 宠 启 事',
-               textAlign: TextAlign.center,
-               style: TextStyle(
-                 color: Colors.white,
--                fontSize: 32,
-+                fontSize: isA4 ? 80 : 32,
-                 fontWeight: FontWeight.w900,
-                 letterSpacing: 12,
-                 height: 1.0,
-@@ -1293,183 +1314,207 @@ class _LostPetRescuePageState extends State<LostPetRescuePage>
+@@ -2142,7 +2125,6 @@ class _DogClickerScreenState extends State<DogClickerScreen>
+             ],
            ),
+         );
+-      },
+     );
+   }
  
-           // 2. Content
--          Padding(
--            padding: const EdgeInsets.fromLTRB(24, 32, 24, 32),
--            child: Column(
+@@ -2643,22 +2625,18 @@ class _DogClickerScreenState extends State<DogClickerScreen>
+         'icon': Icons.looks_one_rounded,
+         'text': '一次只教一个',
+         'color': const Color(0xFFFF9800)
+-      },
+       {
+         'icon': Icons.volume_off_rounded,
+         'text': '安静的环境',
+         'color': const Color(0xFF9C27B0)
+-      },
+       {
+         'icon': Icons.emoji_events_rounded,
+         'text': '结束在成功',
+         'color': const Color(0xFF4CAF50)
+-      },
+       {
+         'icon': Icons.timer_rounded,
+         'text': '短时多次',
+         'color': const Color(0xFF2196F3)
+-      },
+     ];
+ 
+     return GridView.count(
+@@ -2698,7 +2676,6 @@ class _DogClickerScreenState extends State<DogClickerScreen>
+             ],
+           ),
+         );
+-      }).toList(),
+     );
+   }
+ 
+@@ -2819,116 +2796,151 @@ class _DogClickerScreenState extends State<DogClickerScreen>
+   }
+ 
+   /// 空状态引导页面
++  Widget _buildEmptyActionChip(String label, String icon, VoidCallback onTap) {
++    return InkWell(
++      onTap: onTap,
++      borderRadius: BorderRadius.circular(16),
++      child: Container(
++        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
++        decoration: BoxDecoration(
++          color: Colors.white.withOpacity(0.08),
++          borderRadius: BorderRadius.circular(16),
++          border: Border.all(color: Colors.white.withOpacity(0.15)),
++        ),
++        child: Row(
++          mainAxisSize: MainAxisSize.min,
++          children: [
++            Text(icon, style: const TextStyle(fontSize: 18)),
++            const SizedBox(width: 8),
++            Text(
++              label,
++              style: const TextStyle(
++                color: Colors.white,
++                fontWeight: FontWeight.w600,
++                fontSize: 14,
++              ),
++            ),
++          ],
++        ),
++      ),
++    );
++  }
++
+   Widget _buildEmptyState() {
+     return Container(
+-      padding: const EdgeInsets.all(32),
++      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+       margin: const EdgeInsets.symmetric(horizontal: 20),
+       decoration: BoxDecoration(
+-        gradient: const LinearGradient(
++        gradient: LinearGradient(
+           begin: Alignment.topLeft,
+           end: Alignment.bottomRight,
+-          colors: [Color(0xFF2A2A2A), Color(0xFF1A1A1A)],
++          colors: [
++            const Color(0xFF2C2F36).withOpacity(0.9),
++            const Color(0xFF1C1E22).withOpacity(0.9)
++          ],
+         ),
+-        borderRadius: BorderRadius.circular(24),
+-        border: Border.all(color: Colors.white.withOpacity(0.1)),
++        borderRadius: BorderRadius.circular(28),
++        border: Border.all(color: const Color(0xFF8B77FF).withOpacity(0.2), width: 1),
++        boxShadow: [
++          BoxShadow(
++            color: Colors.black.withOpacity(0.3),
++            blurRadius: 20,
++            offset: const Offset(0, 10),
++          )
++        ],
+       ),
+       child: Column(
+         mainAxisSize: MainAxisSize.min,
+         children: [
+-          // 图标
+           Container(
+             padding: const EdgeInsets.all(20),
+             decoration: BoxDecoration(
+               shape: BoxShape.circle,
+-              gradient: LinearGradient(
+-                colors: [
+-                  const Color(0xFF5A8EFA).withOpacity(0.3),
+-                  const Color(0xFF8B77FF).withOpacity(0.3),
+-                ],
+-              ),
++              color: const Color(0xFF5A8EFA).withOpacity(0.15),
++              border: Border.all(color: const Color(0xFF5A8EFA).withOpacity(0.3), width: 1),
+             ),
+             child: const Icon(
+               Icons.pets_rounded,
+-              size: 60,
+-              color: Color(0xFF5A8EFA),
++              size: 48,
++              color: Color(0xFF8B77FF),
+             ),
+           ),
+           const SizedBox(height: 24),
+ 
+-          // 标题
+           const Text(
+-            '开始训练之旅',
++            '开启宠物训练',
+             style: TextStyle(
+-              fontSize: 24,
++              fontSize: 22,
+               fontWeight: FontWeight.bold,
+               color: Colors.white,
++              letterSpacing: 1.2,
+             ),
+           ),
+-          const SizedBox(height: 12),
+-
+-          // 描述
++          const SizedBox(height: 8),
+           Text(
+-            '创建你的第一个训练项目\n为每个动作选择独特的音效',
++            '响片训练可以有效固定宠物的良好行为。\n挑选一个动作开启第一次互动吧！',
+             textAlign: TextAlign.center,
+             style: TextStyle(
+-              fontSize: 15,
+-              color: Colors.white.withOpacity(0.7),
+-              height: 1.6,
++              fontSize: 13,
++              color: Colors.white.withOpacity(0.6),
++              height: 1.5,
+             ),
+           ),
+           const SizedBox(height: 32),
+ 
+-          // 添加按钮
+-          ElevatedButton.icon(
+-            onPressed: _showAddProjectDialog,
+-            icon: const Icon(Icons.add_circle_outline, size: 24),
+-            label: const Text(
+-              '添加训练项目',
+-              style: TextStyle(
+-                fontSize: 18,
+-                fontWeight: FontWeight.bold,
+-              ),
+-            ),
+-            style: ElevatedButton.styleFrom(
+-              backgroundColor: const Color(0xFF5A8EFA),
+-              foregroundColor: Colors.white,
+-              padding: const EdgeInsets.symmetric(
+-                horizontal: 32,
+-                vertical: 16,
+-              ),
+-              shape: RoundedRectangleBorder(
+-                borderRadius: BorderRadius.circular(16),
++          Wrap(
++            spacing: 12,
++            runSpacing: 12,
++            alignment: WrapAlignment.center,
++            children: [
++              _buildEmptyActionChip('坐下', '🐕', () {
++                _addCustomProject('坐下', soundPath: 'mp3/1.mp3');
++              }),
++              _buildEmptyActionChip('握手', '🤝', () {
++                _addCustomProject('握手', soundPath: 'mp3/2.mp3');
++              }),
++              _buildEmptyActionChip('趴下', '🐾', () {
++                _addCustomProject('趴下', soundPath: 'mp3/3.mp3');
++              }),
++            ],
++          ),
++          
++          const SizedBox(height: 32),
++          Row(
++            children: [
++              Expanded(child: Divider(color: Colors.white.withOpacity(0.1))),
++              Padding(
++                padding: const EdgeInsets.symmetric(horizontal: 12),
++                child: Text('或', style: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 12)),
+               ),
+-              elevation: 4,
+-            ),
++              Expanded(child: Divider(color: Colors.white.withOpacity(0.1))),
++            ],
+           ),
+           const SizedBox(height: 24),
+ 
+-          // 示例提示
+-          Container(
+-            padding: const EdgeInsets.all(16),
+-            decoration: BoxDecoration(
+-              color: Colors.white.withOpacity(0.05),
+-              borderRadius: BorderRadius.circular(12),
+-            ),
+-            child: Row(
 -              children: [
--                // Photo
--                GestureDetector(
--                  onTap: _pickImage,
--                  child: Container(
--                    height: 300,
--                    width: double.infinity,
--                    decoration: BoxDecoration(
--                      color: Colors.grey[100],
--                      border: Border.all(color: Colors.black12, width: 1),
--                      borderRadius: BorderRadius.circular(8),
--                      image: _selectedImage != null
--                          ? DecorationImage(
--                              image: FileImage(_selectedImage!),
--                              fit: BoxFit.cover)
--                          : null,
--                    ),
--                    child: _selectedImage == null
--                        ? Column(
--                            mainAxisAlignment: MainAxisAlignment.center,
--                            children: [
--                              Icon(Icons.add_a_photo_rounded,
--                                  size: 64, color: Colors.grey[300]),
--                              const SizedBox(height: 12),
--                              Text('点击上传照片',
--                                  style: TextStyle(
--                                      color: Colors.grey[400],
--                                      fontSize: 16,
--                                      fontWeight: FontWeight.bold)),
--                            ],
--                          )
--                        : null,
-+          Flexible(
-+            fit: isA4 ? FlexFit.tight : FlexFit.loose,
-+            child: Padding(
-+              padding: EdgeInsets.fromLTRB(
-+                  isA4 ? 40 : 24,
-+                  isA4 ? 48 : 32,
-+                  isA4 ? 40 : 24,
-+                  isA4 ? 48 : 32),
-+              child: Column(
-+                mainAxisAlignment: isA4
-+                    ? MainAxisAlignment.spaceBetween
-+                    : MainAxisAlignment.start,
-+                children: [
-+                  // Photo
-+                  GestureDetector(
-+                    onTap: _pickImage,
-+                    child: AspectRatio(
-+                      aspectRatio: 1.0, // 放大成正方形占据满宽
-+                      child: Container(
-+                        width: double.infinity,
-+                        decoration: BoxDecoration(
-+                          color: Colors.grey[100],
-+                          border: Border.all(color: Colors.black12, width: 1),
-+                          borderRadius: BorderRadius.circular(8),
-+                          image: _selectedImage != null
-+                              ? DecorationImage(
-+                                  image: FileImage(_selectedImage!),
-+                                  fit: BoxFit.cover)
-+                              : null,
-+                        ),
-+                        child: _selectedImage == null
-+                            ? Column(
-+                                mainAxisAlignment: MainAxisAlignment.center,
-+                                children: [
-+                                  Icon(Icons.add_a_photo_rounded,
-+                                      size: isA4 ? 96 : 64,
-+                                      color: Colors.grey[300]),
-+                                  const SizedBox(height: 12),
-+                                  Text('点击上传照片',
-+                                      style: TextStyle(
-+                                          color: Colors.grey[400],
-+                                          fontSize: isA4 ? 24 : 16,
-+                                          fontWeight: FontWeight.bold)),
-+                                ],
-+                              )
-+                            : null,
-+                      ),
-+                    ), // close AspectRatio
-                   ),
--                ),
- 
--                const SizedBox(height: 32),
-+                  if (!isA4) const SizedBox(height: 32),
- 
--                // Name & Species
--                Row(
--                  mainAxisAlignment: MainAxisAlignment.center,
--                  crossAxisAlignment: CrossAxisAlignment.center,
--                  children: [
--                    Text(
--                      _nameController.text.isEmpty
--                          ? '宠物名字'
--                          : _nameController.text,
--                      style: const TextStyle(
--                          fontSize: 40,
--                          fontWeight: FontWeight.w900,
--                          color: AppColors.textDark),
--                    ),
--                    const SizedBox(width: 16),
--                    Container(
--                      padding: const EdgeInsets.symmetric(
--                          horizontal: 12, vertical: 6),
--                      decoration: BoxDecoration(
--                        color: Colors.black,
--                        borderRadius: BorderRadius.circular(6),
-+                  // Name & Species
-+                  Row(
-+                    mainAxisAlignment: MainAxisAlignment.center,
-+                    crossAxisAlignment: CrossAxisAlignment.center,
-+                    children: [
-+                      Text(
-+                        _selectedPet?.name ?? '宠物名字',
-+                        style: TextStyle(
-+                            fontSize: isA4 ? 80 : 40,
-+                            fontWeight: FontWeight.w900,
-+                            color: AppColors.textDark),
-                       ),
--                      child: Text(
--                        _speciesController.text,
--                        style: const TextStyle(
--                            color: Colors.white,
--                            fontSize: 16,
--                            fontWeight: FontWeight.bold),
-+                      const SizedBox(width: 16),
-+                      Container(
-+                        padding: const EdgeInsets.symmetric(
-+                            horizontal: 12, vertical: 6),
-+                        decoration: BoxDecoration(
-+                          color: Colors.black,
-+                          borderRadius:
-+                              BorderRadius.circular(isA4 ? 12 : 6),
-+                        ),
-+                        child: Text(
-+                          _speciesController.text,
-+                          style: TextStyle(
-+                              color: Colors.white,
-+                              fontSize: isA4 ? 32 : 16,
-+                              fontWeight: FontWeight.bold),
-+                        ),
-                       ),
--                    ),
--                  ],
--                ),
--
--                const SizedBox(height: 32),
--
--                // Info Grid
--                Container(
--                  padding: const EdgeInsets.all(20),
--                  decoration: BoxDecoration(
--                    color: const Color(0xFFF9F9F9),
--                    borderRadius: BorderRadius.circular(12),
--                    border: Border.all(color: const Color(0xFFEEEEEE)),
--                  ),
--                  child: Column(
--                    children: [
--                      _buildPosterInfoRow(Icons.access_time_filled_rounded,
--                          '走失时间', _timeController.text),
--                      const Padding(
--                          padding: EdgeInsets.symmetric(vertical: 12),
--                          child: Divider(height: 1)),
--                      _buildPosterInfoRow(Icons.location_on_rounded, '走失地点',
--                          _locationController.text),
--                      const Padding(
--                          padding: EdgeInsets.symmetric(vertical: 12),
--                          child: Divider(height: 1)),
--                      _buildPosterInfoRow(Icons.info_rounded, '外貌特征',
--                          _descriptionController.text),
-                     ],
-                   ),
--                ),
- 
--                const SizedBox(height: 32),
-+                  if (!isA4) const SizedBox(height: 32),
- 
--                // Reward
--                if (hasReward)
-+                  // Info Grid
-                   Container(
--                    width: double.infinity,
--                    padding: const EdgeInsets.symmetric(vertical: 16),
-+                    padding: const EdgeInsets.all(20),
-                     decoration: BoxDecoration(
--                      color: const Color(0xFFFFF8E1), // Light Amber
-+                      color: const Color(0xFFF9F9F9),
-                       borderRadius: BorderRadius.circular(12),
--                      border:
--                          Border.all(color: const Color(0xFFFFC107), width: 2),
-+                      border: Border.all(color: const Color(0xFFEEEEEE)),
-                     ),
-                     child: Column(
-                       children: [
--                        const Text('提供有效线索并寻回必有重谢',
--                            style: TextStyle(
--                                fontSize: 14,
--                                fontWeight: FontWeight.bold,
--                                color: Color(0xFF8D6E63))),
--                        const SizedBox(height: 4),
--                        Text(
--                          '¥ ${_rewardController.text}',
--                          style: const TextStyle(
--                              fontSize: 42,
--                              fontWeight: FontWeight.w900,
--                              color: Color(0xFFD32F2F)),
--                        ),
-+                        _buildPosterInfoRow(Icons.access_time_filled_rounded,
-+                            '走失时间', _timeController.text, isA4),
-+                        Padding(
-+                            padding: EdgeInsets.symmetric(
-+                                vertical: isA4 ? 24 : 12),
-+                            child: const Divider(height: 1)),
-+                        _buildPosterInfoRow(Icons.location_on_rounded, '走失地点',
-+                            _locationController.text, isA4),
-+                        Padding(
-+                            padding: EdgeInsets.symmetric(
-+                                vertical: isA4 ? 24 : 12),
-+                            child: const Divider(height: 1)),
-+                        _buildPosterInfoRow(Icons.info_rounded, '外貌特征',
-+                            _descriptionController.text, isA4),
-                       ],
-                     ),
-                   ),
- 
--                const SizedBox(height: 32),
-+                  if (!isA4) const SizedBox(height: 32),
- 
--                // Contact
--                const Text('发现请立即联系',
+-                const Icon(
+-                  Icons.lightbulb_outline,
+-                  color: Color(0xFFFFC107),
+-                  size: 20,
++          SizedBox(
++            width: double.infinity,
++            height: 54,
++            child: ElevatedButton.icon(
++              onPressed: _showAddProjectDialog,
++              icon: const Icon(Icons.add_circle_outline, size: 20),
++              label: const Text(
++                '自定义专属动作',
++                style: TextStyle(
++                  fontSize: 16,
++                  fontWeight: FontWeight.bold,
++                  letterSpacing: 0.5,
+                 ),
+-                const SizedBox(width: 12),
+-                Expanded(
+-                  child: Text(
+-                    '例如：坐下、趴下、握手、转圈...',
 -                    style: TextStyle(
--                        fontSize: 16,
--                        color: Colors.grey,
--                        fontWeight: FontWeight.bold)),
--                const SizedBox(height: 8),
--                Text(
--                  _contactController.text.isEmpty
--                      ? '暂无电话'
--                      : _contactController.text,
--                  style: const TextStyle(
--                      fontSize: 48,
--                      fontWeight: FontWeight.w900,
--                      color: AppColors.textDark,
--                      letterSpacing: 2),
--                ),
--
--                const SizedBox(height: 40),
--
--                // Watermark
--                Row(
--                  mainAxisAlignment: MainAxisAlignment.center,
--                  children: [
-+                  // Reward
-+                  if (hasReward)
-                     Container(
--                      padding: const EdgeInsets.all(6),
--                      decoration: const BoxDecoration(
--                          color: Colors.black, shape: BoxShape.circle),
--                      child:
--                          const Icon(Icons.pets, size: 14, color: Colors.white),
-+                      width: double.infinity,
-+                      padding: const EdgeInsets.symmetric(vertical: 16),
-+                      decoration: BoxDecoration(
-+                        color: const Color(0xFFFFF8E1), // Light Amber
-+                        borderRadius: BorderRadius.circular(12),
-+                        border: Border.all(
-+                            color: const Color(0xFFFFC107), width: 2),
-+                      ),
-+                      child: Column(
-+                        children: [
-+                          Text('提供有效线索并寻回必有重谢',
-+                              style: TextStyle(
-+                                  fontSize: isA4 ? 28 : 14,
-+                                  fontWeight: FontWeight.bold,
-+                                  color: const Color(0xFF8D6E63))),
-+                          const SizedBox(height: 4),
-+                          Text(
-+                            '¥ ${_rewardController.text}',
-+                            style: TextStyle(
-+                                fontSize: isA4 ? 72 : 42,
-+                                fontWeight: FontWeight.w900,
-+                                color: const Color(0xFFD32F2F)),
-+                          ),
-+                        ],
-+                      ),
-                     ),
--                    const SizedBox(width: 10),
--                    const Text(
--                      '由 智宠合生Peture AI 生成',
-+
-+                  if (!isA4) const SizedBox(height: 32),
-+
-+                  // Contact
-+                  Column(children: [
-+                    Text('发现请立即联系',
-+                        style: TextStyle(
-+                            fontSize: isA4 ? 36 : 16,
-+                            color: Colors.grey,
-+                            fontWeight: FontWeight.bold)),
-+                    SizedBox(height: isA4 ? 16 : 8),
-+                    Text(
-+                      _contactController.text.isEmpty
-+                          ? '暂无电话'
-+                          : _contactController.text,
-                       style: TextStyle(
--                          fontSize: 14,
--                          color: Color(0xFF9E9E9E),
--                          fontWeight: FontWeight.w600),
-+                          fontSize: isA4 ? 80 : 48,
-+                          fontWeight: FontWeight.w900,
-+                          color: AppColors.textDark,
-+                          letterSpacing: 2),
-                     ),
-+                  ]),
-+
-+                  if (!isA4) const SizedBox(height: 40),
-+
-+                  // Watermark
-+                  if (!isA4)
-+                    Row(
-+                      mainAxisAlignment: MainAxisAlignment.center,
-+                      children: [
-+                        Container(
-+                          padding: const EdgeInsets.all(6),
-+                          decoration: const BoxDecoration(
-+                              color: Colors.black, shape: BoxShape.circle),
-+                          child: const Icon(Icons.pets,
-+                              size: 14, color: Colors.white),
-+                        ),
-+                        const SizedBox(width: 10),
-+                        const Text(
-+                          '由 智宠合生Peture AI 生成',
-+                          style: TextStyle(
-+                              fontSize: 14,
-+                              color: Color(0xFF9E9E9E),
-+                              fontWeight: FontWeight.w600),
-+                        ),
-+                      ],
-+                    ),
-+
-+                  if (isA4) ...[
-+                    const Spacer(),
-+                    const Text('Peture 紧急救援 - 请帮助毛孩子回家',
-+                        style: TextStyle(color: Colors.grey, fontSize: 24),
-+                        textAlign: TextAlign.center),
-                   ],
--                ),
+-                      fontSize: 13,
+-                      color: Colors.white.withOpacity(0.6),
+-                    ),
+-                  ),
++              ),
++              style: ElevatedButton.styleFrom(
++                backgroundColor: Colors.transparent,
++                foregroundColor: const Color(0xFF5A8EFA),
++                elevation: 0,
++                side: const BorderSide(color: Color(0xFF5A8EFA), width: 1.5),
++                shape: RoundedRectangleBorder(
++                  borderRadius: BorderRadius.circular(16),
+                 ),
 -              ],
-+                ],
 +              ),
              ),
            ),
          ],
-@@ -1477,11 +1522,16 @@ class _LostPetRescuePageState extends State<LostPetRescuePage>
-     );
-   }
- 
--  Widget _buildPosterInfoRow(IconData icon, String label, String value) {
-+  Widget _buildPosterInfoRow(IconData icon, String label, String value,
-+      [bool isA4 = false]) {
-+    double iconSize = isA4 ? 40 : 22;
-+    double fontSizeLabel = isA4 ? 28 : 16;
-+    double fontSizeValue = isA4 ? 32 : 18;
-+
-     return Row(
-       crossAxisAlignment: CrossAxisAlignment.start,
-       children: [
--        Icon(icon, size: 22, color: const Color(0xFF757575)),
-+        Icon(icon, size: iconSize, color: const Color(0xFF757575)),
-         const SizedBox(width: 16),
-         Expanded(
-           child: RichText(
-@@ -1489,15 +1539,15 @@ class _LostPetRescuePageState extends State<LostPetRescuePage>
-               children: [
-                 TextSpan(
-                     text: '$label：',
--                    style: const TextStyle(
--                        color: Color(0xFF757575),
--                        fontSize: 16,
-+                    style: TextStyle(
-+                        color: const Color(0xFF757575),
-+                        fontSize: fontSizeLabel,
-                         fontWeight: FontWeight.bold)),
-                 TextSpan(
-                     text: value.isEmpty ? '未填写' : value,
--                    style: const TextStyle(
-+                    style: TextStyle(
-                         color: AppColors.textDark,
--                        fontSize: 18,
-+                        fontSize: fontSizeValue,
-                         fontWeight: FontWeight.w600,
-                         height: 1.4)),
-               ],
