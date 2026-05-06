@@ -60,13 +60,13 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
   bool _isSaved = false; // 标记是否已保存
   bool _isGenerating = false; // 是否正在生成
   bool _showLoading = true; // 是否显示加载动画
-  String _generatedContent = ''; // 生成的内容
+  final ValueNotifier<String> _contentNotifier = ValueNotifier<String>(''); // 生成的内容
+  String _generatedContent = ''; // 用于分享和保存缓存，保持后向兼容
   String _loadingMessage = '正在连接 AI...'; // 加载提示信息
   Timer? _messageTimer; // 提示信息定时器
   String _fullTextBuffer = ''; // 完整文本缓冲区
   Timer? _typingTimer; // 打字效果定时器
   int _displayedLength = 0; // 已显示的字符数
-  int _lastScrollLength = 0; // 上次滚动时的字符数
   
   // 分享相关
   final GlobalKey _globalKey = GlobalKey();
@@ -116,6 +116,7 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
     // 如果提供了 diaryContent，直接使用（查看已保存的日记）
     if (widget.diaryContent != null) {
       _generatedContent = widget.diaryContent!;
+      _contentNotifier.value = _generatedContent;
       _showLoading = false; // 已有内容，不显示加载动画
     } else if (widget.diaryService != null) {
       // 开始流式生成
@@ -184,7 +185,9 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
 
             // 第一次收到数据时，隐藏加载动画并开始打字效果
             if (_showLoading && newText.isNotEmpty) {
-              _showLoading = false;
+              setState(() {
+                _showLoading = false;
+              });
               _messageTimer?.cancel();
               _fullTextBuffer = newText;
               _startTypingEffect();
@@ -294,63 +297,51 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
     }
   }
 
-  /// 开始打字效果
+  /// 开始打字效果（配合 reverse:true，无需任何滚动代码）
   void _startTypingEffect() {
     _typingTimer?.cancel();
 
-    // 每次显示多个字符，实现更快的"流式"效果
-    _typingTimer = Timer.periodic(const Duration(milliseconds: 50), (timer) {
+    _typingTimer = Timer.periodic(const Duration(milliseconds: 40), (timer) {
       if (!mounted) {
         timer.cancel();
         return;
       }
 
       if (_displayedLength < _fullTextBuffer.length) {
-        setState(() {
-          // 计算还需要显示多少字符
-          final remaining = _fullTextBuffer.length - _displayedLength;
-
-          // 每次显示1-3个字符，让效果既流畅又不会太慢
-          // 如果剩余字符很多，每次多显示几个字符加快追赶
-          final charsToAdd = remaining > 50 ? 3 : (remaining > 20 ? 2 : 1);
-
-          _displayedLength =
-              (_displayedLength + charsToAdd).clamp(0, _fullTextBuffer.length);
-          _generatedContent = _fullTextBuffer.substring(0, _displayedLength);
+        final remaining = _fullTextBuffer.length - _displayedLength;
+        // 落后越多追赶越快，保证不会堆积
+        final charsToAdd = remaining > 100 ? 6 : (remaining > 50 ? 3 : (remaining > 20 ? 2 : 1));
+        _displayedLength = (_displayedLength + charsToAdd).clamp(0, _fullTextBuffer.length);
+        _generatedContent = _fullTextBuffer.substring(0, _displayedLength);
+        _contentNotifier.value = _generatedContent;
+        
+        // 自动滚动到底部
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && _scrollController.hasClients) {
+            final maxScroll = _scrollController.position.maxScrollExtent;
+            if (maxScroll > 0) {
+              _scrollController.jumpTo(maxScroll);
+            }
+          }
         });
-
-        // 每显示约20个字符才滚动一次，进一步减少滚动频率
-        if (_displayedLength - _lastScrollLength >= 20 ||
-            _displayedLength >= _fullTextBuffer.length) {
-          _autoScrollToBottom();
-          _lastScrollLength = _displayedLength;
-        }
       } else if (!_isGenerating) {
-        // 如果已经显示完所有内容且生成已完成，停止定时器
+        // 全部显示完且生成结束 → 平滑滚回顶部供用户阅读
         timer.cancel();
         _typingTimer = null;
+        _scrollToTopForReading();
       }
-      // 如果还在生成中，即使显示完了当前内容，也继续运行
-      // 因为可能还会有新数据到达
     });
   }
 
-  /// 自动滚动到底部
-  void _autoScrollToBottom() {
-    // 如果加载消息已经到了"马上就好..."，不再自动滚动
-    if (_loadingMessage == '马上就好...') {
-      return;
-    }
-
-    // 延迟滚动，避免与UI更新冲突
-    Future.delayed(const Duration(milliseconds: 100), () {
-      if (!mounted) return;
-      if (_scrollController.hasClients && _typingTimer != null) {
-        // 使用 animateTo 但时长很短，既平滑又不抖动
+  /// 生成完成后平滑滚回顶部
+  void _scrollToTopForReading() {
+    Future.delayed(const Duration(milliseconds: 400), () {
+      if (!mounted || !_scrollController.hasClients) return;
+      if (_scrollController.position.pixels > 10) {
         _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 150),
-          curve: Curves.easeOut,
+          0,
+          duration: const Duration(milliseconds: 800),
+          curve: Curves.easeInOut,
         );
       }
     });
@@ -516,29 +507,31 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
           opacity: _fadeAnimation,
           child: SlideTransition(
             position: _slideAnimation,
-            child: SingleChildScrollView(
-              controller: _scrollController,
-              physics: const BouncingScrollPhysics(),
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // 原始记录卡片 - 简约设计
-                  _buildOriginalCard(),
-
-                  const SizedBox(height: 20),
-
-                  // 十六的日记卡片 - 精致设计
-                  _buildDiaryCard(),
-
-                  const SizedBox(height: 32),
-
-                  // 操作按钮 - 只在加载完成后显示
-                  if (!_showLoading) _buildActionButtons(),
-
-                  const SizedBox(height: 20),
-                ],
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // 原始记录卡片 — 固定高度，不参与滚动
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+                  child: _buildOriginalCard(),
+                ),
+                const SizedBox(height: 16),
+                // 日记卡片 — Expanded 撑满剩余屏幕
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: _buildDiaryCard(),
+                  ),
+                ),
+                // 操作按钮 — 固定在底部
+                if (!_showLoading)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+                    child: _buildActionButtons(),
+                  )
+                else
+                  const SizedBox(height: 16),
+              ],
             ),
           ),
         ),
@@ -1017,48 +1010,47 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
             ),
           ),
 
-          // 内容
-          Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // 标题部分
-                Row(
-                  children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '${widget.petName ?? "十六"}正在写日记',
-                          style: const TextStyle(
-                            fontSize: 19,
-                            fontWeight: FontWeight.w800,
-                            color: Color(0xFF7B95FF),
-                            letterSpacing: 0.5,
-                          ),
+          // 内容区域用 Positioned.fill 填满 Stack
+          Positioned.fill(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // 标题 — 固定不滚动
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${widget.petName ?? "十六"}的日记',
+                        style: const TextStyle(
+                          fontSize: 19,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF7B95FF),
+                          letterSpacing: 0.5,
                         ),
-                        const SizedBox(height: 2),
-                        Text(
-                          '${widget.petName == null ? "Sixteen" : "Pet"}\'s Diary',
-                          style: const TextStyle(
-                            fontSize: 11,
-                            color: Color(0xFF9B7FFF),
-                            fontWeight: FontWeight.w500,
-                            letterSpacing: 0.8,
-                          ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        "${widget.petName == null ? 'Sixteen' : 'Pet'}'s Diary",
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: Color(0xFF9B7FFF),
+                          fontWeight: FontWeight.w500,
+                          letterSpacing: 0.8,
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
+                  ),
 
-                  ],
-                ),
+                  const SizedBox(height: 20),
 
-                const SizedBox(height: 20),
-
-                // 日记内容或加载动画
-                _showLoading ? _buildLoadingState() : _buildDiaryContent(),
-              ],
+                  // 内容/加载区域 — Expanded 撑满剩余高度
+                  Expanded(
+                    child: _showLoading ? _buildLoadingState() : _buildDiaryContent(),
+                  ),
+                ],
+              ),
             ),
           ),
         ],
@@ -1068,18 +1060,20 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
 
   // 加载动画状态
   Widget _buildLoadingState() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        const SizedBox(height: 20),
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          const SizedBox(height: 20),
 
-        // "正在写日记"动画 - 呼吸 + 粒子闪烁 + 书写晃动
-        SizedBox(
-          width: 200,
-          height: 200,
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
+          // "正在写日记"动画 - 呼吸 + 粒子闪烁 + 书写晃动
+          SizedBox(
+            width: 200,
+            height: 200,
+            child: Stack(
+              clipBehavior: Clip.none,
+              alignment: Alignment.center,
+              children: [
               // 呼吸光晕 - 外层脉冲
               AnimatedBuilder(
                 animation: _shimmerAnimationController,
@@ -1231,7 +1225,7 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
 
         const SizedBox(height: 20),
       ],
-    );
+    ));
   }
 
   /// 构建微光横条
@@ -1310,39 +1304,48 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
 
   // 日记内容显示
   Widget _buildDiaryContent() {
-    return Stack(
-      children: [
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.04),
-                blurRadius: 10,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: _generatedContent.isEmpty
-              ? const Text(
-                  '等待生成中...',
-                  style: TextStyle(
-                    fontSize: 15.5,
-                    height: 2.0,
-                    color: Color(0xFF2D3142),
-                    letterSpacing: 0.5,
-                    fontWeight: FontWeight.w400,
-                  ),
-                )
-              : RichText(
+    return RepaintBoundary(
+      child: Container(
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 10,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: SingleChildScrollView(
+            controller: _scrollController,
+            padding: const EdgeInsets.all(20),
+            physics: const BouncingScrollPhysics(),
+            child: ValueListenableBuilder<String>(
+              valueListenable: _contentNotifier,
+              builder: (context, content, child) {
+                if (content.isEmpty) {
+                  return const Text(
+                    '等待生成中...',
+                    style: TextStyle(
+                      fontSize: 15.5,
+                      height: 2.0,
+                      color: Color(0xFF2D3142),
+                      letterSpacing: 0.5,
+                    ),
+                  );
+                }
+                
+                return RichText(
                   text: TextSpan(
                     children: [
                       TextSpan(
-                        text: _generatedContent,
+                        text: content,
                         style: const TextStyle(
+                          fontFamily: 'Merriweather',
                           fontSize: 15.5,
                           height: 2.0,
                           color: Color(0xFF2D3142),
@@ -1350,32 +1353,38 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
                           fontWeight: FontWeight.w400,
                         ),
                       ),
-                      // 打字光标
+                      // 打字光标，使用动画控制器实现丝滑闪烁
                       if (_isGenerating)
                         WidgetSpan(
-                          child: FadeTransition(
-                            opacity: _cursorAnimationController,
-                            child: Container(
-                              margin: const EdgeInsets.only(left: 2),
-                              width: 2,
-                              height: 20,
-                              decoration: BoxDecoration(
-                                gradient: const LinearGradient(
-                                  colors: [
-                                    Color(0xFF7B95FF),
-                                    Color(0xFF9B7FFF),
-                                  ],
+                          alignment: PlaceholderAlignment.baseline,
+                          baseline: TextBaseline.alphabetic,
+                          child: AnimatedBuilder(
+                            animation: _cursorAnimationController,
+                            builder: (context, child) {
+                              return Opacity(
+                                opacity: _cursorAnimationController.value,
+                                child: const Text(
+                                  ' ▍',
+                                  style: TextStyle(
+                                    letterSpacing: 0,
+                                    fontFamily: 'Merriweather',
+                                    fontSize: 15.5,
+                                    height: 2.0,
+                                    color: Color(0xFF7B95FF),
+                                  ),
                                 ),
-                                borderRadius: BorderRadius.circular(1),
-                              ),
-                            ),
+                              );
+                            },
                           ),
                         ),
                     ],
                   ),
-                ),
+                );
+              },
+            ),
+          ),
         ),
-      ],
+      ),
     );
   }
 
