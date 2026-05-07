@@ -8,7 +8,7 @@ import 'package:uuid/uuid.dart';
 
 import '../widgets/avatar_crop_page.dart';
 
-/// 头像：全屏圆形裁剪（Flutter）+ JPEG 压缩（用户/宠物共用）
+/// 头像：圆形遮罩辅助裁剪 + 方形 JPEG 压缩（用户/宠物共用）
 class AvatarImageHelper {
   AvatarImageHelper._();
 

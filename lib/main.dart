@@ -15,7 +15,22 @@ void main() async {
   // 确保 Flutter 框架初始化
   WidgetsFlutterBinding.ensureInitialized();
 
-  // ✅ 初始化 Sentry（最早初始化，捕获所有后续错误）
+  // ✅ 初始化 Supabase（在 Sentry 之前，避免 Zone mismatch）
+  debugPrint('🔧 开始初始化 Supabase...');
+  await Supabase.initialize(
+    url: SupabaseConfig.projectUrl,
+    anonKey: SupabaseConfig.anonKey,
+    // 持久化会话并自动刷新 token，保证重开 App 后仍保持登录
+    authOptions: const FlutterAuthClientOptions(
+      autoRefreshToken: true,
+    ),
+  );
+  debugPrint('✅ Supabase 初始化成功');
+
+  // 友盟 initCommon 若在 runApp 之前 await，原生启动屏会一直停到 SDK 返回（易卡死）
+  unawaited(AnalyticsService.tryInitIfConsented());
+
+  // ✅ 初始化 Sentry（捕获所有后续错误）
   await SentryFlutter.init(
     (options) {
       // 从环境变量读取 DSN（避免写死在代码里）
@@ -39,20 +54,6 @@ void main() async {
     appRunner: () async {
       // 初始化日期格式化的本地化数据 (中文)
       await initializeDateFormatting('zh_CN', null);
-
-      // ✅ 初始化 Supabase（在 Sentry 之后，这样 Supabase 的错误也能被捕获）
-      debugPrint('🔧 开始初始化 Supabase...');
-      await Supabase.initialize(
-        url: SupabaseConfig.projectUrl,
-        anonKey: SupabaseConfig.anonKey,
-        // 持久化会话并自动刷新 token，保证重开 App 后仍保持登录
-        authOptions: const FlutterAuthClientOptions(
-          autoRefreshToken: true,
-        ),
-      );
-      debugPrint('✅ Supabase 初始化成功');
-      // 友盟 initCommon 若在 runApp 之前 await，原生启动屏会一直停到 SDK 返回（易卡死）
-      unawaited(AnalyticsService.tryInitIfConsented());
 
       // 启动根路由，根据登录状态自动切换
       runApp(const RootRouter());

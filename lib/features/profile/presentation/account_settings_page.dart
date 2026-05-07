@@ -1,6 +1,7 @@
 // 账户设置页面 - 支持修改密码、编辑个人资料等
 
 import 'dart:io';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:image_picker/image_picker.dart';
@@ -9,6 +10,7 @@ import '../../../shared/utils/china_regions_loader.dart';
 import '../../../shared/utils/user_avatar_helper.dart';
 import '../../../shared/utils/user_gender_mapper.dart';
 import '../../../shared/utils/avatar_image_helper.dart';
+import '../../../shared/utils/ui_helpers.dart';
 import '../../../services/supabase_service.dart';
 
 class AccountSettingsPage extends StatefulWidget {
@@ -36,6 +38,37 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
 
   // 图片选择器
   final ImagePicker _picker = ImagePicker();
+
+  // 图标渐变配置
+  static const List<LinearGradient> _iconGradients = [
+    LinearGradient(
+      colors: [Color(0xFF5A8EFA), Color(0xFF8B77FF)],
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+    ),
+    LinearGradient(
+      colors: [Color(0xFF43E97B), Color(0xFF38F9D7)],
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+    ),
+    LinearGradient(
+      colors: [Color(0xFFFFA726), Color(0xFFFF7043)],
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+    ),
+    LinearGradient(
+      colors: [Color(0xFFEC407A), Color(0xFFAB47BC)],
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+    ),
+  ];
+
+  // 主渐变色
+  static const LinearGradient _primaryGradient = LinearGradient(
+    colors: [Color(0xFF5A8EFA), Color(0xFF8B77FF)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
 
   @override
   void initState() {
@@ -682,17 +715,27 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('确认退出'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.logout_rounded, color: Color(0xFFE53935)),
+            SizedBox(width: 10),
+            Text('确认退出'),
+          ],
+        ),
         content: const Text('您确定要退出登录吗？'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('取消'),
+            child: const Text('取消', style: TextStyle(color: Color(0xFF8E8E93))),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
+              backgroundColor: const Color(0xFFE53935),
               foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
             onPressed: () => Navigator.pop(context, true),
             child: const Text('退出'),
@@ -726,30 +769,240 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
     }
   }
 
+  Color _getGradientColor(int index) {
+    switch (index % 4) {
+      case 0:
+        return const Color(0xFF5A8EFA);
+      case 1:
+        return const Color(0xFF43E97B);
+      case 2:
+        return const Color(0xFFFFA726);
+      case 3:
+        return const Color(0xFFEC407A);
+      default:
+        return const Color(0xFF5A8EFA);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('账户设置'), centerTitle: true),
+      backgroundColor: AppColors.background,
+      extendBodyBehindAppBar: true,
+      appBar: AppBar(
+        backgroundColor: AppColors.background.withOpacity(0.85),
+        elevation: 0,
+        centerTitle: true,
+        flexibleSpace: ClipRRect(
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+            child: Container(
+              color: Colors.transparent,
+            ),
+          ),
+        ),
+        title: ShaderMask(
+          shaderCallback: (bounds) => _primaryGradient.createShader(bounds),
+          child: const Text(
+            '个人资料',
+            style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1.2,
+              color: Colors.white,
+              shadows: [
+                Shadow(
+                  blurRadius: 8,
+                  color: Color(0x405A8EFA),
+                  offset: Offset(0, 2),
+                ),
+              ],
+            ),
+          ),
+        ),
+        leading: Container(
+          margin: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.5),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: Colors.white.withOpacity(0.6),
+              width: 1,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.04),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: IconButton(
+            icon: const Icon(
+              Icons.arrow_back_ios_new_rounded,
+              color: Color(0xFF1D1D1F),
+              size: 18,
+            ),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+        ),
+      ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
               child: Column(
                 children: [
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 120),
 
-                  // 用户头像（可点击更换）
-                  GestureDetector(
-                    onTap: _changeAvatar,
+                  // 用户信息头部卡片 - 玻璃拟态风格
+                  _buildProfileHeader(),
+
+                  const SizedBox(height: 32),
+
+                  // 账户信息部分（标题已移除）
+                  _buildGlassCard(
+                    children: [
+                      _buildSettingsTile(
+                        icon: Icons.photo_camera,
+                        gradientIndex: 0,
+                        title: '头像',
+                        subtitle: '点击更换个人头像',
+                        onTap: _changeAvatar,
+                      ),
+                      _buildDivider(),
+                      _buildSettingsTile(
+                        icon: Icons.person,
+                        gradientIndex: 0,
+                        title: '昵称',
+                        subtitle: _userName?.isNotEmpty == true ? _userName! : '未设置',
+                        onTap: _changeName,
+                      ),
+                      _buildDivider(),
+                      _buildSettingsTile(
+                        icon: Icons.wc,
+                        gradientIndex: 1,
+                        title: '性别',
+                        subtitle: _gender,
+                        onTap: _changeGender,
+                      ),
+                      _buildDivider(),
+                      _buildSettingsTile(
+                        icon: Icons.cake_outlined,
+                        gradientIndex: 2,
+                        title: '出生日期',
+                        subtitle: _birthDate,
+                        onTap: _changeBirthDate,
+                      ),
+                      _buildDivider(),
+                      _buildSettingsTile(
+                        icon: Icons.location_on_outlined,
+                        gradientIndex: 3,
+                        title: '地区',
+                        subtitle: _province == '未设置' && _city == '未设置'
+                            ? '未设置'
+                            : '${_province == '未设置' ? '' : _province}${_city == '未设置' ? '' : ' / $_city'}',
+                        onTap: _changeRegion,
+                      ),
+                      _buildDivider(),
+                      _buildSettingsTile(
+                        icon: Icons.pets,
+                        gradientIndex: 0,
+                        title: '宠物对我的称呼',
+                        subtitle: _ownerNickname,
+                        onTap: _changeOwnerNickname,
+                      ),
+                      _buildDivider(),
+                      _buildSettingsTile(
+                        icon: Icons.email,
+                        gradientIndex: 1,
+                        title: '邮箱',
+                        subtitle: _userEmail ?? '',
+                        trailing: const Icon(
+                          Icons.check_circle,
+                          color: Color(0xFF43E97B),
+                          size: 20,
+                        ),
+                        onTap: null,
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 40),
+
+                  // 退出登录按钮
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: _buildLogoutButton(),
+                  ),
+
+                  const SizedBox(height: 48),
+                ],
+              ),
+            ),
+    );
+  }
+
+  // 用户资料头部 - 玻璃拟态卡片
+  Widget _buildProfileHeader() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 20),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        gradient: LinearGradient(
+          colors: [
+            Colors.white.withOpacity(0.65),
+            Colors.white.withOpacity(0.55),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.5),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.1),
+            ),
+            child: Column(
+              children: [
+                // 用户头像（可点击更换）
+                GestureDetector(
+                  onTap: _changeAvatar,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: _primaryGradient,
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF5A8EFA).withOpacity(0.3),
+                          blurRadius: 16,
+                          offset: const Offset(0, 6),
+                        ),
+                      ],
+                    ),
+                    padding: const EdgeInsets.all(3),
                     child: Stack(
                       children: [
                         CircleAvatar(
                           key: ValueKey<String>(
                             '${_avatarUrl ?? ''}|${_avatarPath ?? ''}',
                           ),
-                          radius: 50,
-                          backgroundColor: Theme.of(
-                            context,
-                          ).primaryColor.withOpacity(0.1),
+                          radius: 38,
+                          backgroundColor: Colors.white,
                           backgroundImage: _avatarPath != null &&
                                   File(_avatarPath!).existsSync()
                               ? FileImage(File(_avatarPath!))
@@ -765,10 +1018,10 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
                                       : (_userEmail?.isNotEmpty == true
                                           ? _userEmail![0].toUpperCase()
                                           : '?'),
-                                  style: TextStyle(
-                                    fontSize: 32,
+                                  style: const TextStyle(
+                                    fontSize: 28,
                                     fontWeight: FontWeight.bold,
-                                    color: Theme.of(context).primaryColor,
+                                    color: Color(0xFF5A8EFA),
                                   ),
                                 )
                               : null,
@@ -778,196 +1031,266 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
                           right: 0,
                           child: Container(
                             decoration: BoxDecoration(
-                              color: Theme.of(context).primaryColor,
+                              gradient: _primaryGradient,
                               shape: BoxShape.circle,
                               border: Border.all(color: Colors.white, width: 2),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.15),
+                                  blurRadius: 6,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
                             ),
-                            padding: const EdgeInsets.all(6),
+                            padding: const EdgeInsets.all(5),
                             child: const Icon(
                               Icons.camera_alt,
                               color: Colors.white,
-                              size: 16,
+                              size: 14,
                             ),
                           ),
                         ),
                       ],
                     ),
                   ),
-                  const SizedBox(height: 16),
+                ),
+                const SizedBox(height: 8),
 
-                  // 用户昵称
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: Text(
-                      _userName?.isNotEmpty == true ? _userName! : '未设置昵称',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+                // 用户昵称
+                Text(
+                  _userName?.isNotEmpty == true ? _userName! : '未设置昵称',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.textDark,
+                    letterSpacing: 0.5,
                   ),
-                  const SizedBox(height: 8),
+                ),
+                const SizedBox(height: 2),
 
-                  // 用户邮箱
-                  Text(
-                    _userEmail ?? '',
-                    style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                // 用户邮箱
+                Text(
+                  _userEmail ?? '',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: AppColors.textGrey,
+                    fontWeight: FontWeight.w500,
                   ),
-
-                  const SizedBox(height: 32),
-
-                  // 账户信息部分
-                  _buildSection(
-                    title: '账户信息',
-                    children: [
-                      _buildListTile(
-                        icon: Icons.photo_camera,
-                        title: '更换头像',
-                        subtitle: '点击更换个人头像',
-                        onTap: _changeAvatar,
-                      ),
-                      _buildListTile(
-                        icon: Icons.person,
-                        title: '修改昵称',
-                        subtitle:
-                            _userName?.isNotEmpty == true ? _userName! : '未设置',
-                        onTap: _changeName,
-                      ),
-                      _buildListTile(
-                        icon: Icons.wc,
-                        title: '性别',
-                        subtitle: _gender,
-                        onTap: _changeGender,
-                      ),
-                      _buildListTile(
-                        icon: Icons.cake_outlined,
-                        title: '出生日期',
-                        subtitle: _birthDate,
-                        onTap: _changeBirthDate,
-                      ),
-                      _buildListTile(
-                        icon: Icons.location_on_outlined,
-                        title: '地区',
-                        subtitle: _province == '未设置' && _city == '未设置'
-                            ? '未设置'
-                            : '${_province == '未设置' ? '' : _province}${_city == '未设置' ? '' : ' / $_city'}',
-                        onTap: _changeRegion,
-                      ),
-                      _buildListTile(
-                        icon: Icons.pets,
-                        title: '宠物对我的称呼',
-                        subtitle: _ownerNickname,
-                        onTap: _changeOwnerNickname,
-                      ),
-                      _buildListTile(
-                        icon: Icons.email,
-                        title: '邮箱',
-                        subtitle: _userEmail ?? '',
-                        trailing: const Icon(
-                          Icons.check_circle,
-                          color: Colors.green,
-                        ),
-                        onTap: null, // 邮箱不可修改
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 32),
-
-                  // 退出登录按钮
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed: _signOut,
-                        icon: const Icon(Icons.logout),
-                        label: const Text('退出登录'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.red,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 40),
-                ],
-              ),
-            ),
-    );
-  }
-
-  Widget _buildSection({
-    required String title,
-    required List<Widget> children,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-          child: Text(
-            title,
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
-              color: Colors.grey[600],
+                ),
+              ],
             ),
           ),
         ),
-        Container(
-          margin: const EdgeInsets.symmetric(horizontal: 16),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.05),
-                blurRadius: 10,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: Column(children: children),
-        ),
-      ],
+      ),
     );
   }
 
-  Widget _buildListTile({
+  // 玻璃拟态卡片容器
+  Widget _buildGlassCard({required List<Widget> children}) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 20),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        gradient: LinearGradient(
+          colors: [
+            Colors.white.withOpacity(0.65),
+            Colors.white.withOpacity(0.55),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.5),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.1),
+            ),
+            child: Column(children: children),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // 设置项 - 带渐变图标
+  Widget _buildSettingsTile({
     required IconData icon,
+    required int gradientIndex,
     required String title,
     String? subtitle,
     Widget? trailing,
-    VoidCallback? onTap,
+    required VoidCallback? onTap,
   }) {
-    return ListTile(
-      leading: CircleAvatar(
-        backgroundColor: Theme.of(context).primaryColor.withOpacity(0.1),
-        child: Icon(icon, color: Theme.of(context).primaryColor, size: 20),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        splashColor: const Color(0xFF5A8EFA).withOpacity(0.1),
+        highlightColor: const Color(0xFF5A8EFA).withOpacity(0.05),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 14.0),
+          child: Row(
+            children: [
+              // 渐变图标容器
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  gradient: _iconGradients[gradientIndex % _iconGradients.length],
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: _getGradientColor(gradientIndex).withOpacity(0.3),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
+                ),
+                child: Icon(
+                  icon,
+                  color: Colors.white,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        color: AppColors.textDark,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.2,
+                      ),
+                    ),
+                    if (subtitle != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: AppColors.textGrey,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              if (trailing != null)
+                trailing
+              else if (onTap != null)
+                Icon(
+                  Icons.arrow_forward_ios_rounded,
+                  color: const Color(0xFF8E8E93).withOpacity(0.4),
+                  size: 16,
+                ),
+            ],
+          ),
+        ),
       ),
-      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w500)),
-      subtitle: subtitle != null
-          ? Text(
-              subtitle,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 13, color: Colors.grey[600]),
-            )
-          : null,
-      trailing: trailing ??
-          (onTap != null
-              ? const Icon(Icons.arrow_forward_ios, size: 16)
-              : null),
-      onTap: onTap,
-      enabled: onTap != null,
+    );
+  }
+
+  // 分隔线
+  Widget _buildDivider() {
+    return Padding(
+      padding: const EdgeInsets.only(left: 70.0),
+      child: Container(
+        height: 0.5,
+        color: Colors.grey.withOpacity(0.1),
+      ),
+    );
+  }
+
+  // 玻璃拟态退出登录按钮
+  Widget _buildLogoutButton() {
+    const logoutButtonTextColor = Color(0xFFE53935);
+    return GestureDetector(
+      onTap: _signOut,
+      child: Container(
+        height: 56,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(28),
+          gradient: LinearGradient(
+            colors: [
+              Colors.white.withOpacity(0.5),
+              Colors.white.withOpacity(0.4),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          border: Border.all(
+            color: logoutButtonTextColor.withOpacity(0.3),
+            width: 1,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: logoutButtonTextColor.withOpacity(0.1),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
+            ),
+            BoxShadow(
+              color: Colors.white.withOpacity(0.5),
+              blurRadius: 8,
+              offset: const Offset(0, -2),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(28),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.1),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.logout_rounded,
+                    color: logoutButtonTextColor.withOpacity(0.9),
+                    size: 20,
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    '退出登录',
+                    style: TextStyle(
+                      color: logoutButtonTextColor.withOpacity(0.9),
+                      fontSize: 17,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

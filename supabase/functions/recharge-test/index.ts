@@ -30,6 +30,18 @@ Deno.serve(async (req) => {
       status: 400
     });
   }
+  // const quotaIncrease = Number(amount) * 100000; // n元*100000
+  // const userId = "b7c9a3e1-2f58-4d27-a9c3-f1b24c0e7d62";
+  // // quota自增
+  // const { error } = await supabase.rpc('increase_quota', { uid: userId, inc: quotaIncrease });
+  // if (error) {
+  //   return new Response("Failed to recharge quota", {
+  //     status: 500
+  //   });
+  // }
+  // return new Response("Balance recharged successfully", {
+  //   status: 200
+  // });
 
   // CORS headers 配置
   const corsHeaders = {

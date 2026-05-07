@@ -1,5 +1,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-const apiKey = Deno.env.get("DIFY_DIARY_API_KEY");
+const apiKey =
+  Deno.env.get("DIFY_DIARY_V4_API_KEY") ??
+  Deno.env.get("DIFY_DIARY_API_KEY");
 const DIFY_API = "https://api.dify.ai/v1/workflows/run";
 
 Deno.serve(async (req)=>{
@@ -32,7 +34,7 @@ Deno.serve(async (req)=>{
   const { inputs, user, response_mode } = body ?? {};
   const mode = response_mode === "streaming" ? "streaming" : "blocking";
   if (!apiKey) {
-    return new Response("Missing DIFY_DIARY_API_KEY", {
+    return new Response("Missing DIFY_DIARY_V4_API_KEY", {
       status: 500,
       headers: corsHeaders,
     });

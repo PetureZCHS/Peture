@@ -405,6 +405,7 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen>
 
   // 标记是否已经加载过数据（避免重复加载）
   bool _hasLoadedData = false;
+  late final VoidCallback _petDataRefreshListener;
 
   /// 传给 [WeightTrendCard]，在体重增删改后递增以触发图表重新拉取云端数据。
   int _weightTrendRefreshNonce = 0;
@@ -412,6 +413,13 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen>
   @override
   void initState() {
     super.initState();
+    _petDataRefreshListener = () {
+      if (!mounted) return;
+      _loadAllData();
+    };
+    DataChangeNotifier.petDataRefreshNotifier.addListener(
+      _petDataRefreshListener,
+    );
     _tabController = AnimationController(
       vsync: this,
       lowerBound: double.negativeInfinity,
@@ -444,10 +452,17 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen>
         }
       });
     }
+    // 检查宠物数据是否在其他页面被修改（如更新头像），如果是则刷新
+    if (DataChangeNotifier.checkAndReset()) {
+      _loadAllData();
+    }
   }
 
   @override
   void dispose() {
+    DataChangeNotifier.petDataRefreshNotifier.removeListener(
+      _petDataRefreshListener,
+    );
     _tabController.dispose();
     widget.refreshNotifier?.removeListener(_onRefreshRequested);
     super.dispose();
