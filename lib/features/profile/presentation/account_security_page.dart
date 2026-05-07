@@ -91,8 +91,8 @@ class AccountSecurityPage extends StatelessWidget {
                   context,
                   icon: Icons.no_accounts_outlined,
                   iconColor: Colors.red,
-                  title: '用户注销',
-                  subtitle: '永久删除账号及业务数据，不可恢复',
+                  title: '账号注销',
+                  subtitle: '删除账号及全部数据，不可恢复（非退出登录）',
                   onTap: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(

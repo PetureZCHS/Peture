@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../../../core/auth_otp_email_context.dart';
 import '../../../main.dart';
 import 'email_register_page.dart';
 
@@ -216,6 +218,7 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
         email: email,
         shouldCreateUser: false,
         emailRedirectTo: null,
+        data: AuthOtpEmailKind.payload(AuthOtpEmailKind.login),
       );
 
       _startCountdown();

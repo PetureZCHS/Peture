@@ -4,9 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../core/auth_otp_email_context.dart';
 import '../../auth/presentation/login_page.dart';
 
-/// 立即注销：两次确认 → 向绑定邮箱发送验证码 → 校验通过后调用 Edge 删除并全局退出。
+/// 账号注销：两次确认 → 绑定邮箱验证码 → 校验通过后调用 Edge 删除并全局退出。
 class AccountDeactivatePage extends StatefulWidget {
   const AccountDeactivatePage({super.key});
 
@@ -23,10 +24,66 @@ class _AccountDeactivatePageState extends State<AccountDeactivatePage> {
   int _resendCooldown = 0;
   Timer? _resendTimer;
 
-  static const String _riskNotice =
-      '注销后，你的账号及关联业务数据将被立即永久删除，无法恢复。\n\n'
-      '完成后将在所有已登录设备上退出登录。\n\n'
-      '下一步将向你的绑定邮箱发送验证码，请查收后填写。';
+  static const Color _warnRed = Color(0xFFB71C1C);
+
+  TextStyle get _bodyBaseStyle =>
+      TextStyle(fontSize: 15, height: 1.45, color: Colors.grey[800]);
+  TextStyle get _bodyEmphasisStyle => _bodyBaseStyle.copyWith(
+        color: _warnRed,
+        fontWeight: FontWeight.w600,
+      );
+
+  /// 首屏说明（与弹窗要点一致，引导点击「开始注销流程」）。
+  Widget _buildIntroCopy() {
+    return Text.rich(
+      TextSpan(
+        style: _bodyBaseStyle,
+        children: [
+          const TextSpan(text: '您即将进入'),
+          TextSpan(text: '账号注销', style: _bodyEmphasisStyle),
+          const TextSpan(text: '流程，这与「'),
+          TextSpan(text: '退出登录', style: _bodyEmphasisStyle),
+          const TextSpan(text: '」不同：退出登录只是暂时登出；注销会导致您的账号及数据被'),
+          TextSpan(text: '永久删除且无法恢复', style: _bodyEmphasisStyle),
+          const TextSpan(
+            text: '。须通过绑定邮箱验证码确认本人操作；请使用本人设备、在无人代操作的环境下继续。',
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 第一步风险提示弹窗正文。
+  Widget _buildRiskDialogBody() {
+    const base = TextStyle(fontSize: 14, height: 1.5, color: Color(0xFF424242));
+    final emph = base.copyWith(color: _warnRed, fontWeight: FontWeight.w600);
+    return Text.rich(
+      TextSpan(
+        style: base,
+        children: [
+          const TextSpan(text: '您即将进入账号注销流程。注销后，您的账号及所有数据将被'),
+          TextSpan(text: '永久删除', style: emph),
+          const TextSpan(text: '，且'),
+          TextSpan(text: '无法恢复', style: emph),
+          const TextSpan(text: '。\n\n这与「'),
+          TextSpan(text: '退出登录', style: emph),
+          const TextSpan(text: '」不同：退出登录只是暂时登出；而'),
+          TextSpan(text: '注销', style: emph),
+          const TextSpan(text: '会直接'),
+          TextSpan(text: '清除账号及相关信息', style: emph),
+          const TextSpan(text: '。\n\n为保障账号安全，注销须通过'),
+          TextSpan(text: '绑定邮箱收到的验证码', style: emph),
+          const TextSpan(text: '确认是您本人操作。\n\n请您务必使用'),
+          TextSpan(text: '本人设备', style: emph),
+          const TextSpan(text: '、在'),
+          TextSpan(text: '无人代操作', style: emph),
+          const TextSpan(text: '的环境下继续。\n\n请确认您已了解并接受注销的'),
+          TextSpan(text: '全部后果', style: emph),
+          const TextSpan(text: '后，再继续操作。'),
+        ],
+      ),
+    );
+  }
 
   @override
   void dispose() {
@@ -72,6 +129,7 @@ class _AccountDeactivatePageState extends State<AccountDeactivatePage> {
         email: email,
         shouldCreateUser: false,
         emailRedirectTo: null,
+        data: AuthOtpEmailKind.payload(AuthOtpEmailKind.accountDeletion),
       );
       if (!mounted) return;
       _startResendCooldown();
@@ -117,6 +175,17 @@ class _AccountDeactivatePageState extends State<AccountDeactivatePage> {
     return '验证失败：${e.message}';
   }
 
+  /// 尽力全局退出，与注销成功路径一致。
+  Future<void> _signOutGloballyBestEffort() async {
+    try {
+      await Supabase.instance.client.auth.signOut(
+        scope: SignOutScope.global,
+      );
+    } catch (_) {
+      await Supabase.instance.client.auth.signOut();
+    }
+  }
+
   Future<void> _verifyOtpAndDeleteAccount() async {
     final email = _emailForOtp?.trim();
     final code = _otpController.text.trim();
@@ -129,12 +198,14 @@ class _AccountDeactivatePageState extends State<AccountDeactivatePage> {
     }
 
     setState(() => _isSubmitting = true);
+    var otpEstablishedSession = false;
     try {
       await Supabase.instance.client.auth.verifyOTP(
         email: email,
         token: code,
         type: OtpType.email,
       );
+      otpEstablishedSession = true;
 
       final res = await Supabase.instance.client.functions.invoke(
         'delete-my-account',
@@ -148,13 +219,7 @@ class _AccountDeactivatePageState extends State<AccountDeactivatePage> {
         throw Exception(msg ?? '注销失败（${res.status}）');
       }
 
-      try {
-        await Supabase.instance.client.auth.signOut(
-          scope: SignOutScope.global,
-        );
-      } catch (_) {
-        await Supabase.instance.client.auth.signOut();
-      }
+      await _signOutGloballyBestEffort();
 
       if (!mounted) return;
       Navigator.of(context).pushAndRemoveUntil(
@@ -167,16 +232,47 @@ class _AccountDeactivatePageState extends State<AccountDeactivatePage> {
         SnackBar(content: Text(_messageForVerifyFailure(e))),
       );
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('操作失败：$e')),
-      );
+      if (otpEstablishedSession) {
+        await _signOutGloballyBestEffort();
+        if (!mounted) return;
+        await showDialog<void>(
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) => AlertDialog(
+            title: const Text('注销未完成'),
+            content: SingleChildScrollView(
+              child: Text(
+                '未能完成注销，已为你退出登录，请重新登录后重试。\n\n详情：$e',
+                style: const TextStyle(height: 1.4),
+              ),
+            ),
+            actions: [
+              FilledButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text('确定'),
+              ),
+            ],
+          ),
+        );
+        if (!mounted) return;
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const LoginPage()),
+          (route) => false,
+        );
+      } else {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('操作失败：$e')),
+        );
+      }
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }
   }
 
   Future<void> _onTapStartDeactivate() async {
+    if (_isSubmitting) return;
+
     final session = Supabase.instance.client.auth.currentSession;
     if (session == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -195,55 +291,62 @@ class _AccountDeactivatePageState extends State<AccountDeactivatePage> {
       return;
     }
 
-    final agreed = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: const Text('注销账号'),
-        content: const SingleChildScrollView(
-          child: Text(_riskNotice, style: TextStyle(height: 1.45, fontSize: 14)),
+    setState(() => _isSubmitting = true);
+    try {
+      final agreed = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          title: const Text('注销账号'),
+          content: SingleChildScrollView(child: _buildRiskDialogBody()),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: Colors.red),
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('我已了解并接受后果'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('我已了解风险'),
-          ),
-        ],
-      ),
-    );
-    if (agreed != true || !mounted) return;
+      );
+      if (agreed != true || !mounted) return;
 
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('最后确认'),
-        content: const Text('确定要继续吗？将向你的绑定邮箱发送验证码。'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('取消'),
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('最后确认'),
+          content: const Text(
+            '将向您的绑定邮箱发送验证码，用于确认注销操作。\n\n请点击下方「发送验证码」并查收邮件。',
           ),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('发送验证码'),
-          ),
-        ],
-      ),
-    );
-    if (confirm != true || !mounted) return;
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: Colors.red),
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('发送验证码'),
+            ),
+          ],
+        ),
+      );
+      if (confirm != true || !mounted) return;
 
-    setState(() {
-      _emailForOtp = email;
-      _awaitingOtp = true;
-      _otpController.clear();
-    });
-    await _sendDeletionOtp();
+      setState(() {
+        _emailForOtp = email;
+        _awaitingOtp = true;
+        _otpController.clear();
+      });
+      await _sendDeletionOtp();
+    } finally {
+      if (mounted && !_awaitingOtp) {
+        setState(() => _isSubmitting = false);
+      }
+    }
   }
 
   void _cancelOtpStep() {
@@ -259,24 +362,48 @@ class _AccountDeactivatePageState extends State<AccountDeactivatePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('用户注销')),
+      appBar: AppBar(title: const Text('账号注销')),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              _awaitingOtp
-                  ? '请输入发送至 ${_maskEmail(_emailForOtp ?? '')} 的验证码，验证通过后账号将被立即删除。'
-                  : '本页为「立即注销」：确认后账号与数据会马上删除，与设置里的「退出登录」不同。'
-                      '需通过绑定邮箱验证码确认本人操作。',
-              style: TextStyle(fontSize: 15, color: Colors.grey[800], height: 1.4),
-            ),
-            if (!_awaitingOtp) ...[
-              const SizedBox(height: 12),
-              Text(
-                '请使用本人设备、在确认无人代操作的情况下继续。',
-                style: TextStyle(fontSize: 13, color: Colors.grey[600], height: 1.35),
+            if (_awaitingOtp)
+              Text.rich(
+                TextSpan(
+                  style: _bodyBaseStyle,
+                  children: [
+                    TextSpan(
+                      text:
+                          '请输入发送至 ${_maskEmail(_emailForOtp ?? '')} 的验证码。\n验证通过后，您的账号及数据将被',
+                    ),
+                    TextSpan(text: '永久删除', style: _bodyEmphasisStyle),
+                    const TextSpan(text: '，且'),
+                    TextSpan(text: '无法恢复', style: _bodyEmphasisStyle),
+                    const TextSpan(text: '。'),
+                  ],
+                ),
+              )
+            else ...[
+              _buildIntroCopy(),
+              const SizedBox(height: 14),
+              Text.rich(
+                TextSpan(
+                  style: TextStyle(fontSize: 13, height: 1.4, color: Colors.grey[700]),
+                  children: [
+                    const TextSpan(text: '请确认您已理解上述说明，并'),
+                    TextSpan(
+                      text: '自愿承担注销的全部后果',
+                      style: TextStyle(
+                        color: _warnRed,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13,
+                        height: 1.4,
+                      ),
+                    ),
+                    const TextSpan(text: '后再点击「开始注销流程」。'),
+                  ],
+                ),
               ),
             ],
             if (_awaitingOtp) ...[
@@ -343,7 +470,7 @@ class _AccountDeactivatePageState extends State<AccountDeactivatePage> {
                           height: 20,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : const Text('验证并立即注销'),
+                      : const Text('验证并完成注销'),
                 ),
               ),
           ],

@@ -1,5 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { purgeUserBusinessData } from "../_shared/purge_user_business_data.ts";
+import { banThenPurgeThenDeleteAuth } from "../_shared/ban_purge_delete_auth.ts";
 import { createServiceRoleClient } from "../_shared/create_service_role_client.ts";
 
 const corsHeaders = {
@@ -76,24 +76,26 @@ Deno.serve(async (req: Request) => {
     );
   }
 
-  const purged = await purgeUserBusinessData(admin, user.id);
-  if (!purged.ok) {
+  const outcome = await banThenPurgeThenDeleteAuth(admin, user.id);
+  if (!outcome.ok) {
+    if (outcome.code === "PURGE_FAILED") {
+      return new Response(
+        JSON.stringify({
+          error: "purge_failed",
+          step: outcome.step,
+          message: outcome.message,
+        }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
     return new Response(
       JSON.stringify({
-        error: "purge_failed",
-        step: purged.step,
-        message: purged.message,
+        error: outcome.message ?? outcome.code,
+        code: outcome.code,
+        step: outcome.step,
       }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
-  }
-
-  const { error: delAuth } = await admin.auth.admin.deleteUser(user.id);
-  if (delAuth) {
-    return new Response(JSON.stringify({ error: delAuth.message }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
   }
 
   return new Response(JSON.stringify({ success: true, action: "deleted" }), {

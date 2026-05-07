@@ -1,5 +1,5 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { purgeUserBusinessData } from "../_shared/purge_user_business_data.ts";
+import { banThenPurgeThenDeleteAuth } from "../_shared/ban_purge_delete_auth.ts";
 import { createServiceRoleClient } from "../_shared/create_service_role_client.ts";
 
 const corsHeaders = {
@@ -43,26 +43,39 @@ Deno.serve(async (req: Request) => {
   }
 
   const admin = createServiceRoleClient();
-  const purged = await purgeUserBusinessData(admin, user.id);
-  if (!purged.ok) {
+  const outcome = await banThenPurgeThenDeleteAuth(admin, user.id);
+  if (!outcome.ok) {
+    if (outcome.code === "BAN_FAILED") {
+      return new Response(
+        JSON.stringify({
+          error: "无法阻断账号登录，请稍后重试",
+          code: outcome.code,
+          step: outcome.step,
+          message: outcome.message,
+        }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+    if (outcome.code === "PURGE_FAILED") {
+      return new Response(
+        JSON.stringify({
+          error: "删除业务数据失败",
+          code: "PURGE_FAILED",
+          step: outcome.step,
+          message: outcome.message,
+        }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
     return new Response(
       JSON.stringify({
-        error: "删除业务数据失败",
-        code: "PURGE_FAILED",
-        step: purged.step,
-        message: purged.message,
+        error: "删除认证账户失败（已加入自动重试）",
+        code: "DELETE_AUTH_FAILED",
+        step: outcome.step,
+        message: outcome.message,
       }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
-  }
-
-  const { error: deleteError } = await admin.auth.admin.deleteUser(user.id);
-  if (deleteError) {
-    console.error("delete auth.users failed:", deleteError);
-    return new Response(JSON.stringify({ error: "删除认证账户失败", code: "DELETE_AUTH_FAILED" }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
   }
 
   return new Response(JSON.stringify({ success: true }), {

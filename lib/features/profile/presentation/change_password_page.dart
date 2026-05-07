@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../core/auth_otp_email_context.dart';
 import '../../../core/auth_pending_email_login.dart';
 import '../../../core/root_navigator_key.dart';
 import '../../auth/presentation/login_page.dart';
@@ -68,6 +69,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
         email: email,
         shouldCreateUser: false,
         emailRedirectTo: null,
+        data: AuthOtpEmailKind.payload(AuthOtpEmailKind.passwordChange),
       );
       if (!mounted) return;
       setState(() {
@@ -98,7 +100,6 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
     );
 
     if (!mounted) return;
-    setState(() => _isSubmitting = false);
 
     await showDialog<void>(
       context: context,
@@ -127,7 +128,6 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
     );
 
     if (!mounted) return;
-    AuthPendingEmailLogin.armAfterPasswordChanged(email);
 
     try {
       await Supabase.instance.client.auth.signOut(

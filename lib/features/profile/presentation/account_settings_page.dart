@@ -432,7 +432,9 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
           ).showSnackBar(SnackBar(content: Text('❌ 退出失败: $e')));
         }
       } finally {
-        setState(() => _isLoading = false);
+        if (mounted) {
+          setState(() => _isLoading = false);
+        }
       }
     }
   }
@@ -563,7 +565,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
                       _buildListTile(
                         icon: Icons.shield_outlined,
                         title: '账号安全',
-                        subtitle: '修改密码、用户注销等',
+                        subtitle: '修改密码、账号注销等',
                         onTap: () {
                           Navigator.of(context).push(
                             MaterialPageRoute(
