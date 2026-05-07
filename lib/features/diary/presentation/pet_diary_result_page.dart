@@ -136,6 +136,7 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
     _loadingAnimationController.dispose();
     _shimmerAnimationController.dispose();
     _scrollController.dispose();
+    _contentNotifier.dispose();
     _messageTimer?.cancel();
     _typingTimer?.cancel();
     super.dispose();
@@ -513,7 +514,12 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
                 // 原始记录卡片 — 固定高度，不参与滚动
                 Padding(
                   padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-                  child: _buildOriginalCard(),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxHeight: MediaQuery.of(context).size.height * 0.24,
+                    ),
+                    child: _buildOriginalCard(),
+                  ),
                 ),
                 const SizedBox(height: 16),
                 // 日记卡片 — Expanded 撑满剩余屏幕
@@ -907,6 +913,7 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
         ],
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
@@ -941,13 +948,18 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
             ],
           ),
           const SizedBox(height: 16),
-          Text(
-            widget.originalText,
-            style: TextStyle(
-              fontSize: 14,
-              height: 1.7,
-              color: Colors.grey[600],
-              letterSpacing: 0.2,
+          Flexible(
+            child: SingleChildScrollView(
+              physics: const BouncingScrollPhysics(),
+              child: Text(
+                widget.originalText,
+                style: TextStyle(
+                  fontSize: 14,
+                  height: 1.7,
+                  color: Colors.grey[600],
+                  letterSpacing: 0.2,
+                ),
+              ),
             ),
           ),
         ],

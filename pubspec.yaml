@@ -112,6 +112,11 @@ flutter:
     - assets/mp3/6.mp3
     - assets/image_styles/
 
+  fonts:
+    - family: Merriweather
+      fonts:
+        - asset: assets/fonts/Merriweather-Bold.ttf
+
 # --- 启动页配置 ---
 flutter_native_splash:
   color: "#FFFFFF"
