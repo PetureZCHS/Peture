@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/auth_otp_email_context.dart';
 import '../../../main.dart';
+import '../../../services/analytics_service.dart';
 import 'email_register_page.dart';
 
 class EmailLoginPage extends StatefulWidget {
@@ -157,6 +158,7 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
             ),
           );
         }
+        unawaited(AnalyticsService.acceptConsentAndInit());
       }
     } on AuthException catch (e) {
       debugPrint('❌ 密码登录失败: ${e.message}');
@@ -297,6 +299,7 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
             ),
           );
         }
+        unawaited(AnalyticsService.acceptConsentAndInit());
       } else {
         _showMessage('验证码验证失败，请重试');
       }

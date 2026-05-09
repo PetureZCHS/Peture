@@ -1,8 +1,17 @@
+import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:flutter_image_compress/flutter_image_compress.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
+import 'package:uuid/uuid.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../shared/utils/user_avatar_helper.dart';
+import '../../../shared/utils/avatar_image_helper.dart';
 import '../../../services/supabase_service.dart';
 
 /// 宠物档案表单页面 - 模仿截图设计
@@ -16,7 +25,12 @@ class PetProfileFormPage extends StatefulWidget {
 }
 
 class _PetProfileFormPageState extends State<PetProfileFormPage> {
+  String? _petId;
   File? _avatarFile;
+  File? _lifePhotoFile;
+  /// 编辑模式下云端头像 URL（仅展示，未重新选择文件时保留）
+  String? _avatarUrl;
+  String? _lifePhotoUrl;
   String? _petName;
   String? _petType; // 宠物类型：狗狗/猫咪
   String? _petSpecies; // 品种
@@ -24,12 +38,14 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
   String? _gender; // 弟弟/妹妹/未知
   String? _neuterStatus; // 已绝育/未绝育
   double? _weight; // kg
-  String? _userAvatarPath; // 用户头像路径
+// 用户头像路径
 
   // 主人昵称相关
 
   String? _ownerNickname; // 该宠物对主人的自定义称呼
   String _defaultOwnerNickname = '主人'; // 用户默认称呼
+  bool _isSaving = false;
+  String? _lifePhotoPrecheckReason; // 生活照预检查失败原因
 
   final Map<String, List<String>> _speciesOptions = {
     '猫咪': [
@@ -198,6 +214,7 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
   void _loadInitialData() {
     final data = widget.initialData!;
     setState(() {
+      _petId = data['id']?.toString();
       _petName = data['name'] as String?;
       _petSpecies = data['species'] as String?;
       _gender = data['gender'] as String?;
@@ -224,11 +241,27 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
         }
       }
 
-      // 如果有头像路径
+      // 如果有头像路径或 URL
       if (data['avatar'] != null) {
         final avatarPath = data['avatar'] as String;
-        if (File(avatarPath).existsSync()) {
+        final isRemote = avatarPath.startsWith('http://') ||
+            avatarPath.startsWith('https://');
+        if (isRemote) {
+          _avatarUrl = avatarPath;
+        } else if (File(avatarPath).existsSync()) {
           _avatarFile = File(avatarPath);
+        }
+      }
+
+      if (data['lifePhoto'] != null || data['life_photo'] != null) {
+        final lifePath =
+            (data['lifePhoto'] ?? data['life_photo']) as String;
+        final isRemote =
+            lifePath.startsWith('http://') || lifePath.startsWith('https://');
+        if (isRemote) {
+          _lifePhotoUrl = lifePath;
+        } else if (File(lifePath).existsSync()) {
+          _lifePhotoFile = File(lifePath);
         }
       }
 
@@ -251,7 +284,6 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
       final avatarPath = await UserAvatarHelper.getCurrentUserAvatarPath();
       if (mounted && avatarPath != null) {
         setState(() {
-          _userAvatarPath = avatarPath;
         });
       }
     } catch (e) {
@@ -263,11 +295,110 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
     try {
       final picker = ImagePicker();
       final file = await picker.pickImage(source: ImageSource.gallery);
-      if (file != null) {
-        setState(() => _avatarFile = File(file.path));
-      }
+      if (file == null) return;
+      if (!mounted) return;
+      final cropped =
+          await AvatarImageHelper.cropAndCompressAvatar(context, file.path);
+      if (cropped == null) return;
+      setState(() {
+        _avatarFile = cropped;
+        _avatarUrl = null;
+      });
     } catch (e) {
       debugPrint('选择头像失败: $e');
+    }
+  }
+
+  Future<void> _pickLifePhoto() async {
+    try {
+      final picker = ImagePicker();
+      final picked = await picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 2048,
+        maxHeight: 2048,
+        imageQuality: 90,
+      );
+      if (picked == null) return;
+
+      final tempDir = await getTemporaryDirectory();
+      final targetPath = p.join(
+        tempDir.path,
+        '${const Uuid().v4()}_lifephoto.jpg',
+      );
+      final compressed = await FlutterImageCompress.compressAndGetFile(
+        picked.path,
+        targetPath,
+        quality: 85,
+        format: CompressFormat.jpeg,
+        minWidth: 1024,
+        minHeight: 1024,
+      );
+
+      setState(() {
+        _lifePhotoFile = File(compressed?.path ?? picked.path);
+        _lifePhotoUrl = null;
+        _lifePhotoPrecheckReason = null; // 清除之前的预检查结果
+      });
+    } catch (e) {
+      debugPrint('选择生活照失败: $e');
+    }
+  }
+
+  /// 图片质量预检查 - 调用 img-gen-precheck Edge Function
+  Future<({bool pass, String reason})> _precheckLifePhoto({
+    required String fileName,
+    required String bucket,
+    required String path,
+  }) async {
+    final supabase = Supabase.instance.client;
+    try {
+      final response = await supabase.functions.invoke(
+        'img-gen-precheck',
+        body: {
+          'file_name': fileName,
+          'bucket': bucket,
+          'path': path,
+        },
+      );
+
+      dynamic payload = response.data;
+      if (payload is String && payload.isNotEmpty) {
+        payload = jsonDecode(payload);
+      }
+
+      if (payload is! Map) {
+        return (pass: false, reason: '图片检测服务返回了无效结果，请稍后重试');
+      }
+
+      final bool pass = payload['pass'] == true;
+      final String reason = (payload['reason'] as String? ?? '').trim();
+
+      if (pass) {
+        return (pass: true, reason: '');
+      }
+
+      return (pass: false, reason: reason.isNotEmpty ? reason : '图片不符合生成要求，请更换后重试');
+    } on SocketException {
+      return (pass: false, reason: '图片检测失败：网络连接异常，请检查网络后重试');
+    } on TimeoutException {
+      return (pass: false, reason: '图片检测超时，请稍后再试');
+    } on FunctionException catch (e) {
+      debugPrint('❌ 生活照预检函数调用失败: $e');
+      final message = e.toString().toLowerCase();
+      if (message.contains('401') || message.contains('403') ||
+          message.contains('unauthorized') || message.contains('forbidden')) {
+        return (pass: false, reason: '登录状态已失效，请重新登录后重试');
+      }
+      if (message.contains('timeout')) {
+        return (pass: false, reason: '图片检测超时，请稍后再试');
+      }
+      if (message.contains('network') || message.contains('fetch')) {
+        return (pass: false, reason: '图片检测失败：网络连接异常，请检查网络后重试');
+      }
+      return (pass: false, reason: '图片检测服务暂时不可用，请稍后重试');
+    } catch (e, st) {
+      debugPrint('❌ 生活照预检异常: $e\n$st');
+      return (pass: false, reason: '图片检测失败，请检查网络后重试');
     }
   }
 
@@ -1717,6 +1848,7 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
     required String placeholder,
     String? value,
     required VoidCallback onTap,
+    Widget? trailing,
     bool isFirst = false,
     bool isLast = false,
   }) {
@@ -1751,29 +1883,88 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
                   ),
                 ),
               ),
-              Row(
-                children: [
-                  Text(
-                    value ?? placeholder,
-                    style: TextStyle(
-                      fontSize: 15,
-                      color: value != null
-                          ? Colors.black87
-                          : const Color(0xFFCCCCCC),
-                    ),
+              trailing ??
+                  Row(
+                    children: [
+                      Text(
+                        value ?? placeholder,
+                        style: TextStyle(
+                          fontSize: 15,
+                          color: value != null
+                              ? Colors.black87
+                              : const Color(0xFFCCCCCC),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      const Icon(
+                        Icons.arrow_forward_ios,
+                        size: 14,
+                        color: Color(0xFFCCCCCC),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 8),
-                  const Icon(
-                    Icons.arrow_forward_ios,
-                    size: 14,
-                    color: Color(0xFFCCCCCC),
-                  ),
-                ],
-              ),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildLifePhotoTrailing() {
+    final hasLifePhoto =
+        _lifePhotoFile != null || (_lifePhotoUrl != null && _lifePhotoUrl!.isNotEmpty);
+
+    Widget thumb;
+    if (_lifePhotoFile != null && _lifePhotoFile!.existsSync()) {
+      thumb = Image.file(
+        _lifePhotoFile!,
+        width: 44,
+        height: 44,
+        fit: BoxFit.cover,
+      );
+    } else if (_lifePhotoUrl != null && _lifePhotoUrl!.isNotEmpty) {
+      thumb = Image.network(
+        _lifePhotoUrl!,
+        width: 44,
+        height: 44,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) => Container(
+          width: 44,
+          height: 44,
+          color: const Color(0xFFF2F3F7),
+          child: const Icon(Icons.photo, color: Color(0xFFB8BEC9), size: 20),
+        ),
+      );
+    } else {
+      thumb = Container(
+        width: 44,
+        height: 44,
+        color: const Color(0xFFF2F3F7),
+        child: const Icon(Icons.photo, color: Color(0xFFB8BEC9), size: 20),
+      );
+    }
+
+    return Row(
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(10),
+          child: thumb,
+        ),
+        const SizedBox(width: 10),
+        if (!hasLifePhoto)
+          const Padding(
+            padding: EdgeInsets.only(right: 6),
+            child: Text(
+              '未添加',
+              style: TextStyle(fontSize: 14, color: Color(0xFFCCCCCC)),
+            ),
+          ),
+        const Icon(
+          Icons.arrow_forward_ios,
+          size: 14,
+          color: Color(0xFFCCCCCC),
+        ),
+      ],
     );
   }
 
@@ -1816,13 +2007,16 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
     );
   }
 
-  void _savePetProfile() {
+  Future<void> _savePetProfile() async {
     if (_petName == null || _petName!.isEmpty) {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('请输入宠物昵称')));
       return;
     }
+
+    final petId = _petId ?? const Uuid().v4();
+    _petId = petId;
 
     // 保存逻辑，返回数据给上一页
     // 根据品种自动推断宠物类型（如果用户没有明确选择）
@@ -1847,8 +2041,79 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
       typeForDb = petType;
     }
 
+    setState(() => _isSaving = true);
+    // 仅保留已有头像值；新选择本地文件时，只有上传成功才更新为远程 URL。
+    String? avatarValue = widget.initialData?['avatar'] as String?;
+    if (_avatarFile != null) {
+      final uploaded = await SupabaseService().uploadPetAvatar(
+        file: _avatarFile!,
+        petId: petId,
+      );
+      if (uploaded != null && uploaded.isNotEmpty) {
+        avatarValue = uploaded;
+      }
+    }
+
+    String? lifePhotoValue =
+        (widget.initialData?['life_photo'] ?? widget.initialData?['lifePhoto'])
+            as String?;
+    if (_lifePhotoFile != null) {
+      // 1. 先上传到 Storage（不更新数据库）
+      final uploadResult = await SupabaseService().uploadPetLifePhotoToStorage(
+        file: _lifePhotoFile!,
+        petId: petId,
+      );
+      if (uploadResult == null) {
+        if (mounted) {
+          setState(() => _isSaving = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('生活照上传失败，请重试')),
+          );
+        }
+        return;
+      }
+
+      // 2. 预检查
+      final fileName = uploadResult.path.split('/').last;
+      final precheckResult = await _precheckLifePhoto(
+        fileName: fileName,
+        bucket: 'user-avatars',
+        path: uploadResult.path,
+      );
+
+      if (!precheckResult.pass) {
+        // 预检查不通过，删除已上传的文件
+        await SupabaseService().removeStorageObject(
+          bucket: 'user-avatars',
+          path: uploadResult.path,
+        );
+        if (mounted) {
+          setState(() {
+            _isSaving = false;
+            _lifePhotoPrecheckReason = precheckResult.reason;
+          });
+        }
+        return;
+      }
+
+      // 3. 预检查通过，更新数据库
+      lifePhotoValue = uploadResult.url;
+      try {
+        await Supabase.instance.client.from('pets').upsert({
+          'id': petId,
+          'life_photo': lifePhotoValue,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        });
+      } catch (e) {
+        debugPrint('保存 life_photo 到 pets 表失败: $e');
+      }
+    }
+
     final result = {
-      'avatar': _avatarFile?.path,
+      'id': petId,
+      'avatar': avatarValue,
+      'life_photo': lifePhotoValue,
+      'lifePhoto': lifePhotoValue,
       'name': _petName,
       'type': typeForDb, // 宠物类型：狗、猫
       'breed': _petSpecies, // 品种：边牧犬、布偶猫
@@ -1859,64 +2124,43 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
       'useCustomNickname': _ownerNickname != null && _ownerNickname!.isNotEmpty,
       'ownerNickname': _ownerNickname,
     };
-
+    if (!mounted) return;
+    setState(() => _isSaving = false);
     Navigator.pop(context, result);
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF5F6F9),
-      body: Column(
-        children: [
-          // 自定义顶部返回按钮和用户头像
-          Container(
-            color: const Color(0xFFF5F6F9),
-            child: SafeArea(
-              bottom: false,
-              child: Padding(
-                padding: const EdgeInsets.only(
-                  left: 8,
-                  right: 16,
-                  top: 0,
-                  bottom: 4,
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    IconButton(
-                      icon: const Icon(
-                        Icons.arrow_back_ios,
-                        color: Colors.black87,
-                        size: 20,
-                      ),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                    // 用户头像
-                    if (_userAvatarPath != null &&
-                        File(_userAvatarPath!).existsSync())
-                      CircleAvatar(
-                        radius: 18,
-                        backgroundImage: FileImage(File(_userAvatarPath!)),
-                      )
-                    else
-                      CircleAvatar(
-                        radius: 18,
-                        backgroundColor: const Color(0xFF5A8EFA),
-                        child: Text(
-                          'U',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.dark.copyWith(
+        statusBarColor: Colors.transparent,
+      ),
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF5F6F9),
+        appBar: AppBar(
+          backgroundColor: const Color(0xFFF5F6F9),
+          elevation: 0,
+          centerTitle: true,
+          systemOverlayStyle: SystemUiOverlayStyle.dark,
+          leading: IconButton(
+            icon: const Icon(
+              Icons.arrow_back_ios,
+              color: Colors.black87,
+              size: 20,
+            ),
+            onPressed: () => Navigator.pop(context),
+          ),
+          title: const Text(
+            '编辑宠物档案',
+            style: TextStyle(
+              color: Colors.black87,
+              fontSize: 17,
+              fontWeight: FontWeight.w600,
             ),
           ),
+        ),
+      body: Column(
+        children: [
           Expanded(
             child: SingleChildScrollView(
               child: Column(
@@ -1944,12 +2188,20 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
                               radius: 60,
                               backgroundColor: Colors.white,
                               child: CircleAvatar(
+                                key: ValueKey<String>(
+                                  '${_avatarFile?.path ?? ''}|${_avatarUrl ?? ''}',
+                                ),
                                 radius: 58,
                                 backgroundColor: const Color(0xFFF8F8F8),
-                                backgroundImage: _avatarFile != null
-                                    ? FileImage(_avatarFile!)
-                                    : null,
-                                child: _avatarFile == null
+                                backgroundImage: (_avatarFile != null
+                                        ? FileImage(_avatarFile!)
+                                        : (_avatarUrl != null &&
+                                                _avatarUrl!.isNotEmpty
+                                            ? NetworkImage(_avatarUrl!)
+                                            : null)) as ImageProvider?,
+                                child: _avatarFile == null &&
+                                        (_avatarUrl == null ||
+                                            _avatarUrl!.isEmpty)
                                     ? const Icon(
                                         Icons.camera_alt,
                                         size: 42,
@@ -1958,24 +2210,6 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
                                     : null,
                               ),
                             ),
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          _petName != null && _petName!.isNotEmpty
-                              ? _petName!
-                              : '请输入爱宠昵称',
-                          style: TextStyle(
-                            fontSize: _petName != null && _petName!.isNotEmpty
-                                ? 16
-                                : 13,
-                            color: _petName != null && _petName!.isNotEmpty
-                                ? Colors.black87
-                                : Colors.grey.shade400,
-                            letterSpacing: 0.3,
-                            fontWeight: _petName != null && _petName!.isNotEmpty
-                                ? FontWeight.w500
-                                : FontWeight.normal,
                           ),
                         ),
                       ],
@@ -2043,7 +2277,7 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
                         _FormRow(
                           label: '我的称呼',
                           onTap: _showNicknameEditor,
-                          isLast: true,
+                          isLast: false,
                           child: Text(
                             _ownerNickname ?? _defaultOwnerNickname,
                             textAlign: TextAlign.right,
@@ -2053,6 +2287,53 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
                             ),
                           ),
                         ),
+                        _buildListItem(
+                          label: '生活照',
+                          placeholder: '请选择生活照',
+                          trailing: _buildLifePhotoTrailing(),
+                          onTap: () {
+                            setState(() => _lifePhotoPrecheckReason = null); // 清除之前的预检查结果
+                            _pickLifePhoto();
+                          },
+                          isLast: true,
+                        ),
+                        // 生活照预检查失败提示
+                        if (_lifePhotoPrecheckReason != null && _lifePhotoPrecheckReason!.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+                            child: Container(
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFFF3E0),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: const Color(0xFFFFB74D),
+                                  width: 1,
+                                ),
+                              ),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Icon(
+                                    Icons.info_outline,
+                                    color: Color(0xFFF57C00),
+                                    size: 20,
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      _lifePhotoPrecheckReason!,
+                                      style: const TextStyle(
+                                        fontSize: 13,
+                                        color: Color(0xFFE65100),
+                                        height: 1.5,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
                       ],
                     ),
                   ),
@@ -2067,43 +2348,74 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
             padding: const EdgeInsets.all(20),
             child: SafeArea(
               top: false,
-              child: SizedBox(
-                width: double.infinity,
-                child: Container(
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF6B9EFF), Color(0xFF4E7EFF)],
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
+                child: SizedBox(
+                  width: double.infinity,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      gradient: _isSaving
+                          ? const LinearGradient(
+                              colors: [Color(0xFFB0C4DE), Color(0xFF9CAFC9)],
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                            )
+                          : const LinearGradient(
+                              colors: [Color(0xFF6B9EFF), Color(0xFF4E7EFF)],
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                            ),
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: _isSaving
+                          ? []
+                          : [
+                              BoxShadow(
+                                color: const Color(0xFF5A8EFA).withOpacity(0.3),
+                                blurRadius: 12,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
                     ),
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF5A8EFA).withOpacity(0.3),
-                        blurRadius: 12,
-                        offset: const Offset(0, 4),
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.transparent,
+                        foregroundColor: _isSaving ? const Color(0xFFF0F4F8) : Colors.white,
+                        shadowColor: Colors.transparent,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        elevation: 0,
+                        disabledBackgroundColor: Colors.transparent,
                       ),
-                    ],
-                  ),
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.transparent,
-                      foregroundColor: Colors.white,
-                      shadowColor: Colors.transparent,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      elevation: 0,
-                    ),
-                    onPressed: _savePetProfile,
-                    child: const Text(
-                      '保存档案',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                      onPressed: _isSaving ? null : _savePetProfile,
+                      child: _isSaving
+                          ? Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: const [
+                                SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2.5,
+                                    valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFF0F4F8)),
+                                  ),
+                                ),
+                                SizedBox(width: 10),
+                                Text(
+                                  '保存中…',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            )
+                          : const Text(
+                              '保存档案',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
                   ),
                 ),
               ),
@@ -2111,7 +2423,8 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
           ),
         ],
       ),
-    );
+    ),
+  );
   }
 }
 

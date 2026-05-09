@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'dart:io';
 import '../../../shared/models/pet.dart';
 import '../../../shared/models/pet_passport.dart';
@@ -10,7 +11,15 @@ class EditPetPassportPage extends StatefulWidget {
   final Pet pet;
   final PetPassport? passport;
 
-  const EditPetPassportPage({super.key, required this.pet, this.passport});
+  /// 与账号昵称同步后的展示用主人名（占位「铲屎官」等会替换为此值），用于表单初始文案。
+  final String? suggestedOwnerDisplay;
+
+  const EditPetPassportPage({
+    super.key,
+    required this.pet,
+    this.passport,
+    this.suggestedOwnerDisplay,
+  });
 
   @override
   State<EditPetPassportPage> createState() => _EditPetPassportPageState();
@@ -25,31 +34,38 @@ class _EditPetPassportPageState extends State<EditPetPassportPage> {
   String? _selectedMbti;
   DateTime? _adoptionDate;
   List<String> _selectedTags = [];
-  String? _photoPath;
-  File? _photoFile;
+  String? _lifePhotoPath;
+  File? _lifePhotoFile;
 
   @override
   void initState() {
     super.initState();
     _ownerNameController = TextEditingController(
-      text: widget.passport?.ownerName ?? '铲屎官',
+      text: widget.suggestedOwnerDisplay ??
+          widget.passport?.ownerName ??
+          '宠物家长',
     );
     _bioController = TextEditingController(text: widget.passport?.bio ?? '');
     _selectedMbti = widget.passport?.mbtiType;
     _adoptionDate = widget.passport?.adoptionDate;
     _selectedTags = List.from(widget.passport?.interestTags ?? []);
 
-    // 优先使用电子档案头像，如果没有则使用宠物档案头像（仅在电子档案没设置前保存）
-    _photoPath = widget.passport?.photoPath;
-    if (_photoPath == null || _photoPath!.isEmpty) {
-      // 电子档案没有头像时，使用宠物档案的头像作为初始值
-      _photoPath = widget.pet.avatar;
-    }
+    // 使用宠物档案的 life_photo（生活照）作为初始值
+    _lifePhotoPath = widget.pet.lifePhoto;
 
-    // 如果有照片路径，加载照片
-    if (_photoPath != null && _photoPath!.isNotEmpty) {
-      _photoFile = File(_photoPath!);
+    // 如果有照片路径且是本地文件路径，则加载 File
+    if (_lifePhotoPath != null && _lifePhotoPath!.isNotEmpty) {
+      if (!_lifePhotoPath!.startsWith('http')) {
+        _lifePhotoFile = File(_lifePhotoPath!);
+      }
     }
+  }
+
+  /// 判断生活照是否为网络图片
+  bool get _isNetworkLifePhoto {
+    return _lifePhotoPath != null &&
+        (_lifePhotoPath!.startsWith('http://') ||
+            _lifePhotoPath!.startsWith('https://'));
   }
 
   @override
@@ -98,8 +114,8 @@ class _EditPetPassportPageState extends State<EditPetPassportPage> {
         child: ListView(
           padding: const EdgeInsets.all(20),
           children: [
-            // 宠物照片
-            _buildSectionTitle('宠物照片'),
+            // 宠物生活照
+            _buildSectionTitle('宠物生活照'),
             const SizedBox(height: 12),
             _buildPhotoSelector(),
 
@@ -111,6 +127,7 @@ class _EditPetPassportPageState extends State<EditPetPassportPage> {
             _buildTextField(
               controller: _ownerNameController,
               label: '主人姓名',
+              hint: '默认与账号昵称一致，可改成展示用姓名',
               icon: Icons.person,
             ),
             const SizedBox(height: 16),
@@ -197,36 +214,34 @@ class _EditPetPassportPageState extends State<EditPetPassportPage> {
                   top: Radius.circular(12),
                 ),
               ),
-              child: _photoFile != null
+              child: _lifePhotoPath != null && _lifePhotoPath!.isNotEmpty
                   ? ClipRRect(
                       borderRadius: const BorderRadius.vertical(
                         top: Radius.circular(12),
                       ),
-                      child: Image.file(_photoFile!, fit: BoxFit.cover),
+                      child: _isNetworkLifePhoto
+                          ? CachedNetworkImage(
+                              imageUrl: _lifePhotoPath!,
+                              fit: BoxFit.cover,
+                              width: double.infinity,
+                              height: double.infinity,
+                              errorWidget: (context, url, error) => _buildPhotoPlaceholder(),
+                            )
+                          : Image.file(
+                              _lifePhotoFile!,
+                              fit: BoxFit.cover,
+                              width: double.infinity,
+                              height: double.infinity,
+                              errorBuilder: (context, error, stackTrace) =>
+                                  _buildPhotoPlaceholder(),
+                            ),
                     )
-                  : Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.add_a_photo,
-                          size: 48,
-                          color: Colors.grey[400],
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          '点击添加宠物照片',
-                          style: TextStyle(
-                            color: Colors.grey[600],
-                            fontSize: 14,
-                          ),
-                        ),
-                      ],
-                    ),
+                  : _buildPhotoPlaceholder(),
             ),
           ),
 
           // 操作按钮区域
-          if (_photoFile != null)
+          if (_lifePhotoPath != null && _lifePhotoPath!.isNotEmpty)
             Container(
               padding: const EdgeInsets.all(12),
               child: Row(
@@ -358,8 +373,8 @@ class _EditPetPassportPageState extends State<EditPetPassportPage> {
 
       if (image != null) {
         setState(() {
-          _photoFile = File(image.path);
-          _photoPath = image.path;
+          _lifePhotoFile = File(image.path);
+          _lifePhotoPath = image.path;
         });
       }
     } catch (e) {
@@ -374,9 +389,31 @@ class _EditPetPassportPageState extends State<EditPetPassportPage> {
   /// 删除照片
   void _removePhoto() {
     setState(() {
-      _photoFile = null;
-      _photoPath = null;
+      _lifePhotoFile = null;
+      _lifePhotoPath = null;
     });
+  }
+
+  /// 构建照片占位符
+  Widget _buildPhotoPlaceholder() {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(
+          Icons.add_a_photo,
+          size: 48,
+          color: Colors.grey[400],
+        ),
+        const SizedBox(height: 8),
+        Text(
+          '点击添加宠物生活照',
+          style: TextStyle(
+            color: Colors.grey[600],
+            fontSize: 14,
+          ),
+        ),
+      ],
+    );
   }
 
   Widget _buildTextField({
@@ -384,6 +421,7 @@ class _EditPetPassportPageState extends State<EditPetPassportPage> {
     required String label,
     required IconData icon,
     int maxLines = 1,
+    String? hint,
   }) {
     return Container(
       decoration: BoxDecoration(
@@ -402,6 +440,7 @@ class _EditPetPassportPageState extends State<EditPetPassportPage> {
         maxLines: maxLines,
         decoration: InputDecoration(
           labelText: label,
+          hintText: hint,
           prefixIcon: Icon(icon, color: const Color(0xFF5A8EFA)),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(12),
@@ -811,7 +850,7 @@ class _EditPetPassportPageState extends State<EditPetPassportPage> {
         final updatedPassport = PetPassport(
           id: widget.passport?.id,
           petId: widget.pet.id!,
-          photoPath: _photoPath,
+          photoPath: widget.passport?.photoPath, // 保持原有值，不再更新
           ownerName: _ownerNameController.text,
           adoptionDate: _adoptionDate,
           mbtiType: _selectedMbti,
@@ -841,16 +880,16 @@ class _EditPetPassportPageState extends State<EditPetPassportPage> {
           return;
         }
 
-        // 同步头像到宠物表：以电子档案中的头像为准
-        if (_photoPath != null &&
-            _photoPath!.isNotEmpty &&
+        // 同步生活照到宠物表的 life_photo 字段
+        if (_lifePhotoPath != null &&
+            _lifePhotoPath!.isNotEmpty &&
             widget.pet.id != null) {
           try {
             final petData = widget.pet.toMap();
-            petData['avatar'] = _photoPath; // 使用电子档案的头像路径
+            petData['life_photo'] = _lifePhotoPath; // 保存到 life_photo 字段
             await supabaseService.updatePet(petData);
           } catch (e) {
-            debugPrint('同步头像到宠物表失败: $e');
+            debugPrint('同步生活照到宠物表失败: $e');
             // 不影响护照保存，只记录错误
           }
         }

@@ -5,10 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../shared/utils/ui_helpers.dart';
 import '../../../services/supabase_edge_service.dart';
-
 import '../../../shared/models/pet.dart';
 import '../../../services/supabase_service.dart';
 import 'pet_diary_result_page.dart';
+import 'pet_journal_demo_page.dart';
 import 'dart:io';
 import '../../library/presentation/library_screen.dart';
 
@@ -31,6 +31,8 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
   List<Pet> _pets = [];
   Pet? _selectedPet;
   bool _isLoadingPets = false;
+  // 控制宠物列表的展开状态
+  bool _isPetSelectorExpanded = false;
 
   // 当前选中的风格
   String _selectedStyle = '小红书';
@@ -38,9 +40,6 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
   // 可用的风格列表
   final List<String> _availableStyles = ['哲学', '搞笑', '治愈', '中二', '小红书'];
 
-  // 示例文本
-  final String _exampleText =
-      '今天，我带我的宠物狗狗十六去逍遥津的大草坪玩飞盘。小妮带着她的宠物狗狗朱朱一起。十六跑得比朱朱快。十六和朱朱都玩得很开心，我奖励它们吃苹果狗粮。';
   @override
   void initState() {
     super.initState();
@@ -86,6 +85,16 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
 
   /// 生成宠物日记（跳转到生成页面）
   Future<void> _generatePetDiary() async {
+    // 检查是否选择了宠物
+    if (_selectedPet == null) {
+      _showCustomDialog(
+        title: '还没有选择主角呢 🐾',
+        content: '请先从上方列表选择一只宠物，\nAI 才能以它的视角写日记哦！',
+        confirmText: '这就去选',
+      );
+      return;
+    }
+
     final userInput = _inputController.text.trim();
 
     if (userInput.isEmpty) {
@@ -125,7 +134,9 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
           style: _selectedStyle,
           diaryService: _diaryService,
           nickname: nickname,
+          petId: _selectedPet?.id,
           petName: _selectedPet?.name,
+          petAvatarUrl: _selectedPet?.avatar, // 传递宠物头像
           breed: _selectedPet?.breed,
           gender: _selectedPet?.gender,
           petType: _selectedPet?.type,
@@ -143,8 +154,34 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
 
   /// 点击示例文本
   void _onExampleTap() {
+    String example;
+    // 根据已选宠物的类型提供不同的示例
+    if (_selectedPet != null) {
+      if (_selectedPet!.type == '猫咪') {
+        example =
+            '今天，我回到家一开门，${_selectedPet!.name} 就迈着优雅的猫步走过来，“喵”了一声蹭我的腿求摸摸。我给它倒了些猫粮，它吃得呼噜呼噜的。吃饱后，它跳上窗台晒太阳，眯着眼睛的样子太治愈了，感觉一天的疲惫都消失了。';
+      } else if (_selectedPet!.type == '狗狗') {
+        example =
+            '今天天气真好，我带 ${_selectedPet!.name} 去公园玩飞盘。它精力特别旺盛，跑得飞快，每次都能精准接住飞盘，周围的人都夸它聪明。玩累了我们就坐在草地上休息，它吐着舌头傻笑，我把准备好的零食喂给它，它开心得尾巴摇个不停。';
+      } else {
+        // 其他类型或未知类型，使用通用模版
+        example =
+            '今天 ${_selectedPet!.name} 特别乖，一直陪在我身边。看着它是圆滚滚的小眼睛，感觉心都要化了。给它喂了最爱吃的零食，它开心得不得了，希望它能一直这样快乐健康地成长。';
+      }
+    } else {
+      // 未选择宠物时，交替显示猫狗示例（或随机一个）
+      final random = math.Random();
+      if (random.nextBool()) {
+        example =
+            '今天下班回家，家里的猫咪立刻跑过来迎接我，蹭来蹭去要小鱼干吃。吃饱喝足后，它就在沙发上踩奶，然后缩成一团睡着了，呼噜声听着真让人安心。';
+      } else {
+        example =
+            '今天带狗狗去公园散步，它看到别的狗狗特别兴奋，一直想冲过去玩。我们玩了会捡球游戏，它跑得气喘吁吁的，回来后喝了一大碗水，现在正趴在脚边打呼噜呢。';
+      }
+    }
+
     setState(() {
-      _inputController.text = _exampleText;
+      _inputController.text = example;
     });
   }
 
@@ -160,17 +197,132 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
     );
   }
 
+  /// 显示自定义美观弹窗
+  void _showCustomDialog({
+    required String title,
+    required String content,
+    String confirmText = '好的',
+  }) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        elevation: 0,
+        backgroundColor: Colors.transparent,
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 20,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // 可爱的装饰图标容器
+              Container(
+                width: 80,
+                height: 80,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF0F0),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.pets_rounded,
+                  size: 40,
+                  color: Color(0xFFFF6B6B),
+                ),
+              ),
+              const SizedBox(height: 24),
+              
+              // 标题
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF1A1A1A),
+                ),
+              ),
+              const SizedBox(height: 12),
+              
+              // 内容
+              Text(
+                content,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.grey.shade600,
+                  height: 1.5,
+                ),
+              ),
+              const SizedBox(height: 28),
+              
+              // 按钮
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF1A1A1A),
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(26),
+                    ),
+                  ),
+                  child: Text(
+                    confirmText,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      extendBodyBehindAppBar: true,
-      body: Stack(
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle(
+        statusBarIconBrightness: Brightness.dark,
+        statusBarBrightness: Brightness.light,
+        statusBarColor: Colors.transparent,
+        systemNavigationBarIconBrightness: Brightness.dark,
+        systemNavigationBarColor: Colors.white,
+      ),
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        body: Stack(
         children: [
           // 背景层
           Stack(
             children: [
               Container(color: AppColors.background),
+              // 状态栏区域半透明遮罩，确保图标清晰可见
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                height: MediaQuery.of(context).padding.top + 44,
+                child: Container(
+                  color: AppColors.background.withOpacity(0.85),
+                ),
+              ),
               AnimatedBuilder(
                 animation: _orbController,
                 builder: (context, child) {
@@ -262,6 +414,31 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
                         ),
                         const SizedBox(height: 30),
 
+                        // 1. 引导选择宠物
+                        const Text(
+                          "第一步：选择主角",
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF1A1A1A),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        _buildPetSelector(),
+
+                        const SizedBox(height: 24),
+
+                        // 2. 引导记录
+                        const Text(
+                          "第二步：记录日常",
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF1A1A1A),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+
                         // 输入框区域
                         Container(
                           padding: const EdgeInsets.all(20),
@@ -303,11 +480,6 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
                                   ),
                                 ),
                               ),
-
-                              const SizedBox(height: 16),
-
-                              // 宠物选择
-                              _buildPetSelector(),
 
                               const SizedBox(height: 16),
 
@@ -380,21 +552,24 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
                           child: ElevatedButton(
                             onPressed: _generatePetDiary,
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF1A1A1A),
+                              backgroundColor: _selectedPet == null
+                                  ? Colors.grey.shade400
+                                  : const Color(0xFF1A1A1A),
                               foregroundColor: Colors.white,
                               elevation: 0,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(28),
                               ),
                             ),
-                            child: const Row(
+                            child: Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Icon(Icons.edit_note),
-                                SizedBox(width: 8),
+                                if (_selectedPet != null)
+                                  const Icon(Icons.edit_note),
+                                SizedBox(width: _selectedPet != null ? 8 : 0),
                                 Text(
-                                  "生成日记",
-                                  style: TextStyle(
+                                  _selectedPet != null ? "生成日记" : "请先选择宠物",
+                                  style: const TextStyle(
                                     fontSize: 18,
                                     fontWeight: FontWeight.bold,
                                   ),
@@ -413,7 +588,8 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
           ),
         ],
       ),
-    );
+    ),
+  );
   }
 
   Widget _buildTopHeader() {
@@ -433,6 +609,16 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
                   fontWeight: FontWeight.bold,
                   fontSize: 18,
                 ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.style, size: 28),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const PetJournalDemoPage()),
+              );
+            },
+            tooltip: '手记模式 (Apple Journal)',
           ),
           IconButton(
             icon: const Icon(Icons.local_library_rounded,
@@ -464,57 +650,231 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
       );
     }
 
-    return Container(
-      height: 52,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF7F8FA),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade100),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<Pet>(
-          value: _selectedPet,
-          hint: Row(
-            children: [
-              Icon(Icons.pets_outlined, size: 20, color: Colors.grey.shade400),
-              const SizedBox(width: 10),
-              Text(
-                '选择主角',
-                style: TextStyle(color: Colors.grey.shade400, fontSize: 15),
-              ),
-            ],
-          ),
-          isExpanded: true,
-          icon: Icon(Icons.keyboard_arrow_down_rounded,
-              color: Colors.grey.shade400),
+    if (_pets.isEmpty) {
+      return Container(
+        height: 52,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.8),
           borderRadius: BorderRadius.circular(16),
-          dropdownColor: Colors.white,
-          items: _pets.map((pet) {
-            return DropdownMenuItem<Pet>(
-              value: pet,
-              child: Row(
-                children: [
-                  _buildPetAvatar(pet.avatar, size: 28),
+          border: Border.all(color: Colors.white, width: 2),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 20,
+              offset: const Offset(0, 10),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.pets_outlined, size: 20, color: Colors.grey.shade400),
+            const SizedBox(width: 10),
+            Text(
+              '还没有添加宠物哦',
+              style: TextStyle(color: Colors.grey.shade400, fontSize: 15),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Column(
+      children: [
+        GestureDetector(
+          onTap: () {
+            setState(() {
+              _isPetSelectorExpanded = !_isPetSelectorExpanded;
+            });
+          },
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: _isPetSelectorExpanded
+                  ? Colors.white
+                  : Colors.white.withOpacity(0.8),
+              borderRadius: BorderRadius.only(
+                topLeft: const Radius.circular(16),
+                topRight: const Radius.circular(16),
+                bottomLeft: Radius.circular(_isPetSelectorExpanded ? 4 : 16),
+                bottomRight: Radius.circular(_isPetSelectorExpanded ? 4 : 16),
+              ),
+              border: Border.all(
+                color: _isPetSelectorExpanded
+                    ? Colors.blue.withOpacity(0.3)
+                    : Colors.white,
+                width: _isPetSelectorExpanded ? 1 : 2,
+              ),
+              boxShadow: _isPetSelectorExpanded
+                  ? [
+                      BoxShadow(
+                        color: Colors.blue.withOpacity(0.05),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ]
+                  : [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.05),
+                        blurRadius: 20,
+                        offset: const Offset(0, 10),
+                      ),
+                    ],
+            ),
+            child: Row(
+              children: [
+                if (_selectedPet == null) ...[
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade200,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(Icons.pets,
+                        color: Colors.grey.shade400, size: 20),
+                  ),
+                  const SizedBox(width: 12),
+                  const Text(
+                    '点击选择主角 🐾',
+                    style: TextStyle(
+                      color: Color(0xFF1A1A1A),
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ] else ...[
+                  _buildPetAvatar(_selectedPet!.avatar, size: 40),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: Text(
-                      pet.name,
-                      style: const TextStyle(
-                        fontSize: 15,
-                        color: Color(0xFF1A1A1A),
-                        fontWeight: FontWeight.w500,
-                      ),
-                      overflow: TextOverflow.ellipsis,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _selectedPet!.name,
+                          style: const TextStyle(
+                            color: Color(0xFF1A1A1A),
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Text(
+                          '${_selectedPet!.breed} · ${_selectedPet!.gender}',
+                          style: TextStyle(
+                            color: Colors.grey.shade500,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
-              ),
-            );
-          }).toList(),
-          onChanged: _onPetSelected,
+                const Spacer(),
+                AnimatedRotation(
+                  turns: _isPetSelectorExpanded ? 0.5 : 0,
+                  duration: const Duration(milliseconds: 200),
+                  child: Icon(
+                    Icons.keyboard_arrow_down_rounded,
+                    color: _isPetSelectorExpanded
+                        ? Colors.blue
+                        : Colors.grey.shade400,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
-      ),
+        AnimatedSize(
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+          child: Container(
+            height: _isPetSelectorExpanded ? null : 0,
+            constraints: const BoxConstraints(maxHeight: 300),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: const BorderRadius.only(
+                bottomLeft: Radius.circular(16),
+                bottomRight: Radius.circular(16),
+              ),
+              border: Border.all(color: Colors.grey.shade100),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                children: _pets.map((pet) {
+                  final isSelected = _selectedPet?.id == pet.id;
+                  return InkWell(
+                    onTap: () {
+                      _onPetSelected(pet);
+                      setState(() {
+                        _isPetSelectorExpanded = false;
+                      });
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? Colors.blue.withOpacity(0.05)
+                            : Colors.transparent,
+                        border: Border(
+                          bottom: BorderSide(
+                            color: Colors.grey.shade50,
+                            width: 1,
+                          ),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          _buildPetAvatar(pet.avatar, size: 36),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  pet.name,
+                                  style: TextStyle(
+                                    color: isSelected
+                                        ? Colors.blue
+                                        : const Color(0xFF1A1A1A),
+                                    fontWeight: isSelected
+                                        ? FontWeight.bold
+                                        : FontWeight.normal,
+                                    fontSize: 15,
+                                  ),
+                                ),
+                                Text(
+                                  pet.breed,
+                                  style: TextStyle(
+                                    color: isSelected
+                                        ? Colors.blue.withOpacity(0.7)
+                                        : Colors.grey.shade500,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          if (isSelected)
+                            const Icon(Icons.check_circle_rounded,
+                                color: Colors.blue, size: 20),
+                        ],
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 

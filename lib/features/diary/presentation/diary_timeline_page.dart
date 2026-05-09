@@ -1,12 +1,22 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import '../../../services/ai_image_cache_service.dart';
 import '../../../shared/models/pet_diary.dart';
 import '../../../services/supabase_service.dart';
 import 'diary_detail_page.dart';
 
 class DiaryTimelinePage extends StatefulWidget {
-  const DiaryTimelinePage({super.key});
+  final String? petId;
+  final String? bookTitle;
+
+  const DiaryTimelinePage({
+    super.key,
+    this.petId,
+    this.bookTitle,
+  });
 
   @override
   State<DiaryTimelinePage> createState() => _DiaryTimelinePageState();
@@ -30,7 +40,7 @@ class _DiaryTimelinePageState extends State<DiaryTimelinePage> {
   Future<void> _fetchDiaries() async {
     setState(() => _isLoading = true);
     try {
-      final diaries = await SupabaseService().getAllDiaries();
+      final diaries = await SupabaseService().getAllDiaries(petId: widget.petId);
       if (mounted) {
         setState(() {
           _allDiaries = diaries;
@@ -142,7 +152,7 @@ class _DiaryTimelinePageState extends State<DiaryTimelinePage> {
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          '时光轴',
+          widget.bookTitle ?? '时光轴',
           style: GoogleFonts.notoSerif(
             color: Colors.black87,
             fontWeight: FontWeight.bold,
@@ -291,57 +301,89 @@ class _DiaryTimelinePageState extends State<DiaryTimelinePage> {
           Expanded(
             child: Padding(
               padding: const EdgeInsets.only(bottom: 24),
-              child: GestureDetector(
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => DiaryDetailPage(diary: diary),
-                    ),
-                  );
-                },
-                child: Container(
-                  padding: const EdgeInsets.all(16),
+              child: Dismissible(
+                key: Key(diary.id ?? UniqueKey().toString()),
+                direction: DismissDirection.endToStart,
+                background: Container(
+                  alignment: Alignment.centerRight,
+                  padding: const EdgeInsets.only(right: 20),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: Colors.red.shade400,
                     borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          _getTagIcon(diary.style),
-                          const SizedBox(width: 8),
-                          Text(
-                            diary.style,
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey[600],
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
+                  child: const Icon(Icons.delete_outline, color: Colors.white),
+                ),
+                confirmDismiss: (direction) async {
+                  return await _showDeleteConfirmation(context);
+                },
+                onDismissed: (direction) {
+                  _deleteDiary(diary);
+                },
+                child: GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => DiaryDetailPage(diary: diary),
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        diary.content,
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          height: 1.5,
-                          color: Colors.black87,
+                    );
+                  },
+                  onLongPress: () => _showOptionsSheet(context, diary),
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.05),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(
+                              children: [
+                                _getTagIcon(diary.style),
+                                const SizedBox(width: 8),
+                                Text(
+                                  diary.style,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.grey[600],
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            // Optional: Add a small menu icon here if long press isn't obvious enough
+                            // But usually timeline cards are clean. Let's keep it clean but add Dismissible.
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          diary.content,
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            height: 1.5,
+                            color: Colors.black87,
+                          ),
+                        ),
+                        // AI 生成配图缩略图
+                        if (diary.aiImg != null && diary.aiImg!.isNotEmpty) ...[
+                          const SizedBox(height: 12),
+                          _buildAiImageThumbnail(diary.aiImg!),
+                        ],
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -350,6 +392,202 @@ class _DiaryTimelinePageState extends State<DiaryTimelinePage> {
         ],
       ),
     );
+  }
+
+  final AiImageCacheService _imageCacheService = AiImageCacheService();
+
+  /// 构建 AI 配图缩略图（16:9 宽高比，完整展示图片）
+  /// 使用本地缓存避免重复下载
+  Widget _buildAiImageThumbnail(String aiImgPath) {
+    debugPrint('📷 Timeline AI Image Path: $aiImgPath');
+
+    // 如果已经是完整 URL，使用 Image.network
+    if (aiImgPath.startsWith('http')) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: AspectRatio(
+          aspectRatio: 16 / 9,
+          child: Image.network(
+            aiImgPath,
+            width: double.infinity,
+            fit: BoxFit.contain,
+            errorBuilder: (context, error, stackTrace) {
+              debugPrint('❌ Timeline Image.network error: $error');
+              return Container(
+                decoration: BoxDecoration(
+                  color: Colors.grey[200],
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Center(
+                  child: Icon(Icons.image_not_supported, color: Colors.grey[400]),
+                ),
+              );
+            },
+          ),
+        ),
+      );
+    }
+
+    // 使用缓存服务加载图片
+    return FutureBuilder<Uint8List?>(
+      future: _imageCacheService.getImageBytes(aiImgPath),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return AspectRatio(
+            aspectRatio: 16 / 9,
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Center(
+                child: SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            ),
+          );
+        }
+
+        final imageBytes = snapshot.data;
+        if (imageBytes == null || imageBytes.isEmpty) {
+          return AspectRatio(
+            aspectRatio: 16 / 9,
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.grey[200],
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Center(
+                child: Icon(Icons.image_not_supported, color: Colors.grey[400]),
+              ),
+            ),
+          );
+        }
+
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: AspectRatio(
+            aspectRatio: 16 / 9,
+            child: Image.memory(
+              imageBytes,
+              width: double.infinity,
+              fit: BoxFit.contain,
+              errorBuilder: (context, error, stackTrace) {
+                debugPrint('❌ Timeline Image.memory error: $error');
+                return Container(
+                  decoration: BoxDecoration(
+                    color: Colors.grey[200],
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Center(
+                    child: Icon(Icons.image_not_supported, color: Colors.grey[400]),
+                  ),
+                );
+              },
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<bool?> _showDeleteConfirmation(BuildContext context) {
+    return showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('删除日记'),
+        content: const Text('确定要删除这篇日记吗？此操作无法撤销。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('取消', style: TextStyle(color: Colors.grey)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('删除', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showOptionsSheet(BuildContext context, PetDiary diary) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.share_outlined),
+                title: const Text('分享'),
+                onTap: () {
+                  Navigator.pop(context);
+                  // TODO: Implement share logic if needed, or navigate to detail page/share card
+                  // For now, let's just show a snackbar or navigate to detail
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => DiaryDetailPage(diary: diary),
+                    ),
+                  );
+                },
+              ),
+              const Divider(height: 1),
+              ListTile(
+                leading: const Icon(Icons.delete_outline, color: Colors.red),
+                title: const Text('删除', style: TextStyle(color: Colors.red)),
+                onTap: () async {
+                  Navigator.pop(context);
+                  final confirm = await _showDeleteConfirmation(context);
+                  if (confirm == true) {
+                    _deleteDiary(diary);
+                  }
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _deleteDiary(PetDiary diary) async {
+    // Optimistically update UI
+    final index = _allDiaries.indexOf(diary);
+    setState(() {
+      _allDiaries.remove(diary);
+      _applyFilterAndSort(); // Re-apply filter to update the view
+    });
+
+    final success = await SupabaseService().deleteDiary(diary.id!);
+    if (!success) {
+      // Revert if failed
+      if (mounted) {
+        setState(() {
+           if (index >= 0) _allDiaries.insert(index, diary);
+           _applyFilterAndSort();
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('删除失败，请重试')),
+        );
+      }
+    } else {
+       if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('日记已删除')),
+        );
+      }
+    }
   }
 
   Color _getTagColor(String style) {

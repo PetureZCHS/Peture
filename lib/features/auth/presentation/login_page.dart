@@ -7,6 +7,7 @@ import 'dart:ui';
 // 导入主应用文件
 import '../../../core/auth_pending_email_login.dart';
 import '../../../main.dart';
+import '../../../services/analytics_service.dart';
 // 导入邮箱登录页面
 import 'email_login_page.dart';
 // 导入手机号验证码登录页面
@@ -480,6 +481,7 @@ class _LoginBodyContentState extends State<_LoginBodyContent> {
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(builder: (context) => const MyApp()),
     );
+    unawaited(AnalyticsService.acceptConsentAndInit());
   }
 
   void _otherLogin(String method) {

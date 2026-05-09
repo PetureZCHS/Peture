@@ -127,6 +127,7 @@ web/plugins.js
 *.iws
 .idea/
 .vscode/
+!.vscode/launch.json
 *.swp
 *.swo
 *~
@@ -182,6 +183,9 @@ linux/flutter/ephemeral/.plugin_symlinks/
 windows/flutter/ephemeral/.plugin_symlinks/
 dify_chat.md
 
+# 本地下载的友盟 SDK 解压目录（工程已用 pub 依赖，勿提交）
+umeng_common_sdk-1.3.0/
+
 demo_reference/
 android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java
 ios/Runner/GeneratedPluginRegistrant.h
@@ -232,3 +236,23 @@ app.*.symbols
 !/dev/ci/**/Gemfile.lock
 
 sentry.properties
+.claude/
+.agents/
+AGENTS.md
+CLAUDE.md
+supabase/migrations/20250127000000_invitation_codes.sql
+supabase/migrations/20250130000000_community_posts.sql
+supabase/migrations/20250130000001_community_interactions.sql
+supabase/migrations/20250203000000_add_owner_nickname.sql
+supabase/migrations/20260130_add_reply_to_nickname.sql
+supabase/migrations/20260322_add_pet_id_to_pet_diaries.sql
+supabase/migrations/20260331000100_add_user_basic_profile_fields.sql
+supabase/migrations/20260402120000_users_profiles_gender_enum.sql
+supabase/migrations/20260407110000_expand_user_gender_enum.sql
+supabase/migrations/20260426130000_fix_users_profiles_pets_rls.sql
+supabase/migrations/20260426140000_ensure_users_profiles_birth_region_columns.sql
+supabase/migrations/20260426150000_add_confidential_to_gender_enum.sql
+supabase/migrations/20260426170000_user_avatars_storage_policies.sql
+supabase/migrations/20260426171000_pet_avatars_storage_policies.sql
+supabase/migrations/20260427100000_storage_avatar_cleanup_schedule_notes.sql
+supabase/migrations/20260427110000_fix_pet_health_tables_rls.sql

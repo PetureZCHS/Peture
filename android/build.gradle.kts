@@ -1,7 +1,6 @@
 allprojects {
     repositories {
-        // Some Flutter engine artifacts are not fully mirrored by third-party mirrors.
-        // Keep the official Flutter Maven source in the repo list for reliability.
+        maven { url = uri("https://mirrors.tuna.tsinghua.edu.cn/flutter/download.flutter.io") }
         maven { url = uri("https://storage.googleapis.com/download.flutter.io") }
         maven { url = uri("https://mirrors.cloud.tencent.com/nexus/repository/maven-public/") }
         google()

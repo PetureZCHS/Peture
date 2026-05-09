@@ -4,9 +4,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 void main() async {
   // 初始化 Supabase
   await Supabase.initialize(
-    url: 'https://tcftpcvcldfudzxgemdh.supabase.co',
+    url: 'https://dyxbvsnnrzvozcokhlfw.supabase.co',
     anonKey:
-        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRjZnRwY3ZjbGRmdWR6eGdlbWRoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA2NjMzMTQsImV4cCI6MjA3NjIzOTMxNH0.uiusEWfuAw37fL6neZfK3q9NV4HZF7k-kX6hFIJQ83s',
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR5eGJ2c25ucnp2b3pjb2tobGZ3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY3NTQ2MjIsImV4cCI6MjA5MjMzMDYyMn0.8wLiYTHvqlTnlIib4Qckkb2x2OHBX8A6lTcBrtFURM4',
   );
 
   final supabase = Supabase.instance.client;

@@ -1,192 +1,280 @@
+// Setup type definitions for built-in Supabase Runtime APIs
+// 设置 Supabase Runtime API 的类型定义
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-const DIFY_CHAT_API_KEY = Deno.env.get('DIFY_CHAT_API_KEY');
+import { executeTextModeration } from "../_shared/moderation_provider.ts";
+import { createTraceId } from "../_shared/trace.ts";
+import { writeModerationError, writeModerationLog } from "../_shared/moderation_logger.ts";
+import { requireUserFromRequest } from "../_shared/auth.ts";
+
+// 兼容历史命名：优先 DIFY_CHAT_API_KEY，回退 DIFY_API_KEY
+const DIFY_API_KEY = Deno.env.get('DIFY_CHAT_API_KEY') ?? Deno.env.get('DIFY_API_KEY');
 const DIFY_BASE_URL = 'https://api.dify.ai/v1';
-const EFFECTIVE_DIFY_KEY = DIFY_CHAT_API_KEY;
-
-function toDifyFiles(images: Array<Record<string, unknown>>) {
-  return images.map((img) => {
-    const uploadFileId = String(img['upload_file_id'] ?? '');
-    return {
-      type: 'image',
-      transfer_method: 'local_file',
-      upload_file_id: uploadFileId,
-    };
-  });
-}
-
-async function uploadImageToDify(params: {
-  user: string;
-  fileName: string;
-  mimeType: string;
-  base64: string;
-}) {
-  const { user, fileName, mimeType, base64 } = params;
-  const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
-  const blob = new Blob([bytes], { type: mimeType });
-
-  const formData = new FormData();
-  formData.append('user', user);
-  formData.append('file', blob, fileName);
-
-  const res = await fetch(`${DIFY_BASE_URL}/files/upload`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${EFFECTIVE_DIFY_KEY}`,
-    },
-    body: formData,
-  });
-
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`上传图片失败(${res.status}): ${text}`);
-  }
-
-  const data = await res.json();
-  const id = data?.id as string | undefined;
-  if (!id) {
-    throw new Error('上传图片成功但未返回文件 ID');
-  }
-  return id;
-}
-
-Deno.serve(async (req) => {
+Deno.serve(async (req)=>{
+  // CORS headers 配置
   const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type'
   };
-
+  // Handle CORS preflight requests / 处理 CORS 预检请求
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return new Response('ok', {
+      headers: corsHeaders
+    });
   }
-
+  const traceId = createTraceId();
+  let requestUserId = "";
   try {
-    if (!EFFECTIVE_DIFY_KEY) {
-      return new Response(JSON.stringify({
-        error: '缺少 Dify API Key（DIFY_CHAT_API_KEY）',
-      }), {
-        status: 500,
-        headers: {
-          ...corsHeaders,
-          'Content-Type': 'application/json',
-        },
-      });
+    const auth = await requireUserFromRequest(req);
+    if ("error" in auth) {
+      return auth.error;
     }
-
+    requestUserId = auth.userId;
+    if (!DIFY_API_KEY?.trim()) {
+      return new Response(
+        JSON.stringify({
+          error: "服务端未配置 Dify API Key，请在 Supabase Edge Functions Secrets 中设置 DIFY_CHAT_API_KEY（或兼容的 DIFY_API_KEY）",
+          errorCode: "DIFY_API_KEY_MISSING",
+          status: 503,
+          code: "config_error",
+        }),
+        {
+          status: 503,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+    // Parse request body / 解析请求体
     const requestBody = await req.json();
-    if (!requestBody.query || !requestBody.user) {
+    // Validate required fields / 验证必填字段
+    if (!requestBody.query) {
       return new Response(JSON.stringify({
-        error: 'Missing required fields: query and user are required',
+        error: 'Missing required field: query'
       }), {
         status: 400,
         headers: {
           ...corsHeaders,
-          'Content-Type': 'application/json',
-        },
+          'Content-Type': 'application/json'
+        }
       });
     }
-
+    requestBody.user = requestUserId;
+    // Default to streaming mode / 默认使用流式模式
     const responseMode = requestBody.response_mode || 'streaming';
-    const query = String(requestBody.query);
-    const user = String(requestBody.user);
-    const petContext = String(requestBody.pet_context ?? '').trim();
-
-    let finalQuery = query;
-    // System Prompt 统一交给 Dify 管理，避免 Edge Function 与 Dify 双重注入。
-    // doctor_mode / agent_mode 仅用于客户端逻辑与埋点，不在此处拼接 prompt。
-    if (petContext.length > 0) {
-      finalQuery = `${finalQuery}\n\n${petContext}`;
-    }
-
-    const incomingImages = Array.isArray(requestBody.images)
-      ? requestBody.images as Array<Record<string, unknown>>
-      : [];
-    const uploadedImages: Array<Record<string, unknown>> = [];
-    for (const image of incomingImages) {
-      const base64 = String(image['dataBase64'] ?? '');
-      const fileName = String(image['fileName'] ?? `image_${Date.now()}.jpg`);
-      const mimeType = String(image['mimeType'] ?? 'image/jpeg');
-      if (!base64) continue;
-      const uploadFileId = await uploadImageToDify({
-        user,
-        fileName,
-        mimeType,
-        base64,
+    const inputModerationExec = await executeTextModeration("ai_input", String(requestBody.query), traceId);
+    const inputModeration = inputModerationExec.result;
+    await writeModerationLog({
+      userId: requestUserId,
+      scene: "ai_input",
+      traceId,
+      result: inputModeration,
+      contentExcerpt: String(requestBody.query),
+      provider: inputModerationExec.provider,
+      providerResponse: inputModerationExec.providerResponse,
+    });
+    if (!inputModeration.passed) {
+      return new Response(JSON.stringify(inputModeration), {
+        status: 200,
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'application/json'
+        }
       });
-      uploadedImages.push({ upload_file_id: uploadFileId });
     }
-
-    const bodyForDify = {
-      ...requestBody,
-      query: finalQuery,
-      user,
-      response_mode: responseMode,
-      files: uploadedImages.length > 0 ? toDifyFiles(uploadedImages) : undefined,
-      images: undefined,
-      doctor_mode: undefined,
-      agent_mode: undefined,
-      pet_context: undefined,
-    };
-
+    // Prepare request to Dify API / 准备发送到 Dify API 的请求
     const difyResponse = await fetch(`${DIFY_BASE_URL}/chat-messages`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${EFFECTIVE_DIFY_KEY}`,
-        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${DIFY_API_KEY}`,
+        'Content-Type': 'application/json'
       },
-      body: JSON.stringify(bodyForDify),
+      body: JSON.stringify({
+        ...requestBody,
+        response_mode: responseMode
+      })
     });
-
+    // Handle API errors / 处理 API 错误
     if (!difyResponse.ok) {
-      let errorData: Record<string, unknown> = {};
-      try {
-        errorData = await difyResponse.json();
-      } catch (_) {
-        const raw = await difyResponse.text();
-        errorData = { message: raw };
-      }
+      const errorData = await difyResponse.json();
+      await writeModerationError({
+        traceId,
+        userId: requestUserId,
+        scene: "ai_output",
+        errorCode: "MODERATION_PROVIDER_ERROR",
+        errorMessage: errorData.message || "Dify API request failed",
+        contextJson: { status: difyResponse.status, code: errorData.code },
+      });
       return new Response(JSON.stringify({
-        error: (errorData.message as string) || 'Dify API request failed',
+        error: errorData.message || 'Dify API request failed',
         status: difyResponse.status,
-        code: errorData.code,
+        code: errorData.code
       }), {
         status: difyResponse.status,
         headers: {
           ...corsHeaders,
-          'Content-Type': 'application/json',
-        },
+          'Content-Type': 'application/json'
+        }
       });
     }
-
+    // Handle streaming response / 处理流式响应
+    // SSE (Server-Sent Events) format for real-time output
+    // SSE（服务器推送事件）格式，用于实时输出
     if (responseMode === 'streaming') {
       const stream = difyResponse.body;
-      return new Response(stream, {
+      if (!stream) {
+        return new Response(JSON.stringify({
+          error: "Upstream stream unavailable",
+          traceId,
+        }), {
+          status: 502,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      let outputBuffer = "";
+      let blocked = false;
+      const moderatedStream = stream.pipeThrough(new TransformStream({
+        async transform(chunk, controller) {
+          if (blocked) return;
+          const text = new TextDecoder().decode(chunk);
+          const lines = text.split("\n");
+          for (const rawLine of lines) {
+            const line = rawLine.trim();
+            if (!line.startsWith("data:")) continue;
+            try {
+              const eventData = JSON.parse(line.slice(5).trim());
+              const answer = eventData?.answer?.toString?.() ?? "";
+              if (answer) {
+                outputBuffer += answer;
+                const outputModerationExec = await executeTextModeration("ai_output", outputBuffer, traceId);
+                const outputModeration = outputModerationExec.result;
+                if (!outputModeration.passed) {
+                  blocked = true;
+                  await writeModerationLog({
+                    userId: requestUserId,
+                    scene: "ai_output",
+                    traceId,
+                    result: outputModeration,
+                    contentExcerpt: outputBuffer,
+                    provider: outputModerationExec.provider,
+                    providerResponse: outputModerationExec.providerResponse,
+                  });
+                  // 勿伪装成 Dify 的 message/answer：客户端会把 answer 当增量拼接，导致「正常半句 + 拦截句」粘在一起
+                  const safePayload =
+                    `data: ${JSON.stringify({
+                      event: "moderation_intercept",
+                      message: `该回复因内容审核未通过，已被拦截（traceId: ${traceId}）`,
+                      traceId,
+                    })}\n\n` +
+                    `data: ${JSON.stringify({ event: "message_end" })}\n\n`;
+                  controller.enqueue(new TextEncoder().encode(safePayload));
+                  return;
+                }
+              }
+            } catch (_e) {
+              // noop
+            }
+          }
+          controller.enqueue(chunk);
+        },
+        async flush() {
+          if (!blocked && outputBuffer) {
+            const outputModerationExec = await executeTextModeration("ai_output", outputBuffer, traceId);
+            const outputModeration = outputModerationExec.result;
+            await writeModerationLog({
+              userId: requestUserId,
+              scene: "ai_output",
+              traceId,
+              result: outputModeration,
+              contentExcerpt: outputBuffer,
+              provider: outputModerationExec.provider,
+              providerResponse: outputModerationExec.providerResponse,
+            });
+          }
+        }
+      }));
+      return new Response(moderatedStream, {
         headers: {
           ...corsHeaders,
           'Content-Type': 'text/event-stream',
           'Cache-Control': 'no-cache',
-          'Connection': 'keep-alive',
-        },
+          'Connection': 'keep-alive'
+        }
       });
     }
-
+    // Handle blocking response / 处理阻塞模式响应
+    // Returns complete result after execution / 等待执行完毕后返回完整结果
     const data = await difyResponse.json();
+    const outputText = data?.answer?.toString?.() ?? "";
+    if (outputText) {
+      const outputModerationExec = await executeTextModeration("ai_output", outputText, traceId);
+      const outputModeration = outputModerationExec.result;
+      await writeModerationLog({
+        userId: requestUserId,
+        scene: "ai_output",
+        traceId,
+        result: outputModeration,
+        contentExcerpt: outputText,
+        provider: outputModerationExec.provider,
+        providerResponse: outputModerationExec.providerResponse,
+      });
+      if (!outputModeration.passed) {
+        data.answer = `该回复因内容审核未通过，已被拦截（traceId: ${traceId}）`;
+      }
+    }
     return new Response(JSON.stringify(data), {
       headers: {
         ...corsHeaders,
-        'Content-Type': 'application/json',
-      },
+        'Content-Type': 'application/json'
+      }
     });
   } catch (error) {
+    // Error handling and logging / 错误处理和日志记录
     console.error('Error:', error);
+    await writeModerationError({
+      traceId,
+      userId: requestUserId || undefined,
+      scene: "ai_output",
+      errorCode: "MODERATION_PROVIDER_ERROR",
+      errorMessage: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
     return new Response(JSON.stringify({
       error: error.message || 'Internal server error',
-      details: error.toString(),
+      details: error.toString()
     }), {
       status: 500,
       headers: {
         ...corsHeaders,
-        'Content-Type': 'application/json',
-      },
+        'Content-Type': 'application/json'
+      }
     });
   }
 });
+/* 
+ * Usage Examples / 使用示例:
+ * 
+ * Streaming Mode / 流式模式:
+ * const response = await fetch('YOUR_SUPABASE_FUNCTION_URL', {
+ *   method: 'POST',
+ *   headers: { 'Content-Type': 'application/json' },
+ *   body: JSON.stringify({
+ *     query: "What are the specs of the iPhone 13 Pro Max?",
+ *     user: "user-123",
+ *     response_mode: "streaming"
+ *   })
+ * })
+ * 
+ * Blocking Mode / 阻塞模式:
+ * const response = await fetch('YOUR_SUPABASE_FUNCTION_URL', {
+ *   method: 'POST',
+ *   headers: { 'Content-Type': 'application/json' },
+ *   body: JSON.stringify({
+ *     query: "What are the specs of the iPhone 13 Pro Max?",
+ *     user: "user-123",
+ *     response_mode: "blocking",
+ *     conversation_id: "previous-conversation-id" // Optional, for continuing conversation / 可选，用于继续对话
+ *   })
+ * })
+ * 
+ * Environment Setup / 环境配置:
+ * supabase secrets set DIFY_CHAT_API_KEY=your_dify_api_key
+ */

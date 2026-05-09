@@ -1,0 +1,115 @@
+--- a/lib/features/dog_clicker/presentation/dog_clicker_screen.dart
+-      }
+-      });
+-    final currentOption = _filterOptions[_selectedFilterIndex];
+-      final currentOption = _filterOptions[_selectedFilterIndex];
+-      final currentOption = _filterOptions[_selectedFilterIndex];
+-      });
+-      }
+-      }
+-      }
+-      });
+-      }
+-      });
+-      }
+-                      childAspectRatio: 1.3,
+-    final currentProject = _filterOptions[_selectedFilterIndex];
+-    final currentProject = _filterOptions[_selectedFilterIndex];
+-      });
+-      });
+-      final currentOption = _filterOptions[_selectedFilterIndex];
+-      final soundPath = _projectSounds[currentOption];
+-      if (soundPath == null) {
+-        debugPrint('项目 $currentOption 没有配置音效');
+-        return;
+-      }
+-      }
+-      final currentOption = _filterOptions[_selectedFilterIndex];
+-      });
+-      final currentOption = _filterOptions[_selectedFilterIndex];
+-      final soundPath = _projectSounds[currentOption];
+-      if (soundPath == null) {
+-        debugPrint('项目 $currentOption 没有配置音效');
+-        return;
+-      }
+-      });
+-      });
+-                      // 待确认状态提示
+-                      if (_pendingConfirmation) _buildConfirmationTip(),
+-                        currentProject: _filterOptions[_selectedFilterIndex],
+-      },
+-      },
+-      },
+-      },
+-      },
+-      },
+-      }).toList(),
+-      padding: const EdgeInsets.all(32),
+-        gradient: const LinearGradient(
+-          colors: [Color(0xFF2A2A2A), Color(0xFF1A1A1A)],
+-        borderRadius: BorderRadius.circular(24),
+-        border: Border.all(color: Colors.white.withOpacity(0.1)),
+-          // 图标
+-              gradient: LinearGradient(
+-                colors: [
+-                  const Color(0xFF5A8EFA).withOpacity(0.3),
+-                  const Color(0xFF8B77FF).withOpacity(0.3),
+-                ],
+-              ),
+-              size: 60,
+-              color: Color(0xFF5A8EFA),
+-          // 标题
+-            '开始训练之旅',
+-              fontSize: 24,
+-          const SizedBox(height: 12),
+-
+-          // 描述
+-            '创建你的第一个训练项目\n为每个动作选择独特的音效',
+-              fontSize: 15,
+-              color: Colors.white.withOpacity(0.7),
+-              height: 1.6,
+-          // 添加按钮
+-          ElevatedButton.icon(
+-            onPressed: _showAddProjectDialog,
+-            icon: const Icon(Icons.add_circle_outline, size: 24),
+-            label: const Text(
+-              '添加训练项目',
+-              style: TextStyle(
+-                fontSize: 18,
+-                fontWeight: FontWeight.bold,
+-              ),
+-            ),
+-            style: ElevatedButton.styleFrom(
+-              backgroundColor: const Color(0xFF5A8EFA),
+-              foregroundColor: Colors.white,
+-              padding: const EdgeInsets.symmetric(
+-                horizontal: 32,
+-                vertical: 16,
+-              ),
+-              shape: RoundedRectangleBorder(
+-                borderRadius: BorderRadius.circular(16),
+-              elevation: 4,
+-            ),
+-          // 示例提示
+-          Container(
+-            padding: const EdgeInsets.all(16),
+-            decoration: BoxDecoration(
+-              color: Colors.white.withOpacity(0.05),
+-              borderRadius: BorderRadius.circular(12),
+-            ),
+-            child: Row(
+-              children: [
+-                const Icon(
+-                  Icons.lightbulb_outline,
+-                  color: Color(0xFFFFC107),
+-                  size: 20,
+-                const SizedBox(width: 12),
+-                Expanded(
+-                  child: Text(
+-                    '例如：坐下、趴下、握手、转圈...',
+-                    style: TextStyle(
+-                      fontSize: 13,
+-                      color: Colors.white.withOpacity(0.6),
+-                    ),
+-                  ),
+-              ],
