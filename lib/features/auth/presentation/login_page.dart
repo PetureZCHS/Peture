@@ -6,7 +6,7 @@ import 'dart:ui';
 
 // 导入主应用文件
 import '../../../core/auth_pending_email_login.dart';
-import '../../../main.dart';
+import '../../../../main.dart';
 import '../../../services/analytics_service.dart';
 // 导入邮箱登录页面
 import 'email_login_page.dart';

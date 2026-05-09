@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/auth_otp_email_context.dart';
-import '../../../main.dart';
+import '../../../../main.dart';
 import '../../../services/analytics_service.dart';
 import 'email_register_page.dart';
 
