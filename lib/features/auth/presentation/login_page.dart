@@ -5,7 +5,8 @@ import 'dart:math' as math;
 import 'dart:ui';
 
 // 导入主应用文件
-import '../../../main.dart';
+import '../../../core/auth_pending_email_login.dart';
+import '../../../../main.dart';
 import '../../../services/analytics_service.dart';
 // 导入邮箱登录页面
 import 'email_login_page.dart';
@@ -63,6 +64,18 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
           _showLoginOptions = true;
         });
       }
+    });
+
+    // 修改密码等：先弹窗再 signOut 后进入根 [LoginPage]，此处接力打开邮箱登录并预填邮箱。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final email = AuthPendingEmailLogin.takeInitialEmail();
+      if (email == null || email.isEmpty) return;
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => EmailLoginPage(initialEmail: email),
+        ),
+      );
     });
   }
 

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:async';
+
+import '../../../core/auth_otp_email_context.dart';
 import 'email_login_page.dart';
 
 /// 密码强度等级
@@ -150,6 +152,7 @@ class _EmailRegisterPageState extends State<EmailRegisterPage> {
           email: email,
           shouldCreateUser: false, // 不创建新用户，只检查是否存在（已有用户会成功）
           emailRedirectTo: null,
+          data: AuthOtpEmailKind.payload(AuthOtpEmailKind.login),
         );
         // 如果能执行到这里，说明用户已存在，验证码已发送
         // 直接跳转到邮箱验证码登录页，提示“已注册，可用验证码直接登录”
@@ -213,6 +216,7 @@ class _EmailRegisterPageState extends State<EmailRegisterPage> {
         email: email,
         shouldCreateUser: true, // 允许通过 OTP 为新邮箱创建用户
         emailRedirectTo: null,
+        data: AuthOtpEmailKind.payload(AuthOtpEmailKind.signup),
       );
 
       debugPrint('✅ 验证码已发送');

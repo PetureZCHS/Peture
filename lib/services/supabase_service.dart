@@ -3491,4 +3491,180 @@ class SupabaseService {
       return [];
     }
   }
+
+  /// 永久注销：删除当前用户在业务表中的数据（不含 Auth 用户本体）
+  /// 返回失败明细，便于 UI 给出可读错误提示。
+  Future<({bool success, String? error})> deleteCurrentUserAllData() async {
+    final userId = await currentUserId;
+    if (userId == null) {
+      return (success: false, error: '请先登录');
+    }
+
+    final failures = <String>[];
+
+    Future<void> safeDelete(Future<void> Function() action, String label) async {
+      try {
+        await action();
+      } catch (e) {
+        debugPrint('注销删除失败[$label]: $e');
+        failures.add(label);
+      }
+    }
+
+    // 先删强依赖/关联表，再删主表，尽量规避外键约束失败。
+    await safeDelete(
+      () async => _client
+          .from('community_post_likes')
+          .delete()
+          .eq('user_id', userId),
+      'community_post_likes',
+    );
+    await safeDelete(
+      () async => _client
+          .from('community_post_collections')
+          .delete()
+          .eq('user_id', userId),
+      'community_post_collections',
+    );
+    await safeDelete(
+      () async => _client
+          .from('community_post_comments')
+          .delete()
+          .eq('user_id', userId),
+      'community_post_comments',
+    );
+    await safeDelete(
+      () async => _client
+          .from('community_user_follows')
+          .delete()
+          .or('follower_id.eq.$userId,following_id.eq.$userId'),
+      'community_user_follows',
+    );
+    await safeDelete(
+      () async => _client.from('community_posts').delete().eq('author_id', userId),
+      'community_posts',
+    );
+
+    await safeDelete(
+      () async => _client.from('chat_messages').delete().eq('user_id', userId),
+      'chat_messages',
+    );
+    await safeDelete(
+      () async => _client.from('conversations').delete().eq('user_id', userId),
+      'conversations',
+    );
+    await safeDelete(
+      () async => _client.from('pet_diaries').delete().eq('user_id', userId),
+      'pet_diaries',
+    );
+    await safeDelete(
+      () async => _client.from('medical_records').delete().eq('user_id', userId),
+      'medical_records',
+    );
+    await safeDelete(
+      () async => _client.from('weight_records').delete().eq('user_id', userId),
+      'weight_records',
+    );
+    await safeDelete(
+      () async => _client.from('vaccine_records').delete().eq('user_id', userId),
+      'vaccine_records',
+    );
+    await safeDelete(
+      () async =>
+          _client.from('daily_reminders').delete().eq('user_id', userId),
+      'daily_reminders',
+    );
+    await safeDelete(
+      () async =>
+          _client.from('medication_reminders').delete().eq('user_id', userId),
+      'medication_reminders',
+    );
+    await safeDelete(
+      () async =>
+          _client.from('vaccine_reminders').delete().eq('user_id', userId),
+      'vaccine_reminders',
+    );
+    await safeDelete(
+      () async =>
+          _client.from('deworming_reminders').delete().eq('user_id', userId),
+      'deworming_reminders',
+    );
+    await safeDelete(
+      () async => _client.from('daily_cost_items').delete().eq('user_id', userId),
+      'daily_cost_items',
+    );
+    await safeDelete(
+      () async => _client.from('fitness_records').delete().eq('user_id', userId),
+      'fitness_records',
+    );
+    await safeDelete(
+      () async => _client.from('health_plans').delete().eq('user_id', userId),
+      'health_plans',
+    );
+    await safeDelete(
+      () async =>
+          _client.from('unified_expenses').delete().eq('user_id', userId),
+      'unified_expenses',
+    );
+
+    // 护照成就依赖护照，先删子表后删主表
+    try {
+      final passports = await _client
+          .from('pet_passports')
+          .select('id')
+          .eq('user_id', userId);
+      final passportIds = (passports as List)
+          .map((e) => e['id']?.toString() ?? '')
+          .where((id) => id.isNotEmpty)
+          .toList();
+      if (passportIds.isNotEmpty) {
+        await safeDelete(
+          () async => _client
+              .from('pet_passport_achievements')
+              .delete()
+              .inFilter('passport_id', passportIds),
+          'pet_passport_achievements',
+        );
+      }
+    } catch (e) {
+      debugPrint('注销删除失败[pet_passport_achievements]: $e');
+      failures.add('pet_passport_achievements');
+    }
+    await safeDelete(
+      () async => _client.from('pet_passports').delete().eq('user_id', userId),
+      'pet_passports',
+    );
+
+    await safeDelete(
+      () async => _client.from('pets').delete().eq('user_id', userId),
+      'pets',
+    );
+    await safeDelete(
+      () async => _client.from('users_profiles').delete().eq('id', userId),
+      'users_profiles',
+    );
+
+    if (failures.isNotEmpty) {
+      return (
+        success: false,
+        error: '部分数据删除失败: ${failures.toSet().join(', ')}',
+      );
+    }
+    return (success: true, error: null);
+  }
+
+  /// 删除当前登录用户在 auth.users 中的认证账户（通过 Edge Function）
+  Future<({bool success, String? error})> deleteCurrentAuthUser() async {
+    try {
+      final res = await _client.functions.invoke('delete-my-account');
+      final data = res.data as Map<String, dynamic>?;
+      if (res.status == 200 && data?['success'] == true) {
+        return (success: true, error: null);
+      }
+      return (success: false, error: (data?['error'] as String?) ?? '删除认证账户失败');
+    } catch (e) {
+      debugPrint('删除认证账户异常: $e');
+      return (success: false, error: '网络异常，请重试');
+    }
+  }
 }

@@ -1,4 +1,9 @@
-  Widget _buildEmptyActionChip(String label, String icon, VoidCallback onTap) {
+import 'package:flutter/material.dart';
+
+void _addCustomProject(String name, {String? soundPath}) {}
+void _showAddProjectDialog() {}
+
+Widget _buildEmptyActionChip(String label, String icon, VoidCallback onTap) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),

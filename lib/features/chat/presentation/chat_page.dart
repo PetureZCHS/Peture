@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 // ✅ 使用新的 Supabase Dify 服务
 import '../../../services/supabase_edge_service.dart';
 import '../../../services/supabase_service.dart'; 
@@ -15,6 +17,7 @@ import '../../../shared/models/conversation.dart';
 import '../../../shared/utils/ui_helpers.dart';
 import '../../../shared/widgets/diagnostic_report_card.dart';
 import '../../../shared/widgets/recommendation_card.dart'; 
+import '../../auth/presentation/login_page.dart';
 import '../../shop/presentation/cart_page.dart'; 
 import 'dart:convert'; // Ensure dart:convert is available for JSON parsing
 
@@ -66,7 +69,8 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
   final ScrollController _scrollController = ScrollController();
   final List<ChatMessage> _messages = [];
   bool _isLoading = false;
-  final String _userId = "flutter_test_user_123";
+  String get _userId =>
+      Supabase.instance.client.auth.currentUser?.id ?? "anonymous";
   bool _hasStartedChat = false;
   bool _isComposing = false;
   final math.Random _random = math.Random();
@@ -76,6 +80,9 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
 
   // 打字机效果相关
   String _currentTypingText = '';
+  // 打字机文本高频变更，避免整页 setState 导致大范围重建
+  final ValueNotifier<String> _typingTextNotifier =
+      ValueNotifier<String>('');
   Timer? _typingTimer;
   final List<String> _pendingChunks = [];
   bool _isTyping = false;
@@ -90,103 +97,14 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
   bool _isDoctorMode = false; // 默认为普通模式
   bool _isAgentMode = false; // ✅ 新增：Agent 模式状态
   Pet? _selectedConsultationPet; // ✅ 新增：当前问诊的宠物
+  static const int _maxPendingImages = 3;
+  final ImagePicker _imagePicker = ImagePicker();
+  final List<Map<String, String>> _pendingImages = [];
 
   // ✅ 使用新的 Supabase Edge Function 服务
   final SupabaseEdgeFunctionService _difyService =
       SupabaseEdgeFunctionService();
   final SupabaseService _supabaseService = SupabaseService();
-  static const String _agentSystemPrompt = """
-# System Prompt for Peture AI (Agent Mode)
-
-## Role
-你现在是 Peture AI 的高级智能购物决策 Agent。你的核心能力不仅仅是推荐，而是像一位经验丰富的采购专家一样，通过多维度的数据分析，为用户做出最优的购买决策。
-
-## Workflow (思考与执行流程)
-在生成推荐之前，你必须在后台模拟执行以下复杂的决策逻辑，并在 `reasoningSteps` 中体现出来：
-
-1.  **用户意图深度解析**：分析用户的显性需求（如“性价比高”）和隐性需求（如“长期健康”、“适口性”）。
-2.  **宠物档案调阅 (Simulated)**：假装你正在读取用户的云端宠物健康档案。
-    *   *Action*: "正在读取 '旺财' 的健康档案... 发现历史过敏源：鸡肉..."
-    *   *Action*: "分析最近一次体检报告... 关注指标：体重偏胖，需低脂..."
-3.  **全网比价与库存检索 (Simulated)**：假装你正在实时连接淘宝、京东、亚马逊的 API 进行比价。
-    *   *Action*: "正在检索京东自营库存... 状态：有货"
-    *   *Action*: "对比淘宝旗舰店价格... 发现优惠券..."
-    *   *Action*: "扫描全网历史价格波动... 当前为近 90 天低价..."
-4.  **成分与安全审计**：对候选商品进行成分分析。
-    *   *Action*: "正在比对 FDA 召回数据库... 安全无记录"
-    *   *Action*: "分析配料表前五位... 蛋白质含量 > 30%..."
-5.  **最终决策锁定**：综合以上信息，选出唯一最优解。
-
-## Constraints (核心规则)
-1.  **专业性**：用词要精确、专业。使用“检索中”、“审计通过”、“加权评分”等术语。
-2.  **决策优先**：不要给模棱两可的选项，直接给出“最佳选择”。
-3.  **思考过程可视化**：在 JSON 的 `reasoningSteps` 字段中，必须包含 6-10 个详细的步骤，展示你从“读取档案”到“全网比价”再到“安全审计”的全过程。
-
-## Output Format (输出格式)
-这是一个状态机逻辑：
-
-**状态 A：需求确认中**
-如果用户需求不明确，进行简短追问。
-示例："请问狗狗多大了？平时吃什么牌子的粮？"
-
-**状态 B：生成推荐**
-当你锁定推荐商品时，**必须** 输出以下 JSON 格式的数据块。
-**重要**：请确保 JSON 格式合法，不要使用 Markdown 代码块包裹，直接输出 JSON 字符串即可。
-
-{
-  "type": "recommendation",
-  "data": {
-    "reason": "综合全网比价与成分分析，这款粮在同价位中蛋白质含量最高，且完美避开您宠物的过敏源。",
-    "productName": "这里填写完整的商品名称",
-    "price": "299.00",
-    "rating": "4.9",
-    "safetyCheck": "FDA/AAFCO 双重认证通过",
-    "reasoningSteps": [
-      "正在解析用户需求：目标为【高性价比】且【适合金毛】...",
-      "正在调阅宠物档案... 识别对象：7岁金毛，体重30kg，需关注关节健康...",
-      "正在连接京东/淘宝数据库进行全网比价...",
-      "已过滤掉 12 款溢价过高的进口品牌...",
-      "正在进行成分安全审计... 排除 3 款含诱食剂产品...",
-      "检测到目标商品在京东自营有【限时 8.8 折】优惠...",
-      "最终决策：锁定性价比最高的【伯纳天纯/网易严选/或其他真实品牌】..."
-    ]
-  }
-}
-""";
-
-  static const String _systemPrompt = """
-# System Prompt for Peture AI (Doctor Mode)
-
-## Role
-你现在是 Peture AI 的首席兽医专家。你的目标是通过多轮对话，收集患病宠物的详细信息，并最终给出一份结构化的诊断报告。
-
-## Constraints (核心规则)
-1. **循序渐进**：用户第一次描述病情时，**绝对不要**直接给结论。
-2. **单步追问**：每次回复 **只问 1 个** 最需要厘清的问题（例如：先问频率，再问颜色，最后问精神状态）。禁止一次性抛出多个问题。
-3. **语气风格**：温暖、治愈、专业。使用中文。
-4. **决策时刻**：当你收集了足够的信息（通常在 3-5 轮对话后），或者发现情况危急（如呼吸困难、吞食异物），请立即停止追问，生成诊断单。
-
-## Output Format (输出格式)
-这是一个状态机逻辑：
-
-**状态 A：问诊中**
-直接输出纯文本对话。
-示例："哎呀，听起来宝宝很难受。请问它最后一次进食是什么时候？"
-
-**状态 B：生成诊断**
-当你决定结束问诊时，**仅输出** 以下 JSON 格式的数据，不要包含 Markdown 标记或其他废话：
-
-{
-  "type": "report",
-  "data": {
-    "diagnosis": "这里填写初步判断，如：急性肠胃炎",
-    "urgency_level": 3,  // 1-5的整数，5最紧急
-    "urgency_color": "yellow", // green/yellow/red
-    "possible_causes": ["这里填写原因1", "这里填写原因2"],
-    "advice_summary": "这里填写简短的行动建议，如：禁食禁水12小时，观察..."
-  }
-}
-""";
   final List<String> _allSuggestions = [
     "猫咪呼吸似乎有点困难，嘴巴张开呼吸，像小狗一样喘气",
     "猫咪的耳朵有异味，耳道有褐色分泌物，频繁地抓耳挠腮",
@@ -221,7 +139,8 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
 
   void _onTextChange() {
     if (mounted) {
-      final isComposing = _textController.text.isNotEmpty;
+      final isComposing =
+          _textController.text.isNotEmpty || _pendingImages.isNotEmpty;
       if (isComposing != _isComposing) {
         setState(() {
           _isComposing = isComposing;
@@ -236,6 +155,7 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
     _textController.dispose();
     _scrollController.dispose();
     _typingTimer?.cancel();
+    _typingTextNotifier.dispose();
     _suggestionFadeController.dispose();
     _orbController.dispose();
     // ✅ Edge Function 服务不需要 dispose
@@ -424,6 +344,7 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
       _pendingChunks.clear();
       _isTyping = false;
       _currentTypingText = '';
+      _typingTextNotifier.value = '';
       _fullResponseText = '';
       _pendingSaveQuestion = null;
       _updateSuggestions();
@@ -460,6 +381,7 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
         _pendingChunks.clear();
         _isTyping = false;
         _currentTypingText = '';
+        _typingTextNotifier.value = '';
         _fullResponseText = '';
         _pendingSaveQuestion = null;
 
@@ -521,6 +443,17 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
       if (_isStreamDone && mounted) {
         setState(() {
           _isLoading = false;
+          // 打字结束后，将最终文本写回 messages，确保后续逻辑/历史记录一致
+          if (_messages.isNotEmpty && !_messages.last.isUser) {
+            final lastMessage = _messages.last;
+            _messages[_messages.length - 1] = ChatMessage(
+              text: _currentTypingText,
+              isUser: false,
+              isLiked: lastMessage.isLiked,
+              isDisliked: lastMessage.isDisliked,
+              recommendationData: lastMessage.recommendationData,
+            );
+          }
         });
         // ✅ 所有内容都显示完成后，保存对话
         if (_pendingSaveQuestion != null && _fullResponseText.isNotEmpty) {
@@ -538,22 +471,11 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
     _typingTimer?.cancel();
     _typingTimer = Timer.periodic(const Duration(milliseconds: 15), (timer) {
       if (index < characters.length) {
-        if (mounted) {
-          setState(() {
-            _currentTypingText += characters[index];
-            if (_messages.isNotEmpty && !_messages.last.isUser) {
-              final lastMessage = _messages.last;
-              _messages[_messages.length - 1] = ChatMessage(
-                text: _currentTypingText,
-                isUser: false,
-                isLiked: lastMessage.isLiked,
-                isDisliked: lastMessage.isDisliked,
-              );
-            }
-          });
-          if (index % 10 == 0 || characters[index] == '\n') {
-            _smoothScrollToEnd();
-          }
+        // 高频更新只更新 notifier，避免整页 setState 触发大范围重建
+        _currentTypingText += characters[index];
+        _typingTextNotifier.value = _currentTypingText;
+        if (index % 10 == 0 || characters[index] == '\n') {
+          _smoothScrollToEnd();
         }
         index++;
       } else {
@@ -578,8 +500,15 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
 
   Future<void> _sendMessage({String? text}) async {
     if (_isLoading) return;
-    final messageText = (text ?? _textController.text).trim();
-    if (messageText.isEmpty) return;
+    var messageText = (text ?? _textController.text).trim();
+    final attachedImages = List<Map<String, String>>.from(_pendingImages);
+    if (messageText.isEmpty && attachedImages.isEmpty) return;
+    if (messageText.isEmpty && attachedImages.isNotEmpty) {
+      // Dify/Edge Function 需要 query；图片单发时补一个合理的默认 query
+      messageText = _isDoctorMode
+          ? '请根据我上传的图片分析情况，并继续问诊：还需要我补充哪些症状信息？'
+          : '请描述并分析我上传的图片。';
+    }
     HapticFeedback.mediumImpact();
     _textController.clear();
     FocusScope.of(context).unfocus();
@@ -592,18 +521,21 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
       _messages.add(ChatMessage(text: "", isUser: false));
       _isLoading = true;
       _currentTypingText = '';
+      _typingTextNotifier.value = '';
       _pendingChunks.clear();
       _isTyping = false;
       _shouldAutoScroll = true;
       _isStreamDone = false;
       _userScrolledUp = false;
+      _pendingImages.clear();
+      _isComposing = false;
     });
 
     _saveMessageToDatabase(messageText, true);
     _scrollToBottom();
 
     // ✅ 使用 Supabase Dify 服务
-    String queryToSend = messageText;
+    String? petContext;
 
     // 🐾 注入宠物档案与病历信息 (如果有选中的宠物)
     if (_selectedConsultationPet != null) {
@@ -639,44 +571,17 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
         debugPrint("❌ 获取病历失败: $e");
       }
 
-      // 将宠物信息拼接到 Prompt 中 (作为上下文)
-      // 注意：如果是第一条消息，我们会下面统一组合 System Prompt
-      // 如果不是第一条，我们直接附带在 User Message 后
-      if (_conversationId != null) {
-        queryToSend += petInfoBuffer.toString();
-        debugPrint("📎 已向现有对话注入宠物信息");
-      } else {
-        // 如果是新对话，我们将 petInfoBuffer 暂存，拼接到 SystemPrompt 后面
-        // 下面的 _isDoctorMode 判断逻辑会处理
-      }
-
-      // Hack: 无论是否新对话，都追加到 messageText 后面给 AI 看，或者是追加到 System Prompt?
-      // Dify通常接收 query。
-      // 为了确保 AI 既然看到 System Prompt 也能看到这个 Context，我们把它放在 query 里。
-      // 但是如果在 System Prompt 里放会更稳定。
-
-      // 策略：直接追加到 User Query 后面。
-      queryToSend += petInfoBuffer.toString();
-    }
-
-    if (_conversationId == null) {
-      if (_isAgentMode) {
-        // Agent 模式：注入购物决策 Prompt
-        // 注意：如果在 Agent 模式下选了宠物，也会带上宠物信息
-        queryToSend =
-            "$_agentSystemPrompt\n\n用户问题：$queryToSend"; // queryToSend 已经包含了宠物信息
-        debugPrint("🧠 已注入系统提示词 (Agent Mode)");
-      } else if (_isDoctorMode) {
-        // 医生模式：注入问诊 Prompt
-        queryToSend = "$_systemPrompt\n\n用户问题：$queryToSend";
-        debugPrint("💉 已注入系统提示词 (Doctor Mode)");
-      }
+      petContext = petInfoBuffer.toString().trim();
     }
 
     final stream = _difyService.callDifyChat(
       query: messageText,
       user: _userId,
       conversationId: _conversationId,
+      doctorMode: _isDoctorMode,
+      agentMode: _isAgentMode,
+      petContext: petContext,
+      images: attachedImages,
     );
 
     // 重置完整响应文本和待保存的问题
@@ -730,6 +635,23 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
           break;
 
         case ErrorEvent():
+          if (event.error == 'DIFY_AUTH_INVALID') {
+            _typingTimer?.cancel();
+            setState(() {
+              _messages.last = ChatMessage(
+                text: "AI 服务鉴权失败：Dify API Key 无效，请联系管理员更新服务端密钥。",
+                isUser: false,
+              );
+              _isLoading = false;
+              _isTyping = false;
+            });
+            _scrollToBottom();
+            return;
+          }
+          if (event.error == 'AUTH_INVALID') {
+            _handleAuthInvalid();
+            return;
+          }
           _typingTimer?.cancel();
           setState(() {
             _messages.last = ChatMessage(
@@ -761,6 +683,7 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
       _messages.add(ChatMessage(text: "", isUser: false));
       _isLoading = true;
       _currentTypingText = '';
+      _typingTextNotifier.value = '';
       _pendingChunks.clear();
       _isTyping = false;
       _shouldAutoScroll = true;
@@ -814,6 +737,23 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
           break;
 
         case ErrorEvent():
+          if (event.error == 'DIFY_AUTH_INVALID') {
+            _typingTimer?.cancel();
+            setState(() {
+              _messages.last = ChatMessage(
+                text: "重新生成失败：AI 服务鉴权异常（Dify API Key 无效）。",
+                isUser: false,
+              );
+              _isLoading = false;
+              _isTyping = false;
+            });
+            _scrollToBottom();
+            return;
+          }
+          if (event.error == 'AUTH_INVALID') {
+            _handleAuthInvalid();
+            return;
+          }
           _typingTimer?.cancel();
           setState(() {
             _messages.last = ChatMessage(
@@ -841,6 +781,24 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
     });
   }
 
+  Future<void> _handleAuthInvalid() async {
+    _typingTimer?.cancel();
+    if (!mounted) return;
+    setState(() {
+      _isLoading = false;
+      _isTyping = false;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('登录状态已失效，请重新登录')),
+    );
+    await Supabase.instance.client.auth.signOut();
+    if (!mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const LoginPage()),
+      (route) => false,
+    );
+  }
+
   void _onLikePressed(ChatMessage message) {
     HapticFeedback.lightImpact();
     setState(() {
@@ -856,14 +814,129 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
       message.isDisliked = !message.isDisliked;
       if (message.isDisliked) message.isLiked = false;
     });
-    if (message.isDisliked) {
-      _showFeedbackBottomSheet();
+  }
+
+  Future<void> _onPickImagePressed() async {
+    if (_pendingImages.length >= _maxPendingImages) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('最多上传 $_maxPendingImages 张图片')),
+      );
+      return;
     }
+
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('从相册选择'),
+              onTap: () => Navigator.pop(context, ImageSource.gallery),
+            ),
+            ListTile(
+              leading: const Icon(Icons.camera_alt_outlined),
+              title: const Text('拍照'),
+              onTap: () => Navigator.pop(context, ImageSource.camera),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (source == null) return;
+
+    final picked = await _imagePicker.pickImage(
+      source: source,
+      imageQuality: 75,
+      maxWidth: 1600,
+    );
+    if (picked == null) return;
+
+    final bytes = await picked.readAsBytes();
+    final fileName = picked.name.isNotEmpty
+        ? picked.name
+        : 'image_${DateTime.now().millisecondsSinceEpoch}.jpg';
+    final lower = fileName.toLowerCase();
+    String mimeType = 'image/jpeg';
+    if (lower.endsWith('.png')) mimeType = 'image/png';
+    if (lower.endsWith('.webp')) mimeType = 'image/webp';
+
+    setState(() {
+      _pendingImages.add({
+        'fileName': fileName,
+        'mimeType': mimeType,
+        'dataBase64': base64Encode(bytes),
+      });
+      // 选择图片后也应视为“可发送”
+      _isComposing = true;
+    });
+  }
+
+  Future<void> _onPlusPressed() async {
+    HapticFeedback.selectionClick();
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('添加图片'),
+              onTap: () => Navigator.pop(context, 'image'),
+            ),
+            if (_pendingImages.isNotEmpty)
+              ListTile(
+                leading: const Icon(Icons.delete_outline, color: Colors.red),
+                title: const Text(
+                  '清空已选图片',
+                  style: TextStyle(color: Colors.red),
+                ),
+                onTap: () => Navigator.pop(context, 'clear_images'),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || action == null) return;
+    if (action == 'image') {
+      await _onPickImagePressed();
+      return;
+    }
+    if (action == 'clear_images') {
+      setState(() {
+        _pendingImages.clear();
+        _isComposing = _textController.text.isNotEmpty;
+      });
+    }
+  }
+
+  void _showPendingImagePreview(String base64Data) {
+    showDialog(
+      context: context,
+      builder: (_) => Dialog(
+        insetPadding: const EdgeInsets.all(16),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: InteractiveViewer(
+            minScale: 0.8,
+            maxScale: 4,
+            child: Image.memory(
+              base64Decode(base64Data),
+              fit: BoxFit.contain,
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   void _onCopyPressed(ChatMessage message) {
     HapticFeedback.lightImpact();
-    Clipboard.setData(ClipboardData(text: message.text));
+    Clipboard.setData(ClipboardData(text: _buildCopyText(message)));
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text("已复制到剪贴板"),
@@ -871,6 +944,78 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
         behavior: SnackBarBehavior.floating,
       ),
     );
+  }
+
+  String _buildCopyText(ChatMessage message) {
+    final raw = message.text;
+    final startIndex = raw.indexOf('{');
+    final endIndex = raw.lastIndexOf('}');
+    if (startIndex == -1 || endIndex == -1 || endIndex <= startIndex) {
+      return raw;
+    }
+    try {
+      final jsonString = raw.substring(startIndex, endIndex + 1);
+      final jsonMap = jsonDecode(jsonString);
+      final type = jsonMap['type'];
+      final data = (jsonMap['data'] as Map?)?.cast<String, dynamic>() ?? {};
+
+      if (type == 'report') {
+        final petName = (data['pet_name'] as String?)?.trim();
+        final diagnosis = (data['diagnosis'] as String?)?.trim() ?? '';
+        final urgency = data['urgency_level']?.toString() ?? '';
+        final possible = (data['possible_causes'] as List?)
+                ?.map((e) => e.toString())
+                .where((s) => s.trim().isNotEmpty)
+                .toList() ??
+            const <String>[];
+        final advice = (data['advice_summary'] as String?)?.trim() ?? '';
+
+        final b = StringBuffer();
+        b.writeln('Peture AI 辅助诊断报告');
+        if (petName != null && petName.isNotEmpty) b.writeln('姓名：$petName');
+        if (urgency.isNotEmpty) b.writeln('紧急度：$urgency/5');
+        if (diagnosis.isNotEmpty) b.writeln('\n诊断印象：\n$diagnosis');
+        if (possible.isNotEmpty) {
+          b.writeln('\n检查所见 / 症状分析：');
+          for (final c in possible) {
+            b.writeln('- $c');
+          }
+        }
+        if (advice.isNotEmpty) b.writeln('\n处置建议：\n$advice');
+        return b.toString().trim();
+      }
+
+      if (type == 'recommendation') {
+        final productName = (data['productName'] as String?)?.trim() ?? '';
+        final reason = (data['reason'] as String?)?.trim() ?? '';
+        final price = (data['price'] as String?)?.trim() ?? '';
+        final rating = (data['rating'] as String?)?.trim() ?? '';
+        final safety = (data['safetyCheck'] as String?)?.trim() ?? '';
+        final steps = (data['reasoningSteps'] as List?)
+                ?.map((e) => e.toString())
+                .where((s) => s.trim().isNotEmpty)
+                .toList() ??
+            const <String>[];
+
+        final b = StringBuffer();
+        b.writeln('Peture AI 推荐');
+        if (productName.isNotEmpty) b.writeln('商品：$productName');
+        if (price.isNotEmpty) b.writeln('价格：$price');
+        if (rating.isNotEmpty) b.writeln('评分：$rating');
+        if (safety.isNotEmpty) b.writeln('安全检核：$safety');
+        if (reason.isNotEmpty) b.writeln('\n理由：\n$reason');
+        if (steps.isNotEmpty) {
+          b.writeln('\n推理步骤：');
+          for (final s in steps) {
+            b.writeln('- $s');
+          }
+        }
+        return b.toString().trim();
+      }
+    } catch (_) {
+      // ignore
+    }
+    return raw;
   }
 
   void _onMoreOptionsPressed(ChatMessage message) {
@@ -897,65 +1042,6 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
           ],
         );
       },
-    );
-  }
-
-  void _showFeedbackBottomSheet() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) {
-        return Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                "请告诉我们您不满意的原因（可选）：",
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-              ),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 8.0,
-                runSpacing: 8.0,
-                children: [
-                  "内容不相关",
-                  "有事实错误",
-                  "存在有害信息",
-                  "其他",
-                ].map(_buildFeedbackChip).toList(),
-              ),
-              const SizedBox(height: 16),
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text("提交"),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildFeedbackChip(String label) {
-    return ActionChip(
-      label: Text(label),
-      onPressed: () {
-        debugPrint("Feedback received: $label");
-        Navigator.pop(context);
-      },
-      backgroundColor: Colors.grey.shade100,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-        side: BorderSide(color: Colors.grey.shade300),
-      ),
     );
   }
 
@@ -1487,8 +1573,18 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
                 _buildActionChip(
                   icon: Icons.support_agent_rounded,
                   label: "在线问诊",
-                  isActive: false,
-                  onTap: () {}, // 占位功能
+                  isActive: !_isDoctorMode && !_isAgentMode,
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    setState(() {
+                      _isDoctorMode = false;
+                      _isAgentMode = false;
+                      _selectedConsultationPet = null;
+                    });
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('已切换到在线问诊模式')),
+                    );
+                  },
                 ),
                 const SizedBox(width: 8),
                 _buildActionChip(
@@ -1531,11 +1627,74 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
                 IconButton(
                   icon: const Icon(Icons.camera_alt_outlined,
                       color: Colors.black87),
-                  onPressed: enabled ? () {} : null,
+                  onPressed: enabled ? _onPickImagePressed : null,
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
                 ),
                 const SizedBox(width: 8),
+                if (_pendingImages.isNotEmpty)
+                  SizedBox(
+                    height: 42,
+                    width: 170,
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: _pendingImages.length,
+                      separatorBuilder: (_, __) => const SizedBox(width: 4),
+                      itemBuilder: (context, index) {
+                        final image = _pendingImages[index];
+                        final base64 = image['dataBase64'] ?? '';
+                        return Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: Container(
+                                width: 40,
+                                height: 40,
+                                color: Colors.grey.shade200,
+                                child: GestureDetector(
+                                  onTap: base64.isNotEmpty
+                                      ? () => _showPendingImagePreview(base64)
+                                      : null,
+                                  child: base64.isNotEmpty
+                                      ? Image.memory(
+                                          base64Decode(base64),
+                                          fit: BoxFit.cover,
+                                        )
+                                      : const Icon(Icons.image_outlined, size: 18),
+                                ),
+                              ),
+                            ),
+                            Positioned(
+                              top: -6,
+                              right: -6,
+                              child: GestureDetector(
+                                onTap: () => setState(() {
+                                  _pendingImages.removeAt(index);
+                                  _isComposing = _textController.text.isNotEmpty ||
+                                      _pendingImages.isNotEmpty;
+                                }),
+                                child: Container(
+                                  width: 16,
+                                  height: 16,
+                                  decoration: const BoxDecoration(
+                                    color: Colors.black54,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.close,
+                                    size: 12,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                  ),
+                if (_pendingImages.isNotEmpty) const SizedBox(width: 8),
                 // 输入框
                 Expanded(
                   child: TextField(
@@ -1593,7 +1752,7 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
                           key: const ValueKey('plus_btn'),
                           icon: const Icon(Icons.add_circle_outline,
                               color: Colors.black87),
-                          onPressed: enabled ? () {} : null,
+                          onPressed: enabled ? _onPlusPressed : null,
                           padding: EdgeInsets.zero,
                           constraints: const BoxConstraints(),
                         ),
@@ -1677,10 +1836,39 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
                   index == _messages.length - 1 &&
                   message.text.isEmpty;
               final isLastMessage = index == _messages.length - 1;
+              final padding =
+                  EdgeInsets.only(bottom: isLastMessage ? 80.0 : 0);
+
+              // 流式打字：只刷新最后一条气泡，避免整页 rebuild
+              if (isLastMessageLoading && !message.isUser) {
+                return Padding(
+                  padding: padding,
+                  child: ValueListenableBuilder<String>(
+                    valueListenable: _typingTextNotifier,
+                    builder: (context, typingText, _) {
+                      return _MessageBubble(
+                        message: message,
+                        consultationPetName: _selectedConsultationPet?.name,
+                        overrideText: typingText,
+                        isLoading: true,
+                        isResponseComplete: false,
+                        onLikePressed: () => _onLikePressed(message),
+                        onDislikePressed: () => _onDislikePressed(message),
+                        onRegeneratePressed: _regenerateResponse,
+                        onCopyPressed: () => _onCopyPressed(message),
+                        onMoreOptionsPressed: () =>
+                            _onMoreOptionsPressed(message),
+                      );
+                    },
+                  ),
+                );
+              }
+
               return Padding(
-                padding: EdgeInsets.only(bottom: isLastMessage ? 80.0 : 0),
+                padding: padding,
                 child: _MessageBubble(
                   message: message,
+                  consultationPetName: _selectedConsultationPet?.name,
                   isLoading: isLastMessageLoading,
                   isResponseComplete: !_isLoading && !message.isUser,
                   onLikePressed: () => _onLikePressed(message),
@@ -2052,49 +2240,190 @@ class _TypingIndicator extends StatefulWidget {
 }
 
 class _TypingIndicatorState extends State<_TypingIndicator>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
+    with TickerProviderStateMixin {
+  late AnimationController _floatController;
+  late AnimationController _wagController;
+  late AnimationController _bubbleController;
+  Timer? _sloganTimer;
+  int _sloganIndex = 0;
+  static const List<String> _slogans = [
+    '狗狗努力思考中...',
+    '本汪正在组织语言...',
+    '鼻子嗅到关键线索了...',
+    '让我再确认一下症状...',
+  ];
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
+    _floatController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1200),
+      duration: const Duration(milliseconds: 1300),
+    )..repeat(reverse: true);
+    _wagController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 420),
+    )..repeat(reverse: true);
+    _bubbleController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
     )..repeat();
+    _sloganTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+      if (!mounted) return;
+      setState(() {
+        _sloganIndex = (_sloganIndex + 1) % _slogans.length;
+      });
+    });
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _floatController.dispose();
+    _wagController.dispose();
+    _bubbleController.dispose();
+    _sloganTimer?.cancel();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 60,
-      height: 30,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-        children: List.generate(3, (index) {
-          return ScaleTransition(
-            scale: Tween<double>(begin: 0.4, end: 1.0).animate(
-              CurvedAnimation(
-                parent: _controller,
-                curve: Interval(
-                  0.1 + index * 0.2,
-                  0.4 + index * 0.2,
-                  curve: Curves.easeInOut,
+    return AnimatedBuilder(
+      animation: Listenable.merge(
+        [_floatController, _wagController, _bubbleController],
+      ),
+      builder: (context, _) {
+        final floatY = math.sin(_floatController.value * math.pi) * 3.0;
+        final tailAngle = (_wagController.value - 0.5) * 0.9;
+        return Transform.translate(
+          offset: Offset(0, -floatY),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _buildBubble(0.0, 7),
+                  const SizedBox(width: 3),
+                  _buildBubble(0.25, 5),
+                  const SizedBox(width: 3),
+                  _buildBubble(0.5, 4),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Transform.rotate(
+                    angle: tailAngle,
+                    child: Container(
+                      width: 11,
+                      height: 6,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFC78E5E),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 3),
+                  Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Container(
+                        width: 44,
+                        height: 30,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF9C88A),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      Positioned(
+                        left: 6,
+                        top: -5,
+                        child: Transform.rotate(
+                          angle: -0.25,
+                          child: Container(
+                            width: 10,
+                            height: 12,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFC78E5E),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        right: 6,
+                        top: -5,
+                        child: Transform.rotate(
+                          angle: 0.25,
+                          child: Container(
+                            width: 10,
+                            height: 12,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFC78E5E),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const Positioned(
+                        left: 12,
+                        top: 12,
+                        child: Icon(Icons.circle, size: 3.5, color: Colors.black87),
+                      ),
+                      const Positioned(
+                        right: 12,
+                        top: 12,
+                        child: Icon(Icons.circle, size: 3.5, color: Colors.black87),
+                      ),
+                      const Positioned(
+                        left: 19,
+                        top: 17,
+                        child: Icon(Icons.circle, size: 4, color: Color(0xFF8D5A3C)),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 5),
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 300),
+                transitionBuilder: (child, animation) =>
+                    FadeTransition(opacity: animation, child: child),
+                child: Text(
+                  _slogans[_sloganIndex],
+                  key: ValueKey(_sloganIndex),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey.shade700,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ),
-            ),
-            child: CircleAvatar(
-              radius: 4,
-              backgroundColor: Colors.grey.shade400,
-            ),
-          );
-        }),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildBubble(double shift, double size) {
+    final t = (_bubbleController.value + shift) % 1.0;
+    final opacity = (0.35 + 0.65 * math.sin(t * math.pi)).clamp(0.0, 1.0);
+    return Opacity(
+      opacity: opacity,
+      child: Transform.translate(
+        offset: Offset(0, -2 * math.sin(t * math.pi)),
+        child: Container(
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            color: const Color(0xFFAEDCFF),
+            borderRadius: BorderRadius.circular(99),
+          ),
+        ),
       ),
     );
   }
@@ -2105,6 +2434,9 @@ class _TypingIndicatorState extends State<_TypingIndicator>
 // =======================================================================
 class _MessageBubble extends StatelessWidget {
   final ChatMessage message;
+  final String? consultationPetName;
+  // 流式打字阶段：从外部覆盖要展示的文本，避免依赖 message.text 的高频 setState
+  final String? overrideText;
   final bool isLoading;
   final bool isResponseComplete;
   final VoidCallback onLikePressed;
@@ -2115,6 +2447,8 @@ class _MessageBubble extends StatelessWidget {
 
   const _MessageBubble({
     required this.message,
+    this.consultationPetName,
+    this.overrideText,
     this.isLoading = false,
     this.isResponseComplete = false,
     required this.onLikePressed,
@@ -2128,6 +2462,7 @@ class _MessageBubble extends StatelessWidget {
   Widget build(BuildContext context) {
     final isUser = message.isUser;
     final theme = Theme.of(context);
+    final renderText = overrideText ?? message.text;
     final bubbleDecoration = isUser
         ? BoxDecoration(
             color: theme.primaryColor,
@@ -2155,7 +2490,8 @@ class _MessageBubble extends StatelessWidget {
         fontWeight: FontWeight.bold,
       ),
     );
-    final showLoadingIndicator = isLoading && message.text.isEmpty;
+    final showLoadingIndicator = isLoading && renderText.isEmpty;
+    final isStreaming = isLoading && !isResponseComplete && !isUser;
 
     // ✅ 优先渲染推荐卡片
     if (message.recommendationData != null) {
@@ -2199,9 +2535,10 @@ class _MessageBubble extends StatelessWidget {
     // 增强的检测逻辑：如果消息以 { 开头，或者包含 "type": "recommendation"，则视为协议消息
     // 这样可以避免在流式传输初期显示原始 JSON 文本
     bool isProtocolMessage = !isUser &&
-        (message.text.trimLeft().startsWith('{') ||
-            message.text.contains('"type": "recommendation"') ||
-            message.text.contains('"type": "report"'));
+        !isStreaming &&
+        (renderText.trimLeft().startsWith('{') ||
+            renderText.contains('"type": "recommendation"') ||
+            renderText.contains('"type": "report"'));
 
     if (isProtocolMessage) {
       try {
@@ -2213,7 +2550,13 @@ class _MessageBubble extends StatelessWidget {
           final jsonMap = jsonDecode(jsonString);
 
           if (jsonMap['type'] == 'report') {
-            messageContent = DiagnosticReportCard(data: jsonMap['data']);
+            final data = (jsonMap['data'] as Map?)?.cast<String, dynamic>() ??
+                <String, dynamic>{};
+            final petName = consultationPetName?.trim();
+            if (petName != null && petName.isNotEmpty) {
+              data['pet_name'] = petName;
+            }
+            messageContent = DiagnosticReportCard(data: data);
             isCustomCard = true;
           } else if (jsonMap['type'] == 'recommendation') {
             // ✅ 动态解析推荐数据
@@ -2394,11 +2737,23 @@ class _MessageBubble extends StatelessWidget {
         }
       }
     } else {
-      messageContent = MarkdownBody(
-        data: message.text.isEmpty && !isUser ? "思考中..." : message.text,
-        selectable: true,
-        styleSheet: markdownStyleSheet,
-      );
+      // 流式阶段不走 Markdown/JSON 解析，直接展示纯文本以降低每帧开销
+      if (isStreaming) {
+        messageContent = SelectableText(
+          renderText.isEmpty ? "思考中..." : renderText,
+          style: TextStyle(
+            color: isUser ? Colors.white : Colors.black87,
+            fontSize: 16,
+            height: 1.5,
+          ),
+        );
+      } else {
+        messageContent = MarkdownBody(
+          data: renderText.isEmpty && !isUser ? "思考中..." : renderText,
+          selectable: true,
+          styleSheet: markdownStyleSheet,
+        );
+      }
     }
 
     return Container(
@@ -2467,14 +2822,6 @@ class _MessageBubble extends StatelessWidget {
             onLikePressed,
             color: message.isLiked ? theme.primaryColor : null,
             tooltip: message.isLiked ? '取消点赞' : '点赞',
-          ),
-          _buildActionButton(
-            message.isDisliked
-                ? Icons.thumb_down_alt
-                : Icons.thumb_down_alt_outlined,
-            onDislikePressed,
-            color: message.isDisliked ? theme.colorScheme.error : null,
-            tooltip: message.isDisliked ? '取消点踩' : '点踩',
           ),
           _buildActionButton(
             CupertinoIcons.arrow_2_circlepath,

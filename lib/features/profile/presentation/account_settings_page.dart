@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../auth/presentation/login_page.dart';
+import 'account_security_page.dart';
 import '../../../shared/utils/china_regions_loader.dart';
 import '../../../shared/utils/user_avatar_helper.dart';
 import '../../../shared/utils/user_gender_mapper.dart';
@@ -923,6 +924,27 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
                           size: 20,
                         ),
                         onTap: null,
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  _buildGlassCard(
+                    children: [
+                      _buildSettingsTile(
+                        icon: Icons.shield_outlined,
+                        gradientIndex: 2,
+                        title: '账户安全',
+                        subtitle: '修改密码、账号注销等',
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) =>
+                                  const AccountSecurityPage(),
+                            ),
+                          );
+                        },
                       ),
                     ],
                   ),

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/config/supabase_config.dart';
 
 // ============================================================================
@@ -38,6 +39,46 @@ class ErrorEvent implements ChatStreamEvent {
 /// Supabase Edge Function 服务
 /// 通过 Supabase Edge Function 调用 chat API
 class SupabaseEdgeFunctionService {
+  String _tokenSummary(String token) {
+    if (token.length <= 16) return 'len=${token.length}';
+    return '${token.substring(0, 8)}...${token.substring(token.length - 8)} (len=${token.length})';
+  }
+
+  String? _extractProjectRefFromToken(String token) {
+    try {
+      final parts = token.split('.');
+      if (parts.length < 2) return null;
+      final normalized = base64Url.normalize(parts[1]);
+      final payloadJson = utf8.decode(base64Url.decode(normalized));
+      final payload = jsonDecode(payloadJson) as Map<String, dynamic>;
+      final iss = payload['iss']?.toString();
+      if (iss == null || iss.isEmpty) return null;
+      final host = Uri.parse(iss).host;
+      final seg = host.split('.');
+      if (seg.isEmpty) return null;
+      return seg.first;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String _projectRefFromProjectUrl() {
+    final host = Uri.parse(SupabaseConfig.projectUrl).host;
+    return host.split('.').first;
+  }
+
+  Future<String?> _getAccessToken({bool forceRefresh = false}) async {
+    final auth = Supabase.instance.client.auth;
+    if (forceRefresh) {
+      try {
+        await auth.refreshSession();
+      } catch (e) {
+        debugPrint('⚠️ 刷新会话失败: $e');
+      }
+    }
+    return auth.currentSession?.accessToken;
+  }
+
   /// 调用 chat 流式对话
   ///
   /// 参数说明：
@@ -50,6 +91,10 @@ class SupabaseEdgeFunctionService {
     required String query,
     required String user,
     String? conversationId,
+    bool doctorMode = false,
+    bool agentMode = false,
+    String? petContext,
+    List<Map<String, String>> images = const [],
   }) async* {
     try {
       // ✅ 根据 Dify API 文档构建请求体
@@ -59,6 +104,11 @@ class SupabaseEdgeFunctionService {
         'user': user, // 用户标识
         'response_mode': 'streaming', // 流式模式
         'inputs': {}, // 必填字段（可以是空对象）
+        'doctor_mode': doctorMode,
+        'agent_mode': agentMode,
+        if (petContext != null && petContext.trim().isNotEmpty)
+          'pet_context': petContext.trim(),
+        if (images.isNotEmpty) 'images': images,
         // 可选字段
         if (conversationId != null) 'conversation_id': conversationId,
       };
@@ -74,23 +124,64 @@ class SupabaseEdgeFunctionService {
       }
 
       final url = Uri.parse(SupabaseConfig.difyChatUrl);
+      final accessToken = await _getAccessToken();
+      if (accessToken == null || accessToken.isEmpty) {
+        yield ErrorEvent('当前登录状态已失效，请重新登录后再试');
+        return;
+      }
+      final tokenRef = _extractProjectRefFromToken(accessToken);
+      final projectRef = _projectRefFromProjectUrl();
+      debugPrint('🔐 accessToken: ${_tokenSummary(accessToken)}');
+      if (tokenRef != null && tokenRef != projectRef) {
+        debugPrint('⚠️ token project ref 不匹配: token=$tokenRef, app=$projectRef');
+      }
 
       // 构建 HTTP 请求
       final request = http.Request('POST', url)
         ..headers.addAll({
           'Content-Type': 'application/json',
           'apikey': SupabaseConfig.anonKey,
-          'Authorization': 'Bearer ${SupabaseConfig.anonKey}',
+          'Authorization': 'Bearer $accessToken',
         })
         ..body = jsonEncode(body);
 
-      final response = await request.send();
+      var response = await request.send();
       debugPrint('📥 响应状态: ${response.statusCode}');
+
+      if (response.statusCode == 401) {
+        debugPrint('⚠️ 收到 401，尝试刷新会话后重试一次');
+        final refreshedToken = await _getAccessToken(forceRefresh: true);
+        if (refreshedToken != null && refreshedToken.isNotEmpty) {
+          final retryRequest = http.Request('POST', url)
+            ..headers.addAll({
+              'Content-Type': 'application/json',
+              'apikey': SupabaseConfig.anonKey,
+              'Authorization': 'Bearer $refreshedToken',
+            })
+            ..body = jsonEncode(body);
+          response = await retryRequest.send();
+          debugPrint('🔁 重试后响应状态: ${response.statusCode}');
+        }
+      }
 
       if (response.statusCode != 200) {
         final errorBody = await response.stream.bytesToString();
         debugPrint('❌ Edge Function 错误: $errorBody');
-        yield ErrorEvent('请求失败 (${response.statusCode}): $errorBody');
+        if (response.statusCode == 401) {
+          final lower = errorBody.toLowerCase();
+          if (lower.contains('access token is invalid') &&
+              lower.contains('unauthorized')) {
+            yield ErrorEvent('DIFY_AUTH_INVALID');
+          } else if (lower.contains('jwt') ||
+              lower.contains('invalid token') ||
+              lower.contains('auth')) {
+            yield ErrorEvent('AUTH_INVALID');
+          } else {
+            yield ErrorEvent('请求失败 (401): $errorBody');
+          }
+        } else {
+          yield ErrorEvent('请求失败 (${response.statusCode}): $errorBody');
+        }
         return;
       }
 
@@ -121,12 +212,18 @@ class SupabaseEdgeFunctionService {
           if (line.isEmpty) continue;
 
           try {
+            // SSE 心跳/注释行，直接跳过
+            if (line.startsWith('event:') || line.startsWith(':')) {
+              continue;
+            }
+
             // ✅ SSE 格式处理：移除 "data: " 前缀
             if (line.startsWith('data:')) {
               line = line.substring(5).trim();
             }
 
             if (line.isEmpty) continue;
+            if (line == '[DONE]') continue;
 
             // 解析 JSON
             final json = jsonDecode(line) as Map<String, dynamic>;
@@ -160,7 +257,10 @@ class SupabaseEdgeFunctionService {
 
               case 'error':
                 // 错误事件
-                final message = json['message'] as String? ?? '未知错误';
+                var message = json['message'] as String? ?? '未知错误';
+                if (message.toLowerCase().contains('model is not configured')) {
+                  message = 'AI 模型未配置：请在 Dify 控制台为该应用绑定模型后重试';
+                }
                 debugPrint('📨 error 事件: $message');
                 yield ErrorEvent(message);
                 return;
@@ -212,6 +312,10 @@ class SupabaseEdgeFunctionService {
     required String query,
     required String user,
     String? conversationId,
+    bool doctorMode = false,
+    bool agentMode = false,
+    String? petContext,
+    List<Map<String, String>> images = const [],
   }) async {
     try {
       final body = {
@@ -219,6 +323,11 @@ class SupabaseEdgeFunctionService {
         'user': user,
         'response_mode': 'blocking',
         'inputs': {}, // 必填字段
+        'doctor_mode': doctorMode,
+        'agent_mode': agentMode,
+        if (petContext != null && petContext.trim().isNotEmpty)
+          'pet_context': petContext.trim(),
+        if (images.isNotEmpty) 'images': images,
         if (conversationId != null) 'conversation_id': conversationId,
       };
 
@@ -226,15 +335,43 @@ class SupabaseEdgeFunctionService {
       debugPrint('📦 请求体: ${jsonEncode(body)}');
 
       final url = Uri.parse(SupabaseConfig.difyChatUrl);
-      final response = await http.post(
+      final accessToken = await _getAccessToken();
+      if (accessToken == null || accessToken.isEmpty) {
+        debugPrint('❌ 当前登录状态已失效，无法调用 Edge Function');
+        return null;
+      }
+      final tokenRef = _extractProjectRefFromToken(accessToken);
+      final projectRef = _projectRefFromProjectUrl();
+      debugPrint('🔐 accessToken: ${_tokenSummary(accessToken)}');
+      if (tokenRef != null && tokenRef != projectRef) {
+        debugPrint('⚠️ token project ref 不匹配: token=$tokenRef, app=$projectRef');
+      }
+      var response = await http.post(
         url,
         headers: {
           'Content-Type': 'application/json',
           'apikey': SupabaseConfig.anonKey,
-          'Authorization': 'Bearer ${SupabaseConfig.anonKey}',
+          'Authorization': 'Bearer $accessToken',
         },
         body: jsonEncode(body),
       );
+
+      if (response.statusCode == 401) {
+        debugPrint('⚠️ 阻塞模式收到 401，尝试刷新会话后重试一次');
+        final refreshedToken = await _getAccessToken(forceRefresh: true);
+        if (refreshedToken != null && refreshedToken.isNotEmpty) {
+          response = await http.post(
+            url,
+            headers: {
+              'Content-Type': 'application/json',
+              'apikey': SupabaseConfig.anonKey,
+              'Authorization': 'Bearer $refreshedToken',
+            },
+            body: jsonEncode(body),
+          );
+          debugPrint('🔁 阻塞模式重试后响应状态: ${response.statusCode}');
+        }
+      }
 
       debugPrint('📥 响应状态: ${response.statusCode}');
 
@@ -324,35 +461,33 @@ class PetDiaryEdgeService {
 
       final accessToken = session.accessToken;
 
-      // ✅ 根据 diary-v4 Edge Function 要求构建请求体
+      // ✅ 根据 diary-v3 Edge Function 要求构建请求体
       final inputs = {
         'query': query,
         'style': style,
-        // v4 参数映射: 
-        if (nickname != null) 'owner_title': nickname, // 主人称呼 (API参数名: owner_title)
-        if (petName != null) 'nickname': petName,      // 宠物名字 (API参数名: nickname)
-        if (petType != null) 'species': petType,       // 宠物物种 (API参数名: species)
-        if (breed != null) 'breed': breed,             // 宠物品种
-        // 保留其他可能用到的字段
-        if (gender != null) 'gender': gender,
+        if (nickname != null) 'nickname': nickname, //主人昵称
+        if (breed != null) 'breed': breed, //宠物品种
+        if (petName != null) 'pet_name': petName, //宠物名字
+        if (gender != null) 'gender': gender, //宠物性别
+        if (petType != null) 'type': petType, //宠物类型，猫狗
       };
 
       final body = {
         'inputs': inputs,
         'response_mode': 'streaming',
-        'user': session.user.id, // 添加 user 字段，确保与 Dify 一致
       };
 
-      debugPrint('📝 调用 Diary-v4 Edge Function');
+      debugPrint('📝 调用 Diary-v3 Edge Function');
       debugPrint('📦 参数:');
       debugPrint(
         '   - inputs.query: ${query.substring(0, 30.clamp(0, query.length))}...',
       );
       debugPrint('   - inputs.style: $style');
-      if (nickname != null) debugPrint('   - inputs.owner_title: $nickname');
-      if (petName != null) debugPrint('   - inputs.nickname: $petName');
-      if (petType != null) debugPrint('   - inputs.species: $petType');
+      if (nickname != null) debugPrint('   - inputs.nickname: $nickname');
       if (breed != null) debugPrint('   - inputs.breed: $breed');
+      if (petName != null) debugPrint('   - inputs.pet_name: $petName');
+      if (gender != null) debugPrint('   - inputs.gender: $gender');
+      if (petType != null) debugPrint('   - inputs.type: $petType');
       debugPrint('   - response_mode: streaming');
 
       final url = Uri.parse(SupabaseConfig.diaryUrl);
@@ -361,7 +496,6 @@ class PetDiaryEdgeService {
       final request = http.Request('POST', url)
         ..headers.addAll({
           'Content-Type': 'application/json',
-          'apikey': SupabaseConfig.anonKey, // 必须携带 Anon Key
           'Authorization': 'Bearer $accessToken', // ✅ 使用用户 Token
         })
         ..body = jsonEncode(body);
@@ -498,9 +632,9 @@ class PetDiaryEdgeService {
       debugPrint('\n✅ Diary 流式响应完成');
       debugPrint('   最终文本长度: ${accumulatedText.length} 字符');
 
-      // 无论如何，在流结束时都发送一个 DoneEvent，确保 UI 状态能够终止
-      // 即使之前已经发过 DoneEvent，多发一次也无害（UI层应该处理幂等性）
-      yield DiaryDoneEvent(accumulatedText);
+      if (accumulatedText.isNotEmpty) {
+        yield DiaryDoneEvent(accumulatedText);
+      }
     } catch (e, stackTrace) {
       debugPrint('❌ Diary Edge Function 调用异常: $e');
       debugPrint('Stack trace: $stackTrace');
