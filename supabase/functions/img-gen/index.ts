@@ -41,8 +41,13 @@ function jsonResponse(body: unknown, status = 200) {
 }
 
 function isSafeFileName(name: string) {
-  return !!name && name.length <= 200 &&
-    /^[A-Za-z0-9_\-]+\.(jpg|jpeg|png|webp)$/i.test(name);
+  return (
+    !!name &&
+    !name.includes("..") &&
+    !name.includes("/") &&
+    !name.includes("\\") &&
+    name.length <= 200
+  );
 }
 
 function resolveImageSize(aspectRatio: string) {
@@ -56,13 +61,6 @@ function resolveImageSize(aspectRatio: string) {
     default:
       return "1328*1328";
   }
-}
-
-function isTimeoutAbortError(err: unknown) {
-  if (!(err instanceof Error)) {
-    return false;
-  }
-  return err.name === "AbortError" || err.name === "TimeoutError";
 }
 
 Deno.serve(async (req: Request): Promise<Response> => {
@@ -176,7 +174,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         );
       }
 
-      if (files && files.some((file: { name: string }) => file.name === file_name)) {
+      if (files && files.some((file) => file.name === file_name)) {
         fileExists = true;
         break;
       }
@@ -236,7 +234,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         signal: AbortSignal.timeout(120000),
       });
     } catch (err) {
-      if (isTimeoutAbortError(err)) {
+      if (err instanceof Error && err.name === "AbortError") {
         return jsonResponse(
           {
             error: "Upstream DashScope API timeout",
@@ -286,7 +284,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         signal: AbortSignal.timeout(30000),
       });
     } catch (err) {
-      if (isTimeoutAbortError(err)) {
+      if (err instanceof Error && err.name === "AbortError") {
         return jsonResponse({ error: "Generated image download timeout" }, 504);
       }
       throw err;
@@ -303,8 +301,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     }
 
     const arrayBuffer = await imgResp.arrayBuffer();
-    const generatedFileName = file_name.replace(/\.[^.]+$/, ".png");
-    const generatedStoragePath = `${userId}/generated/${generatedFileName}`;
+    const generatedStoragePath = `${userId}/generated/${file_name}`;
 
     const { error: uploadError } = await supabase.storage
       .from("ai-wallpapers")

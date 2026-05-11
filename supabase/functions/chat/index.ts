@@ -24,7 +24,7 @@ function shouldTriggerOutputAudit(pendingSegment: string, lastAuditAt: number): 
   }
   return false;
 }
-Deno.serve(async (req)=>{
+Deno.serve(async (req) => {
   // CORS headers 配置
   const corsHeaders = {
     'Access-Control-Allow-Origin': '*',

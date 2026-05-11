@@ -1,11 +1,14 @@
 import 'package:gal/gal.dart';
+import 'package:share_plus/share_plus.dart';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui';
 import 'dart:ui' as ui;
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
@@ -13,9 +16,13 @@ import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../../shared/utils/ui_helpers.dart';
+import '../../../shared/utils/avatar_image_helper.dart';
+import '../../../shared/utils/user_avatar_helper.dart';
+import '../../../services/supabase_service.dart';
 import '../../content_feedback/domain/content_feedback_kind.dart';
 import '../../content_feedback/presentation/ai_generated_image_disclaimer.dart';
 import '../../content_feedback/presentation/content_feedback_bar.dart';
+import '../../home/presentation/home_screen.dart';
 
 class _WatermarkMetrics {
   final double horizontalPadding;
@@ -87,20 +94,28 @@ double _computeWatermarkTextFitScale({
 }
 
 class AppColors {
-  static const Color background = Color(0xFFF2F2F7);
+  static const Color background = Color(0xFFFAF5FF);
   static const Color surface = Color(0xFFFFFFFF);
-  static const Color primary = Color(0xFF5D5FEF);
+  static const Color primary = Color(0xFF7C3AED);
+  static const Color secondary = Color(0xFF6366F1);
+  static const Color accent = Color(0xFFEC4899);
   static const Color textDark = Color(0xFF1D1D1F);
-  static const Color textGrey = Color(0xFF8E8E93);
-  static const Color textLight = Color(0xFFAEAEB2);
+  static const Color textGrey = Color(0xFF6B7280);
+  static const Color textLight = Color(0xFF9CA3AF);
 
   static const Color favoriteActive = Color(0xFFFF5252);
-  static const Color likeActive = Color(0xFF2196F3);
+  static const Color likeActive = Color(0xFF6366F1);
   static const Color dislikeActive = Color(0xFF9E9E9E);
 
-  static const Color orb1 = Color(0xFFC4E0E5);
-  static const Color orb2 = Color(0xFFE2D1F9);
-  static const Color orb3 = Color(0xFFFFDFC4);
+  static const Color orb1 = Color(0xFFD8B4FE);
+  static const Color orb2 = Color(0xFFA78BFA);
+  static const Color orb3 = Color(0xFFF9A8D4);
+
+  static const List<Color> primaryGradient = [
+    Color(0xFF7C3AED),
+    Color(0xFF6366F1),
+    Color(0xFFEC4899),
+  ];
 }
 
 class FadePageRoute extends PageRouteBuilder {
@@ -128,13 +143,15 @@ class FadePageRoute extends PageRouteBuilder {
 }
 
 class ResultPage extends StatefulWidget {
-  final File originalImage;
+  final File? originalImage;
+  final String? originalImageUrl; // Web 平台使用 URL
   final String? resultImageUrl;
   final File? resultImageFile;
 
   const ResultPage(
       {super.key,
-      required this.originalImage,
+      this.originalImage,
+      this.originalImageUrl,
       this.resultImageFile,
       this.resultImageUrl});
 
@@ -144,6 +161,8 @@ class ResultPage extends StatefulWidget {
 
 class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
   late AnimationController _orbController;
+  late AnimationController _shimmerController;
+  late AnimationController _saveButtonShimmerController;
   static const String _watermarkText = '智宠合生 Peture AI 生成';
   static int? _cachedAndroidSdkInt;
 
@@ -152,6 +171,7 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
   bool _isDisliked = false;
   bool _shouldDeleteTempFile = false;
   bool _enableWatermark = true;
+  bool _isSettingAvatar = false;
 
   bool _isLocalFilePath(String? path) {
     if (path == null || path.isEmpty) return false;
@@ -275,24 +295,6 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
     return byteData.buffer.asUint8List();
   }
 
-  /// Android 上 `Directory.systemTemp` 常在 `code_cache` 下，系统可能随时清理；
-  /// 进入本页后尽快读入内存，保存到相册时优先用缓存，避免 PathNotFoundException。
-  Uint8List? _cachedResultImageBytes;
-
-  Future<void> _warmResultImageBytes() async {
-    final f = widget.resultImageFile;
-    if (f == null) return;
-    try {
-      if (await f.exists()) {
-        final bytes = await f.readAsBytes();
-        if (!mounted) return;
-        setState(() => _cachedResultImageBytes = bytes);
-      }
-    } catch (e) {
-      debugPrint('生成图内存缓存失败: $e');
-    }
-  }
-
   @override
   void initState() {
     super.initState();
@@ -300,6 +302,16 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
       vsync: this,
       duration: const Duration(seconds: 12),
     )..repeat(reverse: true);
+
+    _shimmerController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 4),
+    )..repeat(reverse: true);
+
+    _saveButtonShimmerController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2500),
+    )..repeat();
 
     if (widget.resultImageFile != null) {
       try {
@@ -312,8 +324,6 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
       } catch (e) {
         debugPrint('检查临时文件标记时出错: $e');
       }
-      // 尽快把临时文件读入内存，避免用户在页面上停留后系统删掉 code_cache 导致无法保存
-      unawaited(_warmResultImageBytes());
     }
   }
 
@@ -334,6 +344,8 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
     }
 
     _orbController.dispose();
+    _shimmerController.dispose();
+    _saveButtonShimmerController.dispose();
     super.dispose();
   }
 
@@ -360,10 +372,92 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
       backgroundColor: AppColors.background,
       extendBodyBehindAppBar: true,
       appBar: AppBar(
-        title: const Text("生成完成"),
+        title: const Text(
+          "生成完成",
+          style: TextStyle(
+            fontWeight: FontWeight.w800,
+            fontSize: 20,
+            letterSpacing: 0.8,
+            shadows: [
+              Shadow(
+                color: Colors.black12,
+                offset: Offset(0, 1),
+                blurRadius: 2,
+              ),
+            ],
+          ),
+        ),
+        centerTitle: true,
         backgroundColor: Colors.transparent,
         elevation: 0,
-        actions: [IconButton(icon: const Icon(Icons.share), onPressed: () {})],
+        scrolledUnderElevation: 0,
+        leading: const BackButton(color: AppColors.textDark),
+        flexibleSpace: ClipRect(
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    AppColors.background.withOpacity(0.85),
+                    AppColors.background.withOpacity(0.4),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+        foregroundColor: AppColors.textDark,
+        actions: [
+          Container(
+            margin: const EdgeInsets.only(right: 8),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: _shareImage,
+                borderRadius: BorderRadius.circular(20),
+                child: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: Colors.white.withOpacity(0.6),
+                      width: 1,
+                    ),
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        Colors.white.withOpacity(0.4),
+                        Colors.white.withOpacity(0.15),
+                      ],
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.04),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: ClipOval(
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                      child: Icon(
+                        Icons.share_outlined,
+                        color: AppColors.textDark.withOpacity(0.8),
+                        size: 20,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
       body: Stack(
         children: [
@@ -435,68 +529,109 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
           SafeArea(
             child: Column(
               children: [
-                const SizedBox(height: 20),
+                const SizedBox(height: 8),
+                // 紧凑原图预览
                 GestureDetector(
                   onTap: () {
-                    Navigator.of(context).push(
-                      TransparentImageRoute(
-                        builder: (_) => FullscreenImagePage(
-                          imageFile: widget.originalImage,
-                          heroTag: 'pet_photo_hero',
+                    // Web 平台暂时不支持全屏查看网络图片
+                    if (kIsWeb) return;
+
+                    if (widget.originalImage != null) {
+                      Navigator.of(context).push(
+                        TransparentImageRoute(
+                          builder: (_) => FullscreenImagePage(
+                            imageFile: widget.originalImage!,
+                            heroTag: 'pet_photo_hero',
+                          ),
                         ),
-                      ),
-                    );
+                      );
+                    }
                   },
                   child: Container(
-                    height: 150,
-                    width: double.infinity,
-                    margin: const EdgeInsets.all(16),
+                    height: 56,
+                    margin: const EdgeInsets.symmetric(horizontal: 16),
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(20),
+                      color: Colors.white.withOpacity(0.45),
+                      border: Border.all(
+                        color: Colors.white.withOpacity(0.65),
+                        width: 1,
+                      ),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.05),
-                          blurRadius: 15,
-                          offset: const Offset(0, 8),
+                          color: Colors.black.withOpacity(0.04),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
                         ),
                       ],
                     ),
                     child: ClipRRect(
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(20),
                       child: BackdropFilter(
-                        filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-                        child: Container(
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: Colors.white.withOpacity(0.6),
-                              width: 1.2,
-                            ),
-                            gradient: RadialGradient(
-                              radius: 1.8,
-                              center: Alignment.topCenter,
-                              colors: [
-                                AppColors.surface.withOpacity(0.15),
-                                AppColors.surface.withOpacity(0.3),
-                                AppColors.surface.withOpacity(0.45),
-                              ],
-                              stops: const [0.0, 0.6, 1.0],
-                            ),
-                          ),
+                        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
                           child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              const Text("原图",
-                                  style: TextStyle(color: AppColors.textGrey)),
-                              const SizedBox(width: 10),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 4),
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      AppColors.primary.withOpacity(0.12),
+                                      AppColors.secondary.withOpacity(0.08),
+                                    ],
+                                  ),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Text(
+                                  "原图",
+                                  style: TextStyle(
+                                    color: AppColors.primary.withOpacity(0.9),
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  "点击查看原图",
+                                  style: TextStyle(
+                                    color: AppColors.textLight.withOpacity(0.9),
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w500,
+                                    letterSpacing: 0.3,
+                                  ),
+                                ),
+                              ),
                               Hero(
                                 tag: 'pet_photo_hero',
                                 child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(8),
-                                  child: Image.file(widget.originalImage,
-                                      height: 100,
-                                      width: 100,
-                                      fit: BoxFit.cover),
+                                  borderRadius: BorderRadius.circular(10),
+                                  child: widget.originalImageUrl != null
+                                      ? Image.network(
+                                          widget.originalImageUrl!,
+                                          height: 40,
+                                          width: 40,
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (_, __, ___) =>
+                                              Container(
+                                            height: 40,
+                                            width: 40,
+                                            color: Colors.grey[300],
+                                            child: const Icon(Icons.pets,
+                                                size: 20),
+                                          ),
+                                        )
+                                      : Image.file(
+                                          widget.originalImage!,
+                                          height: 40,
+                                          width: 40,
+                                          fit: BoxFit.cover,
+                                        ),
                                 ),
                               ),
                             ],
@@ -506,6 +641,7 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
                     ),
                   ),
                 ),
+                const SizedBox(height: 12),
                 Expanded(
                   child: GestureDetector(
                     onTap: () {
@@ -528,115 +664,126 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
                     },
                     child: Container(
                       width: double.infinity,
-                      margin: const EdgeInsets.all(16),
+                      margin: const EdgeInsets.symmetric(horizontal: 16),
                       decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(20),
+                        borderRadius: BorderRadius.circular(28),
                         boxShadow: [
                           BoxShadow(
-                              color: Colors.black.withOpacity(0.1),
-                              blurRadius: 20)
-                        ],
-                      ),
-                      child: Stack(
-                        children: [
-                          if (resultImageProvider != null)
-                            _ContainedImageWithWatermark(
-                              heroTag: 'ai_result_hero',
-                              imageProvider: resultImageProvider,
-                              showWatermark: _enableWatermark,
-                              watermarkText: _watermarkText,
-                              progressColor: AppColors.primary,
-                              errorIconColor: Colors.red,
-                              errorTextColor: AppColors.textDark,
-                              errorSubTextColor: AppColors.textGrey,
-                            )
-                          else
-                            const Center(
-                              child: Text(
-                                '未找到可预览的图片',
-                                style: TextStyle(color: AppColors.textGrey),
-                              ),
-                            ),
-                          Positioned(
-                            left: 20,
-                            bottom: 20,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 20, vertical: 10),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(30),
-                                border: Border.all(
-                                  color: Colors.white.withOpacity(0.6),
-                                  width: 1.2,
-                                ),
-                                gradient: RadialGradient(
-                                  radius: 1.8,
-                                  center: Alignment.topCenter,
-                                  colors: [
-                                    Colors.white.withOpacity(0.15),
-                                    Colors.white.withOpacity(0.3),
-                                    Colors.white.withOpacity(0.45),
-                                  ],
-                                  stops: const [0.0, 0.6, 1.0],
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.05),
-                                    blurRadius: 10,
-                                    offset: const Offset(0, 4),
-                                  ),
-                                ],
-                              ),
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(30),
-                                child: BackdropFilter(
-                                  filter:
-                                      ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      _buildIconAction(
-                                          Icons.favorite_border,
-                                          _isFavorite,
-                                          AppColors.favoriteActive, () {
-                                        setState(() {
-                                          _isFavorite = !_isFavorite;
-                                        });
-                                      }),
-                                      const SizedBox(width: 20),
-                                      _buildIconAction(Icons.thumb_up_outlined,
-                                          _isLiked, AppColors.likeActive, () {
-                                        setState(() {
-                                          if (_isDisliked) {
-                                            _isDisliked = false;
-                                          }
-                                          _isLiked = !_isLiked;
-                                        });
-                                      }),
-                                      const SizedBox(width: 20),
-                                      _buildIconAction(
-                                          Icons.thumb_down_outlined,
-                                          _isDisliked,
-                                          AppColors.dislikeActive, () {
-                                        setState(() {
-                                          if (_isLiked) {
-                                            _isLiked = false;
-                                          }
-                                          _isDisliked = !_isDisliked;
-                                        });
-                                      }),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
+                            color: Colors.black.withOpacity(0.06),
+                            blurRadius: 28,
+                            offset: const Offset(0, 12),
+                            spreadRadius: -4,
+                          ),
+                          BoxShadow(
+                            color: Colors.white.withOpacity(0.35),
+                            blurRadius: 1,
+                            offset: const Offset(0, -1),
+                            blurStyle: BlurStyle.inner,
                           ),
                         ],
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(28),
+                        child: Stack(
+                          children: [
+                            if (resultImageProvider != null)
+                              _ContainedImageWithWatermark(
+                                heroTag: 'ai_result_hero',
+                                imageProvider: resultImageProvider,
+                                showWatermark: _enableWatermark,
+                                watermarkText: _watermarkText,
+                                progressColor: AppColors.primary,
+                                errorIconColor: Colors.red,
+                                errorTextColor: AppColors.textDark,
+                                errorSubTextColor: AppColors.textGrey,
+                              )
+                            else
+                              const Center(
+                                child: Text(
+                                  '未找到可预览的图片',
+                                  style: TextStyle(color: AppColors.textGrey),
+                                ),
+                              ),
+                            Positioned(
+                              left: 16,
+                              bottom: 16,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 14, vertical: 8),
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(24),
+                                  border: Border.all(
+                                    color: Colors.white.withOpacity(0.65),
+                                    width: 1,
+                                  ),
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                    colors: [
+                                      Colors.white.withOpacity(0.35),
+                                      Colors.white.withOpacity(0.2),
+                                    ],
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.06),
+                                      blurRadius: 12,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ],
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(24),
+                                  child: BackdropFilter(
+                                    filter: ImageFilter.blur(
+                                        sigmaX: 10, sigmaY: 10),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        _buildIconAction(
+                                            Icons.favorite_border,
+                                            _isFavorite,
+                                            AppColors.favoriteActive, () {
+                                          setState(() {
+                                            _isFavorite = !_isFavorite;
+                                          });
+                                        }),
+                                        const SizedBox(width: 16),
+                                        _buildIconAction(
+                                            Icons.thumb_up_outlined,
+                                            _isLiked,
+                                            AppColors.likeActive, () {
+                                          setState(() {
+                                            if (_isDisliked) {
+                                              _isDisliked = false;
+                                            }
+                                            _isLiked = !_isLiked;
+                                          });
+                                        }),
+                                        const SizedBox(width: 16),
+                                        _buildIconAction(
+                                            Icons.thumb_down_outlined,
+                                            _isDisliked,
+                                            AppColors.dislikeActive, () {
+                                          setState(() {
+                                            if (_isLiked) {
+                                              _isLiked = false;
+                                            }
+                                            _isDisliked = !_isDisliked;
+                                          });
+                                        }),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
                 ),
-
                 Padding(
                   padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
                   child: Column(
@@ -655,8 +802,7 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
                     ],
                   ),
                 ),
-
-                // 底部：保存按钮 - 使用毛玻璃效果
+                const SizedBox(height: 12),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: ClipRRect(
@@ -672,315 +818,446 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
                             width: 1,
                           ),
                         ),
-                        child: SwitchListTile.adaptive(
-                          value: _enableWatermark,
-                          title: const Text(
-                            '水印',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.textDark,
+                        child: Theme(
+                          data: Theme.of(context).copyWith(
+                            listTileTheme: const ListTileThemeData(
+                              contentPadding:
+                                  EdgeInsets.symmetric(horizontal: 16),
+                              minVerticalPadding: 8,
+                              visualDensity: VisualDensity.compact,
                             ),
                           ),
-                          subtitle: const Text(
-                            _watermarkText,
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: AppColors.textGrey,
+                          child: SwitchListTile.adaptive(
+                            value: _enableWatermark,
+                            title: const Text(
+                              '水印',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.textDark,
+                                fontSize: 15,
+                                letterSpacing: 0.3,
+                              ),
                             ),
+                            subtitle: const Text(
+                              _watermarkText,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: AppColors.textGrey,
+                                height: 1.4,
+                              ),
+                            ),
+                            onChanged: (value) {
+                              setState(() {
+                                _enableWatermark = value;
+                              });
+                            },
+                            activeColor: AppColors.primary,
+                            contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 2),
                           ),
-                          onChanged: (value) {
-                            setState(() {
-                              _enableWatermark = value;
-                            });
-                          },
-                          activeColor: AppColors.primary,
-                          contentPadding:
-                              const EdgeInsets.symmetric(horizontal: 14),
                         ),
                       ),
                     ),
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 14),
+                // Save to Gallery Button with shimmer animation
                 Container(
-                  height: 80,
-                  padding: const EdgeInsets.all(20.0),
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(25),
-                        child: BackdropFilter(
-                          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-                          child: Container(
-                            width: double.infinity,
-                            height: 50,
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(25),
-                              border: Border.all(
-                                color: Colors.white.withOpacity(0.6),
-                                width: 1.2,
-                              ),
-                              gradient: RadialGradient(
-                                radius: 1.8,
-                                center: Alignment.topCenter,
-                                colors: [
-                                  Colors.white.withOpacity(0.25),
-                                  Colors.white.withOpacity(0.5),
-                                  Colors.white.withOpacity(0.7),
-                                ],
-                                stops: const [0.0, 0.6, 1.0],
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      AnimatedContainer(
-                        duration: const Duration(milliseconds: 300),
-                        width: double.infinity,
-                        height: 50,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(25),
-                          gradient: const LinearGradient(
-                            colors: [Color(0xFF5D5FEF), Color(0xFF8B77FF)],
-                            begin: Alignment.centerLeft,
-                            end: Alignment.centerRight,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: const Color(0xFF5D5FEF).withOpacity(0.3),
-                              blurRadius: 15,
-                              spreadRadius: -1,
-                              offset: const Offset(0, 3),
-                            ),
-                            BoxShadow(
-                              color: Colors.white.withOpacity(0.4),
-                              blurRadius: 1,
-                              offset: const Offset(0, -1),
-                              blurStyle: BlurStyle.inner,
-                            ),
-                          ],
-                        ),
-                        child: Material(
-                          color: Colors.transparent,
-                          child: InkWell(
-                            onTap: () async {
-                              PermissionStatus status;
-                              if (Platform.isIOS) {
-                                // iOS 双兜底：优先请求 add-only，失败后回退到 photos。
-                                final addOnlyStatus =
-                                    await Permission.photosAddOnly.request();
-                                if (addOnlyStatus.isGranted ||
-                                    addOnlyStatus == PermissionStatus.limited) {
-                                  status = addOnlyStatus;
-                                } else if (addOnlyStatus.isPermanentlyDenied ||
-                                    addOnlyStatus ==
-                                        PermissionStatus.restricted) {
-                                  status = addOnlyStatus;
-                                } else {
-                                  status = await Permission.photos.request();
-                                }
-                              } else if (Platform.isAndroid) {
-                                // Android 13+ (API 33+) 使用 READ_MEDIA_IMAGES (Permission.photos)
-                                // Android 12 及以下 (API 32-) 使用 READ_EXTERNAL_STORAGE (Permission.storage)
-                                _cachedAndroidSdkInt ??=
-                                    (await DeviceInfoPlugin().androidInfo)
-                                        .version
-                                        .sdkInt;
-                                if (_cachedAndroidSdkInt! >= 33) {
-                                  status = await Permission.photos.request();
-                                } else {
-                                  status = await Permission.storage.request();
-                                }
-                              } else {
-                                // 桌面或其他不支持保存到相册的平台
-                                if (context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                          content: Text("当前平台不支持保存到相册")));
-                                }
-                                return;
-                              }
-
-                              if (status.isGranted ||
-                                  status == PermissionStatus.limited) {
-                                // 权限已授予，继续保存
-                              } else if (status.isPermanentlyDenied ||
-                                  status == PermissionStatus.restricted) {
-                                // 权限被永久拒绝或受限，引导用户到设置
-                                if (context.mounted) {
-                                  showDialog(
-                                    context: context,
-                                    builder: (context) {
-                                      return AlertDialog(
-                                        title: const Text('权限被拒绝'),
-                                        content:
-                                            const Text('相册权限已被拒绝，请前往设置开启。'),
-                                        actions: [
-                                          TextButton(
-                                            onPressed: () {
-                                              Navigator.of(context).pop();
-                                              openAppSettings();
-                                            },
-                                            child: const Text('去设置'),
-                                          ),
-                                          TextButton(
-                                            onPressed: () {
-                                              Navigator.of(context).pop();
-                                            },
-                                            child: const Text('取消'),
-                                          ),
-                                        ],
-                                      );
-                                    },
-                                  );
-                                }
-                                return;
-                              } else {
-                                // 权限被拒绝，但可以再次请求
-                                if (context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                          content: Text("需要相册权限才能保存图片")));
-                                }
-                                return;
-                              }
-
-                              try {
-                                late Uint8List bytes;
-
-                                if (_cachedResultImageBytes != null &&
-                                    _cachedResultImageBytes!.isNotEmpty) {
-                                  bytes = _cachedResultImageBytes!;
-                                } else if (widget.resultImageFile != null) {
-                                  try {
-                                    bytes = await widget.resultImageFile!
-                                        .readAsBytes();
-                                  } catch (_) {
-                                    // 临时路径已被系统清理或文件已删，回退网络地址
-                                    if (widget.resultImageUrl != null &&
-                                        widget.resultImageUrl!.isNotEmpty) {
-                                      final response = await http.get(
-                                        Uri.parse(widget.resultImageUrl!),
-                                      );
-                                      if (response.statusCode != 200) {
-                                        if (context.mounted) {
-                                          ScaffoldMessenger.of(context)
-                                              .showSnackBar(const SnackBar(
-                                            content: Text('本地文件已失效且下载失败'),
-                                          ));
-                                        }
-                                        return;
-                                      }
-                                      bytes = response.bodyBytes;
-                                    } else {
-                                      if (context.mounted) {
-                                        ScaffoldMessenger.of(context)
-                                            .showSnackBar(const SnackBar(
-                                          content: Text(
-                                            '本地临时文件已失效，请返回重新生成后保存',
-                                          ),
-                                        ));
-                                      }
-                                      return;
-                                    }
-                                  }
-                                } else if (widget.resultImageUrl != null &&
-                                    widget.resultImageUrl!.isNotEmpty) {
-                                  final url = widget.resultImageUrl!;
-                                  if (_isLocalFilePath(url)) {
-                                    final file = _fileFromPath(url);
-                                    if (await file.exists()) {
-                                      bytes = await file.readAsBytes();
-                                    } else {
-                                      if (context.mounted) {
-                                        ScaffoldMessenger.of(context)
-                                            .showSnackBar(const SnackBar(
-                                                content: Text("未找到本地图片")));
-                                      }
-                                      return;
-                                    }
-                                  } else {
-                                    final response =
-                                        await http.get(Uri.parse(url));
-                                    if (response.statusCode == 200) {
-                                      bytes = response.bodyBytes;
-                                    } else {
-                                      if (context.mounted) {
-                                        ScaffoldMessenger.of(context)
-                                            .showSnackBar(const SnackBar(
-                                                content: Text("下载图片失败")));
-                                      }
-                                      return;
-                                    }
-                                  }
-                                } else {
-                                  if (context.mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                        const SnackBar(
-                                            content: Text("未找到图片以保存")));
-                                  }
-                                  return;
-                                }
-
-                                if (_enableWatermark) {
-                                  bytes = await _addWatermarkToBytes(bytes);
-                                }
-
-                                // 保存到临时文件
-                                final tempDir = await getTemporaryDirectory();
-                                final tempPath =
-                                    '${tempDir.path}/ai_result_${DateTime.now().millisecondsSinceEpoch}.png';
-                                final tempFile = File(tempPath);
-                                await tempFile.writeAsBytes(bytes);
-
-                                try {
-                                  // 使用 Gal 插件保存图片到相册
-                                  await Gal.putImage(tempPath, album: 'Peture');
-                                } finally {
-                                  // 无论保存成功或失败都删除临时文件
-                                  if (await tempFile.exists()) {
-                                    await tempFile.delete();
-                                  }
-                                }
-
-                                if (context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(content: Text("已保存到相册！")));
-                                }
-                              } catch (e) {
-                                debugPrint('保存图片到相册时出错: $e');
-                                if (context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                          content: Text("保存失败，请检查权限设置")));
-                                }
-                              }
-                            },
-                            borderRadius: BorderRadius.circular(25),
-                            child: const Center(
-                              child: Text(
-                                "保存到相册",
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                  fontSize: 16,
-                                  shadows: [
-                                    Shadow(
-                                      color: Colors.black26,
-                                      offset: Offset(0, 1),
-                                      blurRadius: 2,
-                                    ),
-                                  ],
+                  height: 68,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: AnimatedBuilder(
+                    animation: _saveButtonShimmerController,
+                    builder: (context, child) {
+                      return Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          // Glassmorphism base
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(26),
+                            child: BackdropFilter(
+                              filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                              child: Container(
+                                width: double.infinity,
+                                height: 52,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(26),
+                                  border: Border.all(
+                                    color: Colors.white.withOpacity(0.6),
+                                    width: 1.2,
+                                  ),
+                                  gradient: RadialGradient(
+                                    radius: 1.8,
+                                    center: Alignment.topCenter,
+                                    colors: [
+                                      Colors.white.withOpacity(0.25),
+                                      Colors.white.withOpacity(0.5),
+                                      Colors.white.withOpacity(0.7),
+                                    ],
+                                    stops: const [0.0, 0.6, 1.0],
+                                  ),
                                 ),
                               ),
                             ),
                           ),
+                          // Gradient button with shimmer
+                          AnimatedContainer(
+                            duration: const Duration(milliseconds: 300),
+                            width: double.infinity,
+                            height: 52,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(26),
+                              gradient: LinearGradient(
+                                colors: AppColors.primaryGradient,
+                                begin: Alignment.centerLeft,
+                                end: Alignment.centerRight,
+                                stops: const [0.0, 0.5, 1.0],
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: AppColors.primary.withOpacity(0.24),
+                                  blurRadius: 20,
+                                  spreadRadius: -2,
+                                  offset: const Offset(0, 6),
+                                ),
+                                BoxShadow(
+                                  color: Colors.white.withOpacity(0.4),
+                                  blurRadius: 1,
+                                  offset: const Offset(0, -1),
+                                  blurStyle: BlurStyle.inner,
+                                ),
+                              ],
+                            ),
+                            child: Stack(
+                              children: [
+                                // 背景高光层：只作用在按钮背景，不覆盖文字内容
+                                Positioned.fill(
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(26),
+                                    child: AnimatedBuilder(
+                                      animation: _saveButtonShimmerController,
+                                      builder: (context, child) {
+                                        final shimmerPos = -1.0 +
+                                            (_saveButtonShimmerController
+                                                    .value *
+                                                3.0);
+                                        return Stack(
+                                          children: [
+                                            Container(
+                                              decoration: BoxDecoration(
+                                                gradient: LinearGradient(
+                                                  colors:
+                                                      AppColors.primaryGradient,
+                                                  begin: Alignment.centerLeft,
+                                                  end: Alignment.centerRight,
+                                                ),
+                                              ),
+                                            ),
+                                            Align(
+                                              alignment:
+                                                  Alignment(shimmerPos, 0),
+                                              child: FractionallySizedBox(
+                                                widthFactor: 0.35,
+                                                child: Container(
+                                                  decoration: BoxDecoration(
+                                                    gradient: LinearGradient(
+                                                      begin:
+                                                          Alignment.centerLeft,
+                                                      end:
+                                                          Alignment.centerRight,
+                                                      colors: [
+                                                        Colors.transparent,
+                                                        Colors.white
+                                                            .withOpacity(0.08),
+                                                        Colors.transparent,
+                                                      ],
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                ),
+                                // Button content
+                                Material(
+                                  color: Colors.transparent,
+                                  child: InkWell(
+                                    onTap: () async {
+                                      // Web 平台不支持保存到相册
+                                      if (kIsWeb) {
+                                        if (context.mounted) {
+                                          ScaffoldMessenger.of(context)
+                                              .showSnackBar(
+                                            const SnackBar(
+                                                content: Text(
+                                                    "当前平台不支持保存到相册，请在手机上使用")),
+                                          );
+                                        }
+                                        return;
+                                      }
+
+                                      PermissionStatus status;
+                                      if (Platform.isIOS) {
+                                        // iOS 双兜底：优先请求 add-only，失败后回退到 photos。
+                                        final addOnlyStatus = await Permission
+                                            .photosAddOnly
+                                            .request();
+                                        if (addOnlyStatus.isGranted ||
+                                            addOnlyStatus ==
+                                                PermissionStatus.limited) {
+                                          status = addOnlyStatus;
+                                        } else if (addOnlyStatus
+                                                .isPermanentlyDenied ||
+                                            addOnlyStatus ==
+                                                PermissionStatus.restricted) {
+                                          status = addOnlyStatus;
+                                        } else {
+                                          status =
+                                              await Permission.photos.request();
+                                        }
+                                      } else if (Platform.isAndroid) {
+                                        // Android 13+ (API 33+) 使用 READ_MEDIA_IMAGES (Permission.photos)
+                                        // Android 12 及以下 (API 32-) 使用 READ_EXTERNAL_STORAGE (Permission.storage)
+                                        _cachedAndroidSdkInt ??=
+                                            (await DeviceInfoPlugin()
+                                                    .androidInfo)
+                                                .version
+                                                .sdkInt;
+                                        if (_cachedAndroidSdkInt! >= 33) {
+                                          status =
+                                              await Permission.photos.request();
+                                        } else {
+                                          status = await Permission.storage
+                                              .request();
+                                        }
+                                      } else {
+                                        // 桌面或其他不支持保存到相册的平台
+                                        if (context.mounted) {
+                                          ScaffoldMessenger.of(context)
+                                              .showSnackBar(const SnackBar(
+                                                  content:
+                                                      Text("当前平台不支持保存到相册")));
+                                        }
+                                        return;
+                                      }
+
+                                      if (status.isGranted ||
+                                          status == PermissionStatus.limited) {
+                                        // 权限已授予，继续保存
+                                      } else if (status.isPermanentlyDenied ||
+                                          status ==
+                                              PermissionStatus.restricted) {
+                                        // 权限被永久拒绝或受限，引导用户到设置
+                                        if (context.mounted) {
+                                          showDialog(
+                                            context: context,
+                                            builder: (context) {
+                                              return AlertDialog(
+                                                title: const Text('权限被拒绝'),
+                                                content: const Text(
+                                                    '相册权限已被拒绝，请前往设置开启。'),
+                                                actions: [
+                                                  TextButton(
+                                                    onPressed: () {
+                                                      Navigator.of(context)
+                                                          .pop();
+                                                      openAppSettings();
+                                                    },
+                                                    child: const Text('去设置'),
+                                                  ),
+                                                  TextButton(
+                                                    onPressed: () {
+                                                      Navigator.of(context)
+                                                          .pop();
+                                                    },
+                                                    child: const Text('取消'),
+                                                  ),
+                                                ],
+                                              );
+                                            },
+                                          );
+                                        }
+                                        return;
+                                      } else {
+                                        // 权限被拒绝，但可以再次请求
+                                        if (context.mounted) {
+                                          ScaffoldMessenger.of(context)
+                                              .showSnackBar(const SnackBar(
+                                                  content:
+                                                      Text("需要相册权限才能保存图片")));
+                                        }
+                                        return;
+                                      }
+
+                                      try {
+                                        late Uint8List bytes;
+
+                                        if (widget.resultImageFile != null) {
+                                          bytes = await widget.resultImageFile!
+                                              .readAsBytes();
+                                        } else if (widget.resultImageUrl !=
+                                                null &&
+                                            widget.resultImageUrl!.isNotEmpty) {
+                                          final url = widget.resultImageUrl!;
+                                          if (_isLocalFilePath(url)) {
+                                            final file = _fileFromPath(url);
+                                            if (await file.exists()) {
+                                              bytes = await file.readAsBytes();
+                                            } else {
+                                              if (context.mounted) {
+                                                ScaffoldMessenger.of(context)
+                                                    .showSnackBar(
+                                                        const SnackBar(
+                                                            content: Text(
+                                                                "未找到本地图片")));
+                                              }
+                                              return;
+                                            }
+                                          } else {
+                                            final response =
+                                                await http.get(Uri.parse(url));
+                                            if (response.statusCode == 200) {
+                                              bytes = response.bodyBytes;
+                                            } else {
+                                              if (context.mounted) {
+                                                ScaffoldMessenger.of(context)
+                                                    .showSnackBar(
+                                                        const SnackBar(
+                                                            content: Text(
+                                                                "下载图片失败")));
+                                              }
+                                              return;
+                                            }
+                                          }
+                                        } else {
+                                          if (context.mounted) {
+                                            ScaffoldMessenger.of(context)
+                                                .showSnackBar(const SnackBar(
+                                                    content: Text("未找到图片以保存")));
+                                          }
+                                          return;
+                                        }
+
+                                        if (_enableWatermark) {
+                                          bytes =
+                                              await _addWatermarkToBytes(bytes);
+                                        }
+
+                                        // 保存到临时文件
+                                        final tempDir =
+                                            await getTemporaryDirectory();
+                                        final tempPath =
+                                            '${tempDir.path}/ai_result_${DateTime.now().millisecondsSinceEpoch}.png';
+                                        final tempFile = File(tempPath);
+                                        await tempFile.writeAsBytes(bytes);
+
+                                        try {
+                                          // 使用 Gal 插件保存图片到相册
+                                          await Gal.putImage(tempPath,
+                                              album: 'Peture');
+                                        } finally {
+                                          // 无论保存成功或失败都删除临时文件
+                                          if (await tempFile.exists()) {
+                                            await tempFile.delete();
+                                          }
+                                        }
+
+                                        if (context.mounted) {
+                                          ScaffoldMessenger.of(context)
+                                              .showSnackBar(const SnackBar(
+                                                  content: Text("已保存到相册！")));
+                                        }
+                                      } catch (e) {
+                                        debugPrint('保存图片到相册时出错: $e');
+                                        if (context.mounted) {
+                                          ScaffoldMessenger.of(context)
+                                              .showSnackBar(const SnackBar(
+                                                  content:
+                                                      Text("保存失败，请检查权限设置")));
+                                        }
+                                      }
+                                    },
+                                    borderRadius: BorderRadius.circular(26),
+                                    child: Center(
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            Icons.download_rounded,
+                                            color: Colors.white,
+                                            size: 20,
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            "保存到相册",
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.w800,
+                                              color: Colors.white,
+                                              fontSize: 16,
+                                              letterSpacing: 0,
+                                              fontFamilyFallback: const [
+                                                'PingFang SC',
+                                                'Noto Sans CJK SC',
+                                                'Noto Sans SC',
+                                              ],
+                                              shadows: const [
+                                                Shadow(
+                                                  color: Colors.black45,
+                                                  offset: Offset(0, 1),
+                                                  blurRadius: 2.5,
+                                                ),
+                                                Shadow(
+                                                  color: Colors.black26,
+                                                  offset: Offset(0, 0),
+                                                  blurRadius: 1,
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                ),
+
+                const SizedBox(height: 8),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: _buildAvatarActionButton(
+                          label: '设为用户头像',
+                          icon: Icons.person_rounded,
+                          onTap: _setAsUserAvatar,
+                          isLoading: _isSettingAvatar,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _buildAvatarActionButton(
+                          label: '设为宠物头像',
+                          icon: Icons.pets_rounded,
+                          onTap: _setAsPetAvatar,
+                          isLoading: _isSettingAvatar,
                         ),
                       ),
                     ],
                   ),
                 ),
+                const SizedBox(height: 12),
               ],
             ),
           ),
@@ -991,11 +1268,947 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
 
   Widget _buildIconAction(
       IconData icon, bool isActive, Color activeColor, VoidCallback onTap) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Icon(icon,
-          color: isActive ? activeColor : AppColors.textDark, size: 24),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(999),
+        hoverColor: AppColors.primary.withOpacity(0.08),
+        highlightColor: activeColor.withOpacity(0.12),
+        splashColor: activeColor.withOpacity(0.16),
+        child: AnimatedScale(
+          duration: const Duration(milliseconds: 160),
+          curve: Curves.easeOut,
+          scale: isActive ? 1.08 : 1.0,
+          child: Icon(icon,
+              color: isActive ? activeColor : AppColors.textDark, size: 22),
+        ),
+      ),
     );
+  }
+
+  Widget _buildAvatarActionButton({
+    required String label,
+    required IconData icon,
+    required VoidCallback onTap,
+    bool isLoading = false,
+  }) {
+    return SizedBox(
+      height: 40,
+      child: AnimatedBuilder(
+        animation: _shimmerController,
+        builder: (context, child) {
+          final shimmer = _shimmerController.value;
+          return Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              gradient: LinearGradient(
+                begin: Alignment(-0.6 + shimmer * 1.2, -0.5),
+                end: Alignment(0.6 - shimmer * 1.2, 0.5),
+                colors: [
+                  Colors.white.withOpacity(0.92),
+                  AppColors.primary.withOpacity(0.05 + shimmer * 0.06),
+                  AppColors.secondary.withOpacity(0.08 + shimmer * 0.06),
+                  Colors.white.withOpacity(0.92),
+                ],
+              ),
+              border: Border.all(
+                color: isLoading
+                    ? AppColors.textLight.withOpacity(0.18)
+                    : AppColors.secondary.withOpacity(0.24),
+                width: 1,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.secondary.withOpacity(0.08),
+                  blurRadius: 8,
+                  offset: const Offset(0, 3),
+                ),
+                BoxShadow(
+                  color: Colors.white.withOpacity(0.8),
+                  blurRadius: 1,
+                  offset: const Offset(0, -1),
+                  blurStyle: BlurStyle.inner,
+                ),
+              ],
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: isLoading ? null : onTap,
+                borderRadius: BorderRadius.circular(20),
+                hoverColor: AppColors.primary.withOpacity(0.05),
+                highlightColor: AppColors.secondary.withOpacity(0.08),
+                splashColor: AppColors.secondary.withOpacity(0.12),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    if (isLoading)
+                      SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.2,
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            AppColors.primary.withOpacity(0.7),
+                          ),
+                        ),
+                      )
+                    else
+                      Icon(icon,
+                          size: 17, color: AppColors.primary.withOpacity(0.9)),
+                    const SizedBox(width: 6),
+                    Text(
+                      label,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: isLoading
+                            ? AppColors.primary.withOpacity(0.6)
+                            : AppColors.primary.withOpacity(0.95),
+                        letterSpacing: 0.3,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  /// 彻底清除头像缓存，确保所有页面立即显示新头像
+  Future<void> _clearAvatarCache(String imageUrl) async {
+    try {
+      // 1. 清除 CachedNetworkImage 磁盘缓存
+      await CachedNetworkImage.evictFromCache(imageUrl);
+
+      // 2. 清除 Flutter 框架的 ImageCache（覆盖 Image.network / NetworkImage）
+      PaintingBinding.instance.imageCache.clear();
+      PaintingBinding.instance.imageCache.clearLiveImages();
+
+      debugPrint('🗑️ 头像缓存已清除: $imageUrl');
+    } catch (e) {
+      debugPrint('⚠️ 清除头像缓存时出错: $e');
+    }
+  }
+
+  /// 分享当前生成的图片（底部带品牌文字条）
+  Future<void> _shareImage() async {
+    try {
+      late Uint8List bytes;
+
+      if (widget.resultImageFile != null) {
+        bytes = await widget.resultImageFile!.readAsBytes();
+      } else if (widget.resultImageUrl != null &&
+          widget.resultImageUrl!.isNotEmpty) {
+        final url = widget.resultImageUrl!;
+        if (_isLocalFilePath(url)) {
+          final file = _fileFromPath(url);
+          if (await file.exists()) {
+            bytes = await file.readAsBytes();
+          } else {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('未找到本地图片')),
+              );
+            }
+            return;
+          }
+        } else {
+          final response = await http.get(Uri.parse(url));
+          if (response.statusCode == 200) {
+            bytes = response.bodyBytes;
+          } else {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('下载图片失败')),
+              );
+            }
+            return;
+          }
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('未找到图片以分享')),
+          );
+        }
+        return;
+      }
+
+      // 先添加原有水印（如果用户开启了）
+      if (_enableWatermark) {
+        bytes = await _addWatermarkToBytes(bytes);
+      }
+
+      // 再添加底部分享文字条
+      bytes = await _addShareFooterToBytes(bytes);
+
+      // 保存到临时文件
+      final tempDir = await getTemporaryDirectory();
+      final tempPath =
+          '${tempDir.path}/peture_share_${DateTime.now().millisecondsSinceEpoch}.png';
+      final tempFile = File(tempPath);
+      await tempFile.writeAsBytes(bytes);
+
+      // 调用系统分享
+      await Share.shareXFiles(
+        [XFile(tempPath)],
+        text: '智宠合生 Peture AI 生成',
+      );
+
+      // 分享完成后删除临时文件（延迟确保分享面板已读取）
+      Future.delayed(const Duration(seconds: 30), () async {
+        if (await tempFile.exists()) {
+          await tempFile.delete();
+        }
+      });
+    } catch (e) {
+      debugPrint('分享图片时出错: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('分享失败：$e')),
+        );
+      }
+    }
+  }
+
+  /// 在图片底部添加分享品牌文字条 - Premium Design
+  Future<Uint8List> _addShareFooterToBytes(Uint8List originalBytes) async {
+    final sourceImage = await _decodeImage(originalBytes);
+    final footerHeight = (sourceImage.height * 0.15).clamp(80.0, 140.0).toInt();
+    final newHeight = sourceImage.height + footerHeight;
+    final width = sourceImage.width;
+
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+
+    // 绘制原图
+    canvas.drawImageRect(
+      sourceImage,
+      Rect.fromLTWH(0, 0, width.toDouble(), sourceImage.height.toDouble()),
+      Rect.fromLTWH(0, 0, width.toDouble(), sourceImage.height.toDouble()),
+      Paint(),
+    );
+
+    final footerTop = sourceImage.height.toDouble();
+    final footerRect = Rect.fromLTWH(
+      0,
+      footerTop,
+      width.toDouble(),
+      footerHeight.toDouble(),
+    );
+
+    // 绘制渐变背景
+    final gradientPaint = Paint()
+      ..shader = LinearGradient(
+        colors: AppColors.primaryGradient,
+        begin: Alignment.centerLeft,
+        end: Alignment.centerRight,
+      ).createShader(footerRect);
+    canvas.drawRect(footerRect, gradientPaint);
+
+    // 绘制顶部细线（shine效果）
+    final shinePaint = Paint()
+      ..color = Colors.white.withOpacity(0.25)
+      ..strokeWidth = 1.5;
+    canvas.drawLine(
+      Offset(0, footerTop),
+      Offset(width.toDouble(), footerTop),
+      shinePaint,
+    );
+
+    // 绘制次级细线（增加层次感）
+    final secondaryLinePaint = Paint()
+      ..color = Colors.white.withOpacity(0.08)
+      ..strokeWidth = 1;
+    canvas.drawLine(
+      Offset(0, footerTop + 2),
+      Offset(width.toDouble(), footerTop + 2),
+      secondaryLinePaint,
+    );
+
+    // 绘制Logo圆形背景（左对齐）
+    final logoRadius = (footerHeight * 0.28).clamp(18.0, 28.0);
+    final logoCenterX = logoRadius + (width * 0.06).clamp(20.0, 40.0);
+    final logoCenterY = footerTop + footerHeight / 2;
+
+    // Logo圆形渐变背景
+    final logoGradientPaint = Paint()
+      ..shader = RadialGradient(
+        colors: [
+          Colors.white.withOpacity(0.35),
+          Colors.white.withOpacity(0.15),
+        ],
+      ).createShader(Rect.fromCircle(
+        center: Offset(logoCenterX, logoCenterY),
+        radius: logoRadius,
+      ))
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(
+      Offset(logoCenterX, logoCenterY),
+      logoRadius,
+      logoGradientPaint,
+    );
+
+    // Logo圆形边框
+    final logoBorderPaint = Paint()
+      ..color = Colors.white.withOpacity(0.4)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5;
+    canvas.drawCircle(
+      Offset(logoCenterX, logoCenterY),
+      logoRadius,
+      logoBorderPaint,
+    );
+
+    // 绘制"P"字母作为Logo
+    final pTextPainter = TextPainter(
+      text: TextSpan(
+        text: 'P',
+        style: TextStyle(
+          color: Colors.white.withOpacity(0.95),
+          fontSize: logoRadius * 1.1,
+          fontWeight: FontWeight.w800,
+          letterSpacing: -1,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    pTextPainter.paint(
+      canvas,
+      Offset(
+        logoCenterX - pTextPainter.width / 2,
+        logoCenterY - pTextPainter.height / 2 - 1,
+      ),
+    );
+
+    // 计算字体大小
+    final brandFontSize = (width * 0.038).clamp(16.0, 30.0);
+    final subtitleFontSize = brandFontSize * 0.65;
+
+    // 品牌主标题 "智宠合生 Peture"
+    final brandTextPainter = TextPainter(
+      text: TextSpan(
+        text: '智宠合生 Peture',
+        style: TextStyle(
+          color: Colors.white.withOpacity(0.98),
+          fontSize: brandFontSize,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0.6,
+          shadows: [
+            Shadow(
+              color: Colors.black.withOpacity(0.15),
+              blurRadius: 4,
+              offset: const Offset(0, 1),
+            ),
+          ],
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+
+    // 副标题 "AI 生成"
+    final subtitleTextPainter = TextPainter(
+      text: TextSpan(
+        text: 'AI 生成',
+        style: TextStyle(
+          color: Colors.white.withOpacity(0.72),
+          fontSize: subtitleFontSize,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 0.8,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+
+    // 计算文字起始位置（在Logo右侧）
+    final textStartX = logoCenterX + logoRadius + 16;
+    final totalTextHeight =
+        brandTextPainter.height + subtitleTextPainter.height + 2;
+    final textStartY = footerTop + (footerHeight - totalTextHeight) / 2;
+
+    // 绘制品牌文字
+    brandTextPainter.paint(
+      canvas,
+      Offset(textStartX, textStartY),
+    );
+
+    // 绘制副标题
+    subtitleTextPainter.paint(
+      canvas,
+      Offset(textStartX, textStartY + brandTextPainter.height + 2),
+    );
+
+    // 右侧装饰性几何图案（QR-code-like dots）
+    final patternStartX = width - (width * 0.08).clamp(30.0, 60.0);
+    final patternCenterY = footerTop + footerHeight / 2;
+    final dotSize = (footerHeight * 0.06).clamp(3.0, 5.0);
+    final dotSpacing = dotSize * 2.2;
+
+    // 绘制3x3点阵
+    final dotPaint = Paint()..color = Colors.white.withOpacity(0.5);
+
+    for (int row = 0; row < 3; row++) {
+      for (int col = 0; col < 3; col++) {
+        // 创建不规则的"QR-like"图案（跳过一些点）
+        if ((row == 1 && col == 1) || (row == 2 && col == 0)) continue;
+
+        final dotX = patternStartX + (col - 1) * dotSpacing;
+        final dotY = patternCenterY + (row - 1) * dotSpacing;
+
+        // 绘制圆角小方块
+        final dotRect = Rect.fromCenter(
+          center: Offset(dotX, dotY),
+          width: dotSize,
+          height: dotSize,
+        );
+        canvas.drawRRect(
+          RRect.fromRectAndRadius(dotRect, Radius.circular(dotSize * 0.3)),
+          dotPaint,
+        );
+      }
+    }
+
+    // 添加额外的装饰性圆环
+    final ringPaint = Paint()
+      ..color = Colors.white.withOpacity(0.25)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5;
+
+    canvas.drawCircle(
+      Offset(
+          patternStartX + dotSpacing * 0.8, patternCenterY - dotSpacing * 0.3),
+      dotSize * 1.2,
+      ringPaint,
+    );
+
+    final picture = recorder.endRecording();
+    final finalImage = await picture.toImage(width, newHeight);
+    final byteData =
+        await finalImage.toByteData(format: ui.ImageByteFormat.png);
+
+    sourceImage.dispose();
+    finalImage.dispose();
+
+    if (byteData == null) {
+      return originalBytes;
+    }
+    return byteData.buffer.asUint8List();
+  }
+
+  Future<String?> _downloadToTempFileFromUrl(String url) async {
+    try {
+      final res = await http.get(Uri.parse(url));
+      if (res.statusCode != 200) return null;
+      final dir = await getTemporaryDirectory();
+      final path =
+          '${dir.path}/ai_result_download_${DateTime.now().millisecondsSinceEpoch}.png';
+      final f = File(path);
+      await f.writeAsBytes(res.bodyBytes, flush: true);
+      return f.path;
+    } catch (e) {
+      debugPrint('下载图片到临时文件失败: $e');
+      return null;
+    }
+  }
+
+  Future<String?> _getSourceFilePath() async {
+    if (widget.resultImageFile != null) return widget.resultImageFile!.path;
+    if (widget.resultImageUrl != null && widget.resultImageUrl!.isNotEmpty) {
+      if (_isLocalFilePath(widget.resultImageUrl)) {
+        return _fileFromPath(widget.resultImageUrl!).path;
+      }
+      // 下载到临时文件
+      return await _downloadToTempFileFromUrl(widget.resultImageUrl!);
+    }
+    return null;
+  }
+
+  Future<void> _setAsUserAvatar() async {
+    setState(() => _isSettingAvatar = true);
+
+    final src = await _getSourceFilePath();
+    if (!mounted) {
+      setState(() => _isSettingAvatar = false);
+      return;
+    }
+    if (src == null) {
+      setState(() => _isSettingAvatar = false);
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('未找到可用图片')));
+      return;
+    }
+
+    if (!mounted) {
+      setState(() => _isSettingAvatar = false);
+      return;
+    }
+    final cropped = await AvatarImageHelper.cropAndCompressAvatar(context, src);
+    if (!mounted) {
+      setState(() => _isSettingAvatar = false);
+      return;
+    }
+    if (cropped == null) {
+      setState(() => _isSettingAvatar = false);
+      return;
+    }
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Row(
+            children: [
+              SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                    strokeWidth: 2, color: Colors.white),
+              ),
+              SizedBox(width: 12),
+              Text('正在设置用户头像...'),
+            ],
+          ),
+          duration: Duration(seconds: 10),
+        ),
+      );
+    }
+
+    String? persistedPath =
+        await UserAvatarHelper.persistAvatarFile(cropped.path);
+    if (!mounted) {
+      setState(() => _isSettingAvatar = false);
+      return;
+    }
+    if (persistedPath == null && cropped.existsSync()) {
+      persistedPath = await UserAvatarHelper.persistAvatarBytes(
+        await cropped.readAsBytes(),
+      );
+    }
+    if (!mounted) {
+      setState(() => _isSettingAvatar = false);
+      return;
+    }
+    persistedPath ??= cropped.path;
+
+    try {
+      final upload = await SupabaseService()
+          .uploadUserAvatarWithError(File(persistedPath));
+      if (!mounted) {
+        setState(() => _isSettingAvatar = false);
+        return;
+      }
+      if (upload.url == null) {
+        final err = upload.error ?? '上传失败';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('上传头像失败：$err')),
+        );
+        return;
+      }
+
+      final prof = await SupabaseService()
+          .upsertUserProfileWithError(avatarUrl: upload.url);
+      if (!mounted) {
+        setState(() => _isSettingAvatar = false);
+        return;
+      }
+      if (prof.success) {
+        final baseUrl = upload.url!.split('?').first;
+        await UserAvatarHelper.setAvatarSourceUrlBasename(baseUrl);
+        if (!mounted) {
+          setState(() => _isSettingAvatar = false);
+          return;
+        }
+        await UserAvatarHelper.saveUserAvatarPath(persistedPath);
+        if (!mounted) {
+          setState(() => _isSettingAvatar = false);
+          return;
+        }
+        await _clearAvatarCache(baseUrl);
+        if (!mounted) {
+          setState(() => _isSettingAvatar = false);
+          return;
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('已设为用户头像')),
+        );
+      } else {
+        final msg = prof.error ?? '保存失败';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('保存头像链接失败：$msg')),
+        );
+      }
+    } catch (e) {
+      debugPrint('设为用户头像失败: $e');
+      setState(() => _isSettingAvatar = false);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('设为用户头像失败：$e')),
+      );
+    } finally {
+      setState(() => _isSettingAvatar = false);
+    }
+  }
+
+  Future<void> _setAsPetAvatar() async {
+    setState(() => _isSettingAvatar = true);
+
+    final service = SupabaseService();
+    final pets = await service.getAllPets();
+    if (!mounted) {
+      setState(() => _isSettingAvatar = false);
+      return;
+    }
+    if (pets.isEmpty) {
+      setState(() => _isSettingAvatar = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('还没有宠物档案，请先创建宠物')),
+      );
+      return;
+    }
+
+    final selected = await _pickPetForAvatar(pets);
+    if (selected == null) {
+      setState(() => _isSettingAvatar = false);
+      return;
+    }
+
+    final src = await _getSourceFilePath();
+    if (!mounted) {
+      setState(() => _isSettingAvatar = false);
+      return;
+    }
+    if (src == null) {
+      setState(() => _isSettingAvatar = false);
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('未找到可用图片')));
+      return;
+    }
+
+    if (!mounted) {
+      setState(() => _isSettingAvatar = false);
+      return;
+    }
+    final cropped = await AvatarImageHelper.cropAndCompressAvatar(context, src);
+    if (!mounted) {
+      setState(() => _isSettingAvatar = false);
+      return;
+    }
+    if (cropped == null) {
+      setState(() => _isSettingAvatar = false);
+      return;
+    }
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Row(
+            children: [
+              SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                    strokeWidth: 2, color: Colors.white),
+              ),
+              SizedBox(width: 12),
+              Text('正在设置宠物头像...'),
+            ],
+          ),
+          duration: Duration(seconds: 10),
+        ),
+      );
+    }
+
+    final petId = selected['id']?.toString();
+    if (petId == null || petId.isEmpty) {
+      setState(() => _isSettingAvatar = false);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('宠物信息异常，无法设置头像')),
+      );
+      return;
+    }
+
+    try {
+      final avatarUrl = await service.uploadPetAvatar(
+        file: cropped,
+        petId: petId,
+      );
+      if (!mounted) {
+        setState(() => _isSettingAvatar = false);
+        return;
+      }
+      if (avatarUrl == null || avatarUrl.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('上传宠物头像失败，请稍后重试')),
+        );
+        return;
+      }
+
+      // 清除所有层级的缓存，确保立即刷新
+      final baseUrl = avatarUrl.split('?').first;
+      await _clearAvatarCache(baseUrl);
+
+      // 通知其他页面宠物数据已变更，需要刷新
+      DataChangeNotifier.markPetDataChanged();
+
+      if (!mounted) {
+        setState(() => _isSettingAvatar = false);
+        return;
+      }
+      final petName = (selected['name'] ?? '').toString();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('已设为${petName.isEmpty ? '宠物' : petName}头像')),
+      );
+    } catch (e) {
+      debugPrint('设为宠物头像失败: $e');
+      setState(() => _isSettingAvatar = false);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('设为宠物头像失败：$e')),
+      );
+    } finally {
+      setState(() => _isSettingAvatar = false);
+    }
+  }
+
+  Future<Map<String, dynamic>?> _pickPetForAvatar(
+    List<Map<String, dynamic>> pets,
+  ) async {
+    if (!mounted) return null;
+    final rawHeight = 180.0 + pets.length * 92.0;
+    final sheetHeight = rawHeight.clamp(280.0, 440.0).toDouble();
+
+    return showModalBottomSheet<Map<String, dynamic>>(
+      context: context,
+      isScrollControlled: false,
+      backgroundColor: const Color(0xFFF8F7FF),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      builder: (ctx) {
+        return Container(
+          color: const Color(0xFFF8F7FF),
+          child: SafeArea(
+            top: false,
+            child: SizedBox(
+              height: sheetHeight,
+              child: Column(
+                children: [
+                  const SizedBox(height: 10),
+                  Container(
+                    width: 42,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFD6D0F6),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                '选择宠物',
+                                style: TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFF241E44),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: () => Navigator.of(ctx).pop(),
+                          icon: const Icon(Icons.close_rounded),
+                          style: IconButton.styleFrom(
+                            backgroundColor: Colors.white,
+                            foregroundColor: const Color(0xFF4D447E),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Expanded(
+                    child: pets.isEmpty
+                        ? Center(
+                            child: Text(
+                              '暂无宠物可选',
+                              style: TextStyle(
+                                color: Colors.black.withOpacity(0.52),
+                                fontSize: 14,
+                              ),
+                            ),
+                          )
+                        : ListView.separated(
+                            padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                            itemCount: pets.length,
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(height: 12),
+                            itemBuilder: (_, i) {
+                              final pet = pets[i];
+                              final name = (pet['name'] ?? '').toString();
+                              final type = (pet['type'] ?? '').toString();
+                              final breed = (pet['breed'] ?? '').toString();
+                              final avatar = (pet['avatar'] ?? '').toString();
+                              return Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                  borderRadius: BorderRadius.circular(20),
+                                  onTap: () => Navigator.of(ctx).pop(pet),
+                                  child: Container(
+                                    padding: const EdgeInsets.all(14),
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(20),
+                                      color: Colors.white,
+                                      border: Border.all(
+                                        color: const Color(0xFFE6E0FF),
+                                      ),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: const Color(0xFF7A6BFF)
+                                              .withOpacity(0.06),
+                                          blurRadius: 16,
+                                          offset: const Offset(0, 6),
+                                        ),
+                                      ],
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        _buildPetAvatarThumb(avatar),
+                                        const SizedBox(width: 14),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                name.isEmpty ? '未命名宠物' : name,
+                                                style: const TextStyle(
+                                                  fontSize: 16,
+                                                  fontWeight: FontWeight.w800,
+                                                  color: Color(0xFF241E44),
+                                                ),
+                                              ),
+                                              const SizedBox(height: 6),
+                                              Wrap(
+                                                spacing: 8,
+                                                runSpacing: 6,
+                                                children: [
+                                                  _buildPetTag(
+                                                    type.isEmpty
+                                                        ? '未填写类型'
+                                                        : type,
+                                                  ),
+                                                  if (breed.isNotEmpty)
+                                                    _buildPetTag(breed),
+                                                ],
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Icon(
+                                          Icons.chevron_right_rounded,
+                                          size: 26,
+                                          color: Colors.black.withOpacity(0.28),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildPetTag(String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF3EEFF),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: Color(0xFF6756F6),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPetAvatarThumb(String avatar) {
+    final fallback = Container(
+      width: 48,
+      height: 48,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: const Color(0xFFEAE6FF),
+        border: Border.all(
+          color: const Color(0xFF8D79FF).withOpacity(0.25),
+        ),
+      ),
+      child: const Icon(
+        Icons.pets_rounded,
+        color: Color(0xFF6B5CE7),
+        size: 24,
+      ),
+    );
+
+    if (avatar.isEmpty) return fallback;
+
+    if (_isLocalFilePath(avatar)) {
+      final file = _fileFromPath(avatar);
+      if (file.existsSync()) {
+        return ClipOval(
+          child: Image.file(
+            file,
+            width: 48,
+            height: 48,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => fallback,
+          ),
+        );
+      }
+      return fallback;
+    }
+
+    if (avatar.startsWith('http://') || avatar.startsWith('https://')) {
+      return ClipOval(
+        child: Image.network(
+          avatar,
+          width: 48,
+          height: 48,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => fallback,
+        ),
+      );
+    }
+
+    return fallback;
   }
 }
 

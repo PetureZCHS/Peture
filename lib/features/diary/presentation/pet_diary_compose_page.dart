@@ -310,15 +310,32 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      extendBodyBehindAppBar: true,
-      body: Stack(
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle(
+        statusBarIconBrightness: Brightness.dark,
+        statusBarBrightness: Brightness.light,
+        statusBarColor: Colors.transparent,
+        systemNavigationBarIconBrightness: Brightness.dark,
+        systemNavigationBarColor: Colors.white,
+      ),
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        body: Stack(
         children: [
           // 背景层
           Stack(
             children: [
               Container(color: AppColors.background),
+              // 状态栏区域半透明遮罩，确保图标清晰可见
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                height: MediaQuery.of(context).padding.top + 44,
+                child: Container(
+                  color: AppColors.background.withOpacity(0.85),
+                ),
+              ),
               AnimatedBuilder(
                 animation: _orbController,
                 builder: (context, child) {
@@ -584,7 +601,8 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
           ),
         ],
       ),
-    );
+    ),
+  );
   }
 
   Widget _buildTopHeader() {

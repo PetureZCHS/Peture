@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
+
 void main() {
   final file = File('lib/features/lost_pet/presentation/lost_pet_rescue_page.dart');
   final content = file.readAsStringSync();
@@ -10,5 +12,5 @@ void main() {
     dotAll: true,
   );
 
-  print(regex.hasMatch(content) ? 'Matched' : 'Not Matched');
+  debugPrint(regex.hasMatch(content) ? 'Matched' : 'Not Matched');
 }

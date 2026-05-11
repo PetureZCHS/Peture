@@ -1,19 +1,20 @@
 import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:path_provider/path_provider.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../../services/supabase_service.dart';
 import '../../../shared/models/pet.dart';
-import '../../home/presentation/home_screen.dart'; 
+import '../../home/presentation/home_screen.dart';
 import 'settings_page.dart';
 import 'pet_profile_form_page.dart';
 import '../../../shared/utils/ui_helpers.dart';
 import '../../../shared/utils/user_avatar_helper.dart';
+import '../../../shared/utils/avatar_image_helper.dart';
 import '../../moderation/data/moderation_client.dart';
 import '../../moderation/domain/moderation_scene.dart';
-import '../../moderation/presentation/moderation_dialog.dart';
 import '../../moderation/utils/moderation_guard.dart';
 
 // =========================================================
@@ -83,17 +84,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
     try {
       // 从 Supabase 加载昵称和头像 URL
       final profile = await _supabaseService.getUserProfile();
+      final avatarUrl = profile?['avatar_url'] as String?;
       if (mounted) {
         setState(() {
           _userNickname = profile?['nickname'] as String? ?? '';
-          _avatarUrl = profile?['avatar_url'] as String?;
+          _avatarUrl = avatarUrl;
         });
       }
-      // 加载本地头像（如果有）
-      final localAvatar = await UserAvatarHelper.getCurrentUserAvatarPath();
-      if (mounted && localAvatar != null) {
-        setState(() => _avatarPath = localAvatar);
-      }
+      final localAvatar = await UserAvatarHelper.ensureCachedAvatarFile(
+        avatarUrl,
+        _supabaseService.cacheUserAvatarFromPublicUrl,
+      );
+      if (mounted) setState(() => _avatarPath = localAvatar);
     } catch (e) {
       debugPrint('加载用户资料失败: $e');
     }
@@ -140,98 +142,108 @@ class _ProfileScreenState extends State<ProfileScreen> {
             _avatarUrl != null;
 
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        GestureDetector(
-          onTap: _showEditNicknameDialog,
-          child: Row(
-            children: [
-              // 头像（可点击更换）
-              GestureDetector(
-                onTap: _showChangeAvatarDialog,
-                child: Container(
-                  padding: const EdgeInsets.all(3),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: const LinearGradient(
-                      colors: [
-                        AppColors.primaryGradientStart,
-                        AppColors.primaryGradientEnd,
-                      ],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.primary.withOpacity(0.4),
-                        blurRadius: 16,
-                        offset: const Offset(0, 8),
-                      ),
-                    ],
-                  ),
+        Expanded(
+          child: GestureDetector(
+            onTap: _showEditNicknameDialog,
+            child: Row(
+              children: [
+                // 头像（可点击更换）
+                GestureDetector(
+                  onTap: _showChangeAvatarDialog,
                   child: Container(
-                    padding: const EdgeInsets.all(2),
-                    decoration: const BoxDecoration(
-                      color: Colors.white,
+                    padding: const EdgeInsets.all(3),
+                    decoration: BoxDecoration(
                       shape: BoxShape.circle,
+                      gradient: const LinearGradient(
+                        colors: [
+                          AppColors.primaryGradientStart,
+                          AppColors.primaryGradientEnd,
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.primary.withOpacity(0.4),
+                          blurRadius: 16,
+                          offset: const Offset(0, 8),
+                        ),
+                      ],
                     ),
-                    child: CircleAvatar(
-                      radius: 32,
-                      backgroundColor: AppColors.primary,
-                      backgroundImage: hasAvatar &&
-                              _avatarPath != null &&
-                              File(_avatarPath!).existsSync()
-                          ? FileImage(File(_avatarPath!))
-                          : (_avatarUrl != null
-                              ? NetworkImage(_avatarUrl!)
-                              : null) as ImageProvider?,
-                      child: !hasAvatar
-                          ? Text(
-                              avatarText,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 24,
-                              ),
-                            )
-                          : null,
+                    child: Container(
+                      padding: const EdgeInsets.all(2),
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                      ),
+                      child: CircleAvatar(
+                        key: ValueKey<String>(
+                          '${_avatarUrl ?? ''}|${_avatarPath ?? ''}',
+                        ),
+                        radius: 32,
+                        backgroundColor: AppColors.primary,
+                        backgroundImage: hasAvatar &&
+                                _avatarPath != null &&
+                                File(_avatarPath!).existsSync()
+                            ? FileImage(File(_avatarPath!))
+                            : (_avatarUrl != null
+                                ? NetworkImage(_avatarUrl!)
+                                : null) as ImageProvider?,
+                        child: !hasAvatar
+                            ? Text(
+                                avatarText,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 24,
+                                ),
+                              )
+                            : null,
+                      ),
                     ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 20),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    displayName,
-                    style: AppStyles.ownerId.copyWith(
-                      fontSize: 24,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.primaryText,
-                      letterSpacing: -0.5,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: AppColors.primary.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      '主人',
-                      style: AppStyles.ownerId.copyWith(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.primary,
+                const SizedBox(width: 20),
+                Flexible(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        displayName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppStyles.ownerId.copyWith(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.primaryText,
+                          letterSpacing: -0.5,
+                        ),
                       ),
-                    ),
+                      const SizedBox(height: 4),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          '主人',
+                          style: AppStyles.ownerId.copyWith(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.primary,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-            ],
+                ),
+              ],
+            ),
           ),
         ),
         IconButton(
@@ -297,26 +309,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
           content: result.trim(),
           onPassed: () async {},
         );
-        if (!passed) return;
+        if (!passed || !mounted) return;
+
         final success =
             await _supabaseService.upsertUserProfile(nickname: result.trim());
+        if (!mounted) return;
         if (success) {
-          if (mounted) {
-            setState(() => _userNickname = result.trim());
-          }
-          await showModerationSuccessDialog(
-            mounted ? context : null,
-            message: '昵称修改成功',
+          setState(() => _userNickname = result.trim());
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+                content: Text('✅ 昵称修改成功'), backgroundColor: Colors.green),
           );
         } else {
-          if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
                 content: Text('❌ 昵称修改失败'), backgroundColor: Colors.red),
           );
         }
       } catch (e) {
-        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('❌ 昵称修改失败: $e'), backgroundColor: Colors.red),
         );
@@ -362,86 +372,104 @@ class _ProfileScreenState extends State<ProfileScreen> {
     try {
       final XFile? pickedFile = await _picker.pickImage(
         source: source,
-        maxWidth: 512,
-        maxHeight: 512,
-        imageQuality: 80,
+        maxWidth: 2048,
+        maxHeight: 2048,
+        imageQuality: 90,
       );
 
       if (pickedFile == null) {
         return;
       }
-      final avatarBytes = await File(pickedFile.path).readAsBytes();
-      final passed = await _moderationGuard.runImageGuardByBytes(
+
+      if (!mounted) return;
+      final cropped = await AvatarImageHelper.cropAndCompressAvatar(
+        context,
+        pickedFile.path,
+      );
+      if (cropped == null) {
+        return;
+      }
+      final avatarBytes = await cropped.readAsBytes();
+      if (!context.mounted) return;
+      final avatarPassed = await _moderationGuard.runImageGuardByBytes(
         context: context,
         scene: ModerationScene.avatar,
         bytes: avatarBytes,
         onPassed: () async {},
       );
-      if (!passed) return;
-      if (!mounted) return;
+      if (!avatarPassed || !mounted) return;
 
-      // 保存到本地
-      final Directory appDir = await getApplicationDocumentsDirectory();
-      final String avatarsDir = '${appDir.path}/avatars';
-      final Directory avatarDirectory = Directory(avatarsDir);
-      if (!await avatarDirectory.exists()) {
-        await avatarDirectory.create(recursive: true);
+      // 先本地生效，避免网络波动导致“改了但看起来没改”
+      final localFile = cropped;
+      var persistedPath =
+          await UserAvatarHelper.persistAvatarFile(localFile.path);
+      if (persistedPath == null && localFile.existsSync()) {
+        persistedPath = await UserAvatarHelper.persistAvatarBytes(
+          await localFile.readAsBytes(),
+        );
+      }
+      persistedPath ??= localFile.path;
+      await UserAvatarHelper.saveUserAvatarPath(persistedPath);
+      if (mounted) {
+        setState(() {
+          _avatarPath = persistedPath;
+        });
       }
 
-      final String fileName =
-          'avatar_${DateTime.now().millisecondsSinceEpoch}.jpg';
-      final String newPath = '$avatarsDir/$fileName';
-      await File(pickedFile.path).copy(newPath);
+      final fileForUpload = File(persistedPath);
+      var upload = await _supabaseService.uploadUserAvatarWithError(
+        fileForUpload,
+      );
+      if (upload.url == null && _retryableSyncError(upload.error)) {
+        await Future<void>.delayed(const Duration(milliseconds: 600));
+        upload = await _supabaseService.uploadUserAvatarWithError(
+          fileForUpload,
+        );
+      }
 
-      // 删除旧头像
-      if (_avatarPath != null && await File(_avatarPath!).exists()) {
-        try {
-          await File(_avatarPath!).delete();
-        } catch (e) {
-          debugPrint('删除旧头像失败: $e');
+      String? avatarUrl = upload.url;
+      String? syncError = upload.error;
+      var success = false;
+
+      if (avatarUrl != null) {
+        final prof = await _supabaseService.upsertUserProfileWithError(
+          avatarUrl: avatarUrl,
+        );
+        success = prof.success;
+        if (!prof.success) {
+          syncError = prof.error ?? '更新头像链接到资料失败';
         }
       }
 
-      // 上传到临时桶，再由后端 finalize 到正式桶
-      final userId = await _supabaseService.currentUserId;
-      String? avatarUrl;
-      if (userId != null) {
-        try {
-          final uploadPath =
-              '$userId/avatar-temp-${DateTime.now().millisecondsSinceEpoch}.jpg';
-          final tempUploaded = await _supabaseService.uploadAvatarTemp(
-            File(newPath),
-            uploadPath,
-          );
-          if (tempUploaded) {
-            avatarUrl = await _supabaseService.finalizeAvatarFromTemp(uploadPath);
-          }
-        } catch (e) {
-          debugPrint('上传头像到 Storage 失败: $e');
+      String? localPath = persistedPath;
+      if (avatarUrl != null) {
+        await UserAvatarHelper.setAvatarSourceUrlBasename(
+          avatarUrl.split('?').first,
+        );
+        // 上传文件即 persistedPath，避免 ensureCachedAvatarFile 先删本地再下载导致拍照等场景不刷新
+        localPath = persistedPath;
+        if (File(persistedPath).existsSync()) {
+          try {
+            await FileImage(File(persistedPath)).evict();
+          } catch (_) {}
         }
       }
-
-      // 保存到本地和 Supabase
-      await UserAvatarHelper.saveUserAvatarPath(newPath);
-      final success =
-          await _supabaseService.upsertUserProfile(avatarUrl: avatarUrl);
 
       if (mounted) {
         setState(() {
-          _avatarPath = newPath;
+          _avatarPath = localPath;
           if (avatarUrl != null) _avatarUrl = avatarUrl;
         });
-      }
-      if (success) {
-        await showModerationSuccessDialog(
-          mounted ? context : null,
-          message: '头像更换成功',
-        );
-      } else {
-        await showModerationSuccessDialog(
-          mounted ? context : null,
-          title: '提示',
-          message: '头像已保存，但同步失败',
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              success
+                  ? '✅ 头像更换成功'
+                  : '⚠️ 头像已保存，但同步失败${syncError != null ? '：$syncError' : ''}',
+            ),
+            backgroundColor: success ? Colors.green : Colors.orange,
+            duration: Duration(seconds: success ? 2 : 6),
+          ),
         );
       }
     } catch (e) {
@@ -453,6 +481,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  bool _retryableSyncError(String? message) {
+    if (message == null) return false;
+    final s = message.toLowerCase();
+    return s.contains('socket') ||
+        s.contains('timeout') ||
+        s.contains('connection') ||
+        s.contains('network') ||
+        s.contains('failed host') ||
+        s.contains('temporar');
+  }
 }
 
 // =========================================================
@@ -470,11 +508,36 @@ class PetProfileSection extends StatefulWidget {
 class _PetProfileSectionState extends State<PetProfileSection> {
   final List<Pet> pets = [];
   final _supabaseService = SupabaseService();
+  late final VoidCallback _petDataRefreshListener;
 
   @override
   void initState() {
     super.initState();
+    _petDataRefreshListener = () {
+      if (!mounted) return;
+      _loadPets();
+    };
+    DataChangeNotifier.petDataRefreshNotifier.addListener(
+      _petDataRefreshListener,
+    );
     _loadPets();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // 检查宠物数据是否在其他页面被修改，如果是则刷新
+    if (DataChangeNotifier.checkAndReset()) {
+      _loadPets();
+    }
+  }
+
+  @override
+  void dispose() {
+    DataChangeNotifier.petDataRefreshNotifier.removeListener(
+      _petDataRefreshListener,
+    );
+    super.dispose();
   }
 
   Future<void> _loadPets() async {
@@ -512,10 +575,11 @@ class _PetProfileSectionState extends State<PetProfileSection> {
           DataChangeNotifier.markPetDataChanged();
         }
 
-        showModerationSuccessDialog(
-          mounted ? context : null,
-          message: '宠物档案添加成功',
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('宠物档案添加成功')));
+        }
       } else {
         if (mounted) {
           ScaffoldMessenger.of(
@@ -685,6 +749,7 @@ class _PetProfileSectionState extends State<PetProfileSection> {
 
                       // 创建Pet对象，包含所有表单字段
                       final newPet = Pet(
+                        id: petData['id']?.toString(),
                         type: petData['type'] ?? '狗', // 宠物类型
                         name: petData['name'] ?? '',
                         age: age, // 根据出生日期计算
@@ -730,7 +795,7 @@ class _PetProfileSectionState extends State<PetProfileSection> {
             ),
           ],
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 8),
         pets.isEmpty
             ? const Center(
                 child: Padding(
@@ -923,26 +988,54 @@ class _PetProfileCardState extends State<PetProfileCard>
                                   borderRadius: BorderRadius.circular(20),
                                   child: widget.pet.avatar != null &&
                                           widget.pet.avatar!.isNotEmpty
-                                      ? Image.network(
-                                          widget.pet.avatar!,
-                                          width: 80,
-                                          height: 80,
-                                          fit: BoxFit.cover,
-                                          errorBuilder:
-                                              (context, error, stackTrace) {
-                                            return Container(
-                                              color: AppColors.petTypeColors[
-                                                      widget.pet.type] ??
-                                                  AppColors.petTypeColors['其他'],
-                                              child: Icon(
-                                                Icons.pets,
-                                                color: Colors.white
-                                                    .withOpacity(0.8),
-                                                size: 30,
-                                              ),
-                                            );
-                                          },
-                                        )
+                                      ? (widget.pet.avatar!
+                                                  .startsWith('http://') ||
+                                              widget.pet.avatar!
+                                                  .startsWith('https://')
+                                          ? Image.network(
+                                              widget.pet.avatar!,
+                                              width: 80,
+                                              height: 80,
+                                              fit: BoxFit.cover,
+                                              errorBuilder:
+                                                  (context, error, stackTrace) {
+                                                return Container(
+                                                  color: AppColors
+                                                              .petTypeColors[
+                                                          widget.pet.type] ??
+                                                      AppColors
+                                                          .petTypeColors['其他'],
+                                                  child: Icon(
+                                                    Icons.pets,
+                                                    color: Colors.white
+                                                        .withOpacity(0.8),
+                                                    size: 30,
+                                                  ),
+                                                );
+                                              },
+                                            )
+                                          : Image.file(
+                                              File(widget.pet.avatar!),
+                                              width: 80,
+                                              height: 80,
+                                              fit: BoxFit.cover,
+                                              errorBuilder:
+                                                  (context, error, stackTrace) {
+                                                return Container(
+                                                  color: AppColors
+                                                              .petTypeColors[
+                                                          widget.pet.type] ??
+                                                      AppColors
+                                                          .petTypeColors['其他'],
+                                                  child: Icon(
+                                                    Icons.pets,
+                                                    color: Colors.white
+                                                        .withOpacity(0.8),
+                                                    size: 30,
+                                                  ),
+                                                );
+                                              },
+                                            ))
                                       : Container(
                                           color: AppColors.petTypeColors[
                                                   widget.pet.type] ??
@@ -1056,7 +1149,7 @@ class _PetProfileCardState extends State<PetProfileCard>
 }
 
 // =========================================================
-// 宠物档案详情页
+// 宠物档案详情页 - 全新美学设计
 // =========================================================
 class PetProfileDetailsPage extends StatefulWidget {
   final Pet pet;
@@ -1067,249 +1160,992 @@ class PetProfileDetailsPage extends StatefulWidget {
   State<PetProfileDetailsPage> createState() => _PetProfileDetailsPageState();
 }
 
-class _PetProfileDetailsPageState extends State<PetProfileDetailsPage> {
+class _PetProfileDetailsPageState extends State<PetProfileDetailsPage>
+    with SingleTickerProviderStateMixin {
   late Pet _currentPet;
   final _supabaseService = SupabaseService();
+  bool _isSyncingProfile = false;
+  late AnimationController _animationController;
+  late Animation<double> _fadeAnimation;
 
   @override
   void initState() {
     super.initState();
     _currentPet = widget.pet;
+    _animationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    );
+    _fadeAnimation = CurvedAnimation(
+      parent: _animationController,
+      curve: Curves.easeOutQuart,
+    );
+    _animationController.forward();
   }
 
-  Widget _buildInfoCard(String label, String value,
-      {bool isPlaceholder = false}) {
-    return Container(
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
+  }
+
+  // 获取宠物主题色
+  Color get _petThemeColor {
+    return AppColors.petTypeColors[_currentPet.type] ??
+        AppColors.petTypeColors['其他']!;
+  }
+
+  // 格式化年龄：在数字和中文之间添加空格
+  String _formatAgeWithSpaces(String age) {
+    // 将 "3岁1个月" 转换为 "3 岁 1 个月"
+    return age
+        .replaceAllMapped(RegExp(r'(\d+)岁'), (match) => '${match.group(1)} 岁 ')
+        .replaceAllMapped(RegExp(r'(\d+)个月'), (match) => '${match.group(1)} 个月')
+        .trim();
+  }
+
+  // 构建带有图标的信息项
+  Widget _buildInfoItem({
+    required IconData icon,
+    required String label,
+    required String value,
+    required Color accentColor,
+    bool isPlaceholder = false,
+    VoidCallback? onTap,
+  }) {
+    final content = Container(
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.cardBackground,
-        borderRadius: BorderRadius.circular(12),
-        // 🎨 美学升级：多层阴影效果
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
         boxShadow: [
-          // 第一层：接触阴影
           BoxShadow(
-            offset: const Offset(0, 2),
-            blurRadius: 4.0,
-            color: Colors.black.withOpacity(0.04),
+            color: accentColor.withOpacity(0.15),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
           ),
-          // 第二层：弥散光晕
           BoxShadow(
-            offset: const Offset(0, 12),
-            blurRadius: 24.0,
-            color: Colors.black.withOpacity(0.06),
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
           ),
         ],
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              label,
-              style: const TextStyle(
-                fontWeight: FontWeight.w500,
-                color: AppColors.secondaryText,
+      child: Row(
+        children: [
+          // 图标容器
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  accentColor.withOpacity(0.3),
+                  accentColor.withOpacity(0.1),
+                ],
               ),
+              borderRadius: BorderRadius.circular(16),
             ),
-            Text(
-              value,
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-                color: isPlaceholder ? Colors.grey : AppColors.primaryText,
-              ),
+            child: Icon(
+              icon,
+              color: accentColor.withOpacity(0.8),
+              size: 24,
             ),
-          ],
-        ),
+          ),
+          const SizedBox(width: 16),
+          // 标签和值
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: AppColors.secondaryText.withOpacity(0.8),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: isPlaceholder ? Colors.grey : AppColors.primaryText,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (onTap != null)
+            Icon(
+              Icons.chevron_right_rounded,
+              color: AppColors.secondaryText.withOpacity(0.4),
+            ),
+        ],
+      ),
+    );
+
+    if (onTap == null) return content;
+
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(20),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: content,
       ),
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      // 🎨 美学升级：详情页也使用径向渐变背景
-      decoration: const BoxDecoration(
-        gradient: RadialGradient(
-          center: Alignment.topCenter,
-          radius: 1.8,
-          colors: [Colors.white, Color(0xFFF5F5F7)],
-          stops: [0.0, 1.0],
-        ),
+  // 构建信息分组卡片
+  Widget _buildInfoGroup({
+    required String title,
+    required List<Widget> children,
+    required Animation<double> animation,
+    int delay = 0,
+  }) {
+    return AnimatedBuilder(
+      animation: animation,
+      builder: (context, child) {
+        final delayedValue =
+            ((animation.value * 100) - delay).clamp(0.0, 100.0) / 100;
+        return Opacity(
+          opacity: delayedValue,
+          child: Transform.translate(
+            offset: Offset(0, 20 * (1 - delayedValue)),
+            child: child,
+          ),
+        );
+      },
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(left: 8, bottom: 12),
+            child: Text(
+              title,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: AppColors.secondaryText.withOpacity(0.7),
+                letterSpacing: 0.5,
+              ),
+            ),
+          ),
+          ...children,
+        ],
       ),
-      child: Scaffold(
-        backgroundColor: Colors.transparent,
-        appBar: AppBar(
-          title: Text(
-            '${_currentPet.name} 的档案',
-            style: AppStyles.sectionTitle.copyWith(fontSize: 20),
-          ),
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          leading: IconButton(
-            icon: const Icon(
-              Icons.arrow_back_ios,
-              color: AppColors.primaryText,
+    );
+  }
+
+  Widget _buildPetAvatar() {
+    final avatar = _currentPet.avatar;
+    Widget avatarWidget;
+
+    if (avatar != null && avatar.isNotEmpty) {
+      if (avatar.startsWith('http://') || avatar.startsWith('https://')) {
+        avatarWidget = Hero(
+          tag: 'pet_avatar_${_currentPet.id}',
+          child: ClipOval(
+            child: CachedNetworkImage(
+              imageUrl: avatar,
+              width: 140,
+              height: 140,
+              fit: BoxFit.cover,
+              errorWidget: (context, url, error) =>
+                  _buildPetAvatarPlaceholder(),
             ),
-            onPressed: () => Navigator.of(context).pop(),
           ),
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.edit, color: AppColors.primary),
-              onPressed: () async {
-                final initialData = {
-                  'name': _currentPet.name,
-                  'species': _currentPet.breed,
-                  'birthDate': _currentPet.birthDate,
-                  'gender': _currentPet.gender,
-                  'neuterStatus': _currentPet.neuterStatus,
-                  'weight': _currentPet.weight,
-                  'avatar': _currentPet.avatar,
-                  'type': _currentPet.type,
-                  'ownerNickname': _currentPet.ownerNickname,
-                  'useCustomNickname': _currentPet.useCustomNickname,
-                };
-
-                final result = await Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) =>
-                        PetProfileFormPage(initialData: initialData),
-                  ),
-                );
-
-                if (result != null && mounted) {
-                  // 计算年龄
-                  String age = _currentPet.age;
-                  if (result['birth_date'] != null) {
-                    try {
-                      final birthDate = DateTime.parse(result['birth_date']);
-                      final now = DateTime.now();
-                      int years = now.year - birthDate.year;
-                      int months = now.month - birthDate.month;
-                      if (months < 0) {
-                        years--;
-                        months += 12;
-                      }
-                      age = '$years岁$months个月';
-                    } catch (e) {
-                      debugPrint('Error calculating age: $e');
-                    }
-                  }
-
-                  final updatedPet = Pet(
-                    id: _currentPet.id,
-                    name: result['name'],
-                    type: result['type'],
-                    breed: result['breed'],
-                    birthDate: result['birth_date'],
-                    gender: result['gender'],
-                    neuterStatus: result['neuter_status'],
-                    weight: result['weight'],
-                    avatar: result['avatar'],
-                    age: age,
-                    ownerNickname: result['ownerNickname'],
-                    useCustomNickname: result['useCustomNickname'] ?? false,
-                  );
-
-                  try {
-                    final success = await _supabaseService.updatePet(
-                      updatedPet.toMap(),
-                    );
-                    if (!success) {
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('更新失败，请检查网络连接')),
-                        );
-                      }
-                      return;
-                    }
-                    if (context.mounted) {
-                      setState(() {
-                        _currentPet = updatedPet;
-                      });
-                    }
-                    await showModerationSuccessDialog(
-                      mounted ? context : null,
-                      message: '档案已更新',
-                    );
-                  } catch (e) {
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(
-                        context,
-                      ).showSnackBar(const SnackBar(content: Text('更新失败，请重试')));
-                    }
-                  }
-                }
-              },
+        );
+      } else {
+        final file = File(avatar);
+        if (file.existsSync()) {
+          avatarWidget = Hero(
+            tag: 'pet_avatar_${_currentPet.id}',
+            child: ClipOval(
+              child: Image.file(
+                file,
+                width: 140,
+                height: 140,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) =>
+                    _buildPetAvatarPlaceholder(),
+              ),
             ),
+          );
+        } else {
+          avatarWidget = _buildPetAvatarPlaceholder();
+        }
+      }
+    } else {
+      avatarWidget = _buildPetAvatarPlaceholder();
+    }
+
+    // 装饰性头像容器
+    return Container(
+      padding: const EdgeInsets.all(6),
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            _petThemeColor.withOpacity(0.8),
+            AppColors.primaryGradientEnd.withOpacity(0.6),
           ],
         ),
-        body: SingleChildScrollView(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpaces.horizontalPadding,
-            ),
+        boxShadow: [
+          BoxShadow(
+            color: _petThemeColor.withOpacity(0.4),
+            blurRadius: 30,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      child: Container(
+        padding: const EdgeInsets.all(4),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          shape: BoxShape.circle,
+        ),
+        child: avatarWidget,
+      ),
+    );
+  }
+
+  Widget _buildPetAvatarPlaceholder() {
+    return Container(
+      width: 140,
+      height: 140,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            _petThemeColor.withOpacity(0.6),
+            _petThemeColor.withOpacity(0.3),
+          ],
+        ),
+        shape: BoxShape.circle,
+      ),
+      child: Icon(
+        Icons.pets,
+        color: Colors.white.withOpacity(0.9),
+        size: 56,
+      ),
+    );
+  }
+
+  // 全新的生活照展示组件
+  Widget _buildLifePhotoCard() {
+    final life = _currentPet.lifePhoto;
+    final hasLifePhoto = life != null && life.isNotEmpty;
+    final heroTag = 'life_photo_hero_${_currentPet.id ?? 'unknown'}';
+
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: _petThemeColor.withOpacity(0.12),
+            blurRadius: 24,
+            offset: const Offset(0, 12),
+          ),
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: hasLifePhoto
+                ? () => _openLifePhotoPreview(life, heroTag)
+                : null,
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const SizedBox(height: 20),
-                ClipOval(
-                  child: Image.network(
-                    'https://loremflickr.com/240/240/animal,${_currentPet.breed.toLowerCase()}',
-                    width: 120,
-                    height: 120,
-                    fit: BoxFit.cover,
-                    loadingBuilder: (context, child, progress) {
-                      return progress == null
-                          ? child
-                          : const Center(child: CircularProgressIndicator());
-                    },
-                    errorBuilder: (context, error, stackTrace) {
-                      return Container(
-                        width: 120,
-                        height: 120,
-                        color: Colors.grey[200],
-                        child: const Icon(
-                          Icons.pets,
-                          color: Colors.grey,
-                          size: 50,
+                // 标题栏
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              Colors.pink[200]!.withOpacity(0.4),
+                              Colors.pink[100]!.withOpacity(0.2),
+                            ],
+                          ),
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                      );
-                    },
+                        child: Icon(
+                          Icons.favorite,
+                          color: Colors.pink[400],
+                          size: 20,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              '生活照',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.primaryText,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              hasLifePhoto ? '点击查看大图' : '记录美好瞬间',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: AppColors.secondaryText.withOpacity(0.7),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (hasLifePhoto)
+                        Icon(
+                          Icons.fullscreen_rounded,
+                          color: AppColors.secondaryText.withOpacity(0.4),
+                          size: 24,
+                        ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 16),
-                Text(_currentPet.name, style: AppStyles.sectionTitle),
-                const SizedBox(height: 32),
-                _buildInfoCard('类型', _currentPet.type),
-                const SizedBox(height: 12),
-                _buildInfoCard('品种', _currentPet.breed),
-                const SizedBox(height: 12),
-                _buildInfoCard('性别', _currentPet.gender),
-                const SizedBox(height: 12),
-                _buildInfoCard('年龄', _currentPet.age),
-                const SizedBox(height: 12),
-                if (_currentPet.birthDate != null)
-                  _buildInfoCard('出生日期', _currentPet.birthDate!.split('T')[0]),
-                if (_currentPet.birthDate != null) const SizedBox(height: 12),
-                if (_currentPet.neuterStatus != null)
-                  _buildInfoCard('绝育状态', _currentPet.neuterStatus!),
-                if (_currentPet.neuterStatus != null)
-                  const SizedBox(height: 12),
-                _buildInfoCard(
-                  '体重',
-                  _currentPet.weight != null
-                      ? '${_currentPet.weight!.toStringAsFixed(1)} kg'
-                      : '未填写',
-                  isPlaceholder: _currentPet.weight == null,
-                ),
-                const SizedBox(height: 50),
+                // 图片展示区域
+                if (hasLifePhoto)
+                  Hero(
+                    tag: heroTag,
+                    child: Container(
+                      width: double.infinity,
+                      height: 200,
+                      margin: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.08),
+                            blurRadius: 16,
+                            offset: const Offset(0, 8),
+                          ),
+                        ],
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(16),
+                        child: life.startsWith('http://') ||
+                                life.startsWith('https://')
+                            ? CachedNetworkImage(
+                                imageUrl: life,
+                                fit: BoxFit.cover,
+                                errorWidget: (context, url, error) =>
+                                    _buildLifePhotoPlaceholder(),
+                              )
+                            : Image.file(
+                                File(life),
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) =>
+                                    _buildLifePhotoPlaceholder(),
+                              ),
+                      ),
+                    ),
+                  )
+                else
+                  Container(
+                    width: double.infinity,
+                    height: 120,
+                    margin: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8F9FA),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: Colors.grey[200]!,
+                        width: 2,
+                        style: BorderStyle.solid,
+                      ),
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.add_photo_alternate_outlined,
+                          color: Colors.grey[400],
+                          size: 40,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          '请到编辑页面添加生活照',
+                          style: TextStyle(
+                            color: Colors.grey[500],
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
               ],
             ),
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildLifePhotoPlaceholder() {
+    return Container(
+      color: const Color(0xFFF2F3F7),
+      child: const Icon(Icons.broken_image, color: Color(0xFFB8BEC9), size: 40),
+    );
+  }
+
+  void _openLifePhotoPreview(String source, String heroTag) {
+    Navigator.of(context).push(
+      PageRouteBuilder(
+        opaque: false,
+        barrierColor: Colors.transparent,
+        transitionDuration: const Duration(milliseconds: 200),
+        reverseTransitionDuration: const Duration(milliseconds: 200),
+        pageBuilder: (_, __, ___) => FullscreenLifePhotoPage(
+          imageSource: source,
+          heroTag: heroTag,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openEditPage() async {
+    final initialData = {
+      'id': _currentPet.id,
+      'name': _currentPet.name,
+      'species': _currentPet.breed,
+      'birthDate': _currentPet.birthDate,
+      'gender': _currentPet.gender,
+      'neuterStatus': _currentPet.neuterStatus,
+      'weight': _currentPet.weight,
+      'avatar': _currentPet.avatar,
+      'lifePhoto': _currentPet.lifePhoto,
+      'type': _currentPet.type,
+      'ownerNickname': _currentPet.ownerNickname,
+      'useCustomNickname': _currentPet.useCustomNickname,
+    };
+
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => PetProfileFormPage(initialData: initialData),
+      ),
+    );
+
+    if (result == null || !mounted) {
+      return;
+    }
+
+    // 计算年龄
+    String age = _currentPet.age;
+    if (result['birth_date'] != null) {
+      try {
+        final birthDate = DateTime.parse(result['birth_date']);
+        final now = DateTime.now();
+        int years = now.year - birthDate.year;
+        int months = now.month - birthDate.month;
+        if (months < 0) {
+          years--;
+          months += 12;
+        }
+        age = '$years岁$months个月';
+      } catch (e) {
+        debugPrint('Error calculating age: $e');
+      }
+    }
+
+    final updatedPet = Pet(
+      id: _currentPet.id,
+      name: result['name'],
+      type: result['type'],
+      breed: result['breed'],
+      birthDate: result['birth_date'],
+      gender: result['gender'],
+      neuterStatus: result['neuter_status'],
+      weight: result['weight'],
+      avatar: result['avatar'],
+      lifePhoto: result['life_photo'] ?? result['lifePhoto'],
+      age: age,
+      ownerNickname: result['ownerNickname'],
+      useCustomNickname: result['useCustomNickname'] ?? false,
+    );
+
+    setState(() => _isSyncingProfile = true);
+    try {
+      final success = await _supabaseService.updatePet(updatedPet.toMap());
+      if (!success) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('更新失败，请检查网络连接')),
+          );
+        }
+        return;
+      }
+      setState(() {
+        _currentPet = updatedPet;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('档案已更新')),
+        );
+      }
+      DataChangeNotifier.markPetDataChanged();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('更新失败，请重试')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSyncingProfile = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.dark.copyWith(
+        statusBarColor: Colors.transparent,
+      ),
+      child: Container(
+        // 🎨 全新设计：现代柔和渐变背景
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Color(0xFFF0F4F8), // 浅蓝灰，干净清爽
+              Colors.white,
+              Color(0xFFFAFBFC),
+            ],
+            stops: [0.0, 0.5, 1.0],
+          ),
+        ),
+        child: Stack(
+          children: [
+            Scaffold(
+              backgroundColor: Colors.transparent,
+              appBar: AppBar(
+                title: Text(
+                  '${_currentPet.name} 的档案',
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.primaryText,
+                  ),
+                ),
+                backgroundColor: Colors.transparent,
+                elevation: 0,
+                systemOverlayStyle: SystemUiOverlayStyle.dark,
+                leading: IconButton(
+                  icon: const Icon(
+                    Icons.arrow_back_ios_new_rounded,
+                    color: AppColors.primaryText,
+                  ),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+                actions: [
+                  Container(
+                    margin: const EdgeInsets.only(right: 16),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [
+                          AppColors.primaryGradientStart,
+                          AppColors.primaryGradientEnd,
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Material(
+                      color: Colors.transparent,
+                      borderRadius: BorderRadius.circular(12),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(12),
+                        onTap: _openEditPage,
+                        child: const Padding(
+                          padding:
+                              EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.edit_rounded,
+                                  color: Colors.white, size: 18),
+                              SizedBox(width: 6),
+                              Text(
+                                '编辑',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              body: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      const SizedBox(height: 16),
+                      // 宠物头像区域
+                      FadeTransition(
+                        opacity: _fadeAnimation,
+                        child: _buildPetAvatar(),
+                      ),
+                      const SizedBox(height: 24),
+                      // 宠物名字
+                      FadeTransition(
+                        opacity: _fadeAnimation,
+                        child: Text(
+                          _currentPet.name,
+                          style: const TextStyle(
+                            fontSize: 28,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.primaryText,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      // 品种标签
+                      FadeTransition(
+                        opacity: _fadeAnimation,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 6),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                _petThemeColor.withOpacity(0.6),
+                                _petThemeColor.withOpacity(0.3),
+                              ],
+                            ),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            _currentPet.breed,
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.primaryText.withOpacity(0.8),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 32),
+                      // 基本信息分组
+                      _buildInfoGroup(
+                        title: '基本信息',
+                        animation: _fadeAnimation,
+                        delay: 10,
+                        children: [
+                          _buildInfoItem(
+                            icon: Icons.pets_rounded,
+                            label: '宠物类型',
+                            value: _currentPet.type,
+                            accentColor: Colors.orange[400]!,
+                          ),
+                          const SizedBox(height: 12),
+                          _buildInfoItem(
+                            icon: Icons.category_rounded,
+                            label: '品种',
+                            value: _currentPet.breed,
+                            accentColor: Colors.blue[400]!,
+                          ),
+                          const SizedBox(height: 12),
+                          _buildInfoItem(
+                            icon: _currentPet.gender == '妹妹'
+                                ? Icons.female_rounded
+                                : Icons.male_rounded,
+                            label: '性别',
+                            value: _currentPet.gender,
+                            accentColor: _currentPet.gender == '妹妹'
+                                ? Colors.pink[400]!
+                                : Colors.blue[400]!,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 28),
+                      // 身体特征分组
+                      _buildInfoGroup(
+                        title: '身体特征',
+                        animation: _fadeAnimation,
+                        delay: 25,
+                        children: [
+                          if (_currentPet.birthDate != null)
+                            _buildInfoItem(
+                              icon: Icons.calendar_today_rounded,
+                              label: '出生日期',
+                              value: _currentPet.birthDate!.split('T')[0],
+                              accentColor: Colors.teal[400]!,
+                            ),
+                          if (_currentPet.birthDate != null)
+                            const SizedBox(height: 12),
+                          _buildInfoItem(
+                            icon: Icons.cake_rounded,
+                            label: '年龄',
+                            value: _formatAgeWithSpaces(_currentPet.age),
+                            accentColor: Colors.purple[400]!,
+                          ),
+                          const SizedBox(height: 12),
+                          _buildInfoItem(
+                            icon: Icons.scale_rounded,
+                            label: '体重',
+                            value: _currentPet.weight != null
+                                ? '${_currentPet.weight!.toStringAsFixed(1)} kg'
+                                : '未填写',
+                            accentColor: Colors.green[400]!,
+                            isPlaceholder: _currentPet.weight == null,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 28),
+                      // 其他信息分组
+                      _buildInfoGroup(
+                        title: '其他信息',
+                        animation: _fadeAnimation,
+                        delay: 40,
+                        children: [
+                          if (_currentPet.neuterStatus != null)
+                            _buildInfoItem(
+                              icon: Icons.health_and_safety_rounded,
+                              label: '绝育状态',
+                              value: _currentPet.neuterStatus!,
+                              accentColor: Colors.red[400]!,
+                            ),
+                          if (_currentPet.neuterStatus != null)
+                            const SizedBox(height: 12),
+                          _buildInfoItem(
+                            icon: Icons.person_outline_rounded,
+                            label: '我的称呼',
+                            value: _currentPet.ownerNickname != null &&
+                                    _currentPet.ownerNickname!.isNotEmpty
+                                ? _currentPet.ownerNickname!
+                                : '主人',
+                            accentColor: Colors.indigo[400]!,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 28),
+                      // 生活照卡片
+                      FadeTransition(
+                        opacity: _fadeAnimation,
+                        child: _buildLifePhotoCard(),
+                      ),
+                      const SizedBox(height: 50),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            // 保存中遮罩
+            if (_isSyncingProfile)
+              Positioned.fill(
+                child: AbsorbPointer(
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                    child: Container(
+                      color: Colors.black.withOpacity(0.35),
+                      alignment: Alignment.center,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 32, vertical: 24),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.95),
+                          borderRadius: BorderRadius.circular(20),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.15),
+                              blurRadius: 20,
+                              offset: const Offset(0, 8),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            SizedBox(
+                              width: 36,
+                              height: 36,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 3,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                    AppColors.primary),
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              '保存中…',
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.primaryText,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class FullscreenLifePhotoPage extends StatefulWidget {
+  final String imageSource;
+  final String heroTag;
+
+  const FullscreenLifePhotoPage({
+    super.key,
+    required this.imageSource,
+    required this.heroTag,
+  });
+
+  @override
+  State<FullscreenLifePhotoPage> createState() =>
+      _FullscreenLifePhotoPageState();
+}
+
+class _FullscreenLifePhotoPageState extends State<FullscreenLifePhotoPage>
+    with SingleTickerProviderStateMixin {
+  double dragOffsetY = 0;
+  late AnimationController _controller;
+  late Animation<double> _reboundAnimation;
+
+  static const double dismissThreshold = 150;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 180),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _runReboundAnimation() {
+    _reboundAnimation =
+        Tween<double>(begin: dragOffsetY, end: 0).animate(_controller)
+          ..addListener(() {
+            setState(() {
+              dragOffsetY = _reboundAnimation.value;
+            });
+          });
+    _controller.forward(from: 0);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final screenHeight = MediaQuery.of(context).size.height;
+    final dragPercent = (dragOffsetY / screenHeight).clamp(0.0, 1.0);
+    final scale = 1.0 - dragPercent * 0.4;
+    final bgOpacity = (1.0 - dragPercent).clamp(0.0, 1.0);
+    final isNetwork = widget.imageSource.startsWith('http://') ||
+        widget.imageSource.startsWith('https://');
+
+    final imageWidget = isNetwork
+        ? CachedNetworkImage(
+            imageUrl: widget.imageSource,
+            fit: BoxFit.contain,
+            errorWidget: (context, url, error) => const Icon(
+              Icons.broken_image,
+              color: Colors.white54,
+              size: 56,
+            ),
+          )
+        : Image.file(
+            File(widget.imageSource),
+            fit: BoxFit.contain,
+            errorBuilder: (context, error, stackTrace) => const Icon(
+              Icons.broken_image,
+              color: Colors.white54,
+              size: 56,
+            ),
+          );
+
+    return Stack(
+      children: [
+        Opacity(
+          opacity: bgOpacity,
+          child: Container(color: Colors.black),
+        ),
+        Positioned.fill(
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => Navigator.pop(context),
+            onVerticalDragUpdate: (details) {
+              setState(() {
+                dragOffsetY += details.delta.dy;
+                if (dragOffsetY < 0) dragOffsetY = 0;
+              });
+            },
+            onVerticalDragEnd: (_) {
+              if (dragOffsetY > dismissThreshold) {
+                Navigator.pop(context);
+              } else {
+                _runReboundAnimation();
+              }
+            },
+            child: Transform.translate(
+              offset: Offset(0, dragOffsetY),
+              child: Transform.scale(
+                scale: scale,
+                child: InteractiveViewer(
+                  minScale: 1.0,
+                  maxScale: 4.0,
+                  child: Center(
+                    child: Hero(
+                      tag: widget.heroTag,
+                      child: imageWidget,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

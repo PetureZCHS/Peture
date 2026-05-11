@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/services.dart';
 import 'dart:math' as math;
 import 'dart:io';
+import 'dart:ui';
 import '../../../shared/models/pet.dart';
 import '../../../shared/models/pet_passport.dart';
 import '../../../services/supabase_service.dart';
@@ -9,7 +11,7 @@ import '../../profile/presentation/account_settings_page.dart';
 import '../../../shared/utils/user_avatar_helper.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'edit_pet_passport_page.dart';
-import '../../home/presentation/home_screen.dart'; 
+import '../../home/presentation/home_screen.dart';
 
 /// 宠物身份证（护照风格）页面
 class PetPassportPage extends StatefulWidget {
@@ -20,42 +22,69 @@ class PetPassportPage extends StatefulWidget {
 }
 
 class _PetPassportPageState extends State<PetPassportPage>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   List<Pet> _pets = [];
   final Map<String, PetPassport?> _passports = {};
   bool _isLoading = true;
   int _selectedPetIndex = 0;
   late AnimationController _flipController;
+  late AnimationController _shimmerController;
   bool _isFlipped = false;
+  bool _isPressed = false;
 
   // 用户头像路径
   String? _userAvatarPath;
   String? _userName;
+  /// 账号里「宠物对你的称呼」默认（users_profiles.owner_nickname）
+  String? _profileOwnerNickname;
+
+  static const _placeholderPassportOwnerNames = {'铲屎官', '主人'};
+  late final VoidCallback _petDataRefreshListener;
 
   @override
   void initState() {
     super.initState();
+    _petDataRefreshListener = () {
+      if (!mounted) return;
+      _loadPets();
+    };
+    DataChangeNotifier.petDataRefreshNotifier.addListener(
+      _petDataRefreshListener,
+    );
     _flipController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 600),
     );
+    _shimmerController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    );
     _loadPets();
-    _loadUserInfo();
   }
 
-  /// 加载用户信息（头像和昵称）
+  /// 加载用户信息（头像、昵称、默认主人称呼）
   Future<void> _loadUserInfo() async {
     try {
       final avatarPath = await UserAvatarHelper.getCurrentUserAvatarPath();
       final supabaseService = SupabaseService();
       final profile = await supabaseService.getUserProfile();
       final nickname = profile?['nickname'] as String?;
+      final ownerNick = profile?['owner_nickname'] as String?;
       final user = Supabase.instance.client.auth.currentUser;
+      final metaName = user?.userMetadata?['name'] as String?;
+      final emailLocal = user?.email != null && user!.email!.contains('@')
+          ? user.email!.split('@').first
+          : null;
 
       if (mounted) {
         setState(() {
           _userAvatarPath = avatarPath;
-          _userName = nickname ?? user?.userMetadata?['name'] ?? '铲屎官';
+          _userName = nickname ??
+              (metaName != null && metaName.isNotEmpty ? metaName : null) ??
+              (emailLocal != null && emailLocal.isNotEmpty ? emailLocal : null) ??
+              '宠物家长';
+          _profileOwnerNickname =
+              (ownerNick != null && ownerNick.isNotEmpty) ? ownerNick : '主人';
         });
       }
     } catch (e) {
@@ -63,15 +92,55 @@ class _PetPassportPageState extends State<PetPassportPage>
     }
   }
 
+  /// 身份证「主人」展示：占位文案（铲屎官/主人）或空则与账号昵称同步；用户曾在编辑里自定义则保留。
+  String _displayOwnerName(PetPassport? passport) {
+    final raw = passport?.ownerName?.trim();
+    if (raw != null &&
+        raw.isNotEmpty &&
+        !_placeholderPassportOwnerNames.contains(raw)) {
+      return raw;
+    }
+    final u = _userName?.trim();
+    if (u != null && u.isNotEmpty) return u;
+    return '宠物家长';
+  }
+
+  /// 宠物怎么叫你：优先宠物档案自定义，否则用户默认称呼。
+  String _petCallsOwner(Pet pet) {
+    if (pet.useCustomNickname &&
+        pet.ownerNickname != null &&
+        pet.ownerNickname!.trim().isNotEmpty) {
+      return pet.ownerNickname!.trim();
+    }
+    return _profileOwnerNickname?.trim().isNotEmpty == true
+        ? _profileOwnerNickname!.trim()
+        : '主人';
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // 检查宠物数据是否在其他页面被修改，如果是则刷新
+    if (DataChangeNotifier.checkAndReset()) {
+      _loadPets();
+    }
+  }
+
   @override
   void dispose() {
+    DataChangeNotifier.petDataRefreshNotifier.removeListener(
+      _petDataRefreshListener,
+    );
     _flipController.dispose();
+    _shimmerController.dispose();
     super.dispose();
   }
 
   Future<void> _loadPets() async {
     setState(() => _isLoading = true);
     try {
+      await _loadUserInfo();
+
       final supabaseService = SupabaseService();
       final pets = await supabaseService.getAllPets();
       setState(() {
@@ -123,7 +192,7 @@ class _PetPassportPageState extends State<PetPassportPage>
 
     return PetPassport(
       petId: pet.id!,
-      ownerName: '铲屎官',
+      ownerName: _userName?.trim().isNotEmpty == true ? _userName!.trim() : '宠物家长',
       adoptionDate: DateTime.now().subtract(
         Duration(days: random.nextInt(1000)),
       ),
@@ -138,6 +207,9 @@ class _PetPassportPageState extends State<PetPassportPage>
   }
 
   void _flipCard() {
+    // Trigger shimmer animation
+    _shimmerController.forward(from: 0).then((_) => _shimmerController.reset());
+    
     if (_isFlipped) {
       _flipController.reverse();
     } else {
@@ -146,78 +218,229 @@ class _PetPassportPageState extends State<PetPassportPage>
     setState(() => _isFlipped = !_isFlipped);
   }
 
+  void _onTapDown(TapDownDetails details) {
+    setState(() => _isPressed = true);
+  }
+
+  void _onTapUp(TapUpDetails details) {
+    setState(() => _isPressed = false);
+  }
+
+  void _onTapCancel() {
+    setState(() => _isPressed = false);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F5F5),
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        systemOverlayStyle: SystemUiOverlayStyle.dark,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Color(0xFF1E1E1E)),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text(
-          '宠物身份证',
-          style: TextStyle(
-            color: Color(0xFF1E1E1E),
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        centerTitle: true,
-        actions: [
-          // 用户个人信息设置入口
-          IconButton(
-            icon: const Icon(Icons.person_outline, color: Color(0xFF5A8EFA)),
-            onPressed: () async {
-              await Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const AccountSettingsPage(),
-                ),
-              );
-              // 从设置页面返回后，刷新用户信息
-              _loadUserInfo();
-            },
-          ),
-          if (_pets.isNotEmpty && _pets[_selectedPetIndex].id != null)
-            IconButton(
-              icon: const Icon(Icons.edit, color: Color(0xFF5A8EFA)),
-              onPressed: () => _navigateToEdit(),
-            ),
-        ],
-      ),
+      extendBodyBehindAppBar: true,
+      appBar: _buildEnhancedAppBar(),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _pets.isEmpty
-              ? _buildEmptyState()
+              ? _buildEnhancedEmptyState()
               : _buildPassportView(),
-      // 添加底部安全区域，避免内容被液态导航栏遮挡
       bottomNavigationBar: const SizedBox(height: 20),
     );
   }
 
-  Widget _buildEmptyState() {
+  PreferredSizeWidget _buildEnhancedAppBar() {
+    return AppBar(
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      systemOverlayStyle: SystemUiOverlayStyle.dark,
+      leading: Container(
+        margin: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.8),
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.08),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+            child: IconButton(
+              icon: const Icon(Icons.arrow_back, color: Color(0xFF1E1E1E)),
+              onPressed: () => Navigator.pop(context),
+            ),
+          ),
+        ),
+      ),
+      title: Column(
+        children: [
+          const SizedBox(height: 8),
+          Text(
+            '宠物身份证',
+            style: TextStyle(
+              color: const Color(0xFF1E1E1E),
+              fontSize: 20,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1.0,
+              shadows: [
+                Shadow(
+                  color: Colors.black.withOpacity(0.1),
+                  offset: const Offset(0, 2),
+                  blurRadius: 4,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 6),
+          Container(
+            width: 80,
+            height: 3,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF667eea), Color(0xFF764ba2)],
+              ),
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+        ],
+      ),
+      centerTitle: true,
+      actions: [
+        Container(
+          margin: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.8),
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.08),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+              child: IconButton(
+                icon: const Icon(Icons.person_outline, color: Color(0xFF5A8EFA)),
+                onPressed: () async {
+                  await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const AccountSettingsPage(),
+                    ),
+                  );
+                  if (mounted) await _loadPets();
+                },
+              ),
+            ),
+          ),
+        ),
+        if (_pets.isNotEmpty && _pets[_selectedPetIndex].id != null)
+          Container(
+            margin: const EdgeInsets.only(right: 12, top: 8, bottom: 8),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.8),
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.08),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                child: IconButton(
+                  icon: const Icon(Icons.edit, color: Color(0xFF5A8EFA)),
+                  onPressed: () => _navigateToEdit(),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildEnhancedEmptyState() {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.pets, size: 80, color: Colors.grey[300]),
-          const SizedBox(height: 16),
+          Container(
+            width: 120,
+            height: 120,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF667eea), Color(0xFF764ba2)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(30),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF667eea).withOpacity(0.4),
+                  blurRadius: 30,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+            ),
+            child: const Icon(
+              Icons.pets,
+              size: 60,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 24),
           Text(
             '还没有宠物信息',
             style: TextStyle(
-              fontSize: 18,
-              color: Colors.grey[600],
-              fontWeight: FontWeight.w500,
+              fontSize: 22,
+              color: Colors.grey[800],
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.5,
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 12),
           Text(
-            '请先添加宠物',
-            style: TextStyle(fontSize: 14, color: Colors.grey[400]),
+            '快去添加一只可爱的宠物吧',
+            style: TextStyle(
+              fontSize: 15,
+              color: Colors.grey[500],
+              fontWeight: FontWeight.w400,
+            ),
+          ),
+          const SizedBox(height: 32),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF667eea), Color(0xFF764ba2)],
+              ),
+              borderRadius: BorderRadius.circular(25),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF667eea).withOpacity(0.3),
+                  blurRadius: 15,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: const Text(
+              '添加宠物',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ),
         ],
       ),
@@ -227,58 +450,67 @@ class _PetPassportPageState extends State<PetPassportPage>
   Widget _buildPassportView() {
     return Column(
       children: [
-        // 宠物选择器
-        if (_pets.length > 1) _buildPetSelector(),
-
-        // 护照卡片
+        const SizedBox(height: kToolbarHeight + 20),
+        if (_pets.length > 1) _buildEnhancedPetSelector(),
         Expanded(
           child: Center(
             child: SingleChildScrollView(
               padding: const EdgeInsets.symmetric(vertical: 16),
               child: GestureDetector(
                 onTap: _flipCard,
+                onTapDown: _onTapDown,
+                onTapUp: _onTapUp,
+                onTapCancel: _onTapCancel,
                 child: AnimatedBuilder(
                   animation: _flipController,
                   builder: (context, child) {
                     final angle = _flipController.value * math.pi;
-                    final transform = Matrix4.identity()
-                      ..setEntry(3, 2, 0.001)
-                      ..rotateY(angle);
-
-                    return Transform(
-                      transform: transform,
-                      alignment: Alignment.center,
-                      child: angle < math.pi / 2
-                          ? _buildPassportFront()
-                          : Transform(
-                              transform: Matrix4.identity()..rotateY(math.pi),
-                              alignment: Alignment.center,
-                              child: _buildPassportBack(),
-                            ),
-                    );
+                    final scale = _isPressed ? 0.97 : 1.0;
+                    
+                    final shadowOpacity = 0.2 + (_flipController.value - 0.5).abs() * 0.1;
+                    
+                    return Transform.scale(
+                        scale: scale,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(shadowOpacity),
+                                blurRadius: 20 + (_isPressed ? 10 : 0),
+                                offset: const Offset(0, 10),
+                              ),
+                            ],
+                          ),
+                          child: Transform(
+                            transform: Matrix4.identity()
+                              ..setEntry(3, 2, 0.001)
+                              ..rotateY(angle),
+                            alignment: Alignment.center,
+                            child: angle < math.pi / 2
+                                ? _buildEnhancedPassportFront()
+                                : Transform(
+                                    transform: Matrix4.identity()..rotateY(math.pi),
+                                    alignment: Alignment.center,
+                                    child: _buildEnhancedPassportBack(),
+                                  ),
+                           ),
+                         ),
+                       );
                   },
                 ),
               ),
             ),
           ),
         ),
-
-        // 提示文字
-        Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Text(
-            '点击卡片查看背面',
-            style: TextStyle(fontSize: 14, color: Colors.grey[500]),
-          ),
-        ),
+        _buildEnhancedHint(),
       ],
     );
   }
 
-  Widget _buildPetSelector() {
+  Widget _buildEnhancedPetSelector() {
     return Container(
-      height: 80,
-      margin: const EdgeInsets.symmetric(vertical: 16),
+      height: 100,
+      margin: const EdgeInsets.symmetric(vertical: 8),
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -288,45 +520,74 @@ class _PetPassportPageState extends State<PetPassportPage>
           final passport = _passports[pet.id];
           final isSelected = index == _selectedPetIndex;
 
-          return GestureDetector(
-            onTap: () {
-              setState(() {
-                _selectedPetIndex = index;
-                if (_isFlipped) _flipCard(); // 切换宠物时重置翻转状态
-              });
-            },
-            child: Container(
-              width: 60,
-              margin: const EdgeInsets.only(right: 12),
-              child: Column(
-                children: [
-                  Container(
-                    width: 60,
-                    height: 60,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: isSelected
-                            ? const Color(0xFF5A8EFA)
-                            : Colors.transparent,
-                        width: 3,
+          return AnimatedScale(
+            scale: isSelected ? 1.0 : 0.9,
+            duration: const Duration(milliseconds: 200),
+            child: GestureDetector(
+              onTap: () {
+                setState(() {
+                  _selectedPetIndex = index;
+                  if (_isFlipped) _flipCard();
+                });
+              },
+              child: Container(
+                width: 70,
+                margin: const EdgeInsets.only(right: 12),
+                child: Column(
+                  children: [
+                    Container(
+                      width: 64,
+                      height: 64,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: isSelected
+                            ? const LinearGradient(
+                                colors: [Color(0xFF667eea), Color(0xFF764ba2)],
+                              )
+                            : null,
+                        border: isSelected
+                            ? Border.all(color: Colors.white, width: 3)
+                            : null,
+                        boxShadow: isSelected
+                            ? [
+                                BoxShadow(
+                                  color: const Color(0xFF667eea).withOpacity(0.4),
+                                  blurRadius: 12,
+                                  spreadRadius: 2,
+                                ),
+                              ]
+                            : null,
                       ),
-                      boxShadow: isSelected
-                          ? [
-                              BoxShadow(
-                                color: const Color(0xFF5A8EFA).withOpacity(0.3),
-                                blurRadius: 8,
-                                spreadRadius: 2,
-                              ),
-                            ]
-                          : null,
+                      padding: isSelected ? const EdgeInsets.all(3) : null,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.grey[200],
+                          border: !isSelected
+                              ? Border.all(
+                                  color: Colors.white.withOpacity(0.7),
+                                  width: 2,
+                                )
+                              : null,
+                        ),
+                        child: ClipOval(
+                          child: _buildPetSelectorPhoto(passport, pet, isSelected),
+                        ),
+                      ),
                     ),
-                    child: CircleAvatar(
-                      backgroundColor: Colors.grey[200],
-                      child: _buildPetSelectorPhoto(passport, pet, isSelected),
+                    const SizedBox(height: 6),
+                    Text(
+                      pet.name,
+                      style: TextStyle(
+                        color: isSelected ? const Color(0xFF667eea) : Colors.grey[500],
+                        fontSize: 12,
+                        fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           );
@@ -335,70 +596,116 @@ class _PetPassportPageState extends State<PetPassportPage>
     );
   }
 
-  /// 构建宠物选择器中的照片
   Widget _buildPetSelectorPhoto(
     PetPassport? passport,
     Pet pet,
     bool isSelected,
   ) {
-    // 优先使用 passport.photoPath（电子档案头像，以电子档案为准）
     if (passport?.photoPath != null && passport!.photoPath!.isNotEmpty) {
       final file = File(passport.photoPath!);
       if (file.existsSync()) {
-        return ClipOval(
-          child: Image.file(
-            file,
-            fit: BoxFit.cover,
-            width: 60,
-            height: 60,
-            errorBuilder: (context, error, stackTrace) {
-              return _buildDefaultPetSelectorIcon(isSelected);
-            },
-          ),
+        return Image.file(
+          file,
+          fit: BoxFit.cover,
+          width: 60,
+          height: 60,
+          errorBuilder: (context, error, stackTrace) {
+            return _buildDefaultPetSelectorIcon(isSelected);
+          },
         );
       }
     }
 
-    // 其次使用 pet.avatar（宠物档案头像，仅在电子档案没设置时使用）
     if (pet.avatar != null && pet.avatar!.isNotEmpty) {
-      final file = File(pet.avatar!);
+      final a = pet.avatar!;
+      if (a.startsWith('http://') || a.startsWith('https://')) {
+        return CachedNetworkImage(
+          imageUrl: a,
+          width: 60,
+          height: 60,
+          fit: BoxFit.cover,
+          placeholder: (context, url) => _buildDefaultPetSelectorIcon(isSelected),
+          errorWidget: (context, url, err) =>
+              _buildDefaultPetSelectorIcon(isSelected),
+        );
+      }
+      final file = File(a);
       if (file.existsSync()) {
-        return ClipOval(
-          child: Image.file(
-            file,
-            fit: BoxFit.cover,
-            width: 60,
-            height: 60,
-            errorBuilder: (context, error, stackTrace) {
-              return _buildDefaultPetSelectorIcon(isSelected);
-            },
-          ),
+        return Image.file(
+          file,
+          fit: BoxFit.cover,
+          width: 60,
+          height: 60,
+          errorBuilder: (context, error, stackTrace) {
+            return _buildDefaultPetSelectorIcon(isSelected);
+          },
         );
       }
     }
 
-    // 没有照片时显示默认图标
     return _buildDefaultPetSelectorIcon(isSelected);
   }
 
-  /// 构建默认宠物选择器图标
   Widget _buildDefaultPetSelectorIcon(bool isSelected) {
     return Icon(
       Icons.pets,
-      color: isSelected ? const Color(0xFF5A8EFA) : Colors.grey[400],
-      size: 30,
+      color: isSelected ? const Color(0xFF667eea) : Colors.grey[400],
+      size: 28,
     );
   }
 
-  Widget _buildPassportFront() {
+  Widget _buildEnhancedHint() {
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.8),
+              borderRadius: BorderRadius.circular(25),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.08),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(25),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.touch_app,
+                      size: 18,
+                      color: const Color(0xFF667eea).withOpacity(0.7),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      '点击卡片查看背面',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey[600]?.withOpacity(0.7),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+  }
+
+  Widget _buildEnhancedPassportFront() {
     final pet = _pets[_selectedPetIndex];
     final passport = _passports[pet.id];
 
-    // 获取屏幕宽度，确保卡片不会超出屏幕
     final screenWidth = MediaQuery.of(context).size.width;
-    final cardWidth =
-        (screenWidth - 48).clamp(300.0, 360.0); // 最小300，最大360，左右各留24边距
-    final cardHeight = cardWidth * 1.5; // 保持宽高比 2:3
+    final cardWidth = (screenWidth - 48).clamp(300.0, 360.0);
+    final cardHeight = cardWidth * 1.55;
 
     return Container(
       width: cardWidth,
@@ -409,255 +716,527 @@ class _PetPassportPageState extends State<PetPassportPage>
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.2),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
+            color: const Color(0xFF667eea).withOpacity(0.4),
+            blurRadius: 30,
+            offset: const Offset(0, 15),
           ),
         ],
       ),
-      child: Stack(
-        children: [
-          // 背景装饰图案
-          Positioned.fill(
-            child: CustomPaint(painter: PassportPatternPainter()),
-          ),
-
-          // 内容
-          Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // 标题
-                Row(
-                  children: [
-                    Icon(
-                      Icons.pets,
-                      color: Colors.white.withOpacity(0.9),
-                      size: 28,
-                    ),
-                    const SizedBox(width: 8),
-                    const Text(
-                      'PET PASSPORT',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 2,
-                      ),
-                    ),
-                  ],
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: Stack(
+          children: [
+            // 背景装饰图案
+            Positioned.fill(
+              child: CustomPaint(painter: PassportPatternPainter()),
+            ),
+            
+            // Glassmorphism overlay
+            Positioned.fill(
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.white.withOpacity(0.15),
+                      Colors.white.withOpacity(0.05),
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 24),
-
-                // 宠物照片和基本信息
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // 照片
-                    Container(
-                      width: 100,
-                      height: 120,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.white, width: 3),
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(9),
-                        child: _buildPetPhoto(passport),
-                      ),
+                child: ClipRect(
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 0.5, sigmaY: 0.5),
+                    child: Container(
+                      color: Colors.transparent,
                     ),
-                    const SizedBox(width: 16),
+                  ),
+                ),
+              ),
+            ),
 
-                    // 基本信息
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _buildInfoRow('姓名', pet.name),
-                          const SizedBox(height: 8),
-                          _buildInfoRow('品种', pet.breed),
-                          const SizedBox(height: 8),
-                          _buildInfoRow('性别', pet.gender),
-                          const SizedBox(height: 8),
-                          _buildInfoRow('年龄', pet.age),
+            // Shimmer effect
+            AnimatedBuilder(
+              animation: _shimmerController,
+              builder: (context, child) {
+                return Positioned.fill(
+                  child: ShaderMask(
+                    shaderCallback: (bounds) {
+                      return LinearGradient(
+                        begin: Alignment(-1.0 + _shimmerController.value * 3, 0),
+                        end: Alignment(0.0 + _shimmerController.value * 3, 0),
+                        colors: [
+                          Colors.transparent,
+                          Colors.white.withOpacity(0.3),
+                          Colors.transparent,
+                        ],
+                        stops: const [0.0, 0.5, 1.0],
+                      ).createShader(bounds);
+                    },
+                    blendMode: BlendMode.srcATop,
+                    child: Container(
+                      color: Colors.white.withOpacity(0.1),
+                    ),
+                  ),
+                );
+              },
+            ),
+
+            // Content
+            Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Elegant header with gradient text
+                  _buildPassportHeader(),
+                  const SizedBox(height: 24),
+
+                  // Photo and basic info row
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Decorative photo frame
+                      _buildDecorativePhotoFrame(passport),
+                      const SizedBox(width: 16),
+
+                      // Info column with icons
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildInfoRowWithIcon(
+                              Icons.pets,
+                              '姓名',
+                              pet.name,
+                            ),
+                            const SizedBox(height: 10),
+                            _buildInfoRowWithIcon(
+                              Icons.category,
+                              '品种',
+                              pet.breed,
+                            ),
+                            const SizedBox(height: 10),
+                            _buildInfoRowWithIcon(
+                              pet.gender == '公' ? Icons.male : Icons.female,
+                              '性别',
+                              pet.gender,
+                            ),
+                            const SizedBox(height: 10),
+                            _buildInfoRowWithIcon(
+                              Icons.cake,
+                              '年龄',
+                              pet.age,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 20),
+                  Container(
+                    height: 1,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          Colors.white.withOpacity(0.0),
+                          Colors.white.withOpacity(0.4),
+                          Colors.white.withOpacity(0.0),
                         ],
                       ),
                     ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // MBTI section with enhanced styling
+                  if (passport?.mbtiType != null) ...[
+                    _buildEnhancedMBTISection(passport!),
+                  ],
+
+                  const Spacer(),
+
+                  // Bottom info row with owner and adoption date
+                  _buildBottomInfoRow(pet, passport),
+                ],
+              ),
+            ),
+
+            // Decorative stamp — must be direct child of Stack
+            Positioned(
+              bottom: 20,
+              right: 20,
+              child: _buildDecorativeStamp(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPassportHeader() {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.2),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: const Icon(
+            Icons.verified,
+            color: Colors.white,
+            size: 22,
+          ),
+        ),
+        const SizedBox(width: 10),
+        ShaderMask(
+          shaderCallback: (bounds) {
+            return const LinearGradient(
+              colors: [Colors.white, Color(0xFFE0E0E0)],
+            ).createShader(bounds);
+          },
+          child: const Text(
+            'PET PASSPORT',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 2.5,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDecorativePhotoFrame(PetPassport? passport) {
+    return Container(
+      width: 100,
+      height: 120,
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Colors.white, Color(0xFFF0F0F0)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.15),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(4),
+      child: Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFF667eea).withOpacity(0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: const Color(0xFF667eea).withOpacity(0.2),
+            width: 1,
+          ),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: _buildPetPhoto(passport),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInfoRowWithIcon(IconData icon, String label, String value) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.15),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Icon(
+            icon,
+            color: Colors.white.withOpacity(0.9),
+            size: 14,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.6),
+                  fontSize: 9,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              Text(
+                value,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEnhancedMBTISection(PetPassport passport) {
+    final mbtiInfo = MBTITypes.getTypeInfo(passport.mbtiType!);
+    
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.25),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Colors.white, Color(0xFFF5F5F5)],
+                  ),
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 8,
+                      offset: const Offset(0, 3),
+                    ),
                   ],
                 ),
-
-                const SizedBox(height: 24),
-                const Divider(color: Colors.white30, thickness: 1),
-                const SizedBox(height: 16),
-
-                // MBTI类型
-                if (passport?.mbtiType != null) ...[
-                  _buildSectionTitle('性格类型'),
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: Colors.white.withOpacity(0.3),
-                        width: 1,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.psychology,
+                      color: const Color(0xFF667eea),
+                      size: 16,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      passport.mbtiType!,
+                      style: const TextStyle(
+                        color: Color(0xFF667eea),
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                                vertical: 6,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: Text(
-                                passport!.mbtiType!,
-                                style: const TextStyle(
-                                  color: Color(0xFF667eea),
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                MBTITypes.getTypeInfo(
-                                  passport.mbtiType!,
-                                )!['name']!,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          passport.mbtiDescription ?? '',
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.9),
-                            fontSize: 12,
-                            height: 1.4,
-                          ),
-                          maxLines: 3,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-
-                const SizedBox(height: 16),
-
-                // 底部信息
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(
-                      children: [
-                        // 用户头像
-                        CircleAvatar(
-                          radius: 16,
-                          backgroundColor: Colors.white,
-                          backgroundImage: _userAvatarPath != null &&
-                                  File(_userAvatarPath!).existsSync()
-                              ? FileImage(File(_userAvatarPath!))
-                              : null,
-                          child: _userAvatarPath == null ||
-                                  !File(_userAvatarPath!).existsSync()
-                              ? Text(
-                                  _userName?.isNotEmpty == true
-                                      ? _userName![0].toUpperCase()
-                                      : '?',
-                                  style: const TextStyle(
-                                    color: Color(0xFF667eea),
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                )
-                              : null,
-                        ),
-                        const SizedBox(width: 8),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '主人',
-                              style: TextStyle(
-                                color: Colors.white.withOpacity(0.7),
-                                fontSize: 10,
-                              ),
-                            ),
-                            Text(
-                              passport?.ownerName ?? _userName ?? '铲屎官',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(
-                          '领养日期',
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.7),
-                            fontSize: 10,
-                          ),
-                        ),
-                        Text(
-                          passport?.adoptionDate != null
-                              ? '${passport!.adoptionDate!.year}.${passport.adoptionDate!.month.toString().padLeft(2, '0')}.${passport.adoptionDate!.day.toString().padLeft(2, '0')}'
-                              : '2024.01.01',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
                   ],
                 ),
-              ],
+              ),
+              const SizedBox(width: 10),
+              if (mbtiInfo != null)
+                Text(
+                  mbtiInfo['name']!,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            passport.mbtiDescription ?? '',
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.9),
+              fontSize: 12,
+              height: 1.5,
+              fontWeight: FontWeight.w400,
             ),
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),
     );
   }
 
-  Widget _buildPassportBack() {
+  Widget _buildBottomInfoRow(Pet pet, PetPassport? passport) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        // Owner info
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: [
+              CircleAvatar(
+                radius: 18,
+                backgroundColor: Colors.white,
+                backgroundImage: _userAvatarPath != null &&
+                        File(_userAvatarPath!).existsSync()
+                    ? FileImage(File(_userAvatarPath!))
+                    : null,
+                child: _userAvatarPath == null ||
+                        !File(_userAvatarPath!).existsSync()
+                    ? Text(
+                        _userName?.isNotEmpty == true
+                            ? _userName![0].toUpperCase()
+                            : '?',
+                        style: const TextStyle(
+                          color: Color(0xFF667eea),
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      )
+                    : null,
+              ),
+              const SizedBox(width: 10),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.favorite,
+                        color: Colors.white.withOpacity(0.7),
+                        size: 10,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        '主人',
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.6),
+                          fontSize: 9,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    _displayOwnerName(passport),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  Text(
+                    '称呼 · ${_petCallsOwner(pet)}',
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.8),
+                      fontSize: 10,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        
+        // Adoption date
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    Icons.calendar_today,
+                    color: Colors.white.withOpacity(0.7),
+                    size: 10,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    '领养日期',
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.6),
+                      fontSize: 9,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                passport?.adoptionDate != null
+                    ? '${passport!.adoptionDate!.year}.${passport.adoptionDate!.month.toString().padLeft(2, '0')}.${passport.adoptionDate!.day.toString().padLeft(2, '0')}'
+                    : '2024.01.01',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDecorativeStamp() {
+    return Opacity(
+      opacity: 0.15,
+      child: Container(
+        width: 70,
+        height: 70,
+        decoration: BoxDecoration(
+          border: Border.all(
+            color: Colors.white,
+            width: 2,
+          ),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Icon(
+          Icons.verified,
+          color: Colors.white,
+          size: 32,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEnhancedPassportBack() {
     final pet = _pets[_selectedPetIndex];
     final passport = _passports[pet.id];
 
-    // 获取屏幕宽度，确保卡片不会超出屏幕
     final screenWidth = MediaQuery.of(context).size.width;
-    final cardWidth =
-        (screenWidth - 48).clamp(300.0, 360.0); // 最小300，最大360，左右各留24边距
-    final cardHeight = cardWidth * 1.5; // 保持宽高比 2:3
+    final cardWidth = (screenWidth - 48).clamp(300.0, 360.0);
+    final cardHeight = cardWidth * 1.55;
 
     return Container(
       width: cardWidth,
@@ -668,148 +1247,380 @@ class _PetPassportPageState extends State<PetPassportPage>
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.2),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
+            color: const Color(0xFF764ba2).withOpacity(0.4),
+            blurRadius: 30,
+            offset: const Offset(0, 15),
           ),
         ],
       ),
-      child: Stack(
-        children: [
-          // 背景装饰图案
-          Positioned.fill(
-            child: CustomPaint(painter: PassportPatternPainter()),
-          ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(24),
+        child: Stack(
+          children: [
+            // 背景装饰图案
+            Positioned.fill(
+              child: CustomPaint(painter: PassportPatternPainter()),
+            ),
 
-          // 内容
-          Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // 兴趣标签
-                _buildSectionTitle('兴趣标签'),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: (passport?.interestTags ?? []).map((tag) {
-                    return Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(
-                          color: Colors.white.withOpacity(0.4),
-                          width: 1,
-                        ),
-                      ),
-                      child: Text(
-                        tag,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                ),
-
-                const SizedBox(height: 24),
-
-                // 成就徽章
-                _buildSectionTitle('成就徽章'),
-                const SizedBox(height: 12),
-                Expanded(
-                  child: GridView.builder(
-                    physics: const NeverScrollableScrollPhysics(),
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 3,
-                      crossAxisSpacing: 12,
-                      mainAxisSpacing: 12,
-                      childAspectRatio: 0.85,
-                    ),
-                    itemCount: (passport?.achievements.length ?? 0).clamp(0, 6),
-                    itemBuilder: (context, index) {
-                      final achievement = passport!.achievements[index];
-                      return _buildAchievementBadge(achievement);
-                    },
-                  ),
-                ),
-
-                const SizedBox(height: 16),
-
-                // 社交信息
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceAround,
-                    children: [
-                      _buildStatItem(
-                        Icons.groups,
-                        '好友',
-                        '${passport?.friendCount ?? 0}',
-                      ),
-                      _buildStatItem(
-                        Icons.emoji_events,
-                        '成就',
-                        '${passport?.achievements.length ?? 0}',
-                      ),
-                      _buildStatItem(
-                        Icons.favorite,
-                        '互动',
-                        '${(passport?.friendCount ?? 0) * 3}',
-                      ),
+            // Glassmorphism overlay
+            Positioned.fill(
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.white.withOpacity(0.12),
+                      Colors.white.withOpacity(0.03),
                     ],
                   ),
                 ),
-              ],
+              ),
             ),
-          ),
-        ],
+
+            // Content
+            Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Decorative header with stamp
+                    _buildBackHeader(),
+                    const SizedBox(height: 14),
+
+                    // Interest tags with gradient styling
+                    _buildSectionTitleWithIcon(Icons.local_offer, '兴趣标签'),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: (passport?.interestTags ?? []).map((tag) {
+                        return _buildGradientTag(tag);
+                      }).toList(),
+                    ),
+
+                    const SizedBox(height: 14),
+
+                    // Achievements grid with enhanced badges
+                    _buildSectionTitleWithIcon(Icons.emoji_events, '成就徽章'),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: (passport?.achievements ?? [])
+                          .take(6)
+                          .map((a) => _buildEnhancedAchievementBadge(a))
+                          .toList(),
+                    ),
+
+                    const SizedBox(height: 10),
+
+                    // Social stats with glassmorphism
+                    _buildEnhancedSocialStats(passport),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildInfoRow(String label, String value) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _buildBackHeader() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(
-          label,
-          style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 10),
+        ShaderMask(
+          shaderCallback: (bounds) {
+            return const LinearGradient(
+              colors: [Colors.white, Color(0xFFE0E0E0)],
+            ).createShader(bounds);
+          },
+          child: const Text(
+            'PET DETAILS',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 2,
+            ),
+          ),
         ),
-        const SizedBox(height: 2),
-        Text(
-          value,
-          style: const TextStyle(
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.15),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: Colors.white.withOpacity(0.3),
+              width: 1,
+            ),
+          ),
+          child: const Icon(
+            Icons.fingerprint,
             color: Colors.white,
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
+            size: 20,
           ),
         ),
       ],
     );
   }
 
-  /// 构建宠物照片显示
+  Widget _buildSectionTitleWithIcon(IconData icon, String title) {
+    return Row(
+      children: [
+        Icon(
+          icon,
+          color: Colors.white.withOpacity(0.9),
+          size: 16,
+        ),
+        const SizedBox(width: 8),
+        Text(
+          title,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.5,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildGradientTag(String tag) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            Colors.white.withOpacity(0.25),
+            Colors.white.withOpacity(0.15),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.4),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Text(
+        tag,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEnhancedAchievementBadge(Achievement achievement) {
+    final gradientColors = _getAchievementGradient(achievement.iconName);
+    
+    return SizedBox(
+      width: 80,
+      child: Container(
+        decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.25),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: gradientColors,
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  color: gradientColors[0].withOpacity(0.4),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Icon(
+              _getAchievementIcon(achievement.iconName),
+              color: Colors.white,
+              size: 22,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            achievement.name,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+            ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+      ),
+    );
+  }
+
+  List<Color> _getAchievementGradient(String iconName) {
+    switch (iconName) {
+      case 'health_and_safety':
+        return [const Color(0xFF4CAF50), const Color(0xFF2E7D32)];
+      case 'vaccines':
+        return [const Color(0xFF2196F3), const Color(0xFF1565C0)];
+      case 'groups':
+        return [const Color(0xFF9C27B0), const Color(0xFF6A1B9A)];
+      case 'book':
+        return [const Color(0xFFFF9800), const Color(0xFFE65100)];
+      case 'military_tech':
+        return [const Color(0xFFFFD700), const Color(0xFFFFA000)];
+      case 'celebration':
+        return [const Color(0xFFE91E63), const Color(0xFFC2185B)];
+      case 'restaurant':
+        return [const Color(0xFF00BCD4), const Color(0xFF0097A7)];
+      case 'sports_score':
+        return [const Color(0xFFFF5722), const Color(0xFFD84315)];
+      default:
+        return [const Color(0xFF667eea), const Color(0xFF764ba2)];
+    }
+  }
+
+  Widget _buildEnhancedSocialStats(PetPassport? passport) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            Colors.white.withOpacity(0.15),
+            Colors.white.withOpacity(0.08),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.25),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 15,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _buildEnhancedStatItem(
+                Icons.groups,
+                '好友',
+                '${passport?.friendCount ?? 0}',
+                const Color(0xFF4CAF50),
+              ),
+              Container(
+                width: 1,
+                height: 35,
+                color: Colors.white.withOpacity(0.2),
+              ),
+              _buildEnhancedStatItem(
+                Icons.emoji_events,
+                '成就',
+                '${passport?.achievements.length ?? 0}',
+                const Color(0xFFFFA000),
+              ),
+              Container(
+                width: 1,
+                height: 35,
+                color: Colors.white.withOpacity(0.2),
+              ),
+              _buildEnhancedStatItem(
+                Icons.favorite,
+                '互动',
+                '${(passport?.friendCount ?? 0) * 3}',
+                const Color(0xFFE91E63),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEnhancedStatItem(IconData icon, String label, String value, Color accentColor) {
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: accentColor.withOpacity(0.2),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(
+            icon,
+            color: Colors.white,
+            size: 20,
+          ),
+        ),
+        const SizedBox(height: 8),
+        ShaderMask(
+          shaderCallback: (bounds) {
+            return const LinearGradient(
+              colors: [Colors.white, Color(0xFFE0E0E0)],
+            ).createShader(bounds);
+          },
+          child: Text(
+            value,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 20,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+        Text(
+          label,
+          style: TextStyle(
+            color: Colors.white.withOpacity(0.7),
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildPetPhoto(PetPassport? passport) {
     final pet = _pets[_selectedPetIndex];
 
-    // 优先使用 passport.photoPath（电子档案头像，以电子档案为准）
     if (passport?.photoPath != null && passport!.photoPath!.isNotEmpty) {
       final file = File(passport.photoPath!);
       if (file.existsSync()) {
@@ -823,9 +1634,17 @@ class _PetPassportPageState extends State<PetPassportPage>
       }
     }
 
-    // 其次使用 pet.avatar（宠物档案头像，仅在电子档案没设置时使用）
     if (pet.avatar != null && pet.avatar!.isNotEmpty) {
-      final file = File(pet.avatar!);
+      final a = pet.avatar!;
+      if (a.startsWith('http://') || a.startsWith('https://')) {
+        return CachedNetworkImage(
+          imageUrl: a,
+          fit: BoxFit.cover,
+          placeholder: (context, url) => _buildDefaultPetIcon(),
+          errorWidget: (context, url, err) => _buildDefaultPetIcon(),
+        );
+      }
+      final file = File(a);
       if (file.existsSync()) {
         return Image.file(
           file,
@@ -837,84 +1656,17 @@ class _PetPassportPageState extends State<PetPassportPage>
       }
     }
 
-    // 没有照片时显示默认图标
     return _buildDefaultPetIcon();
   }
 
-  /// 构建默认宠物图标
   Widget _buildDefaultPetIcon() {
     final pet = _pets[_selectedPetIndex];
     return Center(
       child: Icon(
         pet.type == '猫' ? Icons.pets : Icons.pets,
-        size: 60,
+        size: 50,
         color: const Color(0xFF667eea),
       ),
-    );
-  }
-
-  Widget _buildSectionTitle(String title) {
-    return Text(
-      title,
-      style: const TextStyle(
-        color: Colors.white,
-        fontSize: 16,
-        fontWeight: FontWeight.bold,
-        letterSpacing: 0.5,
-      ),
-    );
-  }
-
-  Widget _buildAchievementBadge(Achievement achievement) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.2),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white.withOpacity(0.3), width: 1),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            _getAchievementIcon(achievement.iconName),
-            color: Colors.white,
-            size: 28,
-          ),
-          const SizedBox(height: 6),
-          Text(
-            achievement.name,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 10,
-              fontWeight: FontWeight.w500,
-            ),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatItem(IconData icon, String label, String value) {
-    return Column(
-      children: [
-        Icon(icon, color: Colors.white, size: 24),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        Text(
-          label,
-          style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 11),
-        ),
-      ],
     );
   }
 
@@ -948,16 +1700,18 @@ class _PetPassportPageState extends State<PetPassportPage>
     final result = await Navigator.push<PetPassport>(
       context,
       MaterialPageRoute(
-        builder: (_) => EditPetPassportPage(pet: pet, passport: passport),
+        builder: (_) => EditPetPassportPage(
+          pet: pet,
+          passport: passport,
+          suggestedOwnerDisplay: _displayOwnerName(passport),
+        ),
       ),
     );
 
-    // 如果编辑页面返回了更新的护照数据，更新本地状态
     if (result != null && mounted) {
       setState(() {
         _passports[pet.id!] = result;
       });
-      // 通知其他页面刷新数据
       DataChangeNotifier.markPetDataChanged();
     }
   }
@@ -968,7 +1722,7 @@ class PassportPatternPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = Colors.white.withOpacity(0.05)
+      ..color = Colors.white.withOpacity(0.06)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1;
 

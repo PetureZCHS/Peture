@@ -1,7 +1,81 @@
 import 'dart:io';
+import 'dart:math' as math;
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+
+// ========== 水印配置 ==========
+const String _shareWatermarkText = '智宠合生 Peture AI 生成';
+
+class _ShareWatermarkMetrics {
+  final double horizontalPadding;
+  final double verticalPadding;
+  final double textPaddingH;
+  final double textPaddingV;
+  final double fontSize;
+  final double letterSpacing;
+  final double blurRadius;
+  final Offset shadowOffset;
+  final double borderRadius;
+
+  const _ShareWatermarkMetrics({
+    required this.horizontalPadding,
+    required this.verticalPadding,
+    required this.textPaddingH,
+    required this.textPaddingV,
+    required this.fontSize,
+    required this.letterSpacing,
+    required this.blurRadius,
+    required this.shadowOffset,
+    required this.borderRadius,
+  });
+}
+
+_ShareWatermarkMetrics _computeShareWatermarkMetrics(Size imageSize) {
+  final ratio = imageSize.width / math.max(1.0, imageSize.height);
+  final isSixteenByNine = (ratio - (16 / 9)).abs() <= 0.03;
+  final scale = (imageSize.shortestSide / 1080.0).clamp(0.2, 1.5).toDouble();
+  final fontBoost = isSixteenByNine ? 2.0 : 1.0;
+  return _ShareWatermarkMetrics(
+    horizontalPadding: 24.0 * scale,
+    verticalPadding: 16.0 * scale,
+    textPaddingH: 14.0 * scale,
+    textPaddingV: 8.0 * scale,
+    fontSize: 30.0 * scale * fontBoost,
+    letterSpacing: 0.4 * scale,
+    blurRadius: 6.0 * scale,
+    shadowOffset: Offset(0, 1.5 * scale),
+    borderRadius: 14.0 * scale,
+  );
+}
+
+double _computeShareWatermarkTextFitScale({
+  required String text,
+  required double maxTextWidth,
+  required double fontSize,
+  required double letterSpacing,
+}) {
+  final safeMaxWidth = math.max(1.0, maxTextWidth);
+  final painter = TextPainter(
+    text: TextSpan(
+      text: text,
+      style: TextStyle(
+        fontSize: fontSize,
+        fontWeight: FontWeight.w600,
+        letterSpacing: letterSpacing,
+      ),
+    ),
+    textDirection: ui.TextDirection.ltr,
+    maxLines: 1,
+  )..layout();
+
+  if (painter.width <= safeMaxWidth) {
+    return 1.0;
+  }
+
+  return (safeMaxWidth / painter.width).clamp(0.45, 1.0);
+}
 
 enum ShareCardStyle {
   minimal, // 极简艺术 (Art Gallery)
@@ -17,6 +91,8 @@ class PetDiaryShareCard extends StatelessWidget {
   final DateTime date;
   final ShareCardStyle style;
   final double width;
+  final File? diaryImageFile; // AI生成的日记配图（本地文件）
+  final String? diaryImageUrl; // AI生成的日记配图（网络URL）
 
   const PetDiaryShareCard({
     super.key,
@@ -28,6 +104,8 @@ class PetDiaryShareCard extends StatelessWidget {
     required this.date,
     this.style = ShareCardStyle.minimal,
     this.width = 300,
+    this.diaryImageFile,
+    this.diaryImageUrl,
   });
 
   @override
@@ -62,6 +140,10 @@ class PetDiaryShareCard extends StatelessWidget {
                 _buildHeader(),
                 const SizedBox(height: 24),
                 _buildContent(),
+                if (_hasDiaryImage()) ...[
+                  const SizedBox(height: 20),
+                  _buildDiaryImage(),
+                ],
                 const SizedBox(height: 32),
                 _buildFooter(),
               ],
@@ -174,17 +256,28 @@ class PetDiaryShareCard extends StatelessWidget {
   }
 
   Widget _buildContent() {
-    TextStyle textStyle;
+    final baseTextStyle = _getBaseTextStyle();
+    final hashtagStyle = baseTextStyle.copyWith(
+      color: const Color(0xFF2196F3), // 小红书风格的蓝色标签
+      fontWeight: FontWeight.w500,
+    );
+
+    return RichText(
+      text: _buildHashtagTextSpan(content, baseTextStyle, hashtagStyle),
+      textAlign: style == ShareCardStyle.paper ? TextAlign.left : TextAlign.justify,
+    );
+  }
+
+  TextStyle _getBaseTextStyle() {
     switch (style) {
       case ShareCardStyle.paper: // 手账
-        textStyle = GoogleFonts.zhiMangXing(
+        return GoogleFonts.zhiMangXing(
           color: const Color(0xFF2D3436),
           fontSize: 20,
           height: 1.6,
         );
-        break;
       case ShareCardStyle.minimal:
-        textStyle = const TextStyle( // 使用系统字体确保中文可读性
+        return const TextStyle( // 使用系统字体确保中文可读性
           color: Color(0xFF2D3436),
           fontSize: 15,
           height: 1.9,
@@ -192,12 +285,43 @@ class PetDiaryShareCard extends StatelessWidget {
           letterSpacing: 0.3,
         );
     }
+  }
 
-    return Text(
-      content,
-      style: textStyle,
-      textAlign: style == ShareCardStyle.paper ? TextAlign.left : TextAlign.justify,
-    );
+  /// 解析文本中的 #标签，生成带样式的 TextSpan
+  TextSpan _buildHashtagTextSpan(
+    String text,
+    TextStyle baseStyle,
+    TextStyle hashtagStyle,
+  ) {
+    final List<TextSpan> spans = [];
+    final RegExp hashtagRegExp = RegExp(r'#[\w\u4e00-\u9fa5]+');
+    int currentIndex = 0;
+
+    for (final match in hashtagRegExp.allMatches(text)) {
+      // 添加标签前的普通文本
+      if (match.start > currentIndex) {
+        spans.add(TextSpan(
+          text: text.substring(currentIndex, match.start),
+          style: baseStyle,
+        ));
+      }
+      // 添加蓝色标签
+      spans.add(TextSpan(
+        text: match.group(0),
+        style: hashtagStyle,
+      ));
+      currentIndex = match.end;
+    }
+
+    // 添加剩余的普通文本
+    if (currentIndex < text.length) {
+      spans.add(TextSpan(
+        text: text.substring(currentIndex),
+        style: baseStyle,
+      ));
+    }
+
+    return TextSpan(children: spans);
   }
 
   Widget _buildFooter() {
@@ -258,6 +382,104 @@ class PetDiaryShareCard extends StatelessWidget {
           ],
         ),
       ],
+    );
+  }
+
+  // --- 日记配图构建 ---
+
+  bool _hasDiaryImage() {
+    return diaryImageFile != null ||
+        (diaryImageUrl != null && diaryImageUrl!.isNotEmpty);
+  }
+
+  Widget _buildDiaryImage() {
+    ImageProvider? imageProvider;
+    if (diaryImageFile != null) {
+      imageProvider = FileImage(diaryImageFile!);
+    } else if (diaryImageUrl != null && diaryImageUrl!.isNotEmpty) {
+      final uri = Uri.tryParse(diaryImageUrl!);
+      if (uri != null && (uri.scheme == 'http' || uri.scheme == 'https')) {
+        imageProvider = NetworkImage(diaryImageUrl!);
+      } else {
+        imageProvider = FileImage(File(diaryImageUrl!));
+      }
+    }
+
+    if (imageProvider == null) return const SizedBox();
+
+    // Promote to non-null for use inside the LayoutBuilder closure
+    final ImageProvider nonNullImageProvider = imageProvider;
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return Stack(
+            children: [
+              Image(
+                image: nonNullImageProvider,
+                fit: BoxFit.cover,
+                width: double.infinity,
+              ),
+              // 水印 overlay — 模仿 diary_detail_page.dart 中 _ContainedImageWithWatermark 的定位逻辑
+              _buildShareWatermarkOverlay(constraints),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  /// 构建分享卡片中的水印覆盖层
+  Widget _buildShareWatermarkOverlay(BoxConstraints constraints) {
+    final imageSize = Size(constraints.maxWidth, constraints.maxHeight);
+    final metrics = _computeShareWatermarkMetrics(imageSize);
+    final maxTextWidth = (imageSize.width * 0.75) - (metrics.textPaddingH * 2);
+    final textFitScale = _computeShareWatermarkTextFitScale(
+      text: _shareWatermarkText,
+      maxTextWidth: maxTextWidth,
+      fontSize: metrics.fontSize,
+      letterSpacing: metrics.letterSpacing,
+    );
+
+    return Positioned(
+      right: metrics.horizontalPadding,
+      bottom: metrics.verticalPadding,
+      child: IgnorePointer(
+        child: Container(
+          padding: EdgeInsets.symmetric(
+            horizontal: metrics.textPaddingH,
+            vertical: metrics.textPaddingV,
+          ),
+          decoration: BoxDecoration(
+            color: Colors.black.withOpacity(0.22),
+            borderRadius: BorderRadius.circular(metrics.borderRadius),
+          ),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: math.max(1, maxTextWidth),
+            ),
+            child: Text(
+              _shareWatermarkText,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.85),
+                fontSize: metrics.fontSize * textFitScale,
+                fontWeight: FontWeight.w600,
+                letterSpacing: metrics.letterSpacing * textFitScale,
+                shadows: [
+                  Shadow(
+                    color: Colors.black.withOpacity(0.25),
+                    blurRadius: metrics.blurRadius * textFitScale,
+                    offset: metrics.shadowOffset * textFitScale,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 

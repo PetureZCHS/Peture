@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/rendering.dart';
 import 'dart:ui' as ui;
+import 'dart:math' as math; // Added import
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:gal/gal.dart';
@@ -52,7 +53,7 @@ class _LostPetRescuePageState extends State<LostPetRescuePage>
   LostPetMaterials? _generatedMaterials;
   File? _selectedImage;
   bool _isGenerating = false;
-  bool _isA4Mode = false;
+  bool _isA4Ratio = true;
 
   @override
   void initState() {
@@ -1057,99 +1058,154 @@ class _LostPetRescuePageState extends State<LostPetRescuePage>
           ),
           const SizedBox(height: 24),
 
-          // Tab Bar
-          Container(
-            height: 50,
-            decoration: BoxDecoration(
-              color: Colors.grey[100],
-              borderRadius: BorderRadius.circular(25),
-            ),
-            child: TabBar(
-              controller: _tabController,
-              indicator: BoxDecoration(
-                borderRadius: BorderRadius.circular(25),
-                color: Colors.white,
-                boxShadow: [
-                  BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
-                      blurRadius: 10,
-                      offset: const Offset(0, 2)),
-                ],
-              ),
-              labelColor: AppColors.textDark,
-              unselectedLabelColor: Colors.grey,
-              labelStyle: const TextStyle(fontWeight: FontWeight.bold),
-              tabs: const [
-                Tab(text: '文案生成'),
-                Tab(text: '海报预览'),
-              ],
-            ),
-          ),
           const SizedBox(height: 24),
 
-          AnimatedBuilder(
-              animation: _tabController,
-              builder: (context, _) {
-                if (_tabController.index == 0) {
-                  // Copywriting Tab
-                  return Column(
-                    children: [
-                      _buildPlatformCard('朋友圈文案', m.wechatMomentsText,
-                          const Color(0xFF07C160), Icons.chat_bubble_rounded),
-                      _buildPlatformCard(
-                          '小红书文案',
-                          '${m.xiaohongshuTitle}\n\n${m.xiaohongshuText}',
-                          const Color(0xFFFF2442),
-                          Icons.camera_alt_rounded),
-                      _buildPlatformCard('短消息/群发', m.shortMessageText,
-                          const Color(0xFF007AFF), Icons.message_rounded),
-                    ],
-                  );
-                } else {
-                  // Poster Tab
-                  return Column(
-                    children: [
-                      _buildPosterPreview(m, isA4: _isA4Mode),
-                      const SizedBox(height: 24),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 8),
-                        margin: const EdgeInsets.only(bottom: 24),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: const Color(0xFFEEEEEE)),
+          // Sliding Nav Bar (Glassmorphism Style)
+          LayoutBuilder(
+            builder: (context, constraints) {
+              return AnimatedBuilder(
+                animation: _tabController.animation!,
+                builder: (context, child) {
+                  final double position = _tabController.animation!.value;
+                  final double width = constraints.maxWidth;
+                  final double itemWidth = width / 2;
+                  
+                  return Container(
+                    height: 56,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.8),
+                      borderRadius: BorderRadius.circular(28),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.05),
+                          blurRadius: 20,
+                          offset: const Offset(0, 10),
                         ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Row(
-                              children: [
-                                Icon(Icons.print_rounded,
-                                    color: _isA4Mode
-                                        ? AppColors.primary
-                                        : Colors.grey,
-                                    size: 20),
-                                const SizedBox(width: 8),
-                                const Text('生成可打印的 A4 海报版式',
-                                    style: TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.bold,
-                                        color: AppColors.textDark)),
+                      ],
+                    ),
+                    child: Stack(
+                      children: [
+                        // Indicator
+                        Positioned(
+                          left: position * itemWidth + 4, // Add padding
+                          top: 4,
+                          bottom: 4,
+                          width: itemWidth - 8, // Subtract padding
+                          child: Container(
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                colors: [Color(0xFFFF512F), Color(0xFFDD2476)],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                              borderRadius: BorderRadius.circular(24),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(0xFFFF512F).withOpacity(0.3),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
+                                ),
                               ],
                             ),
-                            Switch(
-                              value: _isA4Mode,
-                              activeColor: AppColors.primary,
-                              onChanged: (val) {
+                          ),
+                        ),
+                        // Tap Targets
+                        Row(
+                          children: [
+                            _buildSlidingTabItem(0, '文案生成', position, itemWidth),
+                            _buildSlidingTabItem(1, '海报预览', position, itemWidth),
+                          ],
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              );
+            },
+          ),
+          
+          const SizedBox(height: 24),
+
+          // 动态计算海报预览所需高度
+          Builder(
+            builder: (context) {
+              final width = MediaQuery.of(context).size.width - 40; // Subtract padding
+              // A4 (1:√2) 约 1.414 | 手机屏 9:16 约 1.778
+              final double aspectRatio = _isA4Ratio ? 1.414 : 1.778;
+              final double posterHeight = width * aspectRatio;
+              
+              // 加上 ToggleButtons (48px) + Spacing (16px) + Buttons (48px) + Spacing(12px) + Publish Button (48px) + Spacing (20px)
+              // Total extra space needed roughly 200px
+              // Use a minimum height of 600 or the calculated height
+              final layoutHeight = math.max(600.0, posterHeight + 220);
+
+              return SizedBox(
+                height: layoutHeight,
+                child: TabBarView(
+                  controller: _tabController,
+                  children: [
+                    // Copywriting Tab
+                    SingleChildScrollView(
+                      physics: const BouncingScrollPhysics(),
+                      child: Column(
+                        children: [
+                          _buildPlatformCard('朋友圈文案', m.wechatMomentsText,
+                              const Color(0xFF07C160), Icons.chat_bubble_rounded),
+                          _buildPlatformCard(
+                              '小红书文案',
+                              '${m.xiaohongshuTitle}\n\n${m.xiaohongshuText}',
+                              const Color(0xFFFF2442),
+                              Icons.camera_alt_rounded),
+                          _buildPlatformCard('短消息/群发', m.shortMessageText,
+                              const Color(0xFF007AFF), Icons.message_rounded),
+                        ],
+                      ),
+                    ),
+                    // Poster Tab
+                    Column(
+                      children: [
+                      // 海报比例切换
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 16.0),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Text('海报尺寸：',
+                                style: TextStyle(
+                                    fontSize: 14, fontWeight: FontWeight.bold)),
+                            const SizedBox(width: 12),
+                            ToggleButtons(
+                              constraints: const BoxConstraints(minHeight: 32),
+                              isSelected: [_isA4Ratio, !_isA4Ratio],
+                              onPressed: (index) {
                                 setState(() {
-                                  _isA4Mode = val;
+                                  _isA4Ratio = index == 0;
                                 });
                               },
+                              borderRadius: BorderRadius.circular(8),
+                              selectedColor: Colors.white,
+                              fillColor: const Color(0xFFFF512F),
+                              color: Colors.grey,
+                              children: const [
+                                Padding(
+                                  padding: EdgeInsets.symmetric(horizontal: 16),
+                                  child: Text('A4 打印版'),
+                                ),
+                                Padding(
+                                  padding: EdgeInsets.symmetric(horizontal: 16),
+                                  child: Text('手机屏幕版'),
+                                ),
+                              ],
                             ),
                           ],
                         ),
                       ),
+                      RepaintBoundary(
+                        key: _posterKey,
+                        child: _buildPosterPreview(m),
+                      ),
+                      const SizedBox(height: 24),
+
                       Row(
                         children: [
                           Expanded(
@@ -1210,12 +1266,48 @@ class _LostPetRescuePageState extends State<LostPetRescuePage>
                       ),
                       const SizedBox(height: 20),
                     ],
-                  );
-                }
-              }),
+                  ),
+                ],
+              ),
+            ); // End SizedBox
+          },
+        ),
+        const SizedBox(height: 40),
+      ],
+    ),
+    );
+  }
 
-          const SizedBox(height: 40),
-        ],
+  Widget _buildSlidingTabItem(
+      int index, String label, double position, double itemWidth) {
+    // 0.0 -> 1.0 smoothly
+    final t = (1.0 - (position - index).abs()).clamp(0.0, 1.0);
+    
+    final color = Color.lerp(Colors.grey[600], Colors.white, t);
+    final scale = 1.0 + 0.15 * t;
+
+    return Expanded(
+      child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onTap: () {
+          _tabController.animateTo(index);
+          HapticFeedback.lightImpact();
+        },
+        child: Container(
+          alignment: Alignment.center,
+          color: Colors.transparent, // Hit test target
+          child: Transform.scale(
+            scale: scale,
+            child: Text(
+              label,
+              style: TextStyle(
+                color: color,
+                fontSize: 15,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -1279,291 +1371,336 @@ class _LostPetRescuePageState extends State<LostPetRescuePage>
     );
   }
 
-  Widget _buildPosterPreview(LostPetMaterials m, {bool isA4 = false}) {
+  Widget _buildPosterPreview(LostPetMaterials m) {
     final bool hasReward = _rewardController.text.isNotEmpty;
+    // A4 (1:√2) 约 0.707 | 手机屏 9:16 约 0.56
+    final double aspectRatio = _isA4Ratio ? 1 / 1.414 : 9 / 16;
+    
+    // 设定虚拟画布宽度（基准分辨率），提高至 720 以获得更好的文字/图片比例
+    const double designWidth = 720.0;
 
-    Widget content = Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // 1. Header Banner
-        Container(
-          padding: const EdgeInsets.symmetric(vertical: 24),
-          decoration: const BoxDecoration(
-            color: Color(0xFFD32F2F), // Strong Red
-          ),
-          child: const Text(
-            '寻 宠 启 事',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 32,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 12,
-              height: 1.0,
-            ),
-          ),
-        ),
-
-        // 2. Content
-        Padding(
-          padding: const EdgeInsets.fromLTRB(24, 32, 24, 32),
-          child: Column(
-            children: [
-              // Photo
-              GestureDetector(
-                onTap: _pickImage,
-                child: Container(
-                  height: 300,
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[100],
-                    border: Border.all(color: Colors.black12, width: 1),
-                    borderRadius: BorderRadius.circular(8),
-                    image: _selectedImage != null
-                        ? DecorationImage(
-                            image: FileImage(_selectedImage!),
-                            fit: BoxFit.cover)
-                        : null,
-                  ),
-                  child: _selectedImage == null
-                      ? Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.add_a_photo_rounded,
-                                size: 64, color: Colors.grey[300]),
-                            const SizedBox(height: 12),
-                            Text('点击上传照片',
-                                style: TextStyle(
-                                    color: Colors.grey[400],
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold)),
-                          ],
-                        )
-                      : null,
-                ),
-              ),
-
-              const SizedBox(height: 32),
-
-              // Name & Species
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Text(
-                    _nameController.text.isEmpty
-                        ? '宠物名字'
-                        : _nameController.text,
-                    style: const TextStyle(
-                        fontSize: 40,
-                        fontWeight: FontWeight.w900,
-                        color: AppColors.textDark),
-                  ),
-                  const SizedBox(width: 16),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: Colors.black,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      _speciesController.text,
-                      style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 32),
-
-              // Info Grid
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF9F9F9),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFFEEEEEE)),
-                ),
-                child: Column(
-                  children: [
-                    _buildPosterInfoRow(Icons.access_time_filled_rounded,
-                        '走失时间', _timeController.text),
-                    const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 12),
-                        child: Divider(height: 1)),
-                    _buildPosterInfoRow(Icons.location_on_rounded, '走失地点',
-                        _locationController.text),
-                    const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 12),
-                        child: Divider(height: 1)),
-                    _buildPosterInfoRow(Icons.info_rounded, '外貌特征',
-                        _descriptionController.text),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 32),
-
-              // Reward
-              if (hasReward)
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFF8E1), // Light Amber
-                    borderRadius: BorderRadius.circular(12),
-                    border:
-                        Border.all(color: const Color(0xFFFFC107), width: 2),
-                  ),
-                  child: Column(
-                    children: [
-                      const Text('提供有效线索并寻回必有重谢',
-                          style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF8D6E63))),
-                      const SizedBox(height: 4),
-                      Text(
-                        '¥ ${_rewardController.text}',
-                        style: const TextStyle(
-                            fontSize: 42,
-                            fontWeight: FontWeight.w900,
-                            color: Color(0xFFD32F2F)),
-                      ),
-                    ],
-                  ),
-                ),
-
-              const SizedBox(height: 32),
-
-              // Contact
-              const Text('发现请立即联系',
-                  style: TextStyle(
-                      fontSize: 16,
-                      color: Colors.grey,
-                      fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
-              Text(
-                _contactController.text.isEmpty
-                    ? '暂无电话'
-                    : _contactController.text,
-                style: const TextStyle(
-                    fontSize: 48,
-                    fontWeight: FontWeight.w900,
-                    color: AppColors.textDark,
-                    letterSpacing: 2),
-              ),
-
-              const SizedBox(height: 40),
-
-              // Watermark
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: const BoxDecoration(
-                        color: Colors.black, shape: BoxShape.circle),
-                    child:
-                        const Icon(Icons.pets, size: 14, color: Colors.white),
-                  ),
-                  const SizedBox(width: 10),
-                  const Text(
-                    '由智宠合生Peture AI生成',
-                    style: TextStyle(
-                        fontSize: 14,
-                        color: Color(0xFF9E9E9E),
-                        fontWeight: FontWeight.w600),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-
-    // content is the natural poster layout that grows vertically.
-    Widget contentWrapper = Container(
-      color: Colors.white,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          content,
-        ],
-      ),
-    );
-
-    if (isA4) {
-      // To create a perfect A4 document, we construct an A4 shaped box and use FittedBox
-      // to shrink the poster seamlessly inside it without any cropping.
-      contentWrapper = Container(
-        color: Colors.white,
-        child: AspectRatio(
-          aspectRatio: 1 / 1.414,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // 计算适应当前容器的虚拟高度
+        final double designHeight = designWidth / aspectRatio;
+        
+        return AspectRatio(
+          aspectRatio: aspectRatio,
           child: FittedBox(
-            fit: BoxFit.scaleDown, // Ensures nothing is cropped, adds white margins if needed
-            alignment: Alignment.center,
-            child: SizedBox(
-               // We force the poster layout to a specific nice width so it renders high quality fonts 
-               // and the layout isn't skewed by arbitrary screen sizes
-              width: 500,
-              child: content,
+            fit: BoxFit.contain, // 将设计稿缩放至当前屏幕显示区域
+            child: Container(
+              width: designWidth,
+              height: designHeight,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16), // 稍微加大倒角
+                boxShadow: [
+                  BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 20,
+                      offset: const Offset(0, 10)),
+                ],
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: Column(
+                children: [
+                  // 1. Header Banner (Also scaled now)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 28), // 增加 Banner 高度
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFD32F2F), 
+                    ),
+                    child: const Text(
+                      '寻 宠 启 事',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 48, // 配合 720 宽度略微加大
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 16,
+                        height: 1.0,
+                      ),
+                    ),
+                  ),
+
+                  // 2. Content Area (Fills remaining height)
+                  Expanded(
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: _isA4Ratio ? 24 : 32, // 恢复一点边距
+                        vertical: 24
+                      ),
+                      child: Column(
+                        // 移除 spaceBetween，改为自适应布局
+                        children: [
+                            // Photo Area (Flexible - takes remaining space)
+                            Expanded(
+                              child: Center(
+                                child: AspectRatio(
+                                  aspectRatio: 1.0,
+                                  child: GestureDetector(
+                                    onTap: _pickImage,
+                                    child: Stack(
+                                      fit: StackFit.expand,
+                                      children: [
+                                        Container(
+                                          decoration: BoxDecoration(
+                                            color: Colors.grey[100],
+                                            border: Border.all(
+                                                color: Colors.black12, width: 2),
+                                            borderRadius: BorderRadius.circular(16),
+                                            image: _selectedImage != null
+                                                ? DecorationImage(
+                                                    image: FileImage(_selectedImage!),
+                                                    fit: BoxFit.cover)
+                                                : null,
+                                          ),
+                                          child: _selectedImage == null
+                                              ? Column(
+                                                  mainAxisAlignment:
+                                                      MainAxisAlignment.center,
+                                                  children: [
+                                                    Icon(Icons.add_a_photo_rounded,
+                                                        size: 90,
+                                                        color: Colors.grey[300]),
+                                                    const SizedBox(height: 12),
+                                                    Text('点击上传照片',
+                                                        style: TextStyle(
+                                                            color: Colors.grey[400],
+                                                            fontSize: 24,
+                                                            fontWeight:
+                                                                FontWeight.bold)),
+                                                  ],
+                                                )
+                                              : null,
+                                        ),
+                                        // Change Photo Button
+                                        if (_selectedImage != null && !_isGenerating)
+                                          Positioned(
+                                            right: 16,
+                                            bottom: 16,
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(
+                                                  horizontal: 16, vertical: 8),
+                                              decoration: BoxDecoration(
+                                                color:
+                                                    Colors.black.withOpacity(0.6),
+                                                borderRadius:
+                                                    BorderRadius.circular(30),
+                                              ),
+                                              child: const Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Icon(Icons.camera_alt_rounded,
+                                                      color: Colors.white,
+                                                      size: 18),
+                                                  SizedBox(width: 6),
+                                                  Text('更换照片',
+                                                      style: TextStyle(
+                                                          color: Colors.white,
+                                                          fontSize: 16)),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            
+                            const SizedBox(height: 20),
+
+                            // Name & Species
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    _nameController.text.isEmpty
+                                        ? '宠物名字'
+                                        : _nameController.text,
+                                    // 保持大号字体，但因为画布变大，相对占比变小
+                                    style: const TextStyle(
+                                        fontSize: 60, 
+                                        fontWeight: FontWeight.w900,
+                                        color: AppColors.textDark),
+                                    overflow: TextOverflow.ellipsis,
+                                    maxLines: 1,
+                                  ),
+                                ),
+                                const SizedBox(width: 20),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 16, vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    _speciesController.text,
+                                    style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 24,
+                                        fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            
+                            const SizedBox(height: 16),
+
+                            // Info Grid
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF9F9F9),
+                                borderRadius: BorderRadius.circular(20),
+                                border:
+                                    Border.all(color: const Color(0xFFEEEEEE), width: 2),
+                              ),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min, 
+                                children: [
+                                  _buildPosterInfoRow(
+                                      Icons.access_time_filled_rounded,
+                                      '走失时间',
+                                      _timeController.text,
+                                      fontSize: 20, iconSize: 24),
+                                  const Padding(
+                                      padding:
+                                          EdgeInsets.symmetric(vertical: 12),
+                                      child: Divider(height: 1)),
+                                  _buildPosterInfoRow(Icons.location_on_rounded,
+                                      '走失地点', _locationController.text,
+                                      fontSize: 20, iconSize: 24),
+                                  const Padding(
+                                      padding:
+                                          EdgeInsets.symmetric(vertical: 12),
+                                      child: Divider(height: 1)),
+                                  _buildPosterInfoRow(Icons.info_rounded,
+                                      '外貌特征', _descriptionController.text,
+                                      fontSize: 20, iconSize: 24),
+                                ],
+                              ),
+                            ),
+                            
+                            if (hasReward) const SizedBox(height: 16),
+
+                            // Reward Area
+                            if (hasReward)
+                              Container(
+                                width: double.infinity,
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 16),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFFF8E1),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                      color: const Color(0xFFFFC107), width: 4), // 加粗边框
+                                ),
+                                child: Column(
+                                  children: [
+                                    const Text('提供有效线索并寻回必有重谢',
+                                        style: TextStyle(
+                                            fontSize: 20,
+                                            fontWeight: FontWeight.bold,
+                                            color: Color(0xFF8D6E63))),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      '¥ ${_rewardController.text}',
+                                      style: const TextStyle(
+                                          fontSize: 60,
+                                          fontWeight: FontWeight.w900,
+                                          color: Color(0xFFD32F2F)),
+                                    ),
+                                  ],
+                                ),
+                              ),
+
+                            const SizedBox(height: 24),
+
+                            // Footer Area
+                            Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Text('发现请立即联系',
+                                style: TextStyle(
+                                    fontSize: 20,
+                                    color: Colors.grey,
+                                    fontWeight: FontWeight.bold)),
+                                const SizedBox(height: 8),
+                                Text(
+                                  _contactController.text.isEmpty
+                                      ? '暂无电话'
+                                      : _contactController.text,
+                                  style: const TextStyle(
+                                      fontSize: 72, 
+                                      fontWeight: FontWeight.w900,
+                                      color: AppColors.textDark,
+                                      letterSpacing: 4),
+                                ),
+                              ],
+                            ),
+
+                            const SizedBox(height: 16),
+
+                            // Watermark
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(Icons.pets,
+                                    size: 18, color: Color(0xFF9E9E9E)),
+                                const SizedBox(width: 8),
+                                const Text(
+                                  '由 智宠合生Peture AI 生成',
+                                  style: TextStyle(
+                                      fontSize: 16,
+                                      color: Color(0xFF9E9E9E),
+                                      fontWeight: FontWeight.w600),
+                                ),
+                              ],
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
-      );
-    }
-
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withOpacity(0.1),
-              blurRadius: 20,
-              offset: const Offset(0, 10)),
-        ],
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: RepaintBoundary(
-        key: _posterKey,
-        child: contentWrapper,
-      ),
+        );
+      },
     );
   }
 
-  Widget _buildPosterInfoRow(IconData icon, String label, String value) {
+  Widget _buildPosterInfoRow(IconData icon, String label, String value,
+      {double fontSize = 14, double iconSize = 16}) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, size: 22, color: const Color(0xFF757575)),
-        const SizedBox(width: 16),
+        Icon(icon, size: iconSize, color: const Color(0xFF757575)),
+        const SizedBox(width: 8), // 进一步缩小图标与文字的间距
         Expanded(
           child: RichText(
             text: TextSpan(
               children: [
                 TextSpan(
                     text: '$label：',
-                    style: const TextStyle(
-                        color: Color(0xFF757575),
-                        fontSize: 16,
+                    style: TextStyle(
+                        color: const Color(0xFF757575),
+                        fontSize: fontSize,
                         fontWeight: FontWeight.bold)),
                 TextSpan(
                     text: value.isEmpty ? '未填写' : value,
-                    style: const TextStyle(
+                    style: TextStyle(
                         color: AppColors.textDark,
-                        fontSize: 18,
+                        fontSize: fontSize + 2,
                         fontWeight: FontWeight.w600,
-                        height: 1.4)),
+                        height: 1.25)), // 稍微调小行高，更紧凑
               ],
             ),
           ),

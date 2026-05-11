@@ -3,17 +3,35 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/date_symbol_data_local.dart'; // 添加 intl 包
 import 'package:flutter_localizations/flutter_localizations.dart'; // 添加本地化支持
-import 'package:supabase_flutter/supabase_flutter.dart'; // ✅ 添加 Supabase
-import 'package:sentry_flutter/sentry_flutter.dart'; // ✅ 添加 Sentry
-import 'app_navigator.dart';
+import 'package:supabase_flutter/supabase_flutter.dart'; // 添加 Supabase
+import 'package:sentry_flutter/sentry_flutter.dart'; // 添加 Sentry
+import 'core/app_route_observer.dart';
+import 'core/root_navigator_key.dart';
 import 'features/auth/presentation/login_page.dart';
 import 'features/home/presentation/home_screen.dart';
+import 'core/config/supabase_config.dart';
+import 'services/analytics_service.dart';
 
 void main() async {
   // 确保 Flutter 框架初始化
   WidgetsFlutterBinding.ensureInitialized();
 
-  // ✅ 初始化 Sentry（最早初始化，捕获所有后续错误）
+  // 初始化 Supabase（在 Sentry 之前，避免 Zone mismatch）
+  debugPrint('开始初始化 Supabase...');
+  await Supabase.initialize(
+    url: SupabaseConfig.projectUrl,
+    anonKey: SupabaseConfig.anonKey,
+    // 持久化会话并自动刷新 token，保证重开 App 后仍保持登录
+    authOptions: const FlutterAuthClientOptions(
+      autoRefreshToken: true,
+    ),
+  );
+  debugPrint('Supabase 初始化成功');
+
+  // 友盟 initCommon 若在 runApp 之前 await，原生启动屏会一直停到 SDK 返回（易卡死）
+  unawaited(AnalyticsService.tryInitIfConsented());
+
+  // 初始化 Sentry（捕获所有后续错误）
   await SentryFlutter.init(
     (options) {
       // 从环境变量读取 DSN（避免写死在代码里）
@@ -35,21 +53,8 @@ void main() async {
           const String.fromEnvironment('RELEASE', defaultValue: '1.0.0');
     },
     appRunner: () async {
-      // 初始化日期格式化的本地化数据 (中文)
+      // 初始化日期格式化的本地化数据（中文）
       await initializeDateFormatting('zh_CN', null);
-
-      // ✅ 初始化 Supabase（在 Sentry 之后，这样 Supabase 的错误也能被捕获）
-      debugPrint('🔧 开始初始化 Supabase...');
-      await Supabase.initialize(
-        url: 'https://dyxbvsnnrzvozcokhlfw.supabase.co',
-        anonKey:
-            'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR5eGJ2c25ucnp2b3pjb2tobGZ3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY3NTQ2MjIsImV4cCI6MjA5MjMzMDYyMn0.8wLiYTHvqlTnlIib4Qckkb2x2OHBX8A6lTcBrtFURM4',
-        // 持久化会话并自动刷新 token，保证重开 App 后仍保持登录
-        authOptions: const FlutterAuthClientOptions(
-          autoRefreshToken: true,
-        ),
-      );
-      debugPrint('✅ Supabase 初始化成功');
 
       // 启动根路由，根据登录状态自动切换
       runApp(const RootRouter());
@@ -57,7 +62,7 @@ void main() async {
   );
 }
 
-/// 根路由：监听 Supabase Auth 状态，自动在登录页和主页之间切换
+/// 根路由：监听 Supabase Auth 状态，自动在登录页和主页之间切换。
 class RootRouter extends StatefulWidget {
   const RootRouter({super.key});
 
@@ -75,15 +80,18 @@ class _RootRouterState extends State<RootRouter> {
     // 读取本地已持久化的会话
     _session = Supabase.instance.client.auth.currentSession;
 
-    // 监听登录/登出/Token 刷新事件
+    // 监听登录、登出和 Token 刷新事件
     _authSub =
         Supabase.instance.client.auth.onAuthStateChange.listen((authState) {
       final event = authState.event;
       final session = authState.session;
 
-      // token 刷新失败、签出、用户删除等都会触发 session 为空，此时回到登录页
-      if (event == AuthChangeEvent.signedIn ||
-          event == AuthChangeEvent.tokenRefreshed) {
+      // Token 刷新失败、签出、用户删除等都会触发 session 为空，此时回到登录页
+      if (event == AuthChangeEvent.signedIn && session != null) {
+        setState(() {
+          _session = session;
+        });
+      } else if (event == AuthChangeEvent.tokenRefreshed) {
         setState(() {
           _session = session;
         });
@@ -106,7 +114,10 @@ class _RootRouterState extends State<RootRouter> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: rootNavigatorKey,
       debugShowCheckedModeBanner: false,
+      title: '智宠合生',
+      navigatorObservers: [appRouteObserver],
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
@@ -116,61 +127,54 @@ class _RootRouterState extends State<RootRouter> {
         Locale('zh', 'CN'), // 中文简体
         Locale('en', 'US'), // 英文
       ],
+      locale: const Locale('zh', 'CN'),
       home: _session != null ? const MyApp() : const LoginPage(),
     );
   }
 }
 
+/// 已登录后的主界面壳层：只能使用一个 [MaterialApp]（在 [RootRouter] 里）。
+/// 此处只包 [Theme] + [Material]，避免嵌套第二个 [MaterialApp] 导致 Navigator GlobalKey 冲突。
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    double appBarTextFontSize = 20;
-    return MaterialApp(
-      navigatorKey: AppNavigator.rootKey,
-      debugShowCheckedModeBanner: false,
-      title: '智宠合生',
-      theme: ThemeData(
-        useMaterial3: true,
-        brightness: Brightness.light,
-        scaffoldBackgroundColor: const Color(0xFFF7F7F7), // 浅灰色背景
-        primaryColor: const Color(0xFF007AFF), // 主题蓝色
-        fontFamily: '.SF Pro Text',
-        colorScheme: const ColorScheme.light(
-          primary: Color(0xFF007AFF), // 主要颜色 (按钮、高亮)
-          secondary: Color(0xFF5856D6), // 次要颜色
-          surface: Colors.white, // 卡片背景色
-          onSurface: Colors.black87, // 卡片上的文字颜色
+    const double appBarTextFontSize = 20;
+    final theme = ThemeData(
+      useMaterial3: true,
+      brightness: Brightness.light,
+      scaffoldBackgroundColor: const Color(0xFFF7F7F7),
+      primaryColor: const Color(0xFF007AFF),
+      fontFamily: '.SF Pro Text',
+      colorScheme: const ColorScheme.light(
+        primary: Color(0xFF007AFF),
+        secondary: Color(0xFF5856D6),
+        surface: Colors.white,
+        onSurface: Colors.black87,
+      ),
+      appBarTheme: AppBarTheme(
+        titleTextStyle: TextStyle(
+          fontSize: appBarTextFontSize,
+          color: Colors.black87,
         ),
-        appBarTheme: AppBarTheme(
-          titleTextStyle: TextStyle(
-            fontSize: appBarTextFontSize,
-            color: Colors.black87, // 浅色模式下标题为黑色
-          ),
-          iconTheme: const IconThemeData(color: Colors.black87), // 浅色模式下图标为黑色
-          backgroundColor: Colors.transparent, // 透明 AppBar 背景
-          elevation: 0,
-        ),
-        textButtonTheme: TextButtonThemeData(
-          style: TextButton.styleFrom(
-            foregroundColor: const Color(0xFF007AFF), // TextButton 默认文字颜色
-          ),
+        iconTheme: const IconThemeData(color: Colors.black87),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          foregroundColor: const Color(0xFF007AFF),
         ),
       ),
-      // 添加本地化支持
-      localizationsDelegates: const [
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-      ],
-      supportedLocales: const [
-        Locale('zh', 'CN'), // 中文简体
-        Locale('en', 'US'), // 英文
-      ],
-      locale: const Locale('zh', 'CN'), // 默认使用中文
+    );
 
-      home: const HomeScreen(),
+    return Theme(
+      data: theme,
+      child: Material(
+        color: theme.scaffoldBackgroundColor,
+        child: const HomeScreen(),
+      ),
     );
   }
 }

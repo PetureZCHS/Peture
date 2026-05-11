@@ -9,9 +9,13 @@ import 'package:intl/intl.dart';
 class WeightTrendCard extends StatefulWidget {
   final String? petId; // 可选，如果为 null 则显示所有宠物的数据
 
+  /// 父组件在新增/删除体重等操作后递增，用于触发重新拉取 Supabase 数据。
+  final int refreshNonce;
+
   const WeightTrendCard({
     super.key,
     this.petId,
+    this.refreshNonce = 0,
   });
 
   @override
@@ -38,6 +42,26 @@ class _WeightTrendCardState extends State<WeightTrendCard> {
   void initState() {
     super.initState();
     _loadWeightData();
+  }
+
+  @override
+  void didUpdateWidget(WeightTrendCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.petId != widget.petId ||
+        oldWidget.refreshNonce != widget.refreshNonce) {
+      _loadWeightData();
+    }
+  }
+
+  DateTime? _parseRecordDate(dynamic raw) {
+    if (raw == null) return null;
+    final s = raw.toString().trim();
+    if (s.isEmpty) return null;
+    try {
+      return DateTime.parse(s);
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<void> _loadWeightData() async {
@@ -103,9 +127,8 @@ class _WeightTrendCardState extends State<WeightTrendCard> {
 
     // 筛选数据
     final filteredRecords = _weightRecords.where((record) {
-      final dateStr = record['date'] as String?;
-      if (dateStr == null) return false;
-      final date = DateTime.parse(dateStr);
+      final date = _parseRecordDate(record['date']);
+      if (date == null) return false;
       return date.isAfter(startDate) || date.isAtSameMomentAs(startDate);
     }).toList();
 
@@ -124,8 +147,10 @@ class _WeightTrendCardState extends State<WeightTrendCard> {
 
     // 按日期排序
     filteredRecords.sort((a, b) {
-      final dateA = DateTime.parse(a['date'] as String);
-      final dateB = DateTime.parse(b['date'] as String);
+      final dateA = _parseRecordDate(a['date']);
+      final dateB = _parseRecordDate(b['date']);
+      if (dateA == null) return 1;
+      if (dateB == null) return -1;
       return dateA.compareTo(dateB);
     });
 
@@ -136,7 +161,8 @@ class _WeightTrendCardState extends State<WeightTrendCard> {
     if (_selectedTimeRangeIndex >= 3) {
       final Map<String, List<double>> monthlyData = {};
       for (var record in filteredRecords) {
-        final date = DateTime.parse(record['date'] as String);
+        final date = _parseRecordDate(record['date']);
+        if (date == null) continue;
         final monthKey =
             '${date.year}-${date.month.toString().padLeft(2, '0')}';
         final weight = (record['weight'] as num?)?.toDouble() ?? 0.0;
@@ -161,7 +187,8 @@ class _WeightTrendCardState extends State<WeightTrendCard> {
       }).toList();
 
       tempLabels = filteredRecords.map((record) {
-        final date = DateTime.parse(record['date'] as String);
+        final date = _parseRecordDate(record['date']);
+        if (date == null) return '';
         if (_selectedTimeRangeIndex == 0) {
           return DateFormat('M/d', 'zh_CN').format(date);
         } else if (_selectedTimeRangeIndex == 1) {
@@ -181,10 +208,12 @@ class _WeightTrendCardState extends State<WeightTrendCard> {
     String tempDateRange = '';
     // 计算日期范围
     if (filteredRecords.isNotEmpty) {
-      final firstDate = DateTime.parse(filteredRecords.first['date'] as String);
-      final lastDate = DateTime.parse(filteredRecords.last['date'] as String);
-      tempDateRange =
-          '${DateFormat('yyyy年M月d日', 'zh_CN').format(firstDate)}至${DateFormat('M月d日', 'zh_CN').format(lastDate)}';
+      final firstDate = _parseRecordDate(filteredRecords.first['date']);
+      final lastDate = _parseRecordDate(filteredRecords.last['date']);
+      if (firstDate != null && lastDate != null) {
+        tempDateRange =
+            '${DateFormat('yyyy年M月d日', 'zh_CN').format(firstDate)}至${DateFormat('M月d日', 'zh_CN').format(lastDate)}';
+      }
     }
 
     String tempTrend = '';

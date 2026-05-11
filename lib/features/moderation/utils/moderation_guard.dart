@@ -23,6 +23,7 @@ class ModerationGuard {
     required ModerationPassedAction onPassed,
   }) async {
     final result = await _client.moderateText(scene: scene, content: content);
+    if (!context.mounted) return false;
     return _dispatchResult(
       originalContext: context,
       result: result,
@@ -40,6 +41,7 @@ class ModerationGuard {
       scene: scene,
       bytes: Uint8List.fromList(bytes),
     );
+    if (!context.mounted) return false;
     return _dispatchResult(
       originalContext: context,
       result: result,
@@ -57,6 +59,7 @@ class ModerationGuard {
       scene: scene,
       storagePath: storagePath,
     );
+    if (!context.mounted) return false;
     return _dispatchResult(
       originalContext: context,
       result: result,
