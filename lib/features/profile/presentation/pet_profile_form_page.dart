@@ -13,6 +13,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../shared/utils/user_avatar_helper.dart';
 import '../../../shared/utils/avatar_image_helper.dart';
 import '../../../services/supabase_service.dart';
+import '../../moderation/data/moderation_client.dart';
+import '../../moderation/domain/moderation_scene.dart';
+import '../../moderation/utils/moderation_guard.dart';
 
 /// 宠物档案表单页面 - 模仿截图设计
 class PetProfileFormPage extends StatefulWidget {
@@ -25,9 +28,11 @@ class PetProfileFormPage extends StatefulWidget {
 }
 
 class _PetProfileFormPageState extends State<PetProfileFormPage> {
+  late final ModerationGuard _moderationGuard;
   String? _petId;
   File? _avatarFile;
   File? _lifePhotoFile;
+
   /// 编辑模式下云端头像 URL（仅展示，未重新选择文件时保留）
   String? _avatarUrl;
   String? _lifePhotoUrl;
@@ -189,6 +194,7 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
   @override
   void initState() {
     super.initState();
+    _moderationGuard = ModerationGuard(ModerationClient());
     _loadUserAvatar();
     _loadDefaultOwnerNickname();
     if (widget.initialData != null) {
@@ -254,8 +260,7 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
       }
 
       if (data['lifePhoto'] != null || data['life_photo'] != null) {
-        final lifePath =
-            (data['lifePhoto'] ?? data['life_photo']) as String;
+        final lifePath = (data['lifePhoto'] ?? data['life_photo']) as String;
         final isRemote =
             lifePath.startsWith('http://') || lifePath.startsWith('https://');
         if (isRemote) {
@@ -283,8 +288,7 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
     try {
       final avatarPath = await UserAvatarHelper.getCurrentUserAvatarPath();
       if (mounted && avatarPath != null) {
-        setState(() {
-        });
+        setState(() {});
       }
     } catch (e) {
       debugPrint('加载用户头像失败: $e');
@@ -300,6 +304,15 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
       final cropped =
           await AvatarImageHelper.cropAndCompressAvatar(context, file.path);
       if (cropped == null) return;
+      final avatarBytes = await cropped.readAsBytes();
+      if (!context.mounted) return;
+      final avatarPassed = await _moderationGuard.runImageGuardByBytes(
+        context: context,
+        scene: ModerationScene.petAvatar,
+        bytes: avatarBytes,
+        onPassed: () async {},
+      );
+      if (!avatarPassed || !mounted) return;
       setState(() {
         _avatarFile = cropped;
         _avatarUrl = null;
@@ -333,9 +346,19 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
         minWidth: 1024,
         minHeight: 1024,
       );
+      final lifePhotoFile = File(compressed?.path ?? picked.path);
+      final lifePhotoBytes = await lifePhotoFile.readAsBytes();
+      if (!context.mounted) return;
+      final imagePassed = await _moderationGuard.runImageGuardByBytes(
+        context: context,
+        scene: ModerationScene.imageInput,
+        bytes: lifePhotoBytes,
+        onPassed: () async {},
+      );
+      if (!imagePassed || !mounted) return;
 
       setState(() {
-        _lifePhotoFile = File(compressed?.path ?? picked.path);
+        _lifePhotoFile = lifePhotoFile;
         _lifePhotoUrl = null;
         _lifePhotoPrecheckReason = null; // 清除之前的预检查结果
       });
@@ -377,7 +400,10 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
         return (pass: true, reason: '');
       }
 
-      return (pass: false, reason: reason.isNotEmpty ? reason : '图片不符合生成要求，请更换后重试');
+      return (
+        pass: false,
+        reason: reason.isNotEmpty ? reason : '图片不符合生成要求，请更换后重试'
+      );
     } on SocketException {
       return (pass: false, reason: '图片检测失败：网络连接异常，请检查网络后重试');
     } on TimeoutException {
@@ -385,8 +411,10 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
     } on FunctionException catch (e) {
       debugPrint('❌ 生活照预检函数调用失败: $e');
       final message = e.toString().toLowerCase();
-      if (message.contains('401') || message.contains('403') ||
-          message.contains('unauthorized') || message.contains('forbidden')) {
+      if (message.contains('401') ||
+          message.contains('403') ||
+          message.contains('unauthorized') ||
+          message.contains('forbidden')) {
         return (pass: false, reason: '登录状态已失效，请重新登录后重试');
       }
       if (message.contains('timeout')) {
@@ -1911,8 +1939,8 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
   }
 
   Widget _buildLifePhotoTrailing() {
-    final hasLifePhoto =
-        _lifePhotoFile != null || (_lifePhotoUrl != null && _lifePhotoUrl!.isNotEmpty);
+    final hasLifePhoto = _lifePhotoFile != null ||
+        (_lifePhotoUrl != null && _lifePhotoUrl!.isNotEmpty);
 
     Widget thumb;
     if (_lifePhotoFile != null && _lifePhotoFile!.existsSync()) {
@@ -1991,9 +2019,16 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
             child: const Text('取消'),
           ),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               final nickname = controller.text.trim();
               if (nickname.isNotEmpty) {
+                final passed = await _moderationGuard.runTextGuard(
+                  context: context,
+                  scene: ModerationScene.ownerNickname,
+                  content: nickname,
+                  onPassed: () async {},
+                );
+                if (!passed || !mounted) return;
                 setState(() {
                   _ownerNickname = nickname;
                 });
@@ -2017,6 +2052,49 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
 
     final petId = _petId ?? const Uuid().v4();
     _petId = petId;
+
+    if (!context.mounted) return;
+    final petNamePassed = await _moderationGuard.runTextGuard(
+      context: context,
+      scene: ModerationScene.petName,
+      content: _petName!.trim(),
+      onPassed: () async {},
+    );
+    if (!petNamePassed || !mounted) return;
+
+    if (_ownerNickname != null && _ownerNickname!.trim().isNotEmpty) {
+      final ownerNicknamePassed = await _moderationGuard.runTextGuard(
+        context: context,
+        scene: ModerationScene.ownerNickname,
+        content: _ownerNickname!.trim(),
+        onPassed: () async {},
+      );
+      if (!ownerNicknamePassed || !mounted) return;
+    }
+
+    if (_avatarFile != null) {
+      final avatarBytes = await _avatarFile!.readAsBytes();
+      if (!context.mounted) return;
+      final avatarPassed = await _moderationGuard.runImageGuardByBytes(
+        context: context,
+        scene: ModerationScene.petAvatar,
+        bytes: avatarBytes,
+        onPassed: () async {},
+      );
+      if (!avatarPassed || !mounted) return;
+    }
+
+    if (_lifePhotoFile != null) {
+      final lifePhotoBytes = await _lifePhotoFile!.readAsBytes();
+      if (!context.mounted) return;
+      final lifePhotoPassed = await _moderationGuard.runImageGuardByBytes(
+        context: context,
+        scene: ModerationScene.imageInput,
+        bytes: lifePhotoBytes,
+        onPassed: () async {},
+      );
+      if (!lifePhotoPassed || !mounted) return;
+    }
 
     // 保存逻辑，返回数据给上一页
     // 根据品种自动推断宠物类型（如果用户没有明确选择）
@@ -2054,9 +2132,8 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
       }
     }
 
-    String? lifePhotoValue =
-        (widget.initialData?['life_photo'] ?? widget.initialData?['lifePhoto'])
-            as String?;
+    String? lifePhotoValue = (widget.initialData?['life_photo'] ??
+        widget.initialData?['lifePhoto']) as String?;
     if (_lifePhotoFile != null) {
       // 1. 先上传到 Storage（不更新数据库）
       final uploadResult = await SupabaseService().uploadPetLifePhotoToStorage(
@@ -2159,195 +2236,197 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
             ),
           ),
         ),
-      body: Column(
-        children: [
-          Expanded(
-            child: SingleChildScrollView(
-              child: Column(
-                children: [
-                  // 头像区域
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.only(top: 20, bottom: 28),
-                    child: Column(
-                      children: [
-                        GestureDetector(
-                          onTap: _pickAvatar,
-                          child: Container(
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.08),
-                                  blurRadius: 20,
-                                  offset: const Offset(0, 4),
-                                ),
-                              ],
-                            ),
-                            child: CircleAvatar(
-                              radius: 60,
-                              backgroundColor: Colors.white,
-                              child: CircleAvatar(
-                                key: ValueKey<String>(
-                                  '${_avatarFile?.path ?? ''}|${_avatarUrl ?? ''}',
-                                ),
-                                radius: 58,
-                                backgroundColor: const Color(0xFFF8F8F8),
-                                backgroundImage: (_avatarFile != null
-                                        ? FileImage(_avatarFile!)
-                                        : (_avatarUrl != null &&
-                                                _avatarUrl!.isNotEmpty
-                                            ? NetworkImage(_avatarUrl!)
-                                            : null)) as ImageProvider?,
-                                child: _avatarFile == null &&
-                                        (_avatarUrl == null ||
-                                            _avatarUrl!.isEmpty)
-                                    ? const Icon(
-                                        Icons.camera_alt,
-                                        size: 42,
-                                        color: Color(0xFFBBBBBB),
-                                      )
-                                    : null,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  // 表单字段列表 - 添加圆角卡片包裹
-                  Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(20),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.06),
-                          blurRadius: 20,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      children: [
-                        _buildListItem(
-                          label: '宠物昵称',
-                          placeholder: '请输入爱宠昵称',
-                          value: _petName,
-                          onTap: _showNameInput,
-                          isFirst: true,
-                        ),
-                        _buildListItem(
-                          label: '宠物品种',
-                          placeholder: '请选择爱宠品种',
-                          value: _petSpecies,
-                          onTap: _showSpeciesSelector,
-                        ),
-                        _buildListItem(
-                          label: '出生日期',
-                          placeholder: '选择ta的出生日期',
-                          value: _birthDate != null
-                              ? '${_birthDate!.year}-${_birthDate!.month.toString().padLeft(2, '0')}-${_birthDate!.day.toString().padLeft(2, '0')}'
-                              : null,
-                          onTap: _showDatePicker,
-                        ),
-                        _buildListItem(
-                          label: '宠物性别',
-                          placeholder: '选择性别',
-                          value: _gender,
-                          onTap: _showGenderSelector,
-                        ),
-                        _buildListItem(
-                          label: '是否绝育',
-                          placeholder: '是否绝育',
-                          value: _neuterStatus,
-                          onTap: _showNeuterSelector,
-                        ),
-                        _buildListItem(
-                          label: '宠物体重',
-                          placeholder: '请选择爱宠体重 (kg)',
-                          value: _weight != null
-                              ? '${_weight!.toStringAsFixed(1)} kg'
-                              : null,
-                          onTap: _showWeightPicker,
-                        ),
-                        // 昵称设置
-                        _FormRow(
-                          label: '我的称呼',
-                          onTap: _showNicknameEditor,
-                          isLast: false,
-                          child: Text(
-                            _ownerNickname ?? _defaultOwnerNickname,
-                            textAlign: TextAlign.right,
-                            style: const TextStyle(
-                              fontSize: 16,
-                              color: Colors.black87,
-                            ),
-                          ),
-                        ),
-                        _buildListItem(
-                          label: '生活照',
-                          placeholder: '请选择生活照',
-                          trailing: _buildLifePhotoTrailing(),
-                          onTap: () {
-                            setState(() => _lifePhotoPrecheckReason = null); // 清除之前的预检查结果
-                            _pickLifePhoto();
-                          },
-                          isLast: true,
-                        ),
-                        // 生活照预检查失败提示
-                        if (_lifePhotoPrecheckReason != null && _lifePhotoPrecheckReason!.isNotEmpty)
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+        body: Column(
+          children: [
+            Expanded(
+              child: SingleChildScrollView(
+                child: Column(
+                  children: [
+                    // 头像区域
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.only(top: 20, bottom: 28),
+                      child: Column(
+                        children: [
+                          GestureDetector(
+                            onTap: _pickAvatar,
                             child: Container(
-                              padding: const EdgeInsets.all(14),
                               decoration: BoxDecoration(
-                                color: const Color(0xFFFFF3E0),
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color: const Color(0xFFFFB74D),
-                                  width: 1,
-                                ),
-                              ),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Icon(
-                                    Icons.info_outline,
-                                    color: Color(0xFFF57C00),
-                                    size: 20,
-                                  ),
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: Text(
-                                      _lifePhotoPrecheckReason!,
-                                      style: const TextStyle(
-                                        fontSize: 13,
-                                        color: Color(0xFFE65100),
-                                        height: 1.5,
-                                      ),
-                                    ),
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.08),
+                                    blurRadius: 20,
+                                    offset: const Offset(0, 4),
                                   ),
                                 ],
                               ),
+                              child: CircleAvatar(
+                                radius: 60,
+                                backgroundColor: Colors.white,
+                                child: CircleAvatar(
+                                  key: ValueKey<String>(
+                                    '${_avatarFile?.path ?? ''}|${_avatarUrl ?? ''}',
+                                  ),
+                                  radius: 58,
+                                  backgroundColor: const Color(0xFFF8F8F8),
+                                  backgroundImage: (_avatarFile != null
+                                      ? FileImage(_avatarFile!)
+                                      : (_avatarUrl != null &&
+                                              _avatarUrl!.isNotEmpty
+                                          ? NetworkImage(_avatarUrl!)
+                                          : null)) as ImageProvider?,
+                                  child: _avatarFile == null &&
+                                          (_avatarUrl == null ||
+                                              _avatarUrl!.isEmpty)
+                                      ? const Icon(
+                                          Icons.camera_alt,
+                                          size: 42,
+                                          color: Color(0xFFBBBBBB),
+                                        )
+                                      : null,
+                                ),
+                              ),
                             ),
                           ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 32),
-                ],
+                    const SizedBox(height: 16),
+                    // 表单字段列表 - 添加圆角卡片包裹
+                    Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.06),
+                            blurRadius: 20,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        children: [
+                          _buildListItem(
+                            label: '宠物昵称',
+                            placeholder: '请输入爱宠昵称',
+                            value: _petName,
+                            onTap: _showNameInput,
+                            isFirst: true,
+                          ),
+                          _buildListItem(
+                            label: '宠物品种',
+                            placeholder: '请选择爱宠品种',
+                            value: _petSpecies,
+                            onTap: _showSpeciesSelector,
+                          ),
+                          _buildListItem(
+                            label: '出生日期',
+                            placeholder: '选择ta的出生日期',
+                            value: _birthDate != null
+                                ? '${_birthDate!.year}-${_birthDate!.month.toString().padLeft(2, '0')}-${_birthDate!.day.toString().padLeft(2, '0')}'
+                                : null,
+                            onTap: _showDatePicker,
+                          ),
+                          _buildListItem(
+                            label: '宠物性别',
+                            placeholder: '选择性别',
+                            value: _gender,
+                            onTap: _showGenderSelector,
+                          ),
+                          _buildListItem(
+                            label: '是否绝育',
+                            placeholder: '是否绝育',
+                            value: _neuterStatus,
+                            onTap: _showNeuterSelector,
+                          ),
+                          _buildListItem(
+                            label: '宠物体重',
+                            placeholder: '请选择爱宠体重 (kg)',
+                            value: _weight != null
+                                ? '${_weight!.toStringAsFixed(1)} kg'
+                                : null,
+                            onTap: _showWeightPicker,
+                          ),
+                          // 昵称设置
+                          _FormRow(
+                            label: '我的称呼',
+                            onTap: _showNicknameEditor,
+                            isLast: false,
+                            child: Text(
+                              _ownerNickname ?? _defaultOwnerNickname,
+                              textAlign: TextAlign.right,
+                              style: const TextStyle(
+                                fontSize: 16,
+                                color: Colors.black87,
+                              ),
+                            ),
+                          ),
+                          _buildListItem(
+                            label: '生活照',
+                            placeholder: '请选择生活照',
+                            trailing: _buildLifePhotoTrailing(),
+                            onTap: () {
+                              setState(() => _lifePhotoPrecheckReason =
+                                  null); // 清除之前的预检查结果
+                              _pickLifePhoto();
+                            },
+                            isLast: true,
+                          ),
+                          // 生活照预检查失败提示
+                          if (_lifePhotoPrecheckReason != null &&
+                              _lifePhotoPrecheckReason!.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+                              child: Container(
+                                padding: const EdgeInsets.all(14),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFFF3E0),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: const Color(0xFFFFB74D),
+                                    width: 1,
+                                  ),
+                                ),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Icon(
+                                      Icons.info_outline,
+                                      color: Color(0xFFF57C00),
+                                      size: 20,
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Text(
+                                        _lifePhotoPrecheckReason!,
+                                        style: const TextStyle(
+                                          fontSize: 13,
+                                          color: Color(0xFFE65100),
+                                          height: 1.5,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 32),
+                  ],
+                ),
               ),
             ),
-          ),
-          // 底部保存按钮
-          Container(
-            color: const Color(0xFFF5F6F9),
-            padding: const EdgeInsets.all(20),
-            child: SafeArea(
-              top: false,
+            // 底部保存按钮
+            Container(
+              color: const Color(0xFFF5F6F9),
+              padding: const EdgeInsets.all(20),
+              child: SafeArea(
+                top: false,
                 child: SizedBox(
                   width: double.infinity,
                   child: Container(
@@ -2377,7 +2456,8 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.transparent,
-                        foregroundColor: _isSaving ? const Color(0xFFF0F4F8) : Colors.white,
+                        foregroundColor:
+                            _isSaving ? const Color(0xFFF0F4F8) : Colors.white,
                         shadowColor: Colors.transparent,
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         shape: RoundedRectangleBorder(
@@ -2396,7 +2476,8 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
                                   height: 18,
                                   child: CircularProgressIndicator(
                                     strokeWidth: 2.5,
-                                    valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFF0F4F8)),
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                        Color(0xFFF0F4F8)),
                                   ),
                                 ),
                                 SizedBox(width: 10),
@@ -2416,15 +2497,15 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
-    ),
-  );
+    );
   }
 }
 

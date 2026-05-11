@@ -5,6 +5,7 @@ import 'dart:async';
 import 'dart:ui';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../shared/utils/ui_helpers.dart';
+import '../../content_feedback/presentation/ai_generated_image_disclaimer.dart';
 import 'result_page.dart';
 
 class AppColors {
@@ -22,7 +23,7 @@ class AppColors {
   static const Color orb1 = Color(0xFFD8B4FE);
   static const Color orb2 = Color(0xFFA78BFA);
   static const Color orb3 = Color(0xFFF9A8D4);
-  
+
   // Progress gradient colors
   static const List<Color> progressGradient = [
     Color(0xFF7C3AED),
@@ -220,9 +221,8 @@ class _LoadingPageState extends State<LoadingPage>
         final retryAfterMs = data['retry_after_ms'] as int?;
         final seconds =
             retryAfterMs == null ? null : (retryAfterMs / 1000).ceil();
-        _handleLoadingError(seconds == null
-            ? '请求过于频繁，请稍后重试'
-            : '请求过于频繁，请 $seconds 秒后重试');
+        _handleLoadingError(
+            seconds == null ? '请求过于频繁，请稍后重试' : '请求过于频繁，请 $seconds 秒后重试');
         return;
       }
 
@@ -437,7 +437,7 @@ class _LoadingPageState extends State<LoadingPage>
               ),
             ],
           ),
-          
+
           // Sparkle particles
           AnimatedBuilder(
             animation: _sparkleController,
@@ -447,7 +447,7 @@ class _LoadingPageState extends State<LoadingPage>
               );
             },
           ),
-          
+
           // Main content
           SafeArea(
             child: Center(
@@ -465,12 +465,12 @@ class _LoadingPageState extends State<LoadingPage>
                       // Enhanced glassmorphism container
                       _buildMainContainer(percentage),
                       const SizedBox(height: 48),
-                      
+
                       // Tech tips with fade animation
                       _buildTechTipDisplay(),
-                      
+
                       const SizedBox(height: 24),
-                      
+
                       // Status indicator
                       Row(
                         mainAxisSize: MainAxisSize.min,
@@ -487,6 +487,11 @@ class _LoadingPageState extends State<LoadingPage>
                           ),
                         ],
                       ),
+                      const SizedBox(height: 16),
+                      const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 24),
+                        child: AiGeneratedImageDisclaimer(compact: true),
+                      ),
                     ],
                   );
                 },
@@ -500,7 +505,7 @@ class _LoadingPageState extends State<LoadingPage>
 
   Widget _buildMainContainer(int percentage) {
     final pulseScale = 1.0 + (_pulseController.value * 0.03);
-    
+
     return Transform.scale(
       scale: pulseScale,
       child: Container(
@@ -511,7 +516,8 @@ class _LoadingPageState extends State<LoadingPage>
           boxShadow: [
             // Outer glow
             BoxShadow(
-              color: AppColors.primary.withOpacity(0.15 + (_pulseController.value * 0.1)),
+              color: AppColors.primary
+                  .withOpacity(0.15 + (_pulseController.value * 0.1)),
               blurRadius: 30 + (_pulseController.value * 10),
               spreadRadius: 2,
             ),
@@ -560,7 +566,7 @@ class _LoadingPageState extends State<LoadingPage>
                       ),
                     ),
                   ),
-                  
+
                   // Inner glow ring
                   SizedBox(
                     width: 164,
@@ -577,7 +583,7 @@ class _LoadingPageState extends State<LoadingPage>
                       ),
                     ),
                   ),
-                  
+
                   // Center content
                   Column(
                     mainAxisSize: MainAxisSize.min,
@@ -585,7 +591,7 @@ class _LoadingPageState extends State<LoadingPage>
                       // Paw print icon with animation
                       _buildPawIcon(),
                       const SizedBox(height: 12),
-                      
+
                       // Percentage display
                       ShaderMask(
                         shaderCallback: (bounds) => LinearGradient(
@@ -604,7 +610,7 @@ class _LoadingPageState extends State<LoadingPage>
                       ),
                     ],
                   ),
-                  
+
                   // Decorative paw prints around the ring
                   ..._buildFloatingPaws(),
                 ],
@@ -674,7 +680,8 @@ class _LoadingPageState extends State<LoadingPage>
     return AnimatedBuilder(
       animation: _orbController,
       builder: (context, child) {
-        final float = math.sin((_orbController.value * 2 * math.pi) + rotationOffset) * 3;
+        final float =
+            math.sin((_orbController.value * 2 * math.pi) + rotationOffset) * 3;
         return Transform.translate(
           offset: Offset(0, float),
           child: Opacity(
@@ -692,7 +699,7 @@ class _LoadingPageState extends State<LoadingPage>
 
   Widget _buildTechTipDisplay() {
     final opacity = 1.0 - _tipController.value;
-    
+
     return AnimatedOpacity(
       opacity: opacity,
       duration: const Duration(milliseconds: 150),
@@ -730,7 +737,8 @@ class _LoadingPageState extends State<LoadingPage>
             color: AppColors.primary,
             boxShadow: [
               BoxShadow(
-                color: AppColors.primary.withOpacity(0.4 + (_pulseController.value * 0.4)),
+                color: AppColors.primary
+                    .withOpacity(0.4 + (_pulseController.value * 0.4)),
                 blurRadius: 8 + (_pulseController.value * 8),
                 spreadRadius: _pulseController.value * 2,
               ),
@@ -744,13 +752,13 @@ class _LoadingPageState extends State<LoadingPage>
   List<Widget> _buildSparkles() {
     final sparkles = <Widget>[];
     final random = math.Random(42);
-    
+
     for (int i = 0; i < 12; i++) {
       final x = random.nextDouble() * 400 - 50;
       final y = random.nextDouble() * 800;
       final delay = random.nextDouble();
       final size = 3.0 + random.nextDouble() * 4;
-      
+
       sparkles.add(
         Positioned(
           left: x,
@@ -761,7 +769,7 @@ class _LoadingPageState extends State<LoadingPage>
               final progress = ((_sparkleController.value + delay) % 1.0);
               final opacity = math.sin(progress * math.pi) * 0.6;
               final scale = 0.5 + math.sin(progress * math.pi) * 0.5;
-              
+
               return Transform.scale(
                 scale: scale,
                 child: Opacity(
@@ -788,7 +796,7 @@ class _LoadingPageState extends State<LoadingPage>
         ),
       );
     }
-    
+
     return sparkles;
   }
 }

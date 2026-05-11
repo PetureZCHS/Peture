@@ -1,0 +1,743 @@
+openapi: 3.0.3
+info:
+  title: Peture Supabase API
+  description: |
+    Peture 应用接口：Supabase Edge Functions + PostgREST + Storage（Storage 详见上级目录 `storage-contract.md`）。
+    流式接口（chat、diary-v3）的 SSE 细节见 `../streaming-and-edge-cases.md`。
+    勿在文档或示例中提交真实 anon/service 密钥；使用占位符。
+  version: "1.0.0"
+  contact:
+    name: Peture
+
+servers:
+  - url: "https://{projectRef}.supabase.co"
+    variables:
+      projectRef:
+        default: your-project-ref
+        description: Supabase 项目 ref（Dashboard → Settings → API）
+
+tags:
+  - name: edge-functions
+    description: Supabase Edge Functions（/functions/v1）
+  - name: data-api
+    description: PostgREST（/rest/v1），RLS 随表策略；需登录用户 JWT + apikey
+  - name: shared-schemas
+    description: 跨接口复用的 JSON 结构
+
+security:
+  - ApiKeyAuth: []
+    BearerAuth: []
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: apikey
+      description: Supabase anon（public）key；与 PostgREST / Functions 常见用法一致。
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: 用户 `access_token`（Supabase Auth）；部分 Function 强制校验。
+
+  parameters:
+    TableName:
+      name: table
+      in: path
+      required: true
+      description: 应用使用的业务表（清单见 ../INVENTORY.md）
+      schema:
+        type: string
+        enum:
+          - users_profiles
+          - pets
+          - medical_records
+          - weight_records
+          - vaccine_records
+          - daily_reminders
+          - medication_reminders
+          - vaccine_reminders
+          - deworming_reminders
+          - conversations
+          - chat_messages
+          - pet_diaries
+          - daily_cost_items
+          - fitness_records
+          - health_plans
+          - pet_passports
+          - pet_passport_achievements
+          - unified_expenses
+          - fitness_courses
+          - community_posts
+          - community_post_comments
+          - community_post_likes
+          - community_post_collections
+          - community_user_follows
+          - user_content_feedback
+
+  schemas:
+    ModerationResult:
+      type: object
+      required:
+        - passed
+        - scene
+        - riskLevel
+        - riskLabels
+        - action
+        - message
+        - traceId
+      properties:
+        passed:
+          type: boolean
+        scene:
+          type: string
+          description: 场景枚举，与 moderation_contract 一致
+          enum:
+            - nickname
+            - owner_nickname
+            - pet_name
+            - avatar
+            - pet_avatar
+            - ai_input
+            - ai_output
+            - diary_input
+            - diary_output
+            - image_input
+            - image_output
+        riskLevel:
+          type: string
+          enum: [none, low, medium, high, unknown]
+        riskLabels:
+          type: array
+          items:
+            type: string
+        action:
+          type: string
+          enum: [allow, review, block, unknown]
+        message:
+          type: string
+        traceId:
+          type: string
+        errorCode:
+          type: string
+          description: 如 MODERATION_BLOCKED、MODERATION_UNAUTHORIZED 等
+      description: 与 supabase/functions/_shared/moderation_contract.ts 对齐
+
+    ChatRequest:
+      type: object
+      required: [query]
+      properties:
+        query:
+          type: string
+        user:
+          type: string
+          description: 由服务端用 JWT 内用户 ID 覆盖，客户端可不传
+        response_mode:
+          type: string
+          enum: [streaming, blocking]
+          default: streaming
+        inputs:
+          type: object
+          additionalProperties: true
+        conversation_id:
+          type: string
+          nullable: true
+
+    DiaryV3Request:
+      type: object
+      properties:
+        inputs:
+          type: object
+          description: Dify workflow inputs；常见含 query、style、nickname、breed、pet_name、gender、type
+          additionalProperties: true
+        response_mode:
+          type: string
+          enum: [streaming, blocking]
+
+    ImgGenStartRequest:
+      type: object
+      required: [file_name, style]
+      properties:
+        file_name:
+          type: string
+          description: 已上传到 ai-images-temp 的文件名
+        style:
+          type: string
+          enum: [run, explorer, bazaar, grid, autumn, cowboy]
+
+    ImgGenStartSuccess:
+      type: object
+      required: [task_id]
+      properties:
+        task_id:
+          type: string
+
+    ImgGenCheckV2Request:
+      type: object
+      required: [task_id, file_name]
+      properties:
+        task_id:
+          type: string
+        file_name:
+          type: string
+
+    ImgGenCheckV2Response:
+      type: object
+      properties:
+        task_id:
+          type: string
+        status:
+          type: string
+          description: PENDING/RUNNING/SUCCEED/FAILED 等；客户端兼容多种成功别名见 streaming 文档
+        path:
+          type: string
+          description: 成功写入 ai-images 后的对象路径
+        upstream_task_status:
+          type: string
+        error:
+          type: string
+        traceId:
+          type: string
+        errorCode:
+          type: string
+
+    AvatarFinalizeRequest:
+      type: object
+      required: [temp_path]
+      properties:
+        temp_path:
+          type: string
+          description: 必须在当前用户命名空间下，如 `{userId}/...`
+
+    AvatarFinalizeSuccess:
+      allOf:
+        - $ref: "#/components/schemas/ModerationResult"
+        - type: object
+          properties:
+            avatar_url:
+              type: string
+              format: uri
+            path:
+              type: string
+
+    InvitationCodeResponse:
+      type: object
+      properties:
+        code:
+          description: 成功时为 8 位邀请码字符串；错误时可为业务码如 NOT_ALLOWED
+          type: string
+        error:
+          type: string
+
+    RedeemInvitationRequest:
+      type: object
+      required: [code]
+      properties:
+        code:
+          type: string
+
+    RedeemInvitationResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        error:
+          type: string
+
+    RechargeTestRequest:
+      type: object
+      required: [amount]
+      properties:
+        amount:
+          type: number
+          description: 测试充值逻辑用，服务端会放大系数写入 test 表
+
+    RechargeTestResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        current_quota:
+          type: number
+
+    ErrorJson:
+      type: object
+      additionalProperties: true
+      properties:
+        error:
+          type: string
+        code:
+          type: string
+        status:
+          type: integer
+
+    PostgrestRow:
+      type: object
+      additionalProperties: true
+      description: 行结构因表而异；权威字段以 migrations 与 lib/services/supabase_service 写入为准
+
+paths:
+  /functions/v1/chat:
+    post:
+      tags: [edge-functions]
+      summary: Dify 对话（输入审核 + 流式/阻塞）
+      operationId: edgeChat
+      x-source-files:
+        server: supabase/functions/chat/index.ts
+        client: lib/services/supabase_edge_service.dart
+      security:
+        - ApiKeyAuth: []
+          BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChatRequest"
+      responses:
+        "200":
+          description: |
+            若输入审核未通过：application/json，体为 ModerationResult。
+            若通过且 streaming：text/event-stream（SSE），详见 ../streaming-and-edge-cases.md。
+            若通过且 blocking：application/json（Dify 原始结构，客户端少用）。
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/ModerationResult"
+                  - type: object
+                    additionalProperties: true
+            text/event-stream:
+              schema:
+                type: string
+                format: binary
+        "400":
+          description: 缺 query 等
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorJson"
+        "401":
+          description: 未登录或 JWT 无效（requireUserFromRequest）
+        "503":
+          description: 未配置 DIFY API Key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorJson"
+
+  /functions/v1/diary-v3:
+    post:
+      tags: [edge-functions]
+      summary: 宠物日记工作流（鉴权 + 余额 + 输入输出审核 + SSE/阻塞）
+      operationId: edgeDiaryV3
+      x-source-files:
+        server: supabase/functions/diary/diary-v3.ts
+        client: lib/services/supabase_edge_service.dart
+      security:
+        - ApiKeyAuth: []
+          BearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DiaryV3Request"
+      responses:
+        "200":
+          description: |
+            输入或流式输出审核拦截：application/json ModerationResult。
+            否则 streaming 为 text/event-stream；blocking 为 JSON。详见 ../streaming-and-edge-cases.md。
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModerationResult"
+            text/event-stream:
+              schema:
+                type: string
+                format: binary
+        "401":
+          description: 缺少或无效 Authorization
+        "402":
+          description: 余额不足（文案见实现）
+        "500":
+          description: 配置或额度查询错误
+
+  /functions/v1/diary:
+    post:
+      tags: [edge-functions]
+      summary: 日记工作流（简化版入口，与 diary-v3 部署二选一或并存）
+      operationId: edgeDiaryLegacy
+      deprecated: true
+      x-source-files:
+        server: supabase/functions/diary/index.ts
+        client: lib/core/config/supabase_config.dart
+      security:
+        - ApiKeyAuth: []
+          BearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DiaryV3Request"
+      responses:
+        "200":
+          description: 同 diary-v3，依部署配置可能不经余额/二次审核；以服务端为准
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                format: binary
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /functions/v1/moderate-text:
+    post:
+      tags: [edge-functions]
+      summary: 文本审核
+      operationId: edgeModerateText
+      x-source-files:
+        server: supabase/functions/moderate-text/index.ts
+        client: lib/features/moderation/data/moderation_client.dart
+      security:
+        - ApiKeyAuth: []
+          BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [scene, content]
+              properties:
+                scene:
+                  type: string
+                content:
+                  type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModerationResult"
+        "400":
+          description: scene 非法或内容为空
+        "401":
+          description: 未授权
+
+  /functions/v1/moderate-image:
+    post:
+      tags: [edge-functions]
+      summary: 图像审核（base64 或 storage_path）
+      operationId: edgeModerateImage
+      x-source-files:
+        server: supabase/functions/moderate-image/index.ts
+        client: lib/features/moderation/data/moderation_client.dart
+      security:
+        - ApiKeyAuth: []
+          BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [scene]
+              properties:
+                scene:
+                  type: string
+                image_base64:
+                  type: string
+                storage_path:
+                  type: string
+                  description: 须以当前 userId 为前缀
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModerationResult"
+        "400":
+          description: 参数错误或非本人路径
+        "401":
+          description: 未授权
+
+  /functions/v1/img-gen-start:
+    post:
+      tags: [edge-functions]
+      summary: 启动生图任务（输入图审核 + ModelScope）
+      operationId: edgeImgGenStart
+      x-source-files:
+        server: supabase/functions/img-gen-start/index.ts
+        client: lib/features/image_generation/presentation/preparation_page.dart
+      security:
+        - ApiKeyAuth: []
+          BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImgGenStartRequest"
+      responses:
+        "200":
+          description: 成功返回 task_id；未过审返回 ModerationResult
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/ImgGenStartSuccess"
+                  - $ref: "#/components/schemas/ModerationResult"
+        "400":
+          description: 参数错误或临时文件未就绪
+        "401":
+          description: 无效用户
+
+  /functions/v1/img-gen-check-v2:
+    post:
+      tags: [edge-functions]
+      summary: 轮询生图任务并落库正式桶（输出审核）
+      operationId: edgeImgGenCheckV2
+      x-source-files:
+        server: supabase/functions/img-gen-check-v2/index.ts
+        client: lib/features/image_generation/presentation/loading_page.dart
+      security:
+        - ApiKeyAuth: []
+          BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImgGenCheckV2Request"
+      responses:
+        "200":
+          description: 进行中/失败/成功均为 200 JSON，依 status 字段区分
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImgGenCheckV2Response"
+        "401":
+          description: 缺少或无效 JWT
+        "500":
+          description: 上游或存储错误
+        "504":
+          description: 上游或下载超时
+
+  /functions/v1/img-gen-check:
+    post:
+      tags: [edge-functions]
+      summary: 生图轮询（旧版）
+      deprecated: true
+      operationId: edgeImgGenCheckLegacy
+      x-source-files:
+        server: supabase/functions/img-gen-check/index.ts
+      security:
+        - ApiKeyAuth: []
+          BearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImgGenCheckV2Request"
+      responses:
+        "200":
+          description: 与 v2 类似但字段可能略有差异；客户端未使用
+
+  /functions/v1/avatar-finalize:
+    post:
+      tags: [edge-functions]
+      summary: 临时头像审核并写入正式桶 + 更新 users_profiles.avatar_url
+      operationId: edgeAvatarFinalize
+      x-source-files:
+        server: supabase/functions/avatar-finalize/index.ts
+        client: lib/services/supabase_service.dart
+      security:
+        - ApiKeyAuth: []
+          BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AvatarFinalizeRequest"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/AvatarFinalizeSuccess"
+                  - $ref: "#/components/schemas/ModerationResult"
+        "403":
+          description: 非法 temp_path
+        "500":
+          description: 处理失败（体可能为 ModerationResult 形态）
+
+  /functions/v1/get-or-create-invitation-code:
+    post:
+      tags: [edge-functions]
+      summary: 获取或创建邀请码（白名单逻辑在服务内）
+      operationId: edgeGetOrCreateInvitationCode
+      x-source-files:
+        server: supabase/functions/get-or-create-invitation-code/index.ts
+        client: lib/services/supabase_service.dart
+      security:
+        - ApiKeyAuth: []
+          BearerAuth: []
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code:
+                    type: string
+        "403":
+          description: NOT_ALLOWED 等
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvitationCodeResponse"
+
+  /functions/v1/redeem-invitation:
+    post:
+      tags: [edge-functions]
+      summary: 兑换邀请码开通终身会员
+      operationId: edgeRedeemInvitation
+      x-source-files:
+        server: supabase/functions/redeem-invitation/index.ts
+        client: lib/services/supabase_service.dart
+      security:
+        - ApiKeyAuth: []
+          BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RedeemInvitationRequest"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RedeemInvitationResponse"
+        "400":
+          description: 邀请码无效或已使用
+
+  /functions/v1/recharge-test:
+    post:
+      tags: [edge-functions]
+      summary: 测试充值额度（仅测试场景）
+      operationId: edgeRechargeTest
+      x-source-files:
+        server: supabase/functions/recharge-test/index.ts
+        client: lib/features/profile/presentation/settings_page.dart
+      security:
+        - ApiKeyAuth: []
+          BearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RechargeTestRequest"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RechargeTestResponse"
+        "401":
+          description: 无效 token
+
+  /rest/v1/{table}:
+    parameters:
+      - $ref: "#/components/parameters/TableName"
+    get:
+      tags: [data-api]
+      summary: PostgREST 查询（select / filter）
+      operationId: postgrestSelect
+      description: |
+        标准 Supabase/PostgREST 语义：`select`、`eq`、`order` 等 query 参数。
+        需 header：`apikey`、`Authorization: Bearer <用户JWT>`。
+        RLS 由表策略决定；本仓库 migrations 仅覆盖部分表，其余以线上为准。
+      security:
+        - ApiKeyAuth: []
+          BearerAuth: []
+      responses:
+        "200":
+          description: 通常 JSON 数组
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PostgrestRow"
+    post:
+      tags: [data-api]
+      summary: PostgREST 插入
+      operationId: postgrestInsert
+      security:
+        - ApiKeyAuth: []
+          BearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: "#/components/schemas/PostgrestRow"
+                - type: array
+                  items:
+                    $ref: "#/components/schemas/PostgrestRow"
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/PostgrestRow"
+                  - type: array
+                    items:
+                      $ref: "#/components/schemas/PostgrestRow"
+    patch:
+      tags: [data-api]
+      summary: PostgREST 更新（常配合 query 过滤）
+      operationId: postgrestUpdate
+      security:
+        - ApiKeyAuth: []
+          BearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PostgrestRow"
+      responses:
+        "204":
+          description: 无内容或 Prefer return=representation 时返回行
+        "200":
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/PostgrestRow"
+                  - type: array
+                    items:
+                      $ref: "#/components/schemas/PostgrestRow"
+    delete:
+      tags: [data-api]
+      summary: PostgREST 删除
+      operationId: postgrestDelete
+      security:
+        - ApiKeyAuth: []
+          BearerAuth: []
+      responses:
+        "204":
+          description: 成功

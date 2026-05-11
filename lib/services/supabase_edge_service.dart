@@ -36,6 +36,12 @@ class ErrorEvent implements ChatStreamEvent {
   ErrorEvent(this.error);
 }
 
+class ModerationInterceptEvent implements ChatStreamEvent {
+  final String message;
+
+  ModerationInterceptEvent(this.message);
+}
+
 /// Supabase Edge Function 服务
 /// 通过 Supabase Edge Function 调用 chat API
 class SupabaseEdgeFunctionService {
@@ -115,7 +121,8 @@ class SupabaseEdgeFunctionService {
 
       debugPrint('📤 调用 Edge Function: ${SupabaseConfig.difyChatFunctionName}');
       debugPrint('📦 必填参数:');
-      debugPrint('   - query: ${query.substring(0, 50.clamp(0, query.length))}...');
+      debugPrint(
+          '   - query: ${query.substring(0, 50.clamp(0, query.length))}...');
       debugPrint('   - user: $user');
       debugPrint('   - response_mode: streaming');
       debugPrint('   - inputs: {}');
@@ -133,7 +140,8 @@ class SupabaseEdgeFunctionService {
       final projectRef = _projectRefFromProjectUrl();
       debugPrint('🔐 accessToken: ${_tokenSummary(accessToken)}');
       if (tokenRef != null && tokenRef != projectRef) {
-        debugPrint('⚠️ token project ref 不匹配: token=$tokenRef, app=$projectRef');
+        debugPrint(
+            '⚠️ token project ref 不匹配: token=$tokenRef, app=$projectRef');
       }
 
       // 构建 HTTP 请求
@@ -255,6 +263,12 @@ class SupabaseEdgeFunctionService {
                 debugPrint('📨 message_end 事件: ✅ 消息完成');
                 break;
 
+              case 'moderation_intercept':
+                final msg = json['message'] as String? ?? '该回复因内容审核未通过，已被拦截。';
+                debugPrint('📨 moderation_intercept: 流式输出被服务端拦截');
+                yield ModerationInterceptEvent(msg);
+                break;
+
               case 'error':
                 // 错误事件
                 var message = json['message'] as String? ?? '未知错误';
@@ -281,7 +295,8 @@ class SupabaseEdgeFunctionService {
             }
           } catch (e) {
             debugPrint('⚠️ 解析失败: $e');
-            debugPrint('   行内容: ${line.substring(0, 100.clamp(0, line.length))}...');
+            debugPrint(
+                '   行内容: ${line.substring(0, 100.clamp(0, line.length))}...');
           }
         }
       }
@@ -344,7 +359,8 @@ class SupabaseEdgeFunctionService {
       final projectRef = _projectRefFromProjectUrl();
       debugPrint('🔐 accessToken: ${_tokenSummary(accessToken)}');
       if (tokenRef != null && tokenRef != projectRef) {
-        debugPrint('⚠️ token project ref 不匹配: token=$tokenRef, app=$projectRef');
+        debugPrint(
+            '⚠️ token project ref 不匹配: token=$tokenRef, app=$projectRef');
       }
       var response = await http.post(
         url,

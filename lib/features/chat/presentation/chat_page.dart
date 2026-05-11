@@ -7,19 +7,26 @@ import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:image_picker/image_picker.dart';
+
 import 'package:supabase_flutter/supabase_flutter.dart';
 // ✅ 使用新的 Supabase Dify 服务
 import '../../../services/supabase_edge_service.dart';
-import '../../../services/supabase_service.dart'; 
-import '../../../shared/models/pet.dart'; 
+import '../../../services/supabase_service.dart';
+import '../../../shared/models/pet.dart';
 // ================== 所有必需的导入 ==================
 import '../../../shared/models/conversation.dart';
 import '../../../shared/utils/ui_helpers.dart';
 import '../../../shared/widgets/diagnostic_report_card.dart';
-import '../../../shared/widgets/recommendation_card.dart'; 
+import '../../../shared/widgets/recommendation_card.dart';
 import '../../auth/presentation/login_page.dart';
-import '../../shop/presentation/cart_page.dart'; 
+import '../../shop/presentation/cart_page.dart';
 import 'dart:convert'; // Ensure dart:convert is available for JSON parsing
+import '../../moderation/data/moderation_client.dart';
+import '../../moderation/domain/moderation_scene.dart';
+import '../../moderation/utils/moderation_guard.dart';
+import '../../content_feedback/domain/content_feedback_kind.dart';
+import '../../content_feedback/presentation/content_feedback_bar.dart';
+import '../../content_feedback/utils/content_ref_digest.dart';
 
 // ===============================================
 
@@ -31,6 +38,7 @@ class ChatMessage {
   final bool isUser;
   bool isLiked;
   bool isDisliked;
+  bool isHidden;
   final RecommendationData? recommendationData;
 
   ChatMessage({
@@ -38,6 +46,7 @@ class ChatMessage {
     required this.isUser,
     this.isLiked = false,
     this.isDisliked = false,
+    this.isHidden = false,
     this.recommendationData,
   });
 }
@@ -71,6 +80,7 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
   bool _isLoading = false;
   String get _userId =>
       Supabase.instance.client.auth.currentUser?.id ?? "anonymous";
+
   bool _hasStartedChat = false;
   bool _isComposing = false;
   final math.Random _random = math.Random();
@@ -81,8 +91,7 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
   // 打字机效果相关
   String _currentTypingText = '';
   // 打字机文本高频变更，避免整页 setState 导致大范围重建
-  final ValueNotifier<String> _typingTextNotifier =
-      ValueNotifier<String>('');
+  final ValueNotifier<String> _typingTextNotifier = ValueNotifier<String>('');
   Timer? _typingTimer;
   final List<String> _pendingChunks = [];
   bool _isTyping = false;
@@ -105,6 +114,7 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
   final SupabaseEdgeFunctionService _difyService =
       SupabaseEdgeFunctionService();
   final SupabaseService _supabaseService = SupabaseService();
+  late final ModerationGuard _moderationGuard;
   final List<String> _allSuggestions = [
     "猫咪呼吸似乎有点困难，嘴巴张开呼吸，像小狗一样喘气",
     "猫咪的耳朵有异味，耳道有褐色分泌物，频繁地抓耳挠腮",
@@ -125,6 +135,7 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
   @override
   void initState() {
     super.initState();
+    _moderationGuard = ModerationGuard(ModerationClient());
     _suggestionFadeController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 300),
@@ -451,6 +462,7 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
               isUser: false,
               isLiked: lastMessage.isLiked,
               isDisliked: lastMessage.isDisliked,
+              isHidden: lastMessage.isHidden,
               recommendationData: lastMessage.recommendationData,
             );
           }
@@ -471,7 +483,6 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
     _typingTimer?.cancel();
     _typingTimer = Timer.periodic(const Duration(milliseconds: 15), (timer) {
       if (index < characters.length) {
-        // 高频更新只更新 notifier，避免整页 setState 触发大范围重建
         _currentTypingText += characters[index];
         _typingTextNotifier.value = _currentTypingText;
         if (index % 10 == 0 || characters[index] == '\n') {
@@ -498,17 +509,48 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
     });
   }
 
+  /// Edge 流式中途拦截：整段替换当前 AI 气泡，避免把拦截句当增量拼在已输出正文后。
+  void _applyChatModerationIntercept(String message) {
+    _typingTimer?.cancel();
+    _pendingChunks.clear();
+    _isTyping = false;
+    _fullResponseText = message;
+    _pendingSaveQuestion = null;
+    if (!mounted) return;
+    setState(() {
+      if (_messages.isEmpty) return;
+      final last = _messages.last;
+      if (last.isUser) return;
+      _messages[_messages.length - 1] = ChatMessage(
+        text: message,
+        isUser: false,
+        isLiked: last.isLiked,
+        isDisliked: last.isDisliked,
+        isHidden: last.isHidden,
+        recommendationData: last.recommendationData,
+      );
+      _currentTypingText = message;
+      _isLoading = false;
+    });
+    _scrollToBottom();
+  }
+
   Future<void> _sendMessage({String? text}) async {
     if (_isLoading) return;
     var messageText = (text ?? _textController.text).trim();
     final attachedImages = List<Map<String, String>>.from(_pendingImages);
     if (messageText.isEmpty && attachedImages.isEmpty) return;
     if (messageText.isEmpty && attachedImages.isNotEmpty) {
-      // Dify/Edge Function 需要 query；图片单发时补一个合理的默认 query
-      messageText = _isDoctorMode
-          ? '请根据我上传的图片分析情况，并继续问诊：还需要我补充哪些症状信息？'
-          : '请描述并分析我上传的图片。';
+      messageText =
+          _isDoctorMode ? '请根据我上传的图片分析情况，并继续问诊：还需要我补充哪些症状信息？' : '请描述并分析我上传的图片。';
     }
+    final inputPassed = await _moderationGuard.runTextGuard(
+      context: context,
+      scene: ModerationScene.aiInput,
+      content: messageText,
+      onPassed: () async {},
+    );
+    if (!inputPassed || !mounted) return;
     HapticFeedback.mediumImpact();
     _textController.clear();
     FocusScope.of(context).unfocus();
@@ -588,9 +630,13 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
     _fullResponseText = '';
     _pendingSaveQuestion = messageText;
 
-    stream.listen((event) {
+    stream.listen((event) async {
       if (!mounted) return;
       switch (event) {
+        case ModerationInterceptEvent e:
+          _applyChatModerationIntercept(e.message);
+          break;
+
         case ContentEvent():
           // ✅ 累积完整的响应文本
           _fullResponseText += event.content;
@@ -717,6 +763,10 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
     stream.listen((event) {
       if (!mounted) return;
       switch (event) {
+        case ModerationInterceptEvent e:
+          _applyChatModerationIntercept(e.message);
+          break;
+
         case ContentEvent():
           // ✅ 累积完整的响应文本
           _fullResponseText += event.content;
@@ -1661,7 +1711,8 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
                                           base64Decode(base64),
                                           fit: BoxFit.cover,
                                         )
-                                      : const Icon(Icons.image_outlined, size: 18),
+                                      : const Icon(Icons.image_outlined,
+                                          size: 18),
                                 ),
                               ),
                             ),
@@ -1671,8 +1722,9 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
                               child: GestureDetector(
                                 onTap: () => setState(() {
                                   _pendingImages.removeAt(index);
-                                  _isComposing = _textController.text.isNotEmpty ||
-                                      _pendingImages.isNotEmpty;
+                                  _isComposing =
+                                      _textController.text.isNotEmpty ||
+                                          _pendingImages.isNotEmpty;
                                 }),
                                 child: Container(
                                   width: 16,
@@ -1806,6 +1858,25 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
     );
   }
 
+  /// 聊天 AI 气泡下方「举报 / 不感兴趣」引用（无 DB message id 时用正文 digest）
+  Map<String, dynamic>? _chatContentFeedbackRef(
+    ChatMessage message,
+    int index,
+  ) {
+    if (message.isUser || message.isHidden) return null;
+    final isTailAi = index == _messages.length - 1 && !message.isUser;
+    if (_isLoading && isTailAi) return null;
+    final hasBody =
+        message.text.trim().isNotEmpty || message.recommendationData != null;
+    if (!hasBody) return null;
+    return {
+      if (_supabaseConversationId != null)
+        'supabase_conversation_id': _supabaseConversationId,
+      if (_conversationId != null) 'dify_conversation_id': _conversationId,
+      'message_digest': contentDigestSha256(message.text),
+    };
+  }
+
   Widget _buildMessageList() {
     return Stack(
       children: [
@@ -1832,12 +1903,14 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
             itemCount: _messages.length,
             itemBuilder: (context, index) {
               final message = _messages[index];
+              if (message.isHidden) {
+                return const SizedBox.shrink();
+              }
               final isLastMessageLoading = _isLoading &&
                   index == _messages.length - 1 &&
                   message.text.isEmpty;
               final isLastMessage = index == _messages.length - 1;
-              final padding =
-                  EdgeInsets.only(bottom: isLastMessage ? 80.0 : 0);
+              final padding = EdgeInsets.only(bottom: isLastMessage ? 80.0 : 0);
 
               // 流式打字：只刷新最后一条气泡，避免整页 rebuild
               if (isLastMessageLoading && !message.isUser) {
@@ -1871,6 +1944,10 @@ class _ChatPageWithDatabaseState extends State<ChatPageWithDatabase>
                   consultationPetName: _selectedConsultationPet?.name,
                   isLoading: isLastMessageLoading,
                   isResponseComplete: !_isLoading && !message.isUser,
+                  contentFeedbackRef: _chatContentFeedbackRef(message, index),
+                  onContentNotInterested: () {
+                    setState(() => message.isHidden = true);
+                  },
                   onLikePressed: () => _onLikePressed(message),
                   onDislikePressed: () => _onDislikePressed(message),
                   onRegeneratePressed: _regenerateResponse,
@@ -2371,17 +2448,20 @@ class _TypingIndicatorState extends State<_TypingIndicator>
                       const Positioned(
                         left: 12,
                         top: 12,
-                        child: Icon(Icons.circle, size: 3.5, color: Colors.black87),
+                        child: Icon(Icons.circle,
+                            size: 3.5, color: Colors.black87),
                       ),
                       const Positioned(
                         right: 12,
                         top: 12,
-                        child: Icon(Icons.circle, size: 3.5, color: Colors.black87),
+                        child: Icon(Icons.circle,
+                            size: 3.5, color: Colors.black87),
                       ),
                       const Positioned(
                         left: 19,
                         top: 17,
-                        child: Icon(Icons.circle, size: 4, color: Color(0xFF8D5A3C)),
+                        child: Icon(Icons.circle,
+                            size: 4, color: Color(0xFF8D5A3C)),
                       ),
                     ],
                   ),
@@ -2439,6 +2519,8 @@ class _MessageBubble extends StatelessWidget {
   final String? overrideText;
   final bool isLoading;
   final bool isResponseComplete;
+  final Map<String, dynamic>? contentFeedbackRef;
+  final VoidCallback? onContentNotInterested;
   final VoidCallback onLikePressed;
   final VoidCallback onDislikePressed;
   final VoidCallback onRegeneratePressed;
@@ -2451,6 +2533,8 @@ class _MessageBubble extends StatelessWidget {
     this.overrideText,
     this.isLoading = false,
     this.isResponseComplete = false,
+    this.contentFeedbackRef,
+    this.onContentNotInterested,
     required this.onLikePressed,
     required this.onDislikePressed,
     required this.onRegeneratePressed,
@@ -2495,36 +2579,51 @@ class _MessageBubble extends StatelessWidget {
 
     // ✅ 优先渲染推荐卡片
     if (message.recommendationData != null) {
-      return RecommendationCard(
-        data: message.recommendationData!,
-        onAdopt: () {
-          HapticFeedback.mediumImpact();
-          // 模拟加载
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text("正在为您自动加购..."),
-              duration: Duration(milliseconds: 800),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-
-          Future.delayed(const Duration(milliseconds: 800), () {
-            if (!context.mounted) return;
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => CartPage(
-                  autoAddedItem: {
-                    'name': message.recommendationData!.productName,
-                    'price': 528.00, // 假设价格
-                    'quantity': 1,
-                    'spec': '10kg / 袋',
-                  },
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          RecommendationCard(
+            data: message.recommendationData!,
+            onAdopt: () {
+              HapticFeedback.mediumImpact();
+              // 模拟加载
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text("正在为您自动加购..."),
+                  duration: Duration(milliseconds: 800),
+                  behavior: SnackBarBehavior.floating,
                 ),
-              ),
-            );
-          });
-        },
+              );
+
+              Future.delayed(const Duration(milliseconds: 800), () {
+                if (!context.mounted) return;
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => CartPage(
+                      autoAddedItem: {
+                        'name': message.recommendationData!.productName,
+                        'price': 528.00, // 假设价格
+                        'quantity': 1,
+                        'spec': '10kg / 袋',
+                      },
+                    ),
+                  ),
+                );
+              });
+            },
+          ),
+          if (contentFeedbackRef != null &&
+              isResponseComplete &&
+              onContentNotInterested != null)
+            ContentFeedbackBar(
+              surface: ContentSurface.chatAi,
+              ref: contentFeedbackRef!,
+              onNotInterestedSuccess: onContentNotInterested,
+              dense: true,
+            ),
+        ],
       );
     }
 
@@ -2801,6 +2900,17 @@ class _MessageBubble extends StatelessWidget {
                 ),
                 if (!isUser && isResponseComplete && message.text.isNotEmpty)
                   _buildActionBar(context),
+                if (contentFeedbackRef != null &&
+                    !isUser &&
+                    isResponseComplete &&
+                    !showLoadingIndicator &&
+                    onContentNotInterested != null)
+                  ContentFeedbackBar(
+                    surface: ContentSurface.chatAi,
+                    ref: contentFeedbackRef!,
+                    onNotInterestedSuccess: onContentNotInterested,
+                    dense: true,
+                  ),
               ],
             ),
           ),

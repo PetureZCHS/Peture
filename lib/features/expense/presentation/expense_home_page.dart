@@ -22,7 +22,7 @@ class _ExpenseHomePageState extends State<ExpenseHomePage> {
 
   // 模拟的时间选择和账本选择
   final String _currentDateRange = '本月';
-  final String _currentLedger = '默认账本';
+  final String _currentLedger = '我的账本';
 
   @override
   void initState() {
@@ -286,7 +286,7 @@ class _ExpenseHomePageState extends State<ExpenseHomePage> {
     );
   }
 
-  // 顶部筛选行：默认账本 | 1月4日-1月10日
+  // 顶部筛选行：我的账本 | 1月4日-1月10日
   Widget _buildFilterRow() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,

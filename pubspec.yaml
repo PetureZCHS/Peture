@@ -57,6 +57,9 @@ dependencies:
 
   # --- Supabase 依赖（用于 RAG AI 对话） ---
   supabase_flutter: ^2.10.3
+
+  # --- 内容反馈引用指纹 ---
+  crypto: ^3.0.6
   
   # --- Sentry 错误监控 ---
   sentry_flutter: ^8.0.0

@@ -5,8 +5,8 @@ import { createTraceId } from "../_shared/trace.ts";
 import { executeImageModeration } from "../_shared/moderation_provider.ts";
 import { writeModerationError, writeModerationLog } from "../_shared/moderation_logger.ts";
 
-const AVATARS_TEMP_BUCKET = "avatars-temp";
-const AVATARS_BUCKET = "avatars";
+const AVATARS_TEMP_BUCKET = "user-avatars-temp";
+const AVATARS_BUCKET = "user-avatars";
 
 function corsHeaders() {
   return {
