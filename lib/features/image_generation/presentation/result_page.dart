@@ -19,7 +19,7 @@ import '../../../shared/utils/ui_helpers.dart';
 import '../../../shared/utils/avatar_image_helper.dart';
 import '../../../shared/utils/user_avatar_helper.dart';
 import '../../../services/supabase_service.dart';
-import '../../home/presentation/home_screen.dart';
+import '../../../shared/utils/data_change_notifier.dart';
 
 class _WatermarkMetrics {
   final double horizontalPadding;

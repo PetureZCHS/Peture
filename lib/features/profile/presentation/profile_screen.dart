@@ -7,8 +7,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../../services/supabase_service.dart';
 import '../../../shared/models/pet.dart';
-import '../../home/presentation/home_screen.dart'; 
-import 'settings_page.dart';
+import '../../../shared/utils/data_change_notifier.dart';
+import 'account_settings_page.dart';
 import 'pet_profile_form_page.dart';
 import '../../../shared/utils/ui_helpers.dart';
 import '../../../shared/utils/user_avatar_helper.dart';
@@ -246,7 +246,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           onPressed: () {
             Navigator.push(
               context,
-              MaterialPageRoute(builder: (context) => const SettingsPage()),
+              MaterialPageRoute(builder: (context) => const AccountSettingsPage()),
             ).then((_) => _loadUserProfile()); // 返回时刷新资料
           },
         ),

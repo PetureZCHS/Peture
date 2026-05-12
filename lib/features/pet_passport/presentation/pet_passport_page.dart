@@ -8,10 +8,11 @@ import '../../../shared/models/pet.dart';
 import '../../../shared/models/pet_passport.dart';
 import '../../../services/supabase_service.dart';
 import '../../profile/presentation/account_settings_page.dart';
+import '../../profile/presentation/pet_profile_form_page.dart';
 import '../../../shared/utils/user_avatar_helper.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'edit_pet_passport_page.dart';
-import '../../home/presentation/home_screen.dart';
+import '../../../shared/utils/data_change_notifier.dart';
 
 /// 宠物身份证（护照风格）页面
 class PetPassportPage extends StatefulWidget {
@@ -418,27 +419,37 @@ class _PetPassportPageState extends State<PetPassportPage>
             ),
           ),
           const SizedBox(height: 32),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF667eea), Color(0xFF764ba2)],
-              ),
-              borderRadius: BorderRadius.circular(25),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFF667eea).withOpacity(0.3),
-                  blurRadius: 15,
-                  offset: const Offset(0, 6),
+          GestureDetector(
+            onTap: () {
+              HapticFeedback.mediumImpact();
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (_) => const PetProfileFormPage()),
+              );
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF667eea), Color(0xFF764ba2)],
                 ),
-              ],
-            ),
-            child: const Text(
-              '添加宠物',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
+                borderRadius: BorderRadius.circular(25),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF667eea).withOpacity(0.3),
+                    blurRadius: 15,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: const Text(
+                '添加宠物',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
           ),

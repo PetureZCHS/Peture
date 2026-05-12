@@ -14,6 +14,7 @@ analyzer:
     todo: ignore
   exclude:
     - test/**
+    - _inactive_features/**
 include: package:flutter_lints/flutter.yaml
 
 linter:
