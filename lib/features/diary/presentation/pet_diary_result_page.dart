@@ -16,6 +16,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../services/supabase_edge_service.dart';
 import '../../../shared/models/pet_diary.dart';
 import '../../../services/supabase_service.dart';
+import '../../content_feedback/domain/content_feedback_kind.dart';
+import '../../content_feedback/presentation/content_feedback_bar.dart';
+import '../../content_feedback/utils/content_ref_digest.dart';
 import 'pet_diary_share_card.dart';
 
 // ========== 水印配置 ==========
@@ -89,7 +92,6 @@ double _computeWatermarkTextFitScale({
 
   return (safeMaxWidth / painter.width).clamp(0.45, 1.0);
 }
-
 
 Widget _buildWatermarkOverlay(BoxConstraints constraints) {
   final imageSize = Size(constraints.maxWidth, constraints.maxHeight);
@@ -208,16 +210,16 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
   bool _isImageSavedToGallery = false; // 标记图片是否已保存到相册
   File? _generatedDiaryImageFile;
   Timer? _imageMessageTimer;
-  
+
   // AI 生图进度条相关（模仿 loading_page.dart）
   late AnimationController _imageProgressController;
   static const int _imageGenerationDurationSeconds = 45; // 预期生图时间
-  
+
   // 分享相关
   final GlobalKey _globalKey = GlobalKey();
   final GlobalKey _imageWithWatermarkKey = GlobalKey();
   ShareCardStyle _currentShareStyle = ShareCardStyle.minimal;
-  
+
   // 日记ID（用于保存后更新图片）
   String? _diaryId;
 
@@ -322,7 +324,9 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
 
   Future<void> _generateDiaryImage() async {
     if (_isImageGenerating) return;
-    if (_generatedContent.isEmpty || widget.petId == null || widget.petId!.isEmpty) {
+    if (_generatedContent.isEmpty ||
+        widget.petId == null ||
+        widget.petId!.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('当前缺少宠物或日记信息，暂时无法生图')),
       );
@@ -406,7 +410,7 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
       _imageLoadingMessage = '正在分析日记画面...';
     });
     _startImageLoadingMessages();
-    
+
     // 启动进度条动画（从 0% 到 95%，完成后快速到 100%）
     _imageProgressController.reset();
     _imageProgressController.animateTo(0.95,
@@ -414,7 +418,8 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
         curve: Curves.decelerate);
 
     try {
-      debugPrint('⟡ diary-gen-image invoke -> petId=${widget.petId} userId=$currentUserId');
+      debugPrint(
+          '⟡ diary-gen-image invoke -> petId=${widget.petId} userId=$currentUserId');
 
       final res = await supabase.functions.invoke(
         'diary-gen-image',
@@ -438,8 +443,10 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
       final error = data['error']?.toString();
       if (res.status == 429 || status == 'TOO_FREQUENT') {
         final retryAfterMs = data['retry_after_ms'] as int?;
-        final seconds = retryAfterMs == null ? null : (retryAfterMs / 1000).ceil();
-        throw Exception(seconds == null ? '请求过于频繁，请稍后重试' : '请求过于频繁，请 $seconds 秒后重试');
+        final seconds =
+            retryAfterMs == null ? null : (retryAfterMs / 1000).ceil();
+        throw Exception(
+            seconds == null ? '请求过于频繁，请稍后重试' : '请求过于频繁，请 $seconds 秒后重试');
       }
       if (error != null && status != 'SUCCEED') {
         throw Exception(error);
@@ -466,7 +473,7 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
       // 完成时进度条快速到 100%
       await _imageProgressController.animateTo(1.0,
           duration: const Duration(milliseconds: 500), curve: Curves.easeOut);
-      
+
       if (!mounted) return;
       setState(() {
         _isImageGenerating = false;
@@ -476,13 +483,14 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
       });
       _imageMessageTimer?.cancel();
       _autoScrollToBottom();
-      
+
       // If diary was already saved, update it with the new image path
       if (_isSaved && _diaryId != null) {
         await _updateDiaryImagePath(_diaryId!, path);
       }
     } on FunctionException catch (fe, st) {
-      debugPrint('⟡ FunctionException(status=${fe.status}) details=${fe.details} reason=${fe.reasonPhrase}');
+      debugPrint(
+          '⟡ FunctionException(status=${fe.status}) details=${fe.details} reason=${fe.reasonPhrase}');
       debugPrint(st.toString());
       _imageProgressController.stop();
       if (!mounted) return;
@@ -491,7 +499,8 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
         _showRetryImageButton = true;
       });
       _imageMessageTimer?.cancel();
-      final detailMsg = fe.details != null ? fe.details.toString() : fe.toString();
+      final detailMsg =
+          fe.details != null ? fe.details.toString() : fe.toString();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('AI 生图失败: $detailMsg')),
       );
@@ -594,7 +603,7 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
                 _messageTimer?.cancel();
                 // 如果之前没触发打字效果（例如直接Done了），这里触发一下
                 if (_fullTextBuffer.isNotEmpty) {
-                   _startTypingEffect();
+                  _startTypingEffect();
                 }
               }
             });
@@ -640,25 +649,24 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
       if (mounted && _isGenerating) {
         debugPrint('⚠️ 流传输异常结束（未收到完成或错误事件），执行强制终止');
         setState(() {
-           _isGenerating = false;
-           
-           if (_showLoading) {
-             _showLoading = false; 
-             _messageTimer?.cancel();
-             
-             // 如果有累积的内容，即使断开也尝试显示出来
-             if (_fullTextBuffer.isNotEmpty) {
-               _startTypingEffect();
-             } else {
-               // 确实失败了
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('服务器连接不稳定，请稍后重试')),
-                );
-             }
-           }
+          _isGenerating = false;
+
+          if (_showLoading) {
+            _showLoading = false;
+            _messageTimer?.cancel();
+
+            // 如果有累积的内容，即使断开也尝试显示出来
+            if (_fullTextBuffer.isNotEmpty) {
+              _startTypingEffect();
+            } else {
+              // 确实失败了
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('服务器连接不稳定，请稍后重试')),
+              );
+            }
+          }
         });
       }
-
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -939,11 +947,13 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
                   // AI 生成配图区域 - 在保存/编辑按钮上方
                   if (!_showLoading) _buildAiImageSection(),
 
-                  if (!_showLoading && !_isGenerating && !_isImageGenerating) const SizedBox(height: 16),
+                  if (!_showLoading && !_isGenerating && !_isImageGenerating)
+                    const SizedBox(height: 16),
 
                   // 操作按钮 - 保存日记和重新编辑按钮
                   // 只在日记加载完成且不在AI生图过程中显示
-                  if (!_showLoading && !_isGenerating && !_isImageGenerating) _buildActionButtons(),
+                  if (!_showLoading && !_isGenerating && !_isImageGenerating)
+                    _buildActionButtons(),
 
                   const SizedBox(height: 20),
                 ],
@@ -1002,7 +1012,7 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
                           ],
                         ),
                       ),
-                      
+
                       const Divider(height: 1),
 
                       // 中间：卡片预览区 (可滚动)
@@ -1044,7 +1054,8 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
                               scrollDirection: Axis.horizontal,
                               child: Row(
                                 children: ShareCardStyle.values.map((style) {
-                                  final isSelected = _currentShareStyle == style;
+                                  final isSelected =
+                                      _currentShareStyle == style;
                                   return GestureDetector(
                                     onTap: () {
                                       setDialogState(() {
@@ -1052,7 +1063,8 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
                                       });
                                     },
                                     child: AnimatedContainer(
-                                      duration: const Duration(milliseconds: 200),
+                                      duration:
+                                          const Duration(milliseconds: 200),
                                       margin: const EdgeInsets.only(right: 12),
                                       padding: const EdgeInsets.symmetric(
                                         horizontal: 16,
@@ -1071,7 +1083,8 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
                                         boxShadow: isSelected
                                             ? [
                                                 BoxShadow(
-                                                  color: Colors.black.withOpacity(0.2),
+                                                  color: Colors.black
+                                                      .withOpacity(0.2),
                                                   blurRadius: 8,
                                                   offset: const Offset(0, 2),
                                                 ),
@@ -1102,13 +1115,15 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
                                       height: 50,
                                       child: ElevatedButton.icon(
                                         onPressed: () async {
-                                          await _captureAndSaveToGallery(inDialogContext: ctx);
+                                          await _captureAndSaveToGallery(
+                                              inDialogContext: ctx);
                                         },
-                                        icon: const Icon(Icons.download, color: Colors.blue),
+                                        icon: const Icon(Icons.download,
+                                            color: Colors.blue),
                                         label: const Text(
-                                          '保存相册', 
+                                          '保存相册',
                                           style: TextStyle(
-                                            fontSize: 16, 
+                                            fontSize: 16,
                                             fontWeight: FontWeight.bold,
                                             color: Colors.blue,
                                           ),
@@ -1117,7 +1132,8 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
                                           backgroundColor: Colors.blue.shade50,
                                           elevation: 0,
                                           shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(25),
+                                            borderRadius:
+                                                BorderRadius.circular(25),
                                           ),
                                         ),
                                       ),
@@ -1125,47 +1141,54 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
                                   ),
                                   const SizedBox(width: 12),
                                   Expanded(
-                                    child: Builder(
-                                      builder: (btnContext) {
-                                        return SizedBox(
-                                          height: 50,
-                                          child: ElevatedButton.icon(
-                                            onPressed: () async {
-                                              ScaffoldMessenger.of(context).showSnackBar(
-                                                const SnackBar(content: Text('正在生成图片并分享...')),
-                                              );
-                                              
-                                              final box = btnContext.findRenderObject() as RenderBox?;
-                                              Rect? shareOrigin;
-                                              if (box != null) {
-                                                shareOrigin = box.localToGlobal(Offset.zero) & box.size;
-                                              }
-                                              
-                                              await _captureAndSharePng(
-                                                inDialogContext: ctx, 
-                                                shareOrigin: shareOrigin,
-                                              );
-                                            },
-                                            icon: const Icon(Icons.share, color: Colors.white),
-                                            label: const Text(
-                                              '分享', 
-                                              style: TextStyle(
-                                                fontSize: 16, 
-                                                fontWeight: FontWeight.bold,
-                                                color: Colors.white,
-                                              ),
-                                            ),
-                                            style: ElevatedButton.styleFrom(
-                                              backgroundColor: Colors.black87,
-                                              elevation: 0,
-                                              shape: RoundedRectangleBorder(
-                                                borderRadius: BorderRadius.circular(25),
-                                              ),
+                                    child: Builder(builder: (btnContext) {
+                                      return SizedBox(
+                                        height: 50,
+                                        child: ElevatedButton.icon(
+                                          onPressed: () async {
+                                            ScaffoldMessenger.of(context)
+                                                .showSnackBar(
+                                              const SnackBar(
+                                                  content:
+                                                      Text('正在生成图片并分享...')),
+                                            );
+
+                                            final box =
+                                                btnContext.findRenderObject()
+                                                    as RenderBox?;
+                                            Rect? shareOrigin;
+                                            if (box != null) {
+                                              shareOrigin = box.localToGlobal(
+                                                      Offset.zero) &
+                                                  box.size;
+                                            }
+
+                                            await _captureAndSharePng(
+                                              inDialogContext: ctx,
+                                              shareOrigin: shareOrigin,
+                                            );
+                                          },
+                                          icon: const Icon(Icons.share,
+                                              color: Colors.white),
+                                          label: const Text(
+                                            '分享',
+                                            style: TextStyle(
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.bold,
+                                              color: Colors.white,
                                             ),
                                           ),
-                                        );
-                                      }
-                                    ),
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: Colors.black87,
+                                            elevation: 0,
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(25),
+                                            ),
+                                          ),
+                                        ),
+                                      );
+                                    }),
                                   ),
                                 ],
                               ),
@@ -1193,19 +1216,21 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
     }
   }
 
-  Future<void> _captureAndSharePng({BuildContext? inDialogContext, Rect? shareOrigin}) async {
+  Future<void> _captureAndSharePng(
+      {BuildContext? inDialogContext, Rect? shareOrigin}) async {
     try {
       // 确保重绘
       await Future.delayed(const Duration(milliseconds: 100));
 
-      final boundary = _globalKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+      final boundary = _globalKey.currentContext?.findRenderObject()
+          as RenderRepaintBoundary?;
 
       if (boundary == null) {
         debugPrint('无法获取截图边界');
         if (mounted) {
-           ScaffoldMessenger.of(context).showSnackBar(
+          ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('生成的太快了，请稍后再试')),
-           );
+          );
         }
         return;
       }
@@ -1214,26 +1239,26 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
       final image = await boundary.toImage(pixelRatio: 3.0);
       final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
       if (byteData == null) return;
-      
+
       final pngBytes = byteData.buffer.asUint8List();
 
       final tempDir = await getTemporaryDirectory();
-      final file = File('${tempDir.path}/pet_diary_share_${DateTime.now().millisecondsSinceEpoch}.png');
+      final file = File(
+          '${tempDir.path}/pet_diary_share_${DateTime.now().millisecondsSinceEpoch}.png');
       await file.writeAsBytes(pngBytes);
 
       // 截图成功后，关闭弹窗
       if (inDialogContext != null && inDialogContext.mounted) {
         Navigator.pop(inDialogContext);
       }
-      
+
       // 调起分享
       final xFile = XFile(file.path);
       await Share.shareXFiles(
-        [xFile], 
+        [xFile],
         text: '来自 Peture 的宠物日记 🐾',
         sharePositionOrigin: shareOrigin,
       );
-
     } catch (e) {
       debugPrint('分享失败: $e');
       if (mounted) {
@@ -1243,7 +1268,6 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
       }
     }
   }
-
 
   Future<void> _saveImageWithWatermarkToGallery() async {
     try {
@@ -1256,7 +1280,8 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
         return;
       }
 
-      final boundary = _imageWithWatermarkKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+      final boundary = _imageWithWatermarkKey.currentContext?.findRenderObject()
+          as RenderRepaintBoundary?;
       if (boundary == null) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -1308,13 +1333,14 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
       // 确保重绘
       await Future.delayed(const Duration(milliseconds: 100));
 
-      final boundary = _globalKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+      final boundary = _globalKey.currentContext?.findRenderObject()
+          as RenderRepaintBoundary?;
 
       if (boundary == null) {
-         if (mounted) {
-           ScaffoldMessenger.of(context).showSnackBar(
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('无法获取截图边界')),
-           );
+          );
         }
         return;
       }
@@ -1323,12 +1349,12 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
       final image = await boundary.toImage(pixelRatio: 3.0);
       final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
       if (byteData == null) return;
-      
+
       final pngBytes = byteData.buffer.asUint8List();
 
       // 保存到相册
       await Gal.putImageBytes(pngBytes);
-      
+
       // 截图成功后，关闭弹窗
       if (inDialogContext != null && inDialogContext.mounted) {
         Navigator.pop(inDialogContext);
@@ -1345,11 +1371,11 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
         // 如果是 gal 抛出的异常，可能是权限或不支持
         String message = '保存失败，请检查相册权限';
         if (e is GalException) {
-           message = '保存失败: ${e.type.message}';
+          message = '保存失败: ${e.type.message}';
         } else {
-           message = '保存失败: $e';
+          message = '保存失败: $e';
         }
-        
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(message),
@@ -1511,7 +1537,6 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
                         ),
                       ],
                     ),
-
                   ],
                 ),
 
@@ -1519,12 +1544,27 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
 
                 // 日记内容或加载动画
                 _showLoading ? _buildLoadingState() : _buildDiaryContent(),
+                if (!_showLoading && _generatedContent.isNotEmpty)
+                  ContentFeedbackBar(
+                    surface: ContentSurface.petDiary,
+                    ref: _diaryFeedbackRef(),
+                  ),
               ],
             ),
           ),
         ],
       ),
     );
+  }
+
+  Map<String, dynamic> _diaryFeedbackRef() {
+    if (_diaryId != null) {
+      return {'diary_id': _diaryId};
+    }
+    return {
+      'content_sha256': contentDigestSha256(_generatedContent),
+      'style': widget.style,
+    };
   }
 
   // 加载动画状态
@@ -1920,7 +1960,9 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
             child: Material(
               color: Colors.transparent,
               child: InkWell(
-                onTap: (_isSaved || _isGenerating || _isSaving) ? null : _saveDiary,
+                onTap: (_isSaved || _isGenerating || _isSaving)
+                    ? null
+                    : _saveDiary,
                 borderRadius: BorderRadius.circular(16),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -1931,11 +1973,14 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
                             height: 22,
                             child: CircularProgressIndicator(
                               strokeWidth: 2.5,
-                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                              valueColor:
+                                  AlwaysStoppedAnimation<Color>(Colors.white),
                             ),
                           )
                         : Icon(
-                            _isSaved ? Icons.check_circle : Icons.bookmark_outline,
+                            _isSaved
+                                ? Icons.check_circle
+                                : Icons.bookmark_outline,
                             color: Colors.white,
                             size: 22,
                           ),
@@ -2017,7 +2062,8 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
             child: AnimatedBuilder(
               animation: _loadingAnimationController,
               builder: (context, child) {
-                final shimmerPos = -1.0 + (_loadingAnimationController.value * 3.0);
+                final shimmerPos =
+                    -1.0 + (_loadingAnimationController.value * 3.0);
                 return Stack(
                   alignment: Alignment.center,
                   children: [
@@ -2095,8 +2141,8 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
                                         end: Alignment.centerRight,
                                         colors: [
                                           Colors.transparent,
-                                          Colors.white
-                                              .withOpacity(canGenerateAiImage ? 0.1 : 0.05),
+                                          Colors.white.withOpacity(
+                                              canGenerateAiImage ? 0.1 : 0.05),
                                           Colors.transparent,
                                         ],
                                       ),
@@ -2109,13 +2155,16 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
                           Material(
                             color: Colors.transparent,
                             child: InkWell(
-                              onTap: canGenerateAiImage ? _generateDiaryImage : null,
+                              onTap: canGenerateAiImage
+                                  ? _generateDiaryImage
+                                  : null,
                               borderRadius: BorderRadius.circular(26),
                               child: Center(
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: const [
-                                    Icon(Icons.auto_awesome, color: Colors.white, size: 20),
+                                    Icon(Icons.auto_awesome,
+                                        color: Colors.white, size: 20),
                                     SizedBox(width: 8),
                                     Text(
                                       'AI 生成配图',
@@ -2284,7 +2333,8 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
                           AnimatedBuilder(
                             animation: _shimmerAnimationController,
                             builder: (context, child) {
-                              final scale = 1.0 + (_shimmerAnimationController.value * 0.1);
+                              final scale = 1.0 +
+                                  (_shimmerAnimationController.value * 0.1);
                               return Transform.scale(
                                 scale: scale,
                                 child: Container(
@@ -2301,7 +2351,8 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
                                     ),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: const Color(0xFF7C3AED).withOpacity(0.3),
+                                        color: const Color(0xFF7C3AED)
+                                            .withOpacity(0.3),
                                         blurRadius: 12,
                                         spreadRadius: 2,
                                       ),
@@ -2329,7 +2380,9 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
                             child: AnimatedBuilder(
                               animation: _imageProgressController,
                               builder: (context, child) {
-                                final percentage = (_imageProgressController.value * 100).toInt();
+                                final percentage =
+                                    (_imageProgressController.value * 100)
+                                        .toInt();
                                 return Text(
                                   "$percentage%",
                                   style: const TextStyle(
@@ -2395,7 +2448,8 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
             color: const Color(0xFF7C3AED),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF7C3AED).withOpacity(0.5 - (_shimmerAnimationController.value * 0.3)),
+                color: const Color(0xFF7C3AED).withOpacity(
+                    0.5 - (_shimmerAnimationController.value * 0.3)),
                 blurRadius: 8,
                 spreadRadius: 2,
               ),
@@ -2527,17 +2581,25 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 ElevatedButton.icon(
-                  onPressed: _isImageSavedToGallery ? null : _saveImageWithWatermarkToGallery,
+                  onPressed: _isImageSavedToGallery
+                      ? null
+                      : _saveImageWithWatermarkToGallery,
                   icon: Icon(
-                    _isImageSavedToGallery ? Icons.check : Icons.download_rounded,
+                    _isImageSavedToGallery
+                        ? Icons.check
+                        : Icons.download_rounded,
                     size: 16,
                   ),
                   label: Text(_isImageSavedToGallery ? '已保存到相册' : '保存到相册'),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: _isImageSavedToGallery ? Colors.green : null,
-                    foregroundColor: _isImageSavedToGallery ? Colors.white : null,
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                    backgroundColor:
+                        _isImageSavedToGallery ? Colors.green : null,
+                    foregroundColor:
+                        _isImageSavedToGallery ? Colors.white : null,
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    textStyle: const TextStyle(
+                        fontSize: 12, fontWeight: FontWeight.w600),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -2772,10 +2834,12 @@ class _FullscreenImageWithWatermark extends StatefulWidget {
   });
 
   @override
-  State<_FullscreenImageWithWatermark> createState() => _FullscreenImageWithWatermarkState();
+  State<_FullscreenImageWithWatermark> createState() =>
+      _FullscreenImageWithWatermarkState();
 }
 
-class _FullscreenImageWithWatermarkState extends State<_FullscreenImageWithWatermark> {
+class _FullscreenImageWithWatermarkState
+    extends State<_FullscreenImageWithWatermark> {
   ImageStream? _imageStream;
   ImageStreamListener? _listener;
   double? _aspectRatio;
@@ -3055,17 +3119,18 @@ class _UploadLifePhotoSheetState extends State<_UploadLifePhotoSheet> {
       final bytes = await _selectedImage!.readAsBytes();
 
       // 上传到 user-avatars bucket（与 uploadPetLifePhoto 一致）
-      uploadedFileName = 'lifephoto_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      uploadedFileName =
+          'lifephoto_${DateTime.now().millisecondsSinceEpoch}.jpg';
       storagePath = '$currentUserId/${widget.petId}/$uploadedFileName';
 
       await supabase.storage.from(bucket).uploadBinary(
-        storagePath,
-        bytes,
-        fileOptions: const FileOptions(
-          contentType: 'image/jpeg',
-          upsert: true,
-        ),
-      );
+            storagePath,
+            bytes,
+            fileOptions: const FileOptions(
+              contentType: 'image/jpeg',
+              upsert: true,
+            ),
+          );
 
       // 调用 img-gen-precheck 检查图片质量（指定 bucket 和 path）
       final precheckResult = await _precheckImage(
@@ -3104,7 +3169,9 @@ class _UploadLifePhotoSheetState extends State<_UploadLifePhotoSheet> {
       // 清理上传的文件
       if (storagePath != null) {
         try {
-          await Supabase.instance.client.storage.from(bucket).remove([storagePath]);
+          await Supabase.instance.client.storage
+              .from(bucket)
+              .remove([storagePath]);
         } catch (_) {}
       }
       if (mounted) {
@@ -3416,12 +3483,14 @@ class _UploadLifePhotoSheetState extends State<_UploadLifePhotoSheet> {
                   children: [
                     Expanded(
                       child: OutlinedButton(
-                        onPressed: _isUploading ? null : () {
-                          setState(() {
-                            _selectedImage = null;
-                            _precheckReason = null; // 清除预检查结果
-                          });
-                        },
+                        onPressed: _isUploading
+                            ? null
+                            : () {
+                                setState(() {
+                                  _selectedImage = null;
+                                  _precheckReason = null; // 清除预检查结果
+                                });
+                              },
                         style: OutlinedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           side: BorderSide(color: Colors.grey.shade300),
@@ -3463,7 +3532,9 @@ class _UploadLifePhotoSheetState extends State<_UploadLifePhotoSheet> {
 
               // 取消按钮
               TextButton(
-                onPressed: _isUploading ? null : () => Navigator.of(context).pop(false),
+                onPressed: _isUploading
+                    ? null
+                    : () => Navigator.of(context).pop(false),
                 child: const Text(
                   '暂不生成',
                   style: TextStyle(color: Colors.grey),

@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/auth_otp_email_context.dart';
-import '../../../main.dart';
 import '../../../services/analytics_service.dart';
 import 'email_register_page.dart';
 
@@ -52,6 +51,13 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
 
   int _countdown = 0;
   Timer? _countdownTimer;
+
+  void _returnToRootAfterLogin() {
+    if (!mounted) return;
+    FocusScope.of(context).unfocus();
+    unawaited(AnalyticsService.acceptConsentAndInit());
+    Navigator.of(context).popUntil((route) => route.isFirst);
+  }
 
   @override
   void initState() {
@@ -141,24 +147,7 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
       debugPrint('User: ${response.user?.email}');
 
       if (response.user != null && mounted) {
-        // 隐藏键盘
-        FocusScope.of(context).unfocus();
-
-        // 先跳转，友盟 initCommon 勿 await（原生侧可能耗时，会卡住登录转圈）
-        if (mounted) {
-          Navigator.of(context).pushReplacement(
-            PageRouteBuilder(
-              pageBuilder: (context, animation, secondaryAnimation) =>
-                  const MyApp(),
-              transitionsBuilder:
-                  (context, animation, secondaryAnimation, child) {
-                return FadeTransition(opacity: animation, child: child);
-              },
-              transitionDuration: const Duration(milliseconds: 400),
-            ),
-          );
-        }
-        unawaited(AnalyticsService.acceptConsentAndInit());
+        _returnToRootAfterLogin();
       }
     } on AuthException catch (e) {
       debugPrint('❌ 密码登录失败: ${e.message}');
@@ -282,24 +271,7 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
 
       if ((response.session != null || response.user != null) && mounted) {
         debugPrint('✅ 验证码登录成功: ${response.user?.email}');
-
-        // 隐藏键盘
-        FocusScope.of(context).unfocus();
-
-        if (mounted) {
-          Navigator.of(context).pushReplacement(
-            PageRouteBuilder(
-              pageBuilder: (context, animation, secondaryAnimation) =>
-                  const MyApp(),
-              transitionsBuilder:
-                  (context, animation, secondaryAnimation, child) {
-                return FadeTransition(opacity: animation, child: child);
-              },
-              transitionDuration: const Duration(milliseconds: 400),
-            ),
-          );
-        }
-        unawaited(AnalyticsService.acceptConsentAndInit());
+        _returnToRootAfterLogin();
       } else {
         _showMessage('验证码验证失败，请重试');
       }
@@ -634,8 +606,8 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
                     GestureDetector(
                       onTap: _isLoading
                           ? null
-                          : () => _showMessage('请阅读《用户协议与隐私政策》全文',
-                              isError: false),
+                          : () =>
+                              _showMessage('请阅读《用户协议与隐私政策》全文', isError: false),
                       child: const Text(
                         '《用户协议与隐私政策》',
                         style: TextStyle(

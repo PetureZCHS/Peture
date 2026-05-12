@@ -713,7 +713,7 @@ class _AddUnifiedExpensePageState extends State<AddUnifiedExpensePage> {
                     onTap: _selectDate),
                 const SizedBox(width: 8),
                 _buildSmallChip(
-                    icon: Icons.book_rounded, text: '默认账本', onTap: () {}),
+                    icon: Icons.book_rounded, text: '我的账本', onTap: () {}),
               ],
             ),
           ),

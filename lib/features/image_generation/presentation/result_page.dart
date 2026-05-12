@@ -19,6 +19,9 @@ import '../../../shared/utils/ui_helpers.dart';
 import '../../../shared/utils/avatar_image_helper.dart';
 import '../../../shared/utils/user_avatar_helper.dart';
 import '../../../services/supabase_service.dart';
+import '../../content_feedback/domain/content_feedback_kind.dart';
+import '../../content_feedback/presentation/ai_generated_image_disclaimer.dart';
+import '../../content_feedback/presentation/content_feedback_bar.dart';
 import '../../../shared/utils/data_change_notifier.dart';
 
 class _WatermarkMetrics {
@@ -532,7 +535,7 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
                   onTap: () {
                     // Web 平台暂时不支持全屏查看网络图片
                     if (kIsWeb) return;
-                    
+
                     if (widget.originalImage != null) {
                       Navigator.of(context).push(
                         TransparentImageRoute(
@@ -571,7 +574,8 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
                           child: Row(
                             children: [
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 4),
                                 decoration: BoxDecoration(
                                   gradient: LinearGradient(
                                     colors: [
@@ -613,11 +617,13 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
                                           height: 40,
                                           width: 40,
                                           fit: BoxFit.cover,
-                                          errorBuilder: (_, __, ___) => Container(
+                                          errorBuilder: (_, __, ___) =>
+                                              Container(
                                             height: 40,
                                             width: 40,
                                             color: Colors.grey[300],
-                                            child: const Icon(Icons.pets, size: 20),
+                                            child: const Icon(Icons.pets,
+                                                size: 20),
                                           ),
                                         )
                                       : Image.file(
@@ -729,8 +735,8 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
                                 child: ClipRRect(
                                   borderRadius: BorderRadius.circular(24),
                                   child: BackdropFilter(
-                                    filter:
-                                        ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                                    filter: ImageFilter.blur(
+                                        sigmaX: 10, sigmaY: 10),
                                     child: Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
@@ -743,8 +749,10 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
                                           });
                                         }),
                                         const SizedBox(width: 16),
-                                        _buildIconAction(Icons.thumb_up_outlined,
-                                            _isLiked, AppColors.likeActive, () {
+                                        _buildIconAction(
+                                            Icons.thumb_up_outlined,
+                                            _isLiked,
+                                            AppColors.likeActive, () {
                                           setState(() {
                                             if (_isDisliked) {
                                               _isDisliked = false;
@@ -776,6 +784,24 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
                     ),
                   ),
                 ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+                  child: Column(
+                    children: [
+                      const AiGeneratedImageDisclaimer(),
+                      ContentFeedbackBar(
+                        surface: ContentSurface.aiImage,
+                        ref: {
+                          if (widget.resultImageUrl != null &&
+                              widget.resultImageUrl!.isNotEmpty)
+                            'result_url_hint': widget.resultImageUrl,
+                          if (widget.resultImageFile != null)
+                            'local_path_hint': widget.resultImageFile!.path,
+                        },
+                      ),
+                    ],
+                  ),
+                ),
                 const SizedBox(height: 12),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -795,7 +821,8 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
                         child: Theme(
                           data: Theme.of(context).copyWith(
                             listTileTheme: const ListTileThemeData(
-                              contentPadding: EdgeInsets.symmetric(horizontal: 16),
+                              contentPadding:
+                                  EdgeInsets.symmetric(horizontal: 16),
                               minVerticalPadding: 8,
                               visualDensity: VisualDensity.compact,
                             ),
@@ -825,8 +852,8 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
                               });
                             },
                             activeColor: AppColors.primary,
-                            contentPadding:
-                                const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
+                            contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 2),
                           ),
                         ),
                       ),
@@ -837,7 +864,8 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
                 // Save to Gallery Button with shimmer animation
                 Container(
                   height: 68,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   child: AnimatedBuilder(
                     animation: _saveButtonShimmerController,
                     builder: (context, child) {
@@ -910,30 +938,37 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
                                       animation: _saveButtonShimmerController,
                                       builder: (context, child) {
                                         final shimmerPos = -1.0 +
-                                            (_saveButtonShimmerController.value * 3.0);
+                                            (_saveButtonShimmerController
+                                                    .value *
+                                                3.0);
                                         return Stack(
                                           children: [
                                             Container(
                                               decoration: BoxDecoration(
                                                 gradient: LinearGradient(
-                                                  colors: AppColors.primaryGradient,
+                                                  colors:
+                                                      AppColors.primaryGradient,
                                                   begin: Alignment.centerLeft,
                                                   end: Alignment.centerRight,
                                                 ),
                                               ),
                                             ),
                                             Align(
-                                              alignment: Alignment(shimmerPos, 0),
+                                              alignment:
+                                                  Alignment(shimmerPos, 0),
                                               child: FractionallySizedBox(
                                                 widthFactor: 0.35,
                                                 child: Container(
                                                   decoration: BoxDecoration(
                                                     gradient: LinearGradient(
-                                                      begin: Alignment.centerLeft,
-                                                      end: Alignment.centerRight,
+                                                      begin:
+                                                          Alignment.centerLeft,
+                                                      end:
+                                                          Alignment.centerRight,
                                                       colors: [
                                                         Colors.transparent,
-                                                        Colors.white.withOpacity(0.08),
+                                                        Colors.white
+                                                            .withOpacity(0.08),
                                                         Colors.transparent,
                                                       ],
                                                     ),
@@ -955,9 +990,11 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
                                       // Web 平台不支持保存到相册
                                       if (kIsWeb) {
                                         if (context.mounted) {
-                                          ScaffoldMessenger.of(context).showSnackBar(
+                                          ScaffoldMessenger.of(context)
+                                              .showSnackBar(
                                             const SnackBar(
-                                              content: Text("当前平台不支持保存到相册，请在手机上使用")),
+                                                content: Text(
+                                                    "当前平台不支持保存到相册，请在手机上使用")),
                                           );
                                         }
                                         return;
@@ -966,36 +1003,44 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
                                       PermissionStatus status;
                                       if (Platform.isIOS) {
                                         // iOS 双兜底：优先请求 add-only，失败后回退到 photos。
-                                        final addOnlyStatus =
-                                            await Permission.photosAddOnly.request();
+                                        final addOnlyStatus = await Permission
+                                            .photosAddOnly
+                                            .request();
                                         if (addOnlyStatus.isGranted ||
-                                            addOnlyStatus == PermissionStatus.limited) {
+                                            addOnlyStatus ==
+                                                PermissionStatus.limited) {
                                           status = addOnlyStatus;
-                                        } else if (addOnlyStatus.isPermanentlyDenied ||
+                                        } else if (addOnlyStatus
+                                                .isPermanentlyDenied ||
                                             addOnlyStatus ==
                                                 PermissionStatus.restricted) {
                                           status = addOnlyStatus;
                                         } else {
-                                          status = await Permission.photos.request();
+                                          status =
+                                              await Permission.photos.request();
                                         }
                                       } else if (Platform.isAndroid) {
                                         // Android 13+ (API 33+) 使用 READ_MEDIA_IMAGES (Permission.photos)
                                         // Android 12 及以下 (API 32-) 使用 READ_EXTERNAL_STORAGE (Permission.storage)
                                         _cachedAndroidSdkInt ??=
-                                            (await DeviceInfoPlugin().androidInfo)
+                                            (await DeviceInfoPlugin()
+                                                    .androidInfo)
                                                 .version
                                                 .sdkInt;
                                         if (_cachedAndroidSdkInt! >= 33) {
-                                          status = await Permission.photos.request();
+                                          status =
+                                              await Permission.photos.request();
                                         } else {
-                                          status = await Permission.storage.request();
+                                          status = await Permission.storage
+                                              .request();
                                         }
                                       } else {
                                         // 桌面或其他不支持保存到相册的平台
                                         if (context.mounted) {
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                              const SnackBar(
-                                                  content: Text("当前平台不支持保存到相册")));
+                                          ScaffoldMessenger.of(context)
+                                              .showSnackBar(const SnackBar(
+                                                  content:
+                                                      Text("当前平台不支持保存到相册")));
                                         }
                                         return;
                                       }
@@ -1004,7 +1049,8 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
                                           status == PermissionStatus.limited) {
                                         // 权限已授予，继续保存
                                       } else if (status.isPermanentlyDenied ||
-                                          status == PermissionStatus.restricted) {
+                                          status ==
+                                              PermissionStatus.restricted) {
                                         // 权限被永久拒绝或受限，引导用户到设置
                                         if (context.mounted) {
                                           showDialog(
@@ -1012,19 +1058,21 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
                                             builder: (context) {
                                               return AlertDialog(
                                                 title: const Text('权限被拒绝'),
-                                                content:
-                                                    const Text('相册权限已被拒绝，请前往设置开启。'),
+                                                content: const Text(
+                                                    '相册权限已被拒绝，请前往设置开启。'),
                                                 actions: [
                                                   TextButton(
                                                     onPressed: () {
-                                                      Navigator.of(context).pop();
+                                                      Navigator.of(context)
+                                                          .pop();
                                                       openAppSettings();
                                                     },
                                                     child: const Text('去设置'),
                                                   ),
                                                   TextButton(
                                                     onPressed: () {
-                                                      Navigator.of(context).pop();
+                                                      Navigator.of(context)
+                                                          .pop();
                                                     },
                                                     child: const Text('取消'),
                                                   ),
@@ -1037,9 +1085,10 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
                                       } else {
                                         // 权限被拒绝，但可以再次请求
                                         if (context.mounted) {
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                              const SnackBar(
-                                                  content: Text("需要相册权限才能保存图片")));
+                                          ScaffoldMessenger.of(context)
+                                              .showSnackBar(const SnackBar(
+                                                  content:
+                                                      Text("需要相册权限才能保存图片")));
                                         }
                                         return;
                                       }
@@ -1050,7 +1099,8 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
                                         if (widget.resultImageFile != null) {
                                           bytes = await widget.resultImageFile!
                                               .readAsBytes();
-                                        } else if (widget.resultImageUrl != null &&
+                                        } else if (widget.resultImageUrl !=
+                                                null &&
                                             widget.resultImageUrl!.isNotEmpty) {
                                           final url = widget.resultImageUrl!;
                                           if (_isLocalFilePath(url)) {
@@ -1060,8 +1110,10 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
                                             } else {
                                               if (context.mounted) {
                                                 ScaffoldMessenger.of(context)
-                                                    .showSnackBar(const SnackBar(
-                                                        content: Text("未找到本地图片")));
+                                                    .showSnackBar(
+                                                        const SnackBar(
+                                                            content: Text(
+                                                                "未找到本地图片")));
                                               }
                                               return;
                                             }
@@ -1073,27 +1125,31 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
                                             } else {
                                               if (context.mounted) {
                                                 ScaffoldMessenger.of(context)
-                                                    .showSnackBar(const SnackBar(
-                                                        content: Text("下载图片失败")));
+                                                    .showSnackBar(
+                                                        const SnackBar(
+                                                            content: Text(
+                                                                "下载图片失败")));
                                               }
                                               return;
                                             }
                                           }
                                         } else {
                                           if (context.mounted) {
-                                            ScaffoldMessenger.of(context).showSnackBar(
-                                                const SnackBar(
+                                            ScaffoldMessenger.of(context)
+                                                .showSnackBar(const SnackBar(
                                                     content: Text("未找到图片以保存")));
                                           }
                                           return;
                                         }
 
                                         if (_enableWatermark) {
-                                          bytes = await _addWatermarkToBytes(bytes);
+                                          bytes =
+                                              await _addWatermarkToBytes(bytes);
                                         }
 
                                         // 保存到临时文件
-                                        final tempDir = await getTemporaryDirectory();
+                                        final tempDir =
+                                            await getTemporaryDirectory();
                                         final tempPath =
                                             '${tempDir.path}/ai_result_${DateTime.now().millisecondsSinceEpoch}.png';
                                         final tempFile = File(tempPath);
@@ -1101,7 +1157,8 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
 
                                         try {
                                           // 使用 Gal 插件保存图片到相册
-                                          await Gal.putImage(tempPath, album: 'Peture');
+                                          await Gal.putImage(tempPath,
+                                              album: 'Peture');
                                         } finally {
                                           // 无论保存成功或失败都删除临时文件
                                           if (await tempFile.exists()) {
@@ -1110,15 +1167,17 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
                                         }
 
                                         if (context.mounted) {
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                              const SnackBar(content: Text("已保存到相册！")));
+                                          ScaffoldMessenger.of(context)
+                                              .showSnackBar(const SnackBar(
+                                                  content: Text("已保存到相册！")));
                                         }
                                       } catch (e) {
                                         debugPrint('保存图片到相册时出错: $e');
                                         if (context.mounted) {
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                              const SnackBar(
-                                                  content: Text("保存失败，请检查权限设置")));
+                                          ScaffoldMessenger.of(context)
+                                              .showSnackBar(const SnackBar(
+                                                  content:
+                                                      Text("保存失败，请检查权限设置")));
                                         }
                                       }
                                     },
@@ -1296,7 +1355,8 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
                         ),
                       )
                     else
-                      Icon(icon, size: 17, color: AppColors.primary.withOpacity(0.9)),
+                      Icon(icon,
+                          size: 17, color: AppColors.primary.withOpacity(0.9)),
                     const SizedBox(width: 6),
                     Text(
                       label,
@@ -1567,7 +1627,8 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
 
     // 计算文字起始位置（在Logo右侧）
     final textStartX = logoCenterX + logoRadius + 16;
-    final totalTextHeight = brandTextPainter.height + subtitleTextPainter.height + 2;
+    final totalTextHeight =
+        brandTextPainter.height + subtitleTextPainter.height + 2;
     final textStartY = footerTop + (footerHeight - totalTextHeight) / 2;
 
     // 绘制品牌文字
@@ -1589,17 +1650,16 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
     final dotSpacing = dotSize * 2.2;
 
     // 绘制3x3点阵
-    final dotPaint = Paint()
-      ..color = Colors.white.withOpacity(0.5);
-    
+    final dotPaint = Paint()..color = Colors.white.withOpacity(0.5);
+
     for (int row = 0; row < 3; row++) {
       for (int col = 0; col < 3; col++) {
         // 创建不规则的"QR-like"图案（跳过一些点）
         if ((row == 1 && col == 1) || (row == 2 && col == 0)) continue;
-        
+
         final dotX = patternStartX + (col - 1) * dotSpacing;
         final dotY = patternCenterY + (row - 1) * dotSpacing;
-        
+
         // 绘制圆角小方块
         final dotRect = Rect.fromCenter(
           center: Offset(dotX, dotY),
@@ -1618,16 +1678,18 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
       ..color = Colors.white.withOpacity(0.25)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.5;
-    
+
     canvas.drawCircle(
-      Offset(patternStartX + dotSpacing * 0.8, patternCenterY - dotSpacing * 0.3),
+      Offset(
+          patternStartX + dotSpacing * 0.8, patternCenterY - dotSpacing * 0.3),
       dotSize * 1.2,
       ringPaint,
     );
 
     final picture = recorder.endRecording();
     final finalImage = await picture.toImage(width, newHeight);
-    final byteData = await finalImage.toByteData(format: ui.ImageByteFormat.png);
+    final byteData =
+        await finalImage.toByteData(format: ui.ImageByteFormat.png);
 
     sourceImage.dispose();
     finalImage.dispose();
@@ -1643,7 +1705,8 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
       final res = await http.get(Uri.parse(url));
       if (res.statusCode != 200) return null;
       final dir = await getTemporaryDirectory();
-      final path = '${dir.path}/ai_result_download_${DateTime.now().millisecondsSinceEpoch}.png';
+      final path =
+          '${dir.path}/ai_result_download_${DateTime.now().millisecondsSinceEpoch}.png';
       final f = File(path);
       await f.writeAsBytes(res.bodyBytes, flush: true);
       return f.path;
@@ -1702,7 +1765,8 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
               SizedBox(
                 width: 16,
                 height: 16,
-                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                child: CircularProgressIndicator(
+                    strokeWidth: 2, color: Colors.white),
               ),
               SizedBox(width: 12),
               Text('正在设置用户头像...'),
@@ -1713,7 +1777,8 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
       );
     }
 
-    String? persistedPath = await UserAvatarHelper.persistAvatarFile(cropped.path);
+    String? persistedPath =
+        await UserAvatarHelper.persistAvatarFile(cropped.path);
     if (!mounted) {
       setState(() => _isSettingAvatar = false);
       return;
@@ -1730,7 +1795,8 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
     persistedPath ??= cropped.path;
 
     try {
-      final upload = await SupabaseService().uploadUserAvatarWithError(File(persistedPath));
+      final upload = await SupabaseService()
+          .uploadUserAvatarWithError(File(persistedPath));
       if (!mounted) {
         setState(() => _isSettingAvatar = false);
         return;
@@ -1743,7 +1809,8 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
         return;
       }
 
-      final prof = await SupabaseService().upsertUserProfileWithError(avatarUrl: upload.url);
+      final prof = await SupabaseService()
+          .upsertUserProfileWithError(avatarUrl: upload.url);
       if (!mounted) {
         setState(() => _isSettingAvatar = false);
         return;
@@ -1843,7 +1910,8 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
               SizedBox(
                 width: 16,
                 height: 16,
-                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                child: CircularProgressIndicator(
+                    strokeWidth: 2, color: Colors.white),
               ),
               SizedBox(width: 12),
               Text('正在设置宠物头像...'),
@@ -1987,7 +2055,8 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
                         : ListView.separated(
                             padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
                             itemCount: pets.length,
-                            separatorBuilder: (_, __) => const SizedBox(height: 12),
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(height: 12),
                             itemBuilder: (_, i) {
                               final pet = pets[i];
                               final name = (pet['name'] ?? '').toString();
@@ -2039,7 +2108,9 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
                                                 runSpacing: 6,
                                                 children: [
                                                   _buildPetTag(
-                                                    type.isEmpty ? '未填写类型' : type,
+                                                    type.isEmpty
+                                                        ? '未填写类型'
+                                                        : type,
                                                   ),
                                                   if (breed.isNotEmpty)
                                                     _buildPetTag(breed),

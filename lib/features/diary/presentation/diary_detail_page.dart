@@ -8,6 +8,9 @@ import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import '../../../services/ai_image_cache_service.dart';
 import '../../../shared/models/pet_diary.dart';
+import '../../content_feedback/domain/content_feedback_kind.dart';
+import '../../content_feedback/presentation/content_feedback_bar.dart';
+import '../../content_feedback/utils/content_ref_digest.dart';
 import 'diary_share_page.dart';
 
 // ========== 水印配置 ==========
@@ -228,6 +231,16 @@ class DiaryDetailPage extends StatelessWidget {
                   ],
                 ],
               ),
+            ),
+            const SizedBox(height: 20),
+            ContentFeedbackBar(
+              surface: ContentSurface.petDiaryDetail,
+              ref: {
+                if (diary.id != null && diary.id!.isNotEmpty)
+                  'diary_id': diary.id,
+                'content_sha256': contentDigestSha256(diary.content),
+                'style': diary.style,
+              },
             ),
           ],
         ),

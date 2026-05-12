@@ -19,6 +19,9 @@ import 'package:path_provider/path_provider.dart';
 import '../../../services/supabase_service.dart';
 import '../../../shared/models/pet.dart';
 import '../../../shared/utils/ui_helpers.dart';
+import '../../moderation/data/moderation_client.dart';
+import '../../moderation/domain/moderation_scene.dart';
+import '../../moderation/utils/moderation_guard.dart';
 import 'loading_page.dart';
 
 class AppColors {
@@ -162,6 +165,8 @@ class AiStylePreset {
 
 class _PreparationPageState extends State<PreparationPage>
     with TickerProviderStateMixin {
+  late final ModerationGuard _moderationGuard;
+
   static const String _presetView = 'vw_ai_image_presets';
   static const String _presetBucket = 'assets';
   static const String _defaultAspectRatio = '1:1';
@@ -205,6 +210,7 @@ class _PreparationPageState extends State<PreparationPage>
   @override
   void initState() {
     super.initState();
+    _moderationGuard = ModerationGuard(ModerationClient());
     _orbController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 12),
@@ -472,7 +478,7 @@ class _PreparationPageState extends State<PreparationPage>
               cached.add(preset);
               continue;
             }
-            
+
             // Native 平台：检查本地文件是否存在
             final localPath = preset.localImagePath;
             if (localPath != null && localPath.isNotEmpty) {
@@ -610,7 +616,8 @@ class _PreparationPageState extends State<PreparationPage>
       // Native 平台：检查本地文件是否存在
       final pendingImageIds = kIsWeb
           ? merged
-              .where((preset) => preset.imageUrl == null || preset.imageUrl!.isEmpty)
+              .where((preset) =>
+                  preset.imageUrl == null || preset.imageUrl!.isEmpty)
               .map((preset) => preset.id)
               .toSet()
           : merged
@@ -674,7 +681,7 @@ class _PreparationPageState extends State<PreparationPage>
     // Web 平台：直接构建公开 URL，不需要后台下载
     if (kIsWeb) {
       var hasAnyUpdate = false;
-      
+
       for (final preset in initialPresets) {
         if (!mounted ||
             epoch != _styleLoadEpoch ||
@@ -688,7 +695,8 @@ class _PreparationPageState extends State<PreparationPage>
         }
 
         // 构建公开 URL
-        final withImage = await _ensurePresetImageCached(preset, keepOldPath: true);
+        final withImage =
+            await _ensurePresetImageCached(preset, keepOldPath: true);
 
         if (!mounted ||
             epoch != _styleLoadEpoch ||
@@ -788,7 +796,7 @@ class _PreparationPageState extends State<PreparationPage>
       if (preset.imageUrl != null && preset.imageUrl!.isNotEmpty) {
         return preset;
       }
-      
+
       // 构建公开 URL
       try {
         final ratioFolder = _normalizedAspectRatio(preset.aspectRatio);
@@ -796,7 +804,7 @@ class _PreparationPageState extends State<PreparationPage>
         final publicUrl = Supabase.instance.client.storage
             .from(_presetBucket)
             .getPublicUrl(storagePath);
-        
+
         return preset.copyWith(imageUrl: publicUrl);
       } catch (e) {
         debugPrint('构建示例图公开URL失败(${preset.id}): $e');
@@ -883,18 +891,48 @@ class _PreparationPageState extends State<PreparationPage>
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(source: ImageSource.gallery);
     if (pickedFile != null) {
+      final file = File(pickedFile.path);
+      final bytes = await file.readAsBytes();
+      if (!mounted) return;
+      final passed = await _moderationGuard.runImageGuardByBytes(
+        context: context,
+        scene: ModerationScene.imageInput,
+        bytes: bytes,
+        onPassed: () async {},
+      );
+      if (!passed || !mounted) return;
       setState(() {
-        _selectedImage = File(pickedFile.path);
+        _selectedImage = file;
         _uploadError = '';
         _uploadStatus = UploadStatus.idle;
       });
     }
   }
 
+  Future<bool> _moderateSelectedImageBeforeGeneration() async {
+    Uint8List? bytes;
+    if (_selectedImage != null) {
+      bytes = await _selectedImage!.readAsBytes();
+    } else if (_selectedImageUrl != null && _selectedImageUrl!.isNotEmpty) {
+      final response = await http.get(Uri.parse(_selectedImageUrl!));
+      if (response.statusCode == 200) {
+        bytes = response.bodyBytes;
+      }
+    }
+    if (!context.mounted || bytes == null) return bytes != null;
+    return _moderationGuard.runImageGuardByBytes(
+      context: context,
+      scene: ModerationScene.imageInput,
+      bytes: bytes,
+      onPassed: () async {},
+    );
+  }
+
   void _onImageAreaTap() {
     // 检查是否有选中的图片（File 或 URL）
-    final hasSelectedImage = _selectedImage != null || _selectedImageUrl != null;
-    
+    final hasSelectedImage =
+        _selectedImage != null || _selectedImageUrl != null;
+
     if (!hasSelectedImage) {
       // No image selected yet
       if (_selectedPet == null) {
@@ -916,7 +954,7 @@ class _PreparationPageState extends State<PreparationPage>
       if (kIsWeb) {
         return;
       }
-      
+
       // Native 平台：打开全屏查看
       if (_selectedImage != null) {
         Navigator.of(context).push(
@@ -1337,7 +1375,8 @@ class _PreparationPageState extends State<PreparationPage>
                                         stops: const [0.0, 0.6, 1.0],
                                       ),
                                     ),
-                                    child: (_selectedImage == null && _selectedImageUrl == null)
+                                    child: (_selectedImage == null &&
+                                            _selectedImageUrl == null)
                                         ? Column(
                                             mainAxisAlignment:
                                                 MainAxisAlignment.center,
@@ -1398,26 +1437,42 @@ class _PreparationPageState extends State<PreparationPage>
                                                 child: Hero(
                                                   tag: 'pet_photo_hero',
                                                   // Web 平台使用网络图片，Native 平台使用本地文件
-                                                  child: _selectedImageUrl != null
+                                                  child: _selectedImageUrl !=
+                                                          null
                                                       ? Image.network(
                                                           _selectedImageUrl!,
                                                           fit: BoxFit.contain,
-                                                          loadingBuilder: (context, child, loadingProgress) {
-                                                            if (loadingProgress == null) return child;
+                                                          loadingBuilder: (context,
+                                                              child,
+                                                              loadingProgress) {
+                                                            if (loadingProgress ==
+                                                                null) {
+                                                              return child;
+                                                            }
                                                             return Center(
-                                                              child: CircularProgressIndicator(
-                                                                value: loadingProgress.expectedTotalBytes != null
-                                                                    ? loadingProgress.cumulativeBytesLoaded /
-                                                                        loadingProgress.expectedTotalBytes!
+                                                              child:
+                                                                  CircularProgressIndicator(
+                                                                value: loadingProgress
+                                                                            .expectedTotalBytes !=
+                                                                        null
+                                                                    ? loadingProgress
+                                                                            .cumulativeBytesLoaded /
+                                                                        loadingProgress
+                                                                            .expectedTotalBytes!
                                                                     : null,
                                                               ),
                                                             );
                                                           },
-                                                          errorBuilder: (_, __, ___) => Container(
-                                                            color: Colors.grey[200],
+                                                          errorBuilder:
+                                                              (_, __, ___) =>
+                                                                  Container(
+                                                            color: Colors
+                                                                .grey[200],
                                                             child: const Icon(
-                                                              Icons.error_outline,
-                                                              color: Colors.grey,
+                                                              Icons
+                                                                  .error_outline,
+                                                              color:
+                                                                  Colors.grey,
                                                             ),
                                                           ),
                                                         )
@@ -1617,7 +1672,8 @@ class _PreparationPageState extends State<PreparationPage>
                         height: 50,
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(25),
-                          gradient: ((_selectedImage != null || _selectedImageUrl != null) &&
+                          gradient: ((_selectedImage != null ||
+                                      _selectedImageUrl != null) &&
                                   _styles.isNotEmpty &&
                                   !_isStartingTask &&
                                   _uploadStatus != UploadStatus.uploading)
@@ -1636,7 +1692,8 @@ class _PreparationPageState extends State<PreparationPage>
                                 ),
                           boxShadow: [
                             BoxShadow(
-                              color: (_selectedImage != null || _selectedImageUrl != null)
+                              color: (_selectedImage != null ||
+                                      _selectedImageUrl != null)
                                   ? AppColors.primary.withOpacity(0.3)
                                   : Colors.grey.withOpacity(0.3),
                               blurRadius: 15,
@@ -1654,25 +1711,36 @@ class _PreparationPageState extends State<PreparationPage>
                         child: Material(
                           color: Colors.transparent,
                           child: InkWell(
-                            onTap: ((_selectedImage != null || _selectedImageUrl != null) &&
+                            onTap: ((_selectedImage != null ||
+                                        _selectedImageUrl != null) &&
                                     _styles.isNotEmpty &&
                                     _uploadStatus != UploadStatus.uploading &&
                                     !_isStartingTask)
                                 ? () async {
+                                    final inputPassed =
+                                        await _moderateSelectedImageBeforeGeneration();
+                                    if (!inputPassed || !context.mounted) {
+                                      return;
+                                    }
+
                                     // 保存 messenger 引用，避免 async 后 context 失效
-                                    final messenger = ScaffoldMessenger.of(context);
-                                    
+                                    final messenger =
+                                        ScaffoldMessenger.of(context);
+
                                     // 网络检查（Native 平台）
                                     // Web 平台跳过检查，浏览器会自动处理网络状态
                                     if (!kIsWeb) {
                                       try {
-                                        await InternetAddress.lookup('google.com')
-                                            .timeout(const Duration(seconds: 3));
+                                        await InternetAddress.lookup(
+                                                'google.com')
+                                            .timeout(
+                                                const Duration(seconds: 3));
                                       } catch (_) {
                                         if (mounted) {
                                           messenger.showSnackBar(
                                             const SnackBar(
-                                                content: Text('无网络连接，请检查网络设置。')),
+                                                content:
+                                                    Text('无网络连接，请检查网络设置。')),
                                           );
                                         }
                                         return;
@@ -1684,16 +1752,23 @@ class _PreparationPageState extends State<PreparationPage>
                                     if (kIsWeb && _selectedImageUrl != null) {
                                       // 规则：URL 必须来自 ai-wallpapers，文件名必须是 <ts>_<uuid36>.<ext>
                                       final uri = Uri.parse(_selectedImageUrl!);
-                                      final rawName = uri.pathSegments.isNotEmpty ? uri.pathSegments.last : '';
-                                      final fileNameFromUrl = rawName.split('?').first;
+                                      final rawName =
+                                          uri.pathSegments.isNotEmpty
+                                              ? uri.pathSegments.last
+                                              : '';
+                                      final fileNameFromUrl =
+                                          rawName.split('?').first;
                                       final strictWallpaperRe = RegExp(
                                         r'^\d+_[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\.(jpg|jpeg|png|webp)$',
                                         caseSensitive: false,
                                       );
-                                      final isAiWallpapersUrl = uri.pathSegments.contains('ai-wallpapers');
-                                      final fileNameMatches = strictWallpaperRe.hasMatch(fileNameFromUrl);
+                                      final isAiWallpapersUrl = uri.pathSegments
+                                          .contains('ai-wallpapers');
+                                      final fileNameMatches = strictWallpaperRe
+                                          .hasMatch(fileNameFromUrl);
 
-                                      if (isAiWallpapersUrl && fileNameMatches) {
+                                      if (isAiWallpapersUrl &&
+                                          fileNameMatches) {
                                         uploadedFileName = fileNameFromUrl;
                                       } else {
                                         // 否则尝试下载该 URL 的二进制并上传到 ai-wallpapers（与原生分支一致）
@@ -1701,33 +1776,46 @@ class _PreparationPageState extends State<PreparationPage>
                                           final resp = await http.get(uri);
                                           if (resp.statusCode == 200) {
                                             final bytes = resp.bodyBytes;
-                                            final user = Supabase.instance.client.auth.currentUser;
+                                            final user = Supabase.instance
+                                                .client.auth.currentUser;
                                             final userId = user?.id;
                                             if (userId == null) {
                                               uploadedFileName = null;
                                             } else {
-                                              final timestamp = DateTime.now().millisecondsSinceEpoch.toString();
-                                              final uniqueId = const Uuid().v4();
-                                              final newFileName = '${timestamp}_$uniqueId.jpg';
-                                              final filePath = '$userId/original/$newFileName';
+                                              final timestamp = DateTime.now()
+                                                  .millisecondsSinceEpoch
+                                                  .toString();
+                                              final uniqueId =
+                                                  const Uuid().v4();
+                                              final newFileName =
+                                                  '${timestamp}_$uniqueId.jpg';
+                                              final filePath =
+                                                  '$userId/original/$newFileName';
                                               try {
-                                                await Supabase.instance.client.storage.from('ai-wallpapers').uploadBinary(
-                                                  filePath,
-                                                  bytes,
-                                                  fileOptions: const FileOptions(
-                                                    cacheControl: '3600',
-                                                    upsert: false,
-                                                    contentType: 'image/jpeg',
-                                                  ),
-                                                );
+                                                await Supabase
+                                                    .instance.client.storage
+                                                    .from('ai-wallpapers')
+                                                    .uploadBinary(
+                                                      filePath,
+                                                      bytes,
+                                                      fileOptions:
+                                                          const FileOptions(
+                                                        cacheControl: '3600',
+                                                        upsert: false,
+                                                        contentType:
+                                                            'image/jpeg',
+                                                      ),
+                                                    );
                                                 uploadedFileName = newFileName;
                                               } catch (e) {
-                                                debugPrint('Web: 上传远程图片到 ai-wallpapers 失败: $e');
+                                                debugPrint(
+                                                    'Web: 上传远程图片到 ai-wallpapers 失败: $e');
                                                 uploadedFileName = null;
                                               }
                                             }
                                           } else {
-                                            debugPrint('Web: 下载远程图片失败, status=${resp.statusCode}');
+                                            debugPrint(
+                                                'Web: 下载远程图片失败, status=${resp.statusCode}');
                                             uploadedFileName = null;
                                           }
                                         } catch (e) {
@@ -1737,8 +1825,9 @@ class _PreparationPageState extends State<PreparationPage>
                                       }
                                     } else if (_selectedImage != null) {
                                       // Native 平台：上传本地文件
-                                      uploadedFileName = await _uploadImageToSupabaseStorage(
-                                          _selectedImage!);
+                                      uploadedFileName =
+                                          await _uploadImageToSupabaseStorage(
+                                              _selectedImage!);
                                     }
 
                                     if (uploadedFileName != null && mounted) {
@@ -1825,7 +1914,8 @@ class _PreparationPageState extends State<PreparationPage>
                                           FadePageRoute(
                                             page: LoadingPage(
                                               originalImage: _selectedImage,
-                                              originalImageUrl: _selectedImageUrl,
+                                              originalImageUrl:
+                                                  _selectedImageUrl,
                                               uploadedFileName:
                                                   uploadedFileName,
                                               style: style,
@@ -2511,7 +2601,8 @@ class _PreparationPageState extends State<PreparationPage>
           if (loadingProgress == null) return child;
           return _buildPresetImageFallback(preset, isLoading: true);
         },
-        errorBuilder: (_, __, ___) => _buildPresetImageFallback(preset, isFailed: true),
+        errorBuilder: (_, __, ___) =>
+            _buildPresetImageFallback(preset, isFailed: true),
       );
     }
 

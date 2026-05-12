@@ -322,6 +322,7 @@ class _UnifiedExpenseHomePageState extends State<UnifiedExpenseHomePage>
     }
 
     setState(() {
+      _touchedIndex = -1;
       _groupedExpenses = grouped;
       _periodTotal = periodTotal;
       _periodRecurringTotal = recurringTotal;
@@ -879,6 +880,11 @@ class _UnifiedExpenseHomePageState extends State<UnifiedExpenseHomePage>
       processedEntries.sort((a, b) => b.value.compareTo(a.value));
     }
 
+    final safeTouchedIndex =
+        (_touchedIndex >= 0 && _touchedIndex < processedEntries.length)
+            ? _touchedIndex
+            : -1;
+
     final List<PieChartSectionData> sections = [];
     Color? touchedColor;
     // Fallback palette
@@ -900,8 +906,8 @@ class _UnifiedExpenseHomePageState extends State<UnifiedExpenseHomePage>
           ? Color(category.color)
           : palette[i % palette.length];
       final percent = (amount / total) * 100;
-      final isTouched = i == _touchedIndex;
-      final anyTouched = _touchedIndex != -1;
+      final isTouched = i == safeTouchedIndex;
+      final anyTouched = safeTouchedIndex != -1;
       
       if (isTouched) touchedColor = color;
 
@@ -992,6 +998,8 @@ class _UnifiedExpenseHomePageState extends State<UnifiedExpenseHomePage>
                     alignment: Alignment.center,
                     children: [
                       PieChart(
+                        key: ValueKey(
+                            'pie_${_currentScope.name}_${_startDate.millisecondsSinceEpoch}_${_endDate.millisecondsSinceEpoch}_${processedEntries.length}'),
                         PieChartData(
                           pieTouchData: PieTouchData(
                             touchCallback: (FlTouchEvent event, pieTouchResponse) {
@@ -1054,8 +1062,8 @@ class _UnifiedExpenseHomePageState extends State<UnifiedExpenseHomePage>
                               color: touchedColor ?? ExpenseStyles.textDark,
                             ),
                             child: Text(
-                              _touchedIndex != -1 
-                                  ? '¥${processedEntries[_touchedIndex].value.toStringAsFixed(2)}'
+                              safeTouchedIndex != -1
+                                  ? '¥${processedEntries[safeTouchedIndex].value.toStringAsFixed(2)}'
                                   : '¥${total.toStringAsFixed(2)}',
                             ),
                           ),
@@ -1064,12 +1072,14 @@ class _UnifiedExpenseHomePageState extends State<UnifiedExpenseHomePage>
                             curve: Curves.linear,
                             style: TextStyle(
                               fontSize: 12,
-                              fontWeight: _touchedIndex != -1 ? FontWeight.bold : FontWeight.normal,
+                              fontWeight: safeTouchedIndex != -1
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
                               color: touchedColor?.withOpacity(0.8) ?? ExpenseStyles.textGrey,
                             ),
                             child: Text(
-                              _touchedIndex != -1 
-                                  ? processedEntries[_touchedIndex].key
+                              safeTouchedIndex != -1
+                                  ? processedEntries[safeTouchedIndex].key
                                   : '总支出',
                             ),
                           ),

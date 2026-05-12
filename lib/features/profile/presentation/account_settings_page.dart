@@ -13,6 +13,9 @@ import '../../../shared/utils/user_gender_mapper.dart';
 import '../../../shared/utils/avatar_image_helper.dart';
 import '../../../shared/utils/ui_helpers.dart';
 import '../../../services/supabase_service.dart';
+import '../../moderation/data/moderation_client.dart';
+import '../../moderation/domain/moderation_scene.dart';
+import '../../moderation/utils/moderation_guard.dart';
 
 class AccountSettingsPage extends StatefulWidget {
   const AccountSettingsPage({super.key});
@@ -24,6 +27,7 @@ class AccountSettingsPage extends StatefulWidget {
 class _AccountSettingsPageState extends State<AccountSettingsPage> {
   final _supabase = Supabase.instance.client;
   final _supabaseService = SupabaseService();
+  late final ModerationGuard _moderationGuard;
   bool _isLoading = false;
 
   // 用户信息
@@ -74,6 +78,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
   @override
   void initState() {
     super.initState();
+    _moderationGuard = ModerationGuard(ModerationClient());
     _loadUserInfo();
   }
 
@@ -211,10 +216,26 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
         }
         return;
       }
+      final avatarBytes = await cropped.readAsBytes();
+      if (!context.mounted) {
+        if (mounted) setState(() => _isLoading = false);
+        return;
+      }
+      final avatarPassed = await _moderationGuard.runImageGuardByBytes(
+        context: context,
+        scene: ModerationScene.avatar,
+        bytes: avatarBytes,
+        onPassed: () async {},
+      );
+      if (!avatarPassed || !mounted) {
+        if (mounted) setState(() => _isLoading = false);
+        return;
+      }
 
       // 网络不稳定时先本地显示新头像，云端再异步同步
       final localFile = cropped;
-      var persistedPath = await UserAvatarHelper.persistAvatarFile(localFile.path);
+      var persistedPath =
+          await UserAvatarHelper.persistAvatarFile(localFile.path);
       if (persistedPath == null && localFile.existsSync()) {
         persistedPath = await UserAvatarHelper.persistAvatarBytes(
           await localFile.readAsBytes(),
@@ -325,7 +346,8 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
     if (dbValue == null) return;
     setState(() => _isLoading = true);
     try {
-      final r = await _supabaseService.upsertUserProfileWithError(gender: dbValue);
+      final r =
+          await _supabaseService.upsertUserProfileWithError(gender: dbValue);
       if (r.success && mounted) {
         setState(() => _gender = result);
       } else if (mounted) {
@@ -361,7 +383,8 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
         '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
     setState(() => _isLoading = true);
     try {
-      final r = await _supabaseService.upsertUserProfileWithError(birthDate: value);
+      final r =
+          await _supabaseService.upsertUserProfileWithError(birthDate: value);
       if (r.success && mounted) {
         setState(() => _birthDate = value);
       } else if (mounted) {
@@ -391,7 +414,8 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
         .where((e) => e.isNotEmpty)
         .toList();
 
-    if (selectedProvince.isNotEmpty && !provinceNames.contains(selectedProvince)) {
+    if (selectedProvince.isNotEmpty &&
+        !provinceNames.contains(selectedProvince)) {
       selectedProvince = '';
       selectedCity = '';
     }
@@ -408,8 +432,9 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
           .toList();
     }
 
-    var cityNames =
-        selectedProvince.isEmpty ? <String>[] : citiesForProvince(selectedProvince);
+    var cityNames = selectedProvince.isEmpty
+        ? <String>[]
+        : citiesForProvince(selectedProvince);
     if (selectedCity.isNotEmpty && !cityNames.contains(selectedCity)) {
       selectedCity = '';
     }
@@ -570,6 +595,14 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
       setState(() => _isLoading = true);
 
       try {
+        final passed = await _moderationGuard.runTextGuard(
+          context: context,
+          scene: ModerationScene.nickname,
+          content: result.trim(),
+          onPassed: () async {},
+        );
+        if (!passed || !mounted) return;
+
         // 使用 SupabaseService 保存昵称到 users_profiles 表
         final r = await _supabaseService.upsertUserProfileWithError(
           nickname: result.trim(),
@@ -665,6 +698,14 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
       setState(() => _isLoading = true);
 
       try {
+        final passed = await _moderationGuard.runTextGuard(
+          context: context,
+          scene: ModerationScene.ownerNickname,
+          content: result.trim(),
+          onPassed: () async {},
+        );
+        if (!passed || !mounted) return;
+
         final r = await _supabaseService.upsertUserProfileWithError(
           ownerNickname: result.trim(),
         );
@@ -875,7 +916,8 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
                         icon: Icons.person,
                         gradientIndex: 0,
                         title: '昵称',
-                        subtitle: _userName?.isNotEmpty == true ? _userName! : '未设置',
+                        subtitle:
+                            _userName?.isNotEmpty == true ? _userName! : '未设置',
                         onTap: _changeName,
                       ),
                       _buildDivider(),
@@ -940,8 +982,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
                         onTap: () {
                           Navigator.of(context).push(
                             MaterialPageRoute(
-                              builder: (context) =>
-                                  const AccountSecurityPage(),
+                              builder: (context) => const AccountSecurityPage(),
                             ),
                           );
                         },
@@ -1174,7 +1215,8 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  gradient: _iconGradients[gradientIndex % _iconGradients.length],
+                  gradient:
+                      _iconGradients[gradientIndex % _iconGradients.length],
                   borderRadius: BorderRadius.circular(12),
                   boxShadow: [
                     BoxShadow(
