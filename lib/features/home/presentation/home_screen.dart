@@ -12,19 +12,8 @@ import '../../dog_clicker/presentation/dog_clicker_screen.dart';
 import '../../expense/presentation/unified_expense_home_page.dart';
 import '../../medical/presentation/medical_record_screen.dart';
 import '../../profile/presentation/profile_screen.dart';
-import '../../growth_log/presentation/growth_log_page.dart';
 import '../../../shared/utils/ui_helpers.dart';
 import '../../../shared/utils/data_change_notifier.dart';
-
-/// 搜索结果数据模型
-class SearchResult {
-  final String name;
-  final String keyword;
-  final IconData icon;
-  final Widget Function() pageBuilder;
-
-  SearchResult(this.name, this.keyword, this.icon, this.pageBuilder);
-}
 
 // =========================================================
 // 主页面骨架（3 tab：首页 / 医疗 / 个人，去社区）
@@ -43,7 +32,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   int _lastHapticIndex = 0;
 
   late AnimationController _tabController;
-  bool _showTimeline = false;
 
   /// 用于通知 MedicalRecordScreen 刷新数据的通知器
   final ValueNotifier<int> _medicalScreenRefreshNotifier =
@@ -129,35 +117,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     }
   }
 
-  void _toggleViewMode() {
-    setState(() {
-      _showTimeline = !_showTimeline;
-    });
-    HapticFeedback.mediumImpact();
-  }
-
   @override
   Widget build(BuildContext context) {
-    final Widget homePageContent = AnimatedSwitcher(
-      duration: const Duration(milliseconds: 500),
-      switchInCurve: Curves.easeOutQuart,
-      switchOutCurve: Curves.easeInQuart,
-      transitionBuilder: (Widget child, Animation<double> animation) {
-        return FadeTransition(
-          opacity: animation,
-          child: ScaleTransition(
-            scale: Tween<double>(begin: 0.95, end: 1.0).animate(animation),
-            child: child,
-          ),
-        );
-      },
-      child: _showTimeline
-          ? const _HomeUniverseContent(key: ValueKey('timeline'))
-          : const _HomeDashboardContent(key: ValueKey('dashboard')),
-    );
-
     final List<Widget> pages = [
-      homePageContent,
+      const _HomeDashboardContent(key: ValueKey('dashboard')),
       MedicalRecordScreen(refreshNotifier: _medicalScreenRefreshNotifier),
       const ProfileScreen(),
     ];
@@ -169,42 +132,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
       body: Stack(
         children: [
-          // 内容层
           IndexedStack(
             index: _currentIndex,
             children: pages,
           ),
-
-          // 右上角悬浮切换按钮
-          if (_currentIndex == 0)
-            Positioned(
-              top: MediaQuery.of(context).padding.top + 10,
-              right: 20,
-              child: GestureDetector(
-                onTap: _toggleViewMode,
-                child: ClipOval(
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                    child: Container(
-                      width: 42,
-                      height: 42,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.5),
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                            color: Colors.white.withOpacity(0.8), width: 1),
-                      ),
-                      child: Icon(
-                          _showTimeline
-                              ? Icons.grid_view_rounded
-                              : Icons.timeline_rounded,
-                          color: AppColors.textDark,
-                          size: 22),
-                    ),
-                  ),
-                ),
-              ),
-            ),
 
           // 底部导航
           Positioned(
@@ -470,74 +401,6 @@ class _HomeDashboardContent extends StatefulWidget {
 }
 
 class _HomeDashboardContentState extends State<_HomeDashboardContent> {
-  final TextEditingController _searchController = TextEditingController();
-  final FocusNode _searchFocusNode = FocusNode();
-  List<SearchResult> _searchResults = [];
-  bool _showSearchResults = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _searchController.addListener(() {
-      setState(() {});
-    });
-  }
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    _searchFocusNode.dispose();
-    super.dispose();
-  }
-
-  /// 搜索功能列表
-  static final List<SearchResult> _allSearchItems = [
-    SearchResult('电子档案', 'passport', Icons.badge_rounded,
-        () => const PetPassportPage()),
-    SearchResult('成长日记', 'diary', Icons.menu_book_rounded,
-        () => const PetDiaryComposePage()),
-    SearchResult('训宠响片', 'clicker', Icons.touch_app_rounded,
-        () => const DogClickerScreen()),
-    SearchResult(
-        '宠物消费', 'expense', Icons.account_balance_wallet,
-        () => const UnifiedExpenseHomePage()),
-    SearchResult('AI 图像实验室', 'imagelab', Icons.auto_fix_high_rounded,
-        () => const PreparationPage()),
-  ];
-
-  void _performSearch(String query) {
-    if (query.isEmpty) {
-      setState(() {
-        _searchResults = [];
-        _showSearchResults = false;
-      });
-      return;
-    }
-
-    final lowerQuery = query.toLowerCase();
-    final results = _allSearchItems.where((item) {
-      return item.name.toLowerCase().contains(lowerQuery) ||
-          item.keyword.toLowerCase().contains(lowerQuery);
-    }).toList();
-
-    setState(() {
-      _searchResults = results;
-      _showSearchResults = true;
-    });
-  }
-
-  void _navigateToResult(SearchResult result) {
-    _searchController.clear();
-    _searchFocusNode.unfocus();
-    setState(() {
-      _showSearchResults = false;
-    });
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => result.pageBuilder()),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final double topPadding = MediaQuery.of(context).padding.top;
@@ -551,10 +414,6 @@ class _HomeDashboardContentState extends State<_HomeDashboardContent> {
               parent: BouncingScrollPhysics()),
           padding: EdgeInsets.fromLTRB(20, topPadding + 60, 20, 130),
           children: [
-            _buildSearchBar(),
-
-            const SizedBox(height: 16),
-
             // 功能网格 — 仅 5 个上架功能
             LayoutBuilder(
               builder: (context, constraints) {
@@ -619,89 +478,7 @@ class _HomeDashboardContentState extends State<_HomeDashboardContent> {
           ],
         ),
 
-        // 搜索结果列表
-        if (_showSearchResults && _searchResults.isNotEmpty)
-          Positioned(
-            top: topPadding + 60 + 60,
-            left: 20,
-            right: 20,
-            child: Material(
-              elevation: 8,
-              borderRadius: BorderRadius.circular(12),
-              child: Container(
-                constraints: const BoxConstraints(maxHeight: 400),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: _searchResults.length,
-                  itemBuilder: (context, index) {
-                    final result = _searchResults[index];
-                    return ListTile(
-                      leading:
-                          Icon(result.icon, color: const Color(0xFF5D5FEF)),
-                      title: Text(result.name),
-                      onTap: () => _navigateToResult(result),
-                    );
-                  },
-                ),
-              ),
-            ),
-          ),
       ],
-    );
-  }
-
-  Widget _buildSearchBar() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            offset: const Offset(0, 2),
-            blurRadius: 8.0,
-            color: Colors.black.withOpacity(0.08),
-          ),
-        ],
-      ),
-      child: TextField(
-        controller: _searchController,
-        focusNode: _searchFocusNode,
-        onChanged: _performSearch,
-        decoration: InputDecoration(
-          hintText: '搜索功能...',
-          prefixIcon: const Icon(Icons.search, color: Color(0xFF8E8E93)),
-          suffixIcon: _searchController.text.isNotEmpty
-              ? IconButton(
-                  icon: const Icon(Icons.clear, color: Color(0xFF8E8E93)),
-                  onPressed: () {
-                    setState(() {
-                      _searchController.clear();
-                      _performSearch('');
-                    });
-                  },
-                )
-              : null,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide.none,
-          ),
-          filled: true,
-          fillColor: Colors.white,
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        ),
-      ),
     );
   }
 
@@ -801,28 +578,6 @@ class _HomeDashboardContentState extends State<_HomeDashboardContent> {
 
 // =========================================================
 // 时间线模式
-// =========================================================
-
-class _HomeUniverseContent extends StatelessWidget {
-  const _HomeUniverseContent({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () {
-        FocusScope.of(context).unfocus();
-      },
-      child: Stack(
-        fit: StackFit.expand,
-        alignment: Alignment.center,
-        children: [
-          const GrowthLogPage(isEmbedded: true),
-        ],
-      ),
-    );
-  }
-}
-
 // =========================================================
 // 光弥散背景组件
 // =========================================================

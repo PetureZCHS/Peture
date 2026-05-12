@@ -12,7 +12,6 @@ import '../../moderation/utils/moderation_guard.dart';
 import '../../../shared/models/pet.dart';
 import '../../../services/supabase_service.dart';
 import 'pet_diary_result_page.dart';
-import 'pet_journal_demo_page.dart';
 import 'dart:io';
 import '../../library/presentation/library_screen.dart';
 
@@ -622,16 +621,6 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
                   fontWeight: FontWeight.bold,
                   fontSize: 18,
                 ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.style, size: 28),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const PetJournalDemoPage()),
-              );
-            },
-            tooltip: '手记模式 (Apple Journal)',
           ),
           IconButton(
             icon: const Icon(Icons.local_library_rounded,
