@@ -1,174 +1,176 @@
-# Peture Design System Design
+# Peture 设计系统方案
 
-Date: 2026-05-14
-Branch: `djy-ui`
+日期：2026-05-14
+分支：`djy-ui`
 
-## Goal
+## 目标
 
-Peture is a one-stop pet care platform that combines practical pet management tools with a small set of playful, innovative experiences. The app should feel unified across pages while preserving the product's personality.
+Peture（智宠合生）是一款宠物一站式服务平台，既承载宠物管理、医疗记录、消费记录等实用能力，也包含第一人称日记、AI 图像实验室、训宠响片等更有趣味和创新性的功能。
 
-Brand keywords:
+本设计系统的目标，是让 App 的所有页面拥有统一、优美、可信的视觉语言，同时保留 Peture 的轻盈和记忆点。
 
-- Healing
-- Reliable
-- Lively
-- Restrained
+品牌关键词：
 
-This design covers the MVP surface on `djy-ui`: home, auth, pet profile/passport, diary, image generation, clicker training, expense, medical records, profile/settings, and related account pages.
+- 治愈
+- 可靠
+- 灵动
+- 克制
 
-## Chosen Direction
+本方案覆盖 `djy-ui` 分支上的 MVP 范围：首页、登录注册、宠物档案/电子档案、日记、AI 图像、训宠响片、消费、医疗记录、个人中心/设置，以及相关账号安全页面。
 
-Use **Warm Utility Hub** as the main app direction.
+## 设计方向
 
-The home page should present Peture as a clear, reliable function hub with gentle emotional warmth. It keeps the current five MVP entry points:
+主 App 体验采用 **温暖功能中台**。
 
-- Pet expense
-- Pet passport
-- First-person diary
-- Dog clicker
-- AI image lab
+首页应清楚表达 Peture 是一个可靠的一站式宠物功能入口，同时通过柔和色彩、圆润卡片和轻微动效保留治愈感。首页保留当前 5 个 MVP 功能入口：
 
-The root login screen keeps its existing dark cosmic mood as a brand ritual, but it should be refined to match Peture's typography, buttons, accessibility, and motion restraint. After login, the main app uses the warm utility hub system.
+- 宠物消费
+- 电子档案
+- 第一人称日记
+- 训宠响片
+- AI 图像实验室
 
-## Visual Language
+根登录页保留现有的深色宇宙氛围，作为 Peture 的品牌仪式感入口。但它需要在文字、按钮、登录选项卡片、可访问性和动效强度上收敛到 Peture 的最终设计系统。进入 App 后，主体验使用温暖功能中台。
 
-### Color
+## 视觉语言
 
-The app should move away from unrelated high-saturation gradients scattered across pages. Use a warm, low-saturation palette:
+### 色彩
 
-- Background: warm ivory / milk white
-- Surface: clean white with subtle warm tint
-- Primary: muted coral-peach
-- Support: soft mint green
-- Technology accent: restrained violet-blue
-- Text: deep warm charcoal, not pure black
-- Risk: clear red with calm supporting surfaces
+App 应逐步减少页面之间互不关联的高饱和渐变。主色板采用低饱和、偏温暖的色彩：
 
-Feature-specific colors are allowed only as local accents. AI image, diary, and clicker can keep a more playful identity, but they should still use shared spacing, cards, type, buttons, and inputs.
+- 背景：暖象牙白 / 奶油白
+- 卡片表面：干净白色，带轻微暖色倾向
+- 主色：克制的珊瑚桃色
+- 辅助色：柔和薄荷绿
+- 科技感点缀：低饱和紫蓝
+- 正文色：深暖炭黑，避免纯黑带来的生硬感
+- 风险色：清晰红色，配合冷静的风险说明底色
 
-### Typography
+功能主题色允许存在，但只能作为局部点缀。AI 图像、日记、训宠响片可以保留趣味个性，但仍必须使用统一的间距、卡片、字体、按钮和输入控件规则。
 
-Use a consistent Flutter text scale:
+### 字体
 
-- Large title for page-level identity
-- Title for sections and cards
-- Body for readable content
-- Label for metadata and controls
-- Caption for secondary hints
+使用统一的 Flutter 字体层级：
 
-Avoid mixing page-specific font personalities such as isolated serif/Lato combinations unless the whole system adopts them. Keep Chinese text legible and calm.
+- 大标题：页面身份和首屏重点
+- 标题：区块和卡片标题
+- 正文：主要阅读内容
+- 标签：元信息和控件说明
+- 注释：辅助提示和弱信息
 
-### Shape And Elevation
+避免每个页面各自混用独立字体气质，例如局部的 serif/Lato 组合。中文文本优先保证清晰、稳定、亲和。
 
-Use rounded but controlled shapes:
+### 圆角与层级
 
-- Small controls: 12-14
-- Cards and panels: 18-22
-- Feature tiles: 22-24
-- Bottom navigation / large pills: 28+
+整体使用圆润但克制的形状：
 
-Use shadows sparingly. Prefer soft elevation and subtle borders over heavy glass effects. Glass/blur can remain in the bottom navigation and selected decorative places, but not as the default for every card.
+- 小控件：12-14
+- 卡片和面板：18-22
+- 首页功能入口：22-24
+- 底部导航和大型胶囊按钮：28+
 
-### Motion
+阴影保持轻柔。默认使用轻阴影和细边框表达层级，不把重玻璃拟态作为所有卡片的默认风格。玻璃/模糊效果可以保留在底部导航和少量精选场景中，但不应泛滥。
 
-Motion should be lively but not noisy:
+### 动效
 
-- Press feedback on cards and buttons
-- Short transitions, usually 150-300ms
-- Existing spring bottom navigation can stay, but its color and intensity should be restrained
-- Ambient orbs should be slower and softer
-- Avoid decorative animation that competes with tasks
+动效要灵动，但不能喧宾夺主：
 
-## Flutter Architecture
+- 卡片和按钮有轻微按压反馈
+- 常规过渡控制在 150-300ms
+- 现有弹性底部导航可以保留，但颜色和发光强度要降低
+- 背景光团应更慢、更柔和
+- 避免纯装饰性动画干扰任务完成
 
-Create a dedicated design system directory:
+## Flutter 代码架构
+
+新增明确的设计系统目录：
 
 `lib/shared/design_system/`
 
-Recommended files:
+建议文件：
 
-- `peture_tokens.dart`: colors, spacing, radii, shadows, motion durations
-- `peture_theme.dart`: app `ThemeData`
-- `peture_text_styles.dart`: app text roles
-- `peture_gradients.dart`: brand and feature gradients
-- `components/`: reusable widgets
+- `peture_tokens.dart`：颜色、间距、圆角、阴影、动效时长
+- `peture_theme.dart`：App 级 `ThemeData`
+- `peture_text_styles.dart`：文字层级
+- `peture_gradients.dart`：品牌渐变和功能主题色
+- `components/`：可复用组件
 
-Keep `lib/shared/utils/ui_helpers.dart` as a compatibility layer during migration. It may forward to the new tokens so existing pages are not rewritten all at once.
+保留 `lib/shared/utils/ui_helpers.dart` 作为迁移期兼容层。它可以逐步转发到新 token，避免一次性重写所有旧页面。
 
-## First Components
+## 首批基础组件
 
-Build these primitives first:
+优先建立这些组件：
 
-- `PeturePageScaffold`: unified background, safe area behavior, optional app bar, bottom padding
-- `PetureCard`: standard, emphasized, and danger card variants
-- `PetureFeatureTile`: home feature entry card
+- `PeturePageScaffold`：统一背景、安全区、可选 AppBar、底部导航避让
+- `PetureCard`：标准卡片、强调卡片、危险卡片
+- `PetureFeatureTile`：首页功能入口卡片
 - `PeturePrimaryButton`
 - `PetureSecondaryButton`
 - `PetureDangerButton`
-- `PetureTextField` or a shared input decoration helper
+- `PetureTextField` 或统一输入框装饰 helper
 - `PetureSectionHeader`
 - `PetureEmptyState`
-- `PetureAlertPanel`: risk and sensitive-action panel
+- `PetureAlertPanel`：用于账号注销、风险提示、敏感操作说明
 
-Use Material 3 where possible and keep native Flutter controls recognizable.
+尽量沿用 Material 3 和 Flutter 原生控件能力，让控件看起来有品牌感，但不要失去平台熟悉度。
 
-## Page Scope
+## 页面范围
 
-### P0 Must Change
+### P0：必须改
 
-- Global theme and base design tokens/components
-- Home page as the Warm Utility Hub sample
-- Root login page: keep dark cosmic style, refine brand/control/accessibility alignment
-- Email login and email registration
-- Account security
-- Change password
-- Account deactivation
+- 全局主题、基础 token 和基础组件
+- 首页：作为 **温暖功能中台** 样板
+- 根登录页：保留深色宇宙风格，但对齐品牌、控件、可访问性和动效边界
+- 邮箱登录和邮箱注册
+- 账户安全
+- 修改密码
+- 账号注销
 
-### P1 Change If Visibly Split
+### P1：明显割裂则改
 
-- AI image lab: keep creative energy, reduce isolated purple/pink neon dominance
-- Medical records: keep reliable professional tone, migrate away from isolated local theme
-- Profile and pet profile flows: align cards, avatars, lists, and forms
-- Expense home: align background, cards, chart containers, and controls
-- Dog clicker: preserve the skeuomorphic device, align surrounding page and panels
-- Diary pages: keep warmth, align inputs, selectors, generation state, and share surfaces
+- AI 图像实验室：保留创造力，降低孤立的紫粉霓虹感
+- 医疗记录：保留专业可靠感，迁移掉孤立局部主题
+- 个人中心和宠物资料相关流程：统一卡片、头像、列表项和表单
+- 消费首页：统一背景、卡片、图表容器和操作按钮
+- 训宠响片：保留拟物设备本体，外围页面和面板对齐系统
+- 日记相关页面：保留温暖表达，统一输入、选择器、生成态和分享页面基础样式
 
-### P2 Light Touch
+### P2：轻量处理
 
-- Library and deeper detail/result pages that do not dominate the main path
-- Older shared widgets unless directly used by P0/P1 work
+- 图书馆和不主导主路径的深层详情/结果页
+- 旧共享组件，除非被 P0/P1 页面直接使用，否则不单独大重构
 
-## Auth Notes
+## 登录注册说明
 
-The root login page is intentionally allowed to differ from the main app surface. It should feel like a night-sky brand entry, not a separate product:
+根登录页允许与主 App 浅色页面不同。它应该像一个夜空感的品牌入口，而不是另一个产品：
 
-- Keep the dark cosmic backdrop
-- Refine logo, supporting copy, and login option cards
-- Use design-system buttons and text roles
-- Reduce overwhelming animation where needed
-- Preserve existing auth routing and password-change handoff behavior
+- 保留深色宇宙背景
+- 优化 Logo、辅助文案和登录选项卡片
+- 使用设计系统按钮和文字层级
+- 适当降低过强动画
+- 保留现有认证路由和修改密码后的登录接力逻辑
 
-Email login/register should align strongly with the final system because they are task-heavy trust surfaces.
+邮箱登录/注册是强信任任务页面，应更严格对齐最终设计系统。
 
-Phone login is currently unavailable. Do not add SMS capability. If touched, make its unavailable state clear and visually consistent.
+手机号登录当前不可用。本轮不新增短信登录能力。如触达该页面，只做清晰的不可用状态和视觉统一。
 
-## Non-Goals
+## 非目标
 
-- Do not add new features.
-- Do not change authentication logic.
-- Do not change Supabase function contracts.
-- Do not rewrite every page in one sweep.
-- Do not remove feature-specific personality where it serves the product.
+- 不新增功能
+- 不改变认证逻辑
+- 不改变 Supabase 函数契约
+- 不一次性重写所有页面
+- 不抹掉有产品价值的功能个性
 
-## Verification
+## 验证标准
 
-Before completion:
+完成前需要：
 
-- Run Flutter analysis.
-- Run focused Flutter tests if available.
-- Manually inspect the app in simulator or browser if feasible.
-- Check mobile safe areas and bottom navigation overlap.
-- Check text contrast and tap target sizes.
-- Confirm no MVP function entry was removed or renamed in behavior.
+- 运行 Flutter 分析
+- 如有可用测试，运行相关 Flutter 测试
+- 条件允许时，在模拟器或浏览器中手动检查
+- 检查移动端安全区和底部导航遮挡
+- 检查文字对比度和触控目标尺寸
+- 确认没有移除或改变 MVP 功能入口的行为
 
-Success means the main path no longer feels like multiple unrelated apps: home, auth, settings/security, and the five MVP entry points should share the same visual grammar while keeping Peture's gentle personality.
+成功标准：主路径不再像多个无关 App 拼在一起。首页、登录注册、设置安全链路和 5 个 MVP 功能入口应共享同一套视觉语法，同时保留 Peture 温柔、可靠、轻盈的个性。
