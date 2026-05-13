@@ -11,6 +11,7 @@ import 'features/auth/presentation/login_page.dart';
 import 'features/home/presentation/home_screen.dart';
 import 'core/config/supabase_config.dart';
 import 'services/analytics_service.dart';
+import 'shared/design_system/peture_design_system.dart';
 
 void main() async {
   // 确保 Flutter 框架初始化
@@ -140,34 +141,7 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const double appBarTextFontSize = 20;
-    final theme = ThemeData(
-      useMaterial3: true,
-      brightness: Brightness.light,
-      scaffoldBackgroundColor: const Color(0xFFF7F7F7),
-      primaryColor: const Color(0xFF007AFF),
-      fontFamily: '.SF Pro Text',
-      colorScheme: const ColorScheme.light(
-        primary: Color(0xFF007AFF),
-        secondary: Color(0xFF5856D6),
-        surface: Colors.white,
-        onSurface: Colors.black87,
-      ),
-      appBarTheme: AppBarTheme(
-        titleTextStyle: TextStyle(
-          fontSize: appBarTextFontSize,
-          color: Colors.black87,
-        ),
-        iconTheme: const IconThemeData(color: Colors.black87),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-      ),
-      textButtonTheme: TextButtonThemeData(
-        style: TextButton.styleFrom(
-          foregroundColor: const Color(0xFF007AFF),
-        ),
-      ),
-    );
+    final theme = PetureTheme.light();
 
     return Theme(
       data: theme,
