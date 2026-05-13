@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'dart:math' as math;
 import 'dart:io';
 import 'dart:ui';
+import '../../../core/page_tracker_mixin.dart';
 import '../../../shared/models/pet.dart';
 import '../../../shared/models/pet_passport.dart';
 import '../../../services/supabase_service.dart';
@@ -23,7 +24,7 @@ class PetPassportPage extends StatefulWidget {
 }
 
 class _PetPassportPageState extends State<PetPassportPage>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, PageTrackerMixin<PetPassportPage> {
   List<Pet> _pets = [];
   final Map<String, PetPassport?> _passports = {};
   bool _isLoading = true;
@@ -36,11 +37,15 @@ class _PetPassportPageState extends State<PetPassportPage>
   // 用户头像路径
   String? _userAvatarPath;
   String? _userName;
+
   /// 账号里「宠物对你的称呼」默认（users_profiles.owner_nickname）
   String? _profileOwnerNickname;
 
   static const _placeholderPassportOwnerNames = {'铲屎官', '主人'};
   late final VoidCallback _petDataRefreshListener;
+
+  @override
+  String get analyticsPageName => 'pet_profile_passport';
 
   @override
   void initState() {
@@ -82,7 +87,9 @@ class _PetPassportPageState extends State<PetPassportPage>
           _userAvatarPath = avatarPath;
           _userName = nickname ??
               (metaName != null && metaName.isNotEmpty ? metaName : null) ??
-              (emailLocal != null && emailLocal.isNotEmpty ? emailLocal : null) ??
+              (emailLocal != null && emailLocal.isNotEmpty
+                  ? emailLocal
+                  : null) ??
               '宠物家长';
           _profileOwnerNickname =
               (ownerNick != null && ownerNick.isNotEmpty) ? ownerNick : '主人';
@@ -193,7 +200,8 @@ class _PetPassportPageState extends State<PetPassportPage>
 
     return PetPassport(
       petId: pet.id!,
-      ownerName: _userName?.trim().isNotEmpty == true ? _userName!.trim() : '宠物家长',
+      ownerName:
+          _userName?.trim().isNotEmpty == true ? _userName!.trim() : '宠物家长',
       adoptionDate: DateTime.now().subtract(
         Duration(days: random.nextInt(1000)),
       ),
@@ -210,7 +218,7 @@ class _PetPassportPageState extends State<PetPassportPage>
   void _flipCard() {
     // Trigger shimmer animation
     _shimmerController.forward(from: 0).then((_) => _shimmerController.reset());
-    
+
     if (_isFlipped) {
       _flipController.reverse();
     } else {
@@ -327,7 +335,8 @@ class _PetPassportPageState extends State<PetPassportPage>
             child: BackdropFilter(
               filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
               child: IconButton(
-                icon: const Icon(Icons.person_outline, color: Color(0xFF5A8EFA)),
+                icon:
+                    const Icon(Icons.person_outline, color: Color(0xFF5A8EFA)),
                 onPressed: () async {
                   await Navigator.push(
                     context,
@@ -424,8 +433,7 @@ class _PetPassportPageState extends State<PetPassportPage>
               HapticFeedback.mediumImpact();
               Navigator.push(
                 context,
-                MaterialPageRoute(
-                    builder: (_) => const PetProfileFormPage()),
+                MaterialPageRoute(builder: (_) => const PetProfileFormPage()),
               );
             },
             child: Container(
@@ -477,36 +485,38 @@ class _PetPassportPageState extends State<PetPassportPage>
                   builder: (context, child) {
                     final angle = _flipController.value * math.pi;
                     final scale = _isPressed ? 0.97 : 1.0;
-                    
-                    final shadowOpacity = 0.2 + (_flipController.value - 0.5).abs() * 0.1;
-                    
+
+                    final shadowOpacity =
+                        0.2 + (_flipController.value - 0.5).abs() * 0.1;
+
                     return Transform.scale(
-                        scale: scale,
-                        child: Container(
-                          decoration: BoxDecoration(
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(shadowOpacity),
-                                blurRadius: 20 + (_isPressed ? 10 : 0),
-                                offset: const Offset(0, 10),
-                              ),
-                            ],
-                          ),
-                          child: Transform(
-                            transform: Matrix4.identity()
-                              ..setEntry(3, 2, 0.001)
-                              ..rotateY(angle),
-                            alignment: Alignment.center,
-                            child: angle < math.pi / 2
-                                ? _buildEnhancedPassportFront()
-                                : Transform(
-                                    transform: Matrix4.identity()..rotateY(math.pi),
-                                    alignment: Alignment.center,
-                                    child: _buildEnhancedPassportBack(),
-                                  ),
-                           ),
-                         ),
-                       );
+                      scale: scale,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(shadowOpacity),
+                              blurRadius: 20 + (_isPressed ? 10 : 0),
+                              offset: const Offset(0, 10),
+                            ),
+                          ],
+                        ),
+                        child: Transform(
+                          transform: Matrix4.identity()
+                            ..setEntry(3, 2, 0.001)
+                            ..rotateY(angle),
+                          alignment: Alignment.center,
+                          child: angle < math.pi / 2
+                              ? _buildEnhancedPassportFront()
+                              : Transform(
+                                  transform: Matrix4.identity()
+                                    ..rotateY(math.pi),
+                                  alignment: Alignment.center,
+                                  child: _buildEnhancedPassportBack(),
+                                ),
+                        ),
+                      ),
+                    );
                   },
                 ),
               ),
@@ -562,7 +572,8 @@ class _PetPassportPageState extends State<PetPassportPage>
                         boxShadow: isSelected
                             ? [
                                 BoxShadow(
-                                  color: const Color(0xFF667eea).withOpacity(0.4),
+                                  color:
+                                      const Color(0xFF667eea).withOpacity(0.4),
                                   blurRadius: 12,
                                   spreadRadius: 2,
                                 ),
@@ -582,7 +593,8 @@ class _PetPassportPageState extends State<PetPassportPage>
                               : null,
                         ),
                         child: ClipOval(
-                          child: _buildPetSelectorPhoto(passport, pet, isSelected),
+                          child:
+                              _buildPetSelectorPhoto(passport, pet, isSelected),
                         ),
                       ),
                     ),
@@ -590,9 +602,12 @@ class _PetPassportPageState extends State<PetPassportPage>
                     Text(
                       pet.name,
                       style: TextStyle(
-                        color: isSelected ? const Color(0xFF667eea) : Colors.grey[500],
+                        color: isSelected
+                            ? const Color(0xFF667eea)
+                            : Colors.grey[500],
                         fontSize: 12,
-                        fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                        fontWeight:
+                            isSelected ? FontWeight.w600 : FontWeight.w400,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -635,7 +650,8 @@ class _PetPassportPageState extends State<PetPassportPage>
           width: 60,
           height: 60,
           fit: BoxFit.cover,
-          placeholder: (context, url) => _buildDefaultPetSelectorIcon(isSelected),
+          placeholder: (context, url) =>
+              _buildDefaultPetSelectorIcon(isSelected),
           errorWidget: (context, url, err) =>
               _buildDefaultPetSelectorIcon(isSelected),
         );
@@ -669,45 +685,45 @@ class _PetPassportPageState extends State<PetPassportPage>
     return Padding(
       padding: const EdgeInsets.all(16.0),
       child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.8),
-              borderRadius: BorderRadius.circular(25),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.08),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.8),
+          borderRadius: BorderRadius.circular(25),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.08),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(25),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.touch_app,
+                  size: 18,
+                  color: const Color(0xFF667eea).withOpacity(0.7),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  '点击卡片查看背面',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey[600]?.withOpacity(0.7),
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ],
             ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(25),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.touch_app,
-                      size: 18,
-                      color: const Color(0xFF667eea).withOpacity(0.7),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      '点击卡片查看背面',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey[600]?.withOpacity(0.7),
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
           ),
-        );
+        ),
+      ),
+    );
   }
 
   Widget _buildEnhancedPassportFront() {
@@ -744,7 +760,7 @@ class _PetPassportPageState extends State<PetPassportPage>
             Positioned.fill(
               child: CustomPaint(painter: PassportPatternPainter()),
             ),
-            
+
             // Glassmorphism overlay
             Positioned.fill(
               child: Container(
@@ -777,7 +793,8 @@ class _PetPassportPageState extends State<PetPassportPage>
                   child: ShaderMask(
                     shaderCallback: (bounds) {
                       return LinearGradient(
-                        begin: Alignment(-1.0 + _shimmerController.value * 3, 0),
+                        begin:
+                            Alignment(-1.0 + _shimmerController.value * 3, 0),
                         end: Alignment(0.0 + _shimmerController.value * 3, 0),
                         colors: [
                           Colors.transparent,
@@ -1009,7 +1026,7 @@ class _PetPassportPageState extends State<PetPassportPage>
 
   Widget _buildEnhancedMBTISection(PetPassport passport) {
     final mbtiInfo = MBTITypes.getTypeInfo(passport.mbtiType!);
-    
+
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -1033,7 +1050,8 @@ class _PetPassportPageState extends State<PetPassportPage>
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                 decoration: BoxDecoration(
                   gradient: const LinearGradient(
                     colors: [Colors.white, Color(0xFFF5F5F5)],
@@ -1173,7 +1191,7 @@ class _PetPassportPageState extends State<PetPassportPage>
             ],
           ),
         ),
-        
+
         // Adoption date
         Container(
           padding: const EdgeInsets.all(10),
@@ -1441,59 +1459,59 @@ class _PetPassportPageState extends State<PetPassportPage>
 
   Widget _buildEnhancedAchievementBadge(Achievement achievement) {
     final gradientColors = _getAchievementGradient(achievement.iconName);
-    
+
     return SizedBox(
       width: 80,
       child: Container(
         decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.25),
-          width: 1,
+          color: Colors.white.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: Colors.white.withOpacity(0.25),
+            width: 1,
+          ),
         ),
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: gradientColors,
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: gradientColors[0].withOpacity(0.4),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: gradientColors,
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
                 ),
-              ],
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: gradientColors[0].withOpacity(0.4),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Icon(
+                _getAchievementIcon(achievement.iconName),
+                color: Colors.white,
+                size: 22,
+              ),
             ),
-            child: Icon(
-              _getAchievementIcon(achievement.iconName),
-              color: Colors.white,
-              size: 22,
+            const SizedBox(height: 8),
+            Text(
+              achievement.name,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
             ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            achievement.name,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 10,
-              fontWeight: FontWeight.w600,
-            ),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
-      ),
+          ],
+        ),
       ),
     );
   }
@@ -1586,7 +1604,8 @@ class _PetPassportPageState extends State<PetPassportPage>
     );
   }
 
-  Widget _buildEnhancedStatItem(IconData icon, String label, String value, Color accentColor) {
+  Widget _buildEnhancedStatItem(
+      IconData icon, String label, String value, Color accentColor) {
     return Column(
       children: [
         Container(

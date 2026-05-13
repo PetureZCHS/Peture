@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../../../core/page_tracker_mixin.dart';
 import '../../../shared/models/unified_expense.dart';
 import '../../../shared/database/unified_expense_helper.dart';
 import '../../../services/supabase_service.dart';
@@ -13,7 +14,8 @@ class AddUnifiedExpensePage extends StatefulWidget {
   State<AddUnifiedExpensePage> createState() => _AddUnifiedExpensePageState();
 }
 
-class _AddUnifiedExpensePageState extends State<AddUnifiedExpensePage> {
+class _AddUnifiedExpensePageState extends State<AddUnifiedExpensePage>
+    with PageTrackerMixin<AddUnifiedExpensePage> {
   // State - Using Feature UI approach
   ExpenseTypeEnum _selectedExpenseType = ExpenseTypeEnum.oneOff;
   String _amountStr = '0.00';
@@ -21,6 +23,9 @@ class _AddUnifiedExpensePageState extends State<AddUnifiedExpensePage> {
 
   UnifiedExpenseCategory? _selectedCategory;
   DateTime _selectedDate = DateTime.now();
+
+  @override
+  String get analyticsPageName => 'expense_add_unified';
 
   // Pet Selection - String for Supabase UUID support
   String? _selectedPetId;

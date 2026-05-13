@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import '../../../core/page_tracker_mixin.dart';
 import '../../../services/ai_image_cache_service.dart';
 import '../../../shared/models/pet_diary.dart';
 import '../../../services/supabase_service.dart';
@@ -22,7 +23,8 @@ class DiaryTimelinePage extends StatefulWidget {
   State<DiaryTimelinePage> createState() => _DiaryTimelinePageState();
 }
 
-class _DiaryTimelinePageState extends State<DiaryTimelinePage> {
+class _DiaryTimelinePageState extends State<DiaryTimelinePage>
+    with PageTrackerMixin<DiaryTimelinePage> {
   List<PetDiary> _allDiaries = [];
   List<PetDiary> _filteredDiaries = [];
   bool _isLoading = true;
@@ -30,6 +32,9 @@ class _DiaryTimelinePageState extends State<DiaryTimelinePage> {
   String? _selectedTag; // Null means all
 
   final List<String> _availableTags = ['哲学', '搞笑', '治愈', '中二', '小红书'];
+
+  @override
+  String get analyticsPageName => 'diary_timeline';
 
   @override
   void initState() {
@@ -40,7 +45,8 @@ class _DiaryTimelinePageState extends State<DiaryTimelinePage> {
   Future<void> _fetchDiaries() async {
     setState(() => _isLoading = true);
     try {
-      final diaries = await SupabaseService().getAllDiaries(petId: widget.petId);
+      final diaries =
+          await SupabaseService().getAllDiaries(petId: widget.petId);
       if (mounted) {
         setState(() {
           _allDiaries = diaries;
@@ -419,7 +425,8 @@ class _DiaryTimelinePageState extends State<DiaryTimelinePage> {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Center(
-                  child: Icon(Icons.image_not_supported, color: Colors.grey[400]),
+                  child:
+                      Icon(Icons.image_not_supported, color: Colors.grey[400]),
                 ),
               );
             },
@@ -483,7 +490,8 @@ class _DiaryTimelinePageState extends State<DiaryTimelinePage> {
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Center(
-                    child: Icon(Icons.image_not_supported, color: Colors.grey[400]),
+                    child: Icon(Icons.image_not_supported,
+                        color: Colors.grey[400]),
                   ),
                 );
               },
@@ -574,15 +582,15 @@ class _DiaryTimelinePageState extends State<DiaryTimelinePage> {
       // Revert if failed
       if (mounted) {
         setState(() {
-           if (index >= 0) _allDiaries.insert(index, diary);
-           _applyFilterAndSort();
+          if (index >= 0) _allDiaries.insert(index, diary);
+          _applyFilterAndSort();
         });
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('删除失败，请重试')),
         );
       }
     } else {
-       if (mounted) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('日记已删除')),
         );

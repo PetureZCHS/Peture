@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import '../../../core/page_tracker_mixin.dart';
 import '../../../services/supabase_service.dart';
 import '../../../shared/models/pet_diary.dart';
 import 'pet_diary_result_page.dart';
@@ -13,10 +14,14 @@ class PetDiaryListPage extends StatefulWidget {
   State<PetDiaryListPage> createState() => _PetDiaryListPageState();
 }
 
-class _PetDiaryListPageState extends State<PetDiaryListPage> {
+class _PetDiaryListPageState extends State<PetDiaryListPage>
+    with PageTrackerMixin<PetDiaryListPage> {
   List<PetDiary> _diaries = [];
   bool _isLoading = true;
   final _supabaseService = SupabaseService();
+
+  @override
+  String get analyticsPageName => 'diary_list';
 
   @override
   void initState() {

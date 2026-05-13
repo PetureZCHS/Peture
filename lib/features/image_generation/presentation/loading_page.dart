@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:async';
 import 'dart:ui';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../../core/page_tracker_mixin.dart';
 import '../../../shared/utils/ui_helpers.dart';
 import '../../content_feedback/presentation/ai_generated_image_disclaimer.dart';
 import 'result_page.dart';
@@ -79,7 +80,7 @@ class LoadingPage extends StatefulWidget {
 }
 
 class _LoadingPageState extends State<LoadingPage>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, PageTrackerMixin<LoadingPage> {
   late AnimationController _progressController;
   late AnimationController _orbController;
   late AnimationController _pulseController;
@@ -100,6 +101,9 @@ class _LoadingPageState extends State<LoadingPage>
     "进行最终渲染处理...",
     "即将完成，请稍候...",
   ];
+
+  @override
+  String get analyticsPageName => 'ai_image_loading';
 
   @override
   void initState() {

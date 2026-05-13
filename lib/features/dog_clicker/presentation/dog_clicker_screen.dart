@@ -5,6 +5,7 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'package:audioplayers/audioplayers.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../../core/page_tracker_mixin.dart';
 import '../../../shared/utils/ui_helpers.dart';
 import '../../../shared/widgets/skeuomorphic_clicker_device.dart';
 
@@ -18,7 +19,7 @@ class DogClickerScreen extends StatefulWidget {
 }
 
 class _DogClickerScreenState extends State<DogClickerScreen>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, PageTrackerMixin<DogClickerScreen> {
   // 预设音效列表
   static const List<Map<String, String>> presetSounds = [
     {'name': '音效 1', 'path': 'mp3/1.mp3', 'emoji': '🔊'},
@@ -58,6 +59,9 @@ class _DogClickerScreenState extends State<DogClickerScreen>
   int _totalFailureCount = 0;
   int _totalUnconfirmedCount = 0;
   bool _isLoading = true;
+
+  @override
+  String get analyticsPageName => 'clicker_home';
 
   @override
   void initState() {
@@ -154,10 +158,12 @@ class _DogClickerScreenState extends State<DogClickerScreen>
       _unconfirmedCount = 0;
       return;
     }
-    if (_selectedFilterIndex < 0 || _selectedFilterIndex >= _filterOptions.length) {
+    if (_selectedFilterIndex < 0 ||
+        _selectedFilterIndex >= _filterOptions.length) {
       _selectedFilterIndex = 0;
     }
-    final currentOption = _filterOptions.isEmpty ? '默认训练' : _filterOptions[_selectedFilterIndex];
+    final currentOption =
+        _filterOptions.isEmpty ? '默认训练' : _filterOptions[_selectedFilterIndex];
     _clickCount = _successCounts[currentOption] ?? 0;
     _failCount = _failureCounts[currentOption] ?? 0;
     _unconfirmedCount = _unconfirmedCounts[currentOption] ?? 0;
@@ -167,7 +173,9 @@ class _DogClickerScreenState extends State<DogClickerScreen>
   Future<void> _saveSuccessCount() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final currentOption = _filterOptions.isEmpty ? '默认训练' : _filterOptions[_selectedFilterIndex];
+      final currentOption = _filterOptions.isEmpty
+          ? '默认训练'
+          : _filterOptions[_selectedFilterIndex];
 
       // 更新总计数
       _totalSuccessCount++;
@@ -188,7 +196,9 @@ class _DogClickerScreenState extends State<DogClickerScreen>
   Future<void> _saveFailureCount() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final currentOption = _filterOptions.isEmpty ? '默认训练' : _filterOptions[_selectedFilterIndex];
+      final currentOption = _filterOptions.isEmpty
+          ? '默认训练'
+          : _filterOptions[_selectedFilterIndex];
 
       // 更新总计数
       _totalFailureCount++;
@@ -1086,7 +1096,8 @@ class _DogClickerScreenState extends State<DogClickerScreen>
 
   /// 显示重置确认对话框
   void _showResetConfirmDialog() {
-    final currentProject = _filterOptions.isEmpty ? '默认训练' : _filterOptions[_selectedFilterIndex];
+    final currentProject =
+        _filterOptions.isEmpty ? '默认训练' : _filterOptions[_selectedFilterIndex];
 
     showDialog(
       context: context,
@@ -1208,7 +1219,8 @@ class _DogClickerScreenState extends State<DogClickerScreen>
 
   /// 重置当前项目数据
   Future<void> _resetCurrentProjectData() async {
-    final currentProject = _filterOptions.isEmpty ? '默认训练' : _filterOptions[_selectedFilterIndex];
+    final currentProject =
+        _filterOptions.isEmpty ? '默认训练' : _filterOptions[_selectedFilterIndex];
     await _deleteProjectRecord(currentProject);
 
     setState(() {
@@ -1657,7 +1669,9 @@ class _DogClickerScreenState extends State<DogClickerScreen>
         }
       });
 
-      final currentOption = _filterOptions.isEmpty ? '默认训练' : _filterOptions[_selectedFilterIndex];
+      final currentOption = _filterOptions.isEmpty
+          ? '默认训练'
+          : _filterOptions[_selectedFilterIndex];
       final soundPath = _projectSounds[currentOption] ?? 'mp3/1.mp3';
 
       if (soundPath == null) {
@@ -1706,7 +1720,7 @@ class _DogClickerScreenState extends State<DogClickerScreen>
       // 显示失败提示
       _showFailureMessage = true;
     });
-    
+
     // 重置倒计时
     _failureMessageTimer?.cancel();
     _failureMessageTimer = Timer(const Duration(seconds: 4), () {
@@ -1740,7 +1754,9 @@ class _DogClickerScreenState extends State<DogClickerScreen>
   Future<void> _saveUnconfirmedCount() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final currentOption = _filterOptions.isEmpty ? '默认训练' : _filterOptions[_selectedFilterIndex];
+      final currentOption = _filterOptions.isEmpty
+          ? '默认训练'
+          : _filterOptions[_selectedFilterIndex];
 
       // 更新总计数
       _totalUnconfirmedCount++;
@@ -1774,7 +1790,9 @@ class _DogClickerScreenState extends State<DogClickerScreen>
         }
       });
 
-      final currentOption = _filterOptions.isEmpty ? '默认训练' : _filterOptions[_selectedFilterIndex];
+      final currentOption = _filterOptions.isEmpty
+          ? '默认训练'
+          : _filterOptions[_selectedFilterIndex];
       final soundPath = _projectSounds[currentOption] ?? 'mp3/1.mp3';
 
       if (soundPath == null) {
@@ -1898,7 +1916,8 @@ class _DogClickerScreenState extends State<DogClickerScreen>
           // 注意：extendBodyBehindAppBar=true，需手动计入状态栏+AppBar高度
           Builder(
             builder: (context) {
-              final topPadding = MediaQuery.of(context).padding.top + kToolbarHeight;
+              final topPadding =
+                  MediaQuery.of(context).padding.top + kToolbarHeight;
               return Center(
                 child: SingleChildScrollView(
                   padding: EdgeInsets.fromLTRB(12.0, topPadding + 8, 12.0, 24),
@@ -1928,7 +1947,9 @@ class _DogClickerScreenState extends State<DogClickerScreen>
                           unconfirmedCount: _unconfirmedCount,
                           totalSuccessCount: _totalSuccessCount,
                           totalFailCount: _totalFailureCount,
-                          currentProject: _filterOptions.isEmpty ? '默认训练' : _filterOptions[_selectedFilterIndex],
+                          currentProject: _filterOptions.isEmpty
+                              ? '默认训练'
+                              : _filterOptions[_selectedFilterIndex],
                           projects: _filterOptions,
                           selectedIndex: _selectedFilterIndex,
                           // 新流程的回调
@@ -1946,7 +1967,8 @@ class _DogClickerScreenState extends State<DogClickerScreen>
                             // 更新显示失败提示
                             setState(() => _showFailureMessage = true);
                             _failureMessageTimer?.cancel();
-                            _failureMessageTimer = Timer(const Duration(seconds: 4), () {
+                            _failureMessageTimer =
+                                Timer(const Duration(seconds: 4), () {
                               if (mounted) {
                                 setState(() => _showFailureMessage = false);
                               }
@@ -2011,7 +2033,6 @@ class _DogClickerScreenState extends State<DogClickerScreen>
                 ),
               ],
             ),
-
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -2020,7 +2041,6 @@ class _DogClickerScreenState extends State<DogClickerScreen>
                   color: Colors.white.withOpacity(0.8), // 浅色图标
                   size: 18,
                 ),
-
                 const SizedBox(width: 12),
                 Text(
                   '在它做对的那一秒，按下快门（响片）',
@@ -2029,7 +2049,6 @@ class _DogClickerScreenState extends State<DogClickerScreen>
                     fontSize: 14, // 统一字号
                     fontWeight: FontWeight.w500,
                     letterSpacing: 0.5,
-
                   ),
                 ),
               ],
@@ -2156,8 +2175,6 @@ class _DogClickerScreenState extends State<DogClickerScreen>
       },
     );
   }
-
-
 
   /// 显示帮助指南对话框
   void _showHelpGuide(BuildContext context) {
@@ -2873,7 +2890,8 @@ class _DogClickerScreenState extends State<DogClickerScreen>
           ],
         ),
         borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: const Color(0xFF8B77FF).withOpacity(0.2), width: 1),
+        border: Border.all(
+            color: const Color(0xFF8B77FF).withOpacity(0.2), width: 1),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.3),
@@ -2890,7 +2908,8 @@ class _DogClickerScreenState extends State<DogClickerScreen>
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: const Color(0xFF5A8EFA).withOpacity(0.15),
-              border: Border.all(color: const Color(0xFF5A8EFA).withOpacity(0.3), width: 1),
+              border: Border.all(
+                  color: const Color(0xFF5A8EFA).withOpacity(0.3), width: 1),
             ),
             child: const Icon(
               Icons.pets_rounded,
@@ -2899,7 +2918,6 @@ class _DogClickerScreenState extends State<DogClickerScreen>
             ),
           ),
           const SizedBox(height: 24),
-
           const Text(
             '开启宠物训练',
             style: TextStyle(
@@ -2920,7 +2938,6 @@ class _DogClickerScreenState extends State<DogClickerScreen>
             ),
           ),
           const SizedBox(height: 32),
-
           Wrap(
             spacing: 12,
             runSpacing: 12,
@@ -2937,20 +2954,20 @@ class _DogClickerScreenState extends State<DogClickerScreen>
               }),
             ],
           ),
-          
           const SizedBox(height: 32),
           Row(
             children: [
               Expanded(child: Divider(color: Colors.white.withOpacity(0.1))),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: Text('或', style: TextStyle(color: Colors.white.withOpacity(0.3), fontSize: 12)),
+                child: Text('或',
+                    style: TextStyle(
+                        color: Colors.white.withOpacity(0.3), fontSize: 12)),
               ),
               Expanded(child: Divider(color: Colors.white.withOpacity(0.1))),
             ],
           ),
           const SizedBox(height: 24),
-
           SizedBox(
             width: double.infinity,
             height: 54,

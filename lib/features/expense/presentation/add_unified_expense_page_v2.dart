@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import '../../../core/page_tracker_mixin.dart';
 import '../../../shared/models/unified_expense.dart';
 import '../../../shared/database/unified_expense_helper.dart';
 import '../../../services/supabase_service.dart';
@@ -17,7 +18,9 @@ class AddUnifiedExpensePageV2 extends StatefulWidget {
 }
 
 class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
-    with SingleTickerProviderStateMixin {
+    with
+        SingleTickerProviderStateMixin,
+        PageTrackerMixin<AddUnifiedExpensePageV2> {
   // 基础状态
   ExpenseTypeEnum _selectedExpenseType = ExpenseTypeEnum.oneOff;
   String _amountStr = '';
@@ -43,6 +46,9 @@ class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
 
   bool _isLoading = false;
   late AnimationController _animController;
+
+  @override
+  String get analyticsPageName => 'expense_add_unified_v2';
 
   @override
   void initState() {

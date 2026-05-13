@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import '../../../core/page_tracker_mixin.dart';
 import '../../../shared/models/expense.dart';
 import '../../../services/supabase_service.dart';
 
@@ -14,7 +15,8 @@ class AddExpensePage extends StatefulWidget {
   State<AddExpensePage> createState() => _AddExpensePageState();
 }
 
-class _AddExpensePageState extends State<AddExpensePage> {
+class _AddExpensePageState extends State<AddExpensePage>
+    with PageTrackerMixin<AddExpensePage> {
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _amountController = TextEditingController();
   final TextEditingController _noteController = TextEditingController();
@@ -25,6 +27,9 @@ class _AddExpensePageState extends State<AddExpensePage> {
   String? _selectedPetName;
   List<Map<String, dynamic>> _pets = [];
   bool _isLoading = false;
+
+  @override
+  String get analyticsPageName => 'expense_add';
 
   @override
   void initState() {

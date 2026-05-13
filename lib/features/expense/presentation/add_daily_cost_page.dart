@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
+import '../../../core/page_tracker_mixin.dart';
 import '../../../shared/models/daily_cost_item.dart';
 import '../../../shared/models/pet.dart';
 import '../../../services/supabase_service.dart';
@@ -16,7 +17,8 @@ class AddDailyCostPage extends StatefulWidget {
   State<AddDailyCostPage> createState() => _AddDailyCostPageState();
 }
 
-class _AddDailyCostPageState extends State<AddDailyCostPage> {
+class _AddDailyCostPageState extends State<AddDailyCostPage>
+    with PageTrackerMixin<AddDailyCostPage> {
   final _formKey = GlobalKey<FormState>();
   final _itemNameController = TextEditingController();
   final _totalPriceController = TextEditingController();
@@ -28,6 +30,9 @@ class _AddDailyCostPageState extends State<AddDailyCostPage> {
   String? _imagePath;
 
   List<Pet> _availablePets = [];
+
+  @override
+  String get analyticsPageName => 'expense_add_daily_cost';
   bool _isLoading = false;
 
   @override

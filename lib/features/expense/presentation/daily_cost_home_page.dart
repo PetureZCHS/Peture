@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../../../core/page_tracker_mixin.dart';
 import '../../../shared/models/daily_cost_item.dart';
 import '../../../services/supabase_service.dart';
 import 'add_daily_cost_page.dart';
@@ -12,11 +13,15 @@ class DailyCostHomePage extends StatefulWidget {
   State<DailyCostHomePage> createState() => _DailyCostHomePageState();
 }
 
-class _DailyCostHomePageState extends State<DailyCostHomePage> {
+class _DailyCostHomePageState extends State<DailyCostHomePage>
+    with PageTrackerMixin<DailyCostHomePage> {
   final SupabaseService _supabaseService = SupabaseService();
   List<DailyCostItem> _items = [];
   double _totalDailyCost = 0.0;
   bool _isLoading = true;
+
+  @override
+  String get analyticsPageName => 'expense_daily_cost_home';
 
   @override
   void initState() {

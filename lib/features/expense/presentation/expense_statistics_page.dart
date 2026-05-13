@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
+import '../../../core/page_tracker_mixin.dart';
 import '../../../shared/models/expense.dart';
 import '../../../services/supabase_service.dart';
 
@@ -11,12 +12,16 @@ class ExpenseStatisticsPage extends StatefulWidget {
   State<ExpenseStatisticsPage> createState() => _ExpenseStatisticsPageState();
 }
 
-class _ExpenseStatisticsPageState extends State<ExpenseStatisticsPage> {
+class _ExpenseStatisticsPageState extends State<ExpenseStatisticsPage>
+    with PageTrackerMixin<ExpenseStatisticsPage> {
   final SupabaseService _supabaseService = SupabaseService();
   String _selectedPeriod = 'month'; // 'month' 或 'year'
   Map<String, double> _statistics = {};
   double _totalAmount = 0.0;
   bool _isLoading = true;
+
+  @override
+  String get analyticsPageName => 'expense_statistics';
 
   @override
   void initState() {

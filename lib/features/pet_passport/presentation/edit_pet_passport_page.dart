@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'dart:io';
+import '../../../core/page_tracker_mixin.dart';
 import '../../../shared/models/pet.dart';
 import '../../../shared/models/pet_passport.dart';
 import '../../../services/supabase_service.dart';
@@ -25,7 +26,8 @@ class EditPetPassportPage extends StatefulWidget {
   State<EditPetPassportPage> createState() => _EditPetPassportPageState();
 }
 
-class _EditPetPassportPageState extends State<EditPetPassportPage> {
+class _EditPetPassportPageState extends State<EditPetPassportPage>
+    with PageTrackerMixin<EditPetPassportPage> {
   final _formKey = GlobalKey<FormState>();
   late TextEditingController _ownerNameController;
   late TextEditingController _bioController;
@@ -38,12 +40,14 @@ class _EditPetPassportPageState extends State<EditPetPassportPage> {
   File? _lifePhotoFile;
 
   @override
+  String get analyticsPageName => 'pet_profile_passport_edit';
+
+  @override
   void initState() {
     super.initState();
     _ownerNameController = TextEditingController(
-      text: widget.suggestedOwnerDisplay ??
-          widget.passport?.ownerName ??
-          '宠物家长',
+      text:
+          widget.suggestedOwnerDisplay ?? widget.passport?.ownerName ?? '宠物家长',
     );
     _bioController = TextEditingController(text: widget.passport?.bio ?? '');
     _selectedMbti = widget.passport?.mbtiType;
@@ -225,7 +229,8 @@ class _EditPetPassportPageState extends State<EditPetPassportPage> {
                               fit: BoxFit.cover,
                               width: double.infinity,
                               height: double.infinity,
-                              errorWidget: (context, url, error) => _buildPhotoPlaceholder(),
+                              errorWidget: (context, url, error) =>
+                                  _buildPhotoPlaceholder(),
                             )
                           : Image.file(
                               _lifePhotoFile!,

@@ -10,6 +10,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../../core/page_tracker_mixin.dart';
 import '../../../shared/utils/user_avatar_helper.dart';
 import '../../../shared/utils/avatar_image_helper.dart';
 import '../../../services/supabase_service.dart';
@@ -27,7 +28,8 @@ class PetProfileFormPage extends StatefulWidget {
   State<PetProfileFormPage> createState() => _PetProfileFormPageState();
 }
 
-class _PetProfileFormPageState extends State<PetProfileFormPage> {
+class _PetProfileFormPageState extends State<PetProfileFormPage>
+    with PageTrackerMixin<PetProfileFormPage> {
   late final ModerationGuard _moderationGuard;
   String? _petId;
   File? _avatarFile;
@@ -190,6 +192,9 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
       '其他狗狗',
     ],
   };
+
+  @override
+  String get analyticsPageName => 'pet_profile_form';
 
   @override
   void initState() {

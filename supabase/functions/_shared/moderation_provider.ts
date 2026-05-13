@@ -43,6 +43,16 @@ export interface ModerationExecution {
   providerResponse?: Record<string, unknown>;
 }
 
+function envFlagEnabled(name: string, defaultValue = true): boolean {
+  const raw = Deno.env.get(name)?.trim().toLowerCase();
+  if (raw === undefined || raw === "") return defaultValue;
+  return !["0", "false", "off", "no", "disabled"].includes(raw);
+}
+
+function moderationEnabled(): boolean {
+  return envFlagEnabled("ENABLE_MODERATION", true);
+}
+
 function bytesToBase64(bytes: Uint8Array): string {
   let binary = "";
   const chunkSize = 0x8000;
@@ -73,11 +83,14 @@ export async function executeTextModeration(
   if (scene === "ai_output" || scene === "diary_output") {
     return { result: passedResult(scene, traceId), provider: "output_text_bypassed_by_policy" };
   }
-  const outputEnabled = (Deno.env.get("ENABLE_OUTPUT_MODERATION") ?? "true").toLowerCase() === "true";
+  if (!moderationEnabled()) {
+    return { result: passedResult(scene, traceId), provider: "all_disabled_by_flag" };
+  }
+  const outputEnabled = envFlagEnabled("ENABLE_OUTPUT_MODERATION", true);
   if (!outputEnabled && (scene === "ai_output" || scene === "diary_output" || scene === "image_output")) {
     return { result: passedResult(scene, traceId), provider: "output_disabled_by_flag" };
   }
-  const enabled = (Deno.env.get("ENABLE_TEXT_MODERATION") ?? "true").toLowerCase() === "true";
+  const enabled = envFlagEnabled("ENABLE_TEXT_MODERATION", true);
   if (!enabled) {
     return { result: passedResult(scene, traceId), provider: "disabled_by_flag" };
   }
@@ -112,11 +125,14 @@ export async function executeImageModeration(
   storagePath: string | undefined,
   traceId: string,
 ): Promise<ModerationExecution> {
-  const outputEnabled = (Deno.env.get("ENABLE_OUTPUT_MODERATION") ?? "true").toLowerCase() === "true";
+  if (!moderationEnabled()) {
+    return { result: passedResult(scene, traceId), provider: "all_disabled_by_flag" };
+  }
+  const outputEnabled = envFlagEnabled("ENABLE_OUTPUT_MODERATION", true);
   if (!outputEnabled && scene === "image_output") {
     return { result: passedResult(scene, traceId), provider: "output_disabled_by_flag" };
   }
-  const enabled = (Deno.env.get("ENABLE_IMAGE_MODERATION") ?? "true").toLowerCase() === "true";
+  const enabled = envFlagEnabled("ENABLE_IMAGE_MODERATION", true);
   if (!enabled) {
     return { result: passedResult(scene, traceId), provider: "disabled_by_flag" };
   }
