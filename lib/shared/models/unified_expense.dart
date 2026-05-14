@@ -1,5 +1,33 @@
 import 'package:flutter/material.dart';
 
+final Map<int, IconData> _materialIconByCodePoint = {
+  // Core expense and ledger icons
+  Icons.home.codePoint: Icons.home,
+  Icons.star.codePoint: Icons.star,
+  Icons.favorite.codePoint: Icons.favorite,
+  Icons.category.codePoint: Icons.category,
+  Icons.book.codePoint: Icons.book,
+  Icons.shopping_cart.codePoint: Icons.shopping_cart,
+  Icons.local_cafe.codePoint: Icons.local_cafe,
+  Icons.pets.codePoint: Icons.pets,
+  Icons.sports_esports.codePoint: Icons.sports_esports,
+  Icons.add.codePoint: Icons.add,
+  Icons.store.codePoint: Icons.store,
+  Icons.local_hospital.codePoint: Icons.local_hospital,
+  Icons.restaurant.codePoint: Icons.restaurant,
+  Icons.toys.codePoint: Icons.toys,
+  Icons.shopping_bag.codePoint: Icons.shopping_bag,
+  Icons.more_horiz.codePoint: Icons.more_horiz,
+  Icons.medication.codePoint: Icons.medication,
+  Icons.cleaning_services.codePoint: Icons.cleaning_services,
+  Icons.inventory_2.codePoint: Icons.inventory_2,
+  Icons.chair.codePoint: Icons.chair,
+};
+
+IconData materialIconFromCodePoint(int codePoint) {
+  return _materialIconByCodePoint[codePoint] ?? Icons.more_horiz;
+}
+
 /// 统一的宠物消费数据模型
 class UnifiedExpense {
   final String? id; // 改为 String? 以支持 Supabase UUID

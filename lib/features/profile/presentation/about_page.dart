@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../shared/utils/ui_helpers.dart';
+import 'feedback_page.dart';
 
 class AboutPage extends StatelessWidget {
   const AboutPage({super.key});
@@ -20,6 +21,11 @@ class AboutPage extends StatelessWidget {
     ),
     LinearGradient(
       colors: [Color(0xFF78D2AF), Color(0xFF87DDBF)],
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+    ),
+    LinearGradient(
+      colors: [Color(0xFFF2A65A), Color(0xFFF58549)],
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
     ),
@@ -98,6 +104,20 @@ class AboutPage extends StatelessWidget {
                   icon: Icons.privacy_tip_outlined,
                   gradientIndex: 1,
                   onTap: () => _openLegal(context, _privacyUri),
+                ),
+                _buildDivider(),
+                _entry(
+                  context: context,
+                  title: '意见反馈',
+                  icon: Icons.rate_review_outlined,
+                  gradientIndex: 2,
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => const FeedbackPage(),
+                      ),
+                    );
+                  },
                 ),
               ],
             ),

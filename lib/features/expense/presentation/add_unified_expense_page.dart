@@ -498,7 +498,7 @@ class _AddUnifiedExpensePageState extends State<AddUnifiedExpensePage> {
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: Icon(
-                  IconData(cat.icon, fontFamily: 'MaterialIcons'),
+                  materialIconFromCodePoint(cat.icon),
                   color: isSelected ? Colors.white : Color(cat.color),
                   size: 24,
                 ),

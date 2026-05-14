@@ -993,7 +993,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
                         icon: Icons.info_outline,
                         gradientIndex: 1,
                         title: '关于我们',
-                        subtitle: '用户协议、隐私政策',
+                        subtitle: '用户协议、隐私政策、意见反馈',
                         onTap: () {
                           Navigator.of(context).push(
                             MaterialPageRoute(

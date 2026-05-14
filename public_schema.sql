@@ -813,6 +813,20 @@ CREATE TABLE IF NOT EXISTS "public"."user_devices" (
 ALTER TABLE "public"."user_devices" OWNER TO "postgres";
 
 
+CREATE TABLE IF NOT EXISTS "public"."user_feedback" (
+    "id" "uuid" DEFAULT "extensions"."uuid_generate_v4"() NOT NULL,
+    "user_id" "uuid" NOT NULL,
+    "content" "text" NOT NULL,
+    "status" "text" DEFAULT 'new'::"text" NOT NULL,
+    "client" "jsonb" DEFAULT '{}'::"jsonb" NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "user_feedback_status_check" CHECK (("status" = ANY (ARRAY['new'::"text", 'processing'::"text", 'closed'::"text"])))
+);
+
+
+ALTER TABLE "public"."user_feedback" OWNER TO "postgres";
+
+
 CREATE TABLE IF NOT EXISTS "public"."users_profiles" (
     "id" "uuid" NOT NULL,
     "nickname" "text",
@@ -1073,6 +1087,11 @@ ALTER TABLE ONLY "public"."pet_passports"
 
 
 
+ALTER TABLE ONLY "public"."pet_passports"
+    ADD CONSTRAINT "pet_passports_user_id_pet_id_key" UNIQUE ("user_id", "pet_id");
+
+
+
 ALTER TABLE ONLY "public"."pet_reminders"
     ADD CONSTRAINT "pet_reminders_pkey" PRIMARY KEY ("id");
 
@@ -1100,6 +1119,11 @@ ALTER TABLE ONLY "public"."user_content_feedback"
 
 ALTER TABLE ONLY "public"."user_devices"
     ADD CONSTRAINT "user_devices_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "public"."user_feedback"
+    ADD CONSTRAINT "user_feedback_pkey" PRIMARY KEY ("id");
 
 
 
@@ -1180,6 +1204,14 @@ CREATE INDEX "idx_user_content_feedback_surface_created" ON "public"."user_conte
 
 
 CREATE INDEX "idx_user_content_feedback_user_created" ON "public"."user_content_feedback" USING "btree" ("user_id", "created_at" DESC);
+
+
+
+CREATE INDEX "idx_user_feedback_status_created" ON "public"."user_feedback" USING "btree" ("status", "created_at" DESC);
+
+
+
+CREATE INDEX "idx_user_feedback_user_created" ON "public"."user_feedback" USING "btree" ("user_id", "created_at" DESC);
 
 
 
@@ -1387,6 +1419,11 @@ ALTER TABLE ONLY "public"."user_content_feedback"
 
 
 
+ALTER TABLE ONLY "public"."user_feedback"
+    ADD CONSTRAINT "user_feedback_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
+
+
+
 ALTER TABLE ONLY "public"."users_profiles"
     ADD CONSTRAINT "users_profiles_id_fkey_auth_users_cascade" FOREIGN KEY ("id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
 
@@ -1419,6 +1456,30 @@ ALTER TABLE ONLY "public"."weight_records"
 
 ALTER TABLE ONLY "public"."weight_records"
     ADD CONSTRAINT "weight_records_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "public"."users_profiles"("id");
+
+
+
+CREATE POLICY "Enable all modifications for authenticated users" ON "public"."pet_passport_achievements" TO "authenticated" USING (true) WITH CHECK (true);
+
+
+
+CREATE POLICY "Enable delete for users based on user_id" ON "public"."pet_passports" FOR DELETE TO "authenticated" USING (("auth"."uid"() = "user_id"));
+
+
+
+CREATE POLICY "Enable insert for authenticated users" ON "public"."pet_passports" FOR INSERT TO "authenticated" WITH CHECK (("auth"."uid"() = "user_id"));
+
+
+
+CREATE POLICY "Enable read access for all users" ON "public"."pet_passport_achievements" FOR SELECT USING (true);
+
+
+
+CREATE POLICY "Enable read access for all users" ON "public"."pet_passports" FOR SELECT USING (true);
+
+
+
+CREATE POLICY "Enable update for users based on user_id" ON "public"."pet_passports" FOR UPDATE TO "authenticated" USING (("auth"."uid"() = "user_id")) WITH CHECK (("auth"."uid"() = "user_id"));
 
 
 
@@ -1630,6 +1691,17 @@ CREATE POLICY "user_content_feedback_select_own" ON "public"."user_content_feedb
 
 
 ALTER TABLE "public"."user_devices" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "public"."user_feedback" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "user_feedback_insert_own" ON "public"."user_feedback" FOR INSERT TO "authenticated" WITH CHECK (("auth"."uid"() = "user_id"));
+
+
+
+CREATE POLICY "user_feedback_select_own" ON "public"."user_feedback" FOR SELECT TO "authenticated" USING (("auth"."uid"() = "user_id"));
+
 
 
 ALTER TABLE "public"."users_profiles" ENABLE ROW LEVEL SECURITY;
@@ -1877,15 +1949,15 @@ GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."pet_diaries" TO "s
 
 
 
-GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."pet_passport_achievements" TO "anon";
-GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."pet_passport_achievements" TO "authenticated";
-GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."pet_passport_achievements" TO "service_role";
+GRANT ALL ON TABLE "public"."pet_passport_achievements" TO "anon";
+GRANT ALL ON TABLE "public"."pet_passport_achievements" TO "authenticated";
+GRANT ALL ON TABLE "public"."pet_passport_achievements" TO "service_role";
 
 
 
-GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."pet_passports" TO "anon";
-GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."pet_passports" TO "authenticated";
-GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."pet_passports" TO "service_role";
+GRANT ALL ON TABLE "public"."pet_passports" TO "anon";
+GRANT ALL ON TABLE "public"."pet_passports" TO "authenticated";
+GRANT ALL ON TABLE "public"."pet_passports" TO "service_role";
 
 
 
@@ -1921,6 +1993,12 @@ GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."user_content_feedb
 GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."user_devices" TO "anon";
 GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."user_devices" TO "authenticated";
 GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."user_devices" TO "service_role";
+
+
+
+GRANT REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."user_feedback" TO "anon";
+GRANT SELECT,INSERT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."user_feedback" TO "authenticated";
+GRANT ALL ON TABLE "public"."user_feedback" TO "service_role";
 
 
 

@@ -678,8 +678,7 @@ class _UnifiedExpenseHomePageState extends State<UnifiedExpenseHomePage>
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(
-                    IconData(_currentLedger.iconPoint,
-                        fontFamily: 'MaterialIcons'),
+                    materialIconFromCodePoint(_currentLedger.iconPoint),
                     color: Color(_currentLedger.colorValue),
                     size: 16),
                 const SizedBox(width: 8),
@@ -1116,7 +1115,7 @@ class _UnifiedExpenseHomePageState extends State<UnifiedExpenseHomePage>
           BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4)
         ],
       ),
-      child: Icon(IconData(iconCodePoint, fontFamily: 'MaterialIcons'),
+      child: Icon(materialIconFromCodePoint(iconCodePoint),
           size: size, color: bg),
     );
   }
@@ -1160,7 +1159,7 @@ class _UnifiedExpenseHomePageState extends State<UnifiedExpenseHomePage>
         child: Row(
           children: [
             Icon(
-              IconData(entry.iconCodePoint, fontFamily: 'MaterialIcons'),
+              materialIconFromCodePoint(entry.iconCodePoint),
               size: iconSize,
               color: entry.color,
             ),
@@ -1372,7 +1371,7 @@ class _UnifiedExpenseHomePageState extends State<UnifiedExpenseHomePage>
   Widget _buildExpenseItem(UnifiedExpense expense) {
     final category = UnifiedExpenseCategory.getCategoryByName(expense.category);
     final iconData = category != null
-        ? IconData(category.icon, fontFamily: 'MaterialIcons')
+        ? materialIconFromCodePoint(category.icon)
         : Icons.more_horiz;
     final color = category != null ? Color(category.color) : Colors.grey;
 
@@ -1481,7 +1480,7 @@ class _UnifiedExpenseHomePageState extends State<UnifiedExpenseHomePage>
   Widget _buildRecurringCard(UnifiedExpense expense) {
     final category = UnifiedExpenseCategory.getCategoryByName(expense.category);
     final iconData = category != null
-        ? IconData(category.icon, fontFamily: 'MaterialIcons')
+        ? materialIconFromCodePoint(category.icon)
         : Icons.more_horiz;
     final color = category != null ? Color(category.color) : Colors.grey;
     final isInUse = expense.estimatedEndDate == null;
