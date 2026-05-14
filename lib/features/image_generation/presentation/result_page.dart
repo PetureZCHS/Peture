@@ -356,8 +356,6 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
         widget.resultImageUrl != null && isResultUrlLocalFile
             ? _fileFromPath(widget.resultImageUrl!)
             : null;
-    final useNetworkImage =
-        widget.resultImageFile == null && !isResultUrlLocalFile;
     final ImageProvider<Object>? resultImageProvider = widget.resultImageFile !=
             null
         ? FileImage(widget.resultImageFile!) as ImageProvider<Object>
@@ -527,25 +525,19 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
             ],
           ),
           SafeArea(
+            bottom: false,
             child: Column(
               children: [
                 const SizedBox(height: 8),
                 // 紧凑原图预览
                 GestureDetector(
                   onTap: () {
-                    // Web 平台暂时不支持全屏查看网络图片
-                    if (kIsWeb) return;
-
-                    if (widget.originalImage != null) {
-                      Navigator.of(context).push(
-                        TransparentImageRoute(
-                          builder: (_) => FullscreenImagePage(
-                            imageFile: widget.originalImage!,
-                            heroTag: 'pet_photo_hero',
-                          ),
-                        ),
-                      );
-                    }
+                    _openFullscreenPreview(
+                      heroTag: 'pet_photo_hero',
+                      imageFile: widget.originalImage,
+                      imageUrl: widget.originalImageUrl,
+                      showWatermark: false,
+                    );
                   },
                   child: Container(
                     height: 56,
@@ -645,21 +637,11 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
                 Expanded(
                   child: GestureDetector(
                     onTap: () {
-                      Navigator.of(context).push(
-                        TransparentImageRoute(
-                          builder: (_) => FullscreenImagePage(
-                            imageFile: widget.resultImageFile ??
-                                resultFileFromUrl ??
-                                File(''),
-                            heroTag: 'ai_result_hero',
-                            isNetworkImage: useNetworkImage,
-                            showWatermark: _enableWatermark,
-                            networkImage:
-                                useNetworkImage && widget.resultImageUrl != null
-                                    ? NetworkImage(widget.resultImageUrl!)
-                                    : null,
-                          ),
-                        ),
+                      _openFullscreenPreview(
+                        heroTag: 'ai_result_hero',
+                        imageFile: widget.resultImageFile,
+                        imageUrl: widget.resultImageUrl,
+                        showWatermark: _enableWatermark,
                       );
                     },
                     child: Container(
@@ -784,25 +766,6 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
                     ),
                   ),
                 ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-                  child: Column(
-                    children: [
-                      const AiGeneratedImageDisclaimer(),
-                      ContentFeedbackBar(
-                        surface: ContentSurface.aiImage,
-                        ref: {
-                          if (widget.resultImageUrl != null &&
-                              widget.resultImageUrl!.isNotEmpty)
-                            'result_url_hint': widget.resultImageUrl,
-                          if (widget.resultImageFile != null)
-                            'local_path_hint': widget.resultImageFile!.path,
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 12),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: ClipRRect(
@@ -1258,6 +1221,25 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
                   ),
                 ),
                 const SizedBox(height: 12),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 2, 20, 8),
+                  child: Column(
+                    children: [
+                      const AiGeneratedImageDisclaimer(),
+                      ContentFeedbackBar(
+                        surface: ContentSurface.aiImage,
+                        ref: {
+                          if (widget.resultImageUrl != null &&
+                              widget.resultImageUrl!.isNotEmpty)
+                            'result_url_hint': widget.resultImageUrl,
+                          if (widget.resultImageFile != null)
+                            'local_path_hint': widget.resultImageFile!.path,
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 4),
               ],
             ),
           ),
@@ -1282,6 +1264,34 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
           scale: isActive ? 1.08 : 1.0,
           child: Icon(icon,
               color: isActive ? activeColor : AppColors.textDark, size: 22),
+        ),
+      ),
+    );
+  }
+
+  void _openFullscreenPreview({
+    required String heroTag,
+    File? imageFile,
+    String? imageUrl,
+    bool showWatermark = false,
+  }) {
+    final hasLocalFile = imageFile != null;
+    final hasUrl = imageUrl != null && imageUrl.isNotEmpty;
+    if (!hasLocalFile && !hasUrl) return;
+    final safeUrl = imageUrl ?? '';
+
+    final isLocalUrl = hasUrl && _isLocalFilePath(safeUrl);
+    final fileFromUrl = isLocalUrl ? _fileFromPath(safeUrl) : null;
+    final useNetwork = hasUrl && !isLocalUrl;
+
+    Navigator.of(context).push(
+      TransparentImageRoute(
+        builder: (_) => FullscreenImagePage(
+          imageFile: imageFile ?? fileFromUrl ?? File(''),
+          heroTag: heroTag,
+          isNetworkImage: useNetwork,
+          networkImage: useNetwork ? NetworkImage(safeUrl) : null,
+          showWatermark: showWatermark,
         ),
       ),
     );

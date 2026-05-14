@@ -30,6 +30,8 @@
 	<array>
 		<string>_dartobservatory._tcp</string>
 	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>允许使用相机拍摄头像</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>允许应用访问本地网络以便进行调试</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
@@ -38,8 +40,6 @@
 	<string>允许应用访问照片以便保存生成的图片</string>
 	<key>NSUserTrackingUsageDescription</key>
 	<string>用于统计页面访问与功能点击，帮助改进产品体验。</string>
-	<key>NSCameraUsageDescription</key>
-	<string>允许使用相机拍摄头像</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

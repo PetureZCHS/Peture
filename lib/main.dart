@@ -10,7 +10,6 @@ import 'core/root_navigator_key.dart';
 import 'features/auth/presentation/login_page.dart';
 import 'features/home/presentation/home_screen.dart';
 import 'core/config/supabase_config.dart';
-import 'services/analytics_service.dart';
 import 'shared/design_system/peture_design_system.dart';
 
 void main() async {
@@ -28,9 +27,6 @@ void main() async {
     ),
   );
   debugPrint('Supabase 初始化成功');
-
-  // 友盟 initCommon 若在 runApp 之前 await，原生启动屏会一直停到 SDK 返回（易卡死）
-  unawaited(AnalyticsService.tryInitIfConsented());
 
   // 初始化 Sentry（捕获所有后续错误）
   await SentryFlutter.init(

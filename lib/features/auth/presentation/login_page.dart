@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import 'dart:ui';
@@ -7,7 +5,6 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/auth_pending_email_login.dart';
 import '../../../core/auth_terms_consent.dart';
-import '../../../services/analytics_service.dart';
 import '../../../shared/design_system/peture_design_system.dart';
 // 导入邮箱登录页面
 import 'email_login_page.dart';
@@ -517,7 +514,6 @@ class _LoginBodyContentState extends State<_LoginBodyContent> {
     Navigator.of(context).push(
       MaterialPageRoute(builder: (context) => const EmailLoginPage()),
     );
-    unawaited(AnalyticsService.acceptConsentAndInit());
   }
 
   Future<void> _openLegal(Uri uri) async {

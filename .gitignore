@@ -257,3 +257,5 @@ supabase/migrations/20260426170000_user_avatars_storage_policies.sql
 supabase/migrations/20260426171000_pet_avatars_storage_policies.sql
 supabase/migrations/20260427100000_storage_avatar_cleanup_schedule_notes.sql
 supabase/migrations/20260427110000_fix_pet_health_tables_rls.sql
+
+.envrc

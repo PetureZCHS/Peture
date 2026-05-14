@@ -8,7 +8,6 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/auth_otp_email_context.dart';
 import '../../../core/auth_terms_consent.dart';
 import '../../home/presentation/home_screen.dart';
-import '../../../services/analytics_service.dart';
 import '../../../shared/design_system/peture_design_system.dart';
 import 'email_register_page.dart';
 
@@ -52,7 +51,7 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
   // 登录模式：true = 邮箱验证码登录（默认），false = 密码登录
   bool _useOtpLogin = true;
 
-  /// 是否同意《用户协议与隐私政策》（含友盟等统计说明）
+  /// 是否同意《用户协议与隐私政策》
   bool _agreedToTerms = AuthTermsConsent.value;
 
   int _countdown = 0;
@@ -64,7 +63,6 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
   void _enterHomeAfterLogin() {
     if (!mounted) return;
     FocusScope.of(context).unfocus();
-    unawaited(AnalyticsService.acceptConsentAndInit());
     Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const HomeScreen()),
       (route) => false,
