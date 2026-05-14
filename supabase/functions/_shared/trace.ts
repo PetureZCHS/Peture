@@ -1,4 +1,3 @@
-export function createTraceId(): string {
+export function createTraceId() {
   return crypto.randomUUID();
 }
-

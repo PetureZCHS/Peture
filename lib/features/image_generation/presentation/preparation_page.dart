@@ -1733,7 +1733,7 @@ class _PreparationPageState extends State<PreparationPage>
                                     if (!kIsWeb) {
                                       try {
                                         await InternetAddress.lookup(
-                                                'google.com')
+                                                'www.baidu.com')
                                             .timeout(
                                                 const Duration(seconds: 3));
                                       } catch (_) {

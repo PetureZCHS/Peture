@@ -9,41 +9,20 @@ export const MODERATION_SCENES = [
   "diary_input",
   "diary_output",
   "image_input",
-  "image_output",
-] as const;
-
-export type ModerationScene = (typeof MODERATION_SCENES)[number];
-
+  "image_output"
+];
 export const MODERATION_ERROR_CODES = {
   blocked: "MODERATION_BLOCKED",
   timeout: "MODERATION_TIMEOUT",
   providerError: "MODERATION_PROVIDER_ERROR",
   unauthorized: "MODERATION_UNAUTHORIZED",
   invalidRequest: "MODERATION_INVALID_REQUEST",
-  unknown: "MODERATION_UNKNOWN",
-} as const;
-
-export interface ModerationResult {
-  passed: boolean;
-  scene: ModerationScene;
-  riskLevel: "none" | "low" | "medium" | "high" | "unknown";
-  riskLabels: string[];
-  action: "allow" | "review" | "block" | "unknown";
-  message: string;
-  traceId: string;
-  errorCode?: string;
+  unknown: "MODERATION_UNKNOWN"
+};
+export function isValidScene(scene) {
+  return MODERATION_SCENES.includes(scene);
 }
-
-export function isValidScene(scene: string): scene is ModerationScene {
-  return MODERATION_SCENES.includes(scene as ModerationScene);
-}
-
-export function blockedResult(
-  scene: ModerationScene,
-  traceId: string,
-  message = "内容包含敏感信息",
-  riskLabels: string[] = [],
-): ModerationResult {
+export function blockedResult(scene, traceId, message = "内容包含敏感信息", riskLabels = []) {
   return {
     passed: false,
     scene,
@@ -52,16 +31,10 @@ export function blockedResult(
     action: "block",
     message,
     traceId,
-    errorCode: MODERATION_ERROR_CODES.blocked,
+    errorCode: MODERATION_ERROR_CODES.blocked
   };
 }
-
-export function reviewResult(
-  scene: ModerationScene,
-  traceId: string,
-  message = "内容存在风险嫌疑，请修改后重试",
-  riskLabels: string[] = [],
-): ModerationResult {
+export function reviewResult(scene, traceId, message = "内容存在风险嫌疑，请修改后重试", riskLabels = []) {
   return {
     passed: false,
     scene,
@@ -70,11 +43,10 @@ export function reviewResult(
     action: "review",
     message,
     traceId,
-    errorCode: MODERATION_ERROR_CODES.blocked,
+    errorCode: MODERATION_ERROR_CODES.blocked
   };
 }
-
-export function passedResult(scene: ModerationScene, traceId: string): ModerationResult {
+export function passedResult(scene, traceId) {
   return {
     passed: true,
     scene,
@@ -82,15 +54,10 @@ export function passedResult(scene: ModerationScene, traceId: string): Moderatio
     riskLabels: [],
     action: "allow",
     message: "ok",
-    traceId,
+    traceId
   };
 }
-
-export function providerErrorResult(
-  scene: ModerationScene,
-  traceId: string,
-  message = "审核服务暂时不可用",
-): ModerationResult {
+export function providerErrorResult(scene, traceId, message = "审核服务暂时不可用") {
   return {
     passed: false,
     scene,
@@ -99,7 +66,6 @@ export function providerErrorResult(
     action: "block",
     message,
     traceId,
-    errorCode: MODERATION_ERROR_CODES.providerError,
+    errorCode: MODERATION_ERROR_CODES.providerError
   };
 }
-

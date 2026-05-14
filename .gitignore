@@ -41,7 +41,7 @@ ios/*.pbxuser
 ios/*.perspective
 ios/*.perspectivev3
 ios/*.moved-aside
-ios/*.xcworkspace/
+# ios/*.xcworkspace/
 ios/.symlinks/
 ios/.generated/
 **/ios/**/*.mode1v3
