@@ -1,15 +1,14 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/auth_otp_email_context.dart';
 import '../../../core/auth_pending_email_login.dart';
 import '../../../core/root_navigator_key.dart';
 import '../../auth/presentation/login_page.dart';
+import '../../../shared/design_system/peture_design_system.dart';
 import '../../../shared/utils/password_policy.dart';
-import '../../../shared/utils/ui_helpers.dart';
 
 class ChangePasswordPage extends StatefulWidget {
   const ChangePasswordPage({super.key});
@@ -163,26 +162,11 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
     required IconData icon,
     required Widget suffix,
   }) {
-    return InputDecoration(
+    return petureInputDecoration(
       labelText: label,
       hintText: hint,
-      prefixIcon: Icon(icon, color: AppColors.textGrey),
+      prefixIcon: Icon(icon, color: PetureColors.textSecondary),
       suffixIcon: suffix,
-      filled: true,
-      fillColor: Colors.white,
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide: BorderSide(color: Colors.grey.shade300),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide: BorderSide(color: Colors.grey.shade300),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: Color(0xFF0A84FF), width: 1.5),
-      ),
-      labelStyle: const TextStyle(color: AppColors.textGrey),
     );
   }
 
@@ -283,49 +267,23 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.background.withOpacity(0.92),
-        elevation: 0,
-        centerTitle: true,
-        title: Text(
-          '修改密码',
-          style: GoogleFonts.notoSerif(
-            color: AppColors.textDark,
-            fontWeight: FontWeight.bold,
-            fontSize: 18,
-          ),
-        ),
-        leading: IconButton(
-          icon: Icon(
-            Icons.arrow_back_ios_new,
-            color: AppColors.textDark,
-            size: 22,
-          ),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-      ),
-      body: Form(
+    return PeturePageScaffold(
+      title: '修改密码',
+      child: Form(
         key: _formKey,
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
           children: [
             Text(
               '$appPasswordRulesUserDescription\n\n'
               '修改成功后须使用新密码重新登录，其他设备上的登录将一并退出。',
-              style: GoogleFonts.lato(
-                fontSize: 14,
+              style: PetureTextStyles.body.copyWith(
                 height: 1.45,
-                color: AppColors.textGrey,
+                color: PetureColors.textSecondary,
               ),
             ),
-            const SizedBox(height: 14),
-            Material(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(14),
-              shadowColor: Colors.black.withOpacity(0.06),
-              elevation: 0,
+            const SizedBox(height: PetureSpacing.md),
+            PetureCard(
+              padding: EdgeInsets.zero,
               child: SwitchListTile(
                 contentPadding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -334,27 +292,23 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                 ),
                 title: Text(
                   '使用邮箱验证码验证身份',
-                  style: GoogleFonts.lato(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textDark,
+                  style: PetureTextStyles.bodyStrong.copyWith(
+                    color: PetureColors.textPrimary,
                   ),
                 ),
                 subtitle: Padding(
                   padding: const EdgeInsets.only(top: 6, right: 8),
                   child: Text(
                     '适合长期用验证码登录或记不清当前密码的情况',
-                    style: GoogleFonts.lato(
-                      fontSize: 12.5,
+                    style: PetureTextStyles.caption.copyWith(
                       height: 1.35,
-                      color: AppColors.textGrey,
+                      color: PetureColors.textSecondary,
                     ),
                   ),
                 ),
                 value: _verifyIdentityWithEmailOtp,
-                activeTrackColor:
-                    const Color(0xFF667eea).withOpacity(0.45),
-                activeThumbColor: const Color(0xFF667eea),
+                activeTrackColor: PetureColors.primary.withOpacity(0.45),
+                activeThumbColor: PetureColors.primary,
                 onChanged: _isSubmitting
                     ? null
                     : (v) {
@@ -368,28 +322,11 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                       },
               ),
             ),
-            const SizedBox(height: 18),
-            Material(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              elevation: 0,
-              shadowColor: Colors.transparent,
-              child: Container(
-                padding: const EdgeInsets.all(18),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.06),
-                      blurRadius: 16,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
+            const SizedBox(height: PetureSpacing.lg),
+            PetureCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
                     if (!_verifyIdentityWithEmailOtp) ...[
                       TextFormField(
                         controller: _oldPasswordController,
@@ -406,7 +343,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                               _obscureOld
                                   ? Icons.visibility_off_outlined
                                   : Icons.visibility_outlined,
-                              color: AppColors.textGrey,
+                              color: PetureColors.textSecondary,
                             ),
                           ),
                         ),
@@ -422,10 +359,9 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                     ] else ...[
                       Text(
                         '将向当前账号邮箱发送验证码（与登录相同）。请先点击发送，再填写收到的 6 位数字。',
-                        style: GoogleFonts.lato(
-                          fontSize: 13.5,
+                        style: PetureTextStyles.caption.copyWith(
                           height: 1.45,
-                          color: AppColors.textGrey,
+                          color: PetureColors.textSecondary,
                         ),
                       ),
                       const SizedBox(height: 12),
@@ -444,8 +380,8 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                                   _sendPasswordChangeOtp(em);
                                 },
                           style: OutlinedButton.styleFrom(
-                            foregroundColor: const Color(0xFF667eea),
-                            side: const BorderSide(color: Color(0xFF667eea)),
+                            foregroundColor: PetureColors.primary,
+                            side: const BorderSide(color: PetureColors.primary),
                           ),
                           child: Text(
                             _otpCooldownSec > 0
@@ -487,13 +423,13 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                         suffix: IconButton(
                           onPressed: () =>
                               setState(() => _obscureNew = !_obscureNew),
-                          icon: Icon(
-                            _obscureNew
-                                ? Icons.visibility_off_outlined
-                                : Icons.visibility_outlined,
-                            color: AppColors.textGrey,
+                            icon: Icon(
+                              _obscureNew
+                                  ? Icons.visibility_off_outlined
+                                  : Icons.visibility_outlined,
+                              color: PetureColors.textSecondary,
+                            ),
                           ),
-                        ),
                       ),
                       validator: (value) {
                         final pwd = (value ?? '').trim();
@@ -547,13 +483,13 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                           onPressed: () => setState(
                             () => _obscureConfirm = !_obscureConfirm,
                           ),
-                          icon: Icon(
-                            _obscureConfirm
-                                ? Icons.visibility_off_outlined
-                                : Icons.visibility_outlined,
-                            color: AppColors.textGrey,
+                            icon: Icon(
+                              _obscureConfirm
+                                  ? Icons.visibility_off_outlined
+                                  : Icons.visibility_outlined,
+                              color: PetureColors.textSecondary,
+                            ),
                           ),
-                        ),
                       ),
                       validator: (value) {
                         if ((value ?? '').trim() !=
@@ -564,39 +500,13 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                       },
                     ),
                   ],
-                ),
               ),
             ),
-            const SizedBox(height: 28),
-            SizedBox(
-              height: 52,
-              child: ElevatedButton(
-                onPressed: _isSubmitting ? null : _submit,
-                style: ElevatedButton.styleFrom(
-                  elevation: 0,
-                  backgroundColor: const Color(0xFF667eea),
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(26),
-                  ),
-                ),
-                child: _isSubmitting
-                    ? const SizedBox(
-                        width: 22,
-                        height: 22,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      )
-                    : Text(
-                        '确认修改',
-                        style: GoogleFonts.notoSerif(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-              ),
+            const SizedBox(height: PetureSpacing.xl),
+            PeturePrimaryButton(
+              label: '确认修改',
+              onPressed: _isSubmitting ? null : _submit,
+              isLoading: _isSubmitting,
             ),
           ],
         ),

@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/auth_otp_email_context.dart';
+import '../../../shared/design_system/peture_design_system.dart';
 import '../../auth/presentation/login_page.dart';
 
 /// 账号注销：两次确认 → 绑定邮箱验证码 → 校验通过后调用 Edge 删除并全局退出。
@@ -24,7 +25,7 @@ class _AccountDeactivatePageState extends State<AccountDeactivatePage> {
   int _resendCooldown = 0;
   Timer? _resendTimer;
 
-  static const Color _warnRed = Color(0xFFB71C1C);
+  static const Color _warnRed = PetureColors.danger;
 
   TextStyle get _bodyBaseStyle =>
       TextStyle(fontSize: 15, height: 1.45, color: Colors.grey[800]);
@@ -361,120 +362,125 @@ class _AccountDeactivatePageState extends State<AccountDeactivatePage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('账号注销')),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
+    return PeturePageScaffold(
+      title: '账号注销',
+      child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             if (_awaitingOtp)
-              Text.rich(
-                TextSpan(
-                  style: _bodyBaseStyle,
-                  children: [
-                    TextSpan(
-                      text:
-                          '请输入发送至 ${_maskEmail(_emailForOtp ?? '')} 的验证码。\n验证通过后，您的账号及数据将被',
-                    ),
-                    TextSpan(text: '永久删除', style: _bodyEmphasisStyle),
-                    const TextSpan(text: '，且'),
-                    TextSpan(text: '无法恢复', style: _bodyEmphasisStyle),
-                    const TextSpan(text: '。'),
-                  ],
+              PetureCard(
+                child: Text.rich(
+                  TextSpan(
+                    style: _bodyBaseStyle,
+                    children: [
+                      TextSpan(
+                        text:
+                            '请输入发送至 ${_maskEmail(_emailForOtp ?? '')} 的验证码。\n验证通过后，您的账号及数据将被',
+                      ),
+                      TextSpan(text: '永久删除', style: _bodyEmphasisStyle),
+                      const TextSpan(text: '，且'),
+                      TextSpan(text: '无法恢复', style: _bodyEmphasisStyle),
+                      const TextSpan(text: '。'),
+                    ],
+                  ),
                 ),
               )
             else ...[
-              _buildIntroCopy(),
-              const SizedBox(height: 14),
-              Text.rich(
-                TextSpan(
-                  style: TextStyle(fontSize: 13, height: 1.4, color: Colors.grey[700]),
+              PetureAlertPanel(
+                title: '高风险操作：账号注销',
+                tone: PetureAlertTone.danger,
+                message: '注销后账号与所有数据会被永久删除，无法恢复。',
+              ),
+              const SizedBox(height: PetureSpacing.md),
+              PetureCard(
+                variant: PetureCardVariant.danger,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const TextSpan(text: '请确认您已理解上述说明，并'),
-                    TextSpan(
-                      text: '自愿承担注销的全部后果',
-                      style: TextStyle(
-                        color: _warnRed,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 13,
-                        height: 1.4,
+                    _buildIntroCopy(),
+                    const SizedBox(height: 12),
+                    Text.rich(
+                      TextSpan(
+                        style: TextStyle(
+                          fontSize: 13,
+                          height: 1.4,
+                          color: Colors.grey[700],
+                        ),
+                        children: [
+                          const TextSpan(text: '请确认您已理解上述说明，并'),
+                          TextSpan(
+                            text: '自愿承担注销的全部后果',
+                            style: TextStyle(
+                              color: _warnRed,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 13,
+                              height: 1.4,
+                            ),
+                          ),
+                          const TextSpan(text: '后再点击「开始注销流程」。'),
+                        ],
                       ),
                     ),
-                    const TextSpan(text: '后再点击「开始注销流程」。'),
                   ],
                 ),
               ),
             ],
             if (_awaitingOtp) ...[
-              const SizedBox(height: 20),
-              TextField(
-                controller: _otpController,
-                keyboardType: TextInputType.number,
-                textInputAction: TextInputAction.done,
-                inputFormatters: [
-                  FilteringTextInputFormatter.digitsOnly,
-                  LengthLimitingTextInputFormatter(12),
-                ],
-                decoration: const InputDecoration(
-                  labelText: '邮箱验证码',
-                  hintText: '请输入邮件中的验证码',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.pin_outlined),
+              const SizedBox(height: PetureSpacing.md),
+              PetureCard(
+                child: Column(
+                  children: [
+                    TextField(
+                      controller: _otpController,
+                      keyboardType: TextInputType.number,
+                      textInputAction: TextInputAction.done,
+                      inputFormatters: [
+                        FilteringTextInputFormatter.digitsOnly,
+                        LengthLimitingTextInputFormatter(12),
+                      ],
+                      decoration: petureInputDecoration(
+                        labelText: '邮箱验证码',
+                        hintText: '请输入邮件中的验证码',
+                        prefixIcon: const Icon(Icons.pin_outlined),
+                      ),
+                      onSubmitted: (_) {
+                        if (!_isSubmitting) {
+                          unawaited(_verifyOtpAndDeleteAccount());
+                        }
+                      },
+                    ),
+                    const SizedBox(height: PetureSpacing.md),
+                    PetureSecondaryButton(
+                      label: _resendCooldown > 0
+                          ? '重新发送（${_resendCooldown}s）'
+                          : '重新发送验证码',
+                      onPressed: (_isSubmitting || _resendCooldown > 0)
+                          ? null
+                          : _sendDeletionOtp,
+                    ),
+                    const SizedBox(height: PetureSpacing.sm),
+                    PetureSecondaryButton(
+                      label: '返回上一步',
+                      onPressed: _isSubmitting ? null : _cancelOtpStep,
+                    ),
+                  ],
                 ),
-                onSubmitted: (_) {
-                  if (!_isSubmitting) unawaited(_verifyOtpAndDeleteAccount());
-                },
-              ),
-              const SizedBox(height: 12),
-              TextButton(
-                onPressed: (_isSubmitting || _resendCooldown > 0)
-                    ? null
-                    : _sendDeletionOtp,
-                child: Text(
-                  _resendCooldown > 0
-                      ? '重新发送（${_resendCooldown}s）'
-                      : '重新发送验证码',
-                ),
-              ),
-              TextButton(
-                onPressed: _isSubmitting ? null : _cancelOtpStep,
-                child: const Text('返回上一步'),
               ),
             ],
             const Spacer(),
             if (!_awaitingOtp)
-              SizedBox(
-                height: 48,
-                child: FilledButton(
-                  onPressed: _isSubmitting ? null : _onTapStartDeactivate,
-                  style: FilledButton.styleFrom(backgroundColor: Colors.red),
-                  child: _isSubmitting
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Text('开始注销流程'),
-                ),
+              PetureDangerButton(
+                label: '开始注销流程',
+                onPressed: _isSubmitting ? null : _onTapStartDeactivate,
+                isLoading: _isSubmitting,
               )
             else
-              SizedBox(
-                height: 48,
-                child: FilledButton(
-                  onPressed: _isSubmitting ? null : _verifyOtpAndDeleteAccount,
-                  style: FilledButton.styleFrom(backgroundColor: Colors.red),
-                  child: _isSubmitting
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Text('验证并完成注销'),
-                ),
+              PetureDangerButton(
+                label: '验证并完成注销',
+                onPressed: _isSubmitting ? null : _verifyOtpAndDeleteAccount,
+                isLoading: _isSubmitting,
               ),
           ],
-        ),
       ),
     );
   }
