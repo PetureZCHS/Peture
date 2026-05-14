@@ -1,16 +1,12 @@
-import 'dart:async';
 import 'dart:ui';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/physics.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../image_generation/presentation/preparation_page.dart'
     hide AppColors;
 import '../../diary/presentation/pet_diary_compose_page.dart';
-import '../../image_generation/presentation/loading_page.dart' hide AppColors;
-import '../../image_generation/presentation/result_page.dart' hide AppColors;
 import '../../pet_passport/presentation/pet_passport_page.dart';
 import '../../dog_clicker/presentation/dog_clicker_screen.dart';
 import '../../expense/presentation/unified_expense_home_page.dart';
@@ -44,8 +40,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   /// 标记是否需要刷新健康记录页面
   bool _needsMedicalScreenRefresh = true;
-  static const String _mockImageUrl =
-      'https://images.unsplash.com/photo-1519052537078-e6302a4968d4?auto=format&fit=crop&w=1200&q=80';
 
   /// 3 tab 的渐变列表
   static final List<LinearGradient> _navGradients = [
@@ -151,86 +145,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             height: 68,
             child: _buildFloatingGlassNavBar(),
           ),
-
-          // AI 生图调试入口（仅用于本地验收）
-          Positioned(
-            right: 24,
-            bottom: 106,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                _buildAiDebugButton(
-                  label: 'AI Lab Loading',
-                  onTap: _openAiLabLoadingPreview,
-                ),
-                const SizedBox(height: 10),
-                _buildAiDebugButton(
-                  label: 'AI Lab Result',
-                  onTap: _openAiLabResultPreview,
-                ),
-              ],
-            ),
-          ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildAiDebugButton({
-    required String label,
-    required VoidCallback onTap,
-  }) {
-    return SizedBox(
-      height: 36,
-      child: ElevatedButton(
-        onPressed: onTap,
-        style: ElevatedButton.styleFrom(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          backgroundColor: Colors.white.withOpacity(0.9),
-          foregroundColor: const Color(0xFF4A4A4A),
-          elevation: 0,
-          shadowColor: Colors.transparent,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
-            side: BorderSide(
-              color: const Color(0xFFD7CFC6).withOpacity(0.9),
-            ),
-          ),
-        ),
-        child: Text(
-          label,
-          style: const TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0,
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _openAiLabLoadingPreview() {
-    // 给 LoadingPage 一个长时间 pending 的 future，用于稳定观察加载态 UI
-    final pending = Completer<FunctionResponse>().future;
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => LoadingPage(
-          originalImageUrl: _mockImageUrl,
-          uploadedFileName: 'debug_mock_upload.jpg',
-          style: '小红书',
-          generationFuture: pending,
-        ),
-      ),
-    );
-  }
-
-  void _openAiLabResultPreview() {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => const ResultPage(
-          originalImageUrl: _mockImageUrl,
-          resultImageUrl: _mockImageUrl,
-        ),
       ),
     );
   }
