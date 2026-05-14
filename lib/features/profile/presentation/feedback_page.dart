@@ -154,29 +154,59 @@ class _FeedbackPageState extends State<FeedbackPage> {
                       const SizedBox(height: 8),
                       SizedBox(
                         width: double.infinity,
-                        child: ElevatedButton(
-                          onPressed: _isSubmitting ? null : _submit,
-                          style: ElevatedButton.styleFrom(
-                            minimumSize: const Size.fromHeight(48),
-                            backgroundColor: const Color(0xFF7FA2E8),
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                          ),
-                          child: _isSubmitting
-                              ? const SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2.2,
-                                    color: Colors.white,
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            gradient: _isSubmitting
+                                ? const LinearGradient(
+                                    colors: [Color(0xFFD7C9C1), Color(0xFFCDBDB5)],
+                                    begin: Alignment.topCenter,
+                                    end: Alignment.bottomCenter,
+                                  )
+                                : const LinearGradient(
+                                    colors: [
+                                      AppColors.primaryGradientStart,
+                                      AppColors.primaryGradientEnd,
+                                    ],
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
                                   ),
-                                )
-                              : const Text(
-                                  '提交反馈',
-                                  style: TextStyle(fontWeight: FontWeight.w600),
-                                ),
+                            borderRadius: BorderRadius.circular(14),
+                            boxShadow: _isSubmitting
+                                ? []
+                                : [
+                                    BoxShadow(
+                                      color: AppColors.primary.withOpacity(0.28),
+                                      blurRadius: 10,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ],
+                          ),
+                          child: ElevatedButton(
+                            onPressed: _isSubmitting ? null : _submit,
+                            style: ElevatedButton.styleFrom(
+                              minimumSize: const Size.fromHeight(48),
+                              backgroundColor: Colors.transparent,
+                              disabledBackgroundColor: Colors.transparent,
+                              shadowColor: Colors.transparent,
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                            ),
+                            child: _isSubmitting
+                                ? const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2.2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : const Text(
+                                    '提交反馈',
+                                    style: TextStyle(fontWeight: FontWeight.w600),
+                                  ),
+                          ),
                         ),
                       ),
                     ],

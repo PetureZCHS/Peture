@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../../../shared/utils/loading_guard_mixin.dart';
 import '../../../shared/models/unified_expense.dart';
 import '../../../shared/database/unified_expense_helper.dart';
 import '../../../services/supabase_service.dart';
@@ -13,7 +14,8 @@ class AddUnifiedExpensePage extends StatefulWidget {
   State<AddUnifiedExpensePage> createState() => _AddUnifiedExpensePageState();
 }
 
-class _AddUnifiedExpensePageState extends State<AddUnifiedExpensePage> {
+class _AddUnifiedExpensePageState extends State<AddUnifiedExpensePage>
+    with LoadingGuardMixin {
   // State - Using Feature UI approach
   ExpenseTypeEnum _selectedExpenseType = ExpenseTypeEnum.oneOff;
   String _amountStr = '0.00';
@@ -177,28 +179,27 @@ class _AddUnifiedExpensePageState extends State<AddUnifiedExpensePage> {
   }
 
   Future<void> _saveExpense() async {
-    if (_selectedCategory == null) return;
+    await runWithLoadingFlag(
+      isLoading: _isLoading,
+      assign: (v) => _isLoading = v,
+      action: () async {
+        if (_selectedCategory == null) return;
 
-    double amount = double.tryParse(_amountStr) ?? 0.0;
-    if (amount <= 0) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('请输入金额')));
-      return;
-    }
+        double amount = double.tryParse(_amountStr) ?? 0.0;
+        if (amount <= 0) {
+          ScaffoldMessenger.of(context)
+              .showSnackBar(const SnackBar(content: Text('请输入金额')));
+          return;
+        }
 
-    if (_selectedExpenseType == ExpenseTypeEnum.recurring) {
-      if (_itemNameController.text.trim().isEmpty) {
-        _itemNameController.text = _selectedCategory!.name;
-      }
-      _selectedItemType ??= ItemTypeEnum.consumable;
-    }
+        if (_selectedExpenseType == ExpenseTypeEnum.recurring) {
+          if (_itemNameController.text.trim().isEmpty) {
+            _itemNameController.text = _selectedCategory!.name;
+          }
+          _selectedItemType ??= ItemTypeEnum.consumable;
+        }
 
-    setState(() {
-      _isLoading = true;
-    });
-
-    try {
-      final expense = UnifiedExpense(
+        final expense = UnifiedExpense(
         id: widget.expense?.id,
         amount: amount,
         category: _selectedCategory!.name,
@@ -224,45 +225,33 @@ class _AddUnifiedExpensePageState extends State<AddUnifiedExpensePage> {
         photoPath: null,
       );
 
-      // Dual storage: Local database + Supabase sync
-      final supabaseService = SupabaseService();
-      bool success = false;
+        final supabaseService = SupabaseService();
+        bool success = false;
 
-      if (widget.expense == null) {
-        // 新增 - Save to both local and cloud
-        await UnifiedExpenseHelper.instance.insertExpense(expense);
-        final result =
-            await supabaseService.insertUnifiedExpense(expense.toMap());
-        if (result != null) success = true;
-      } else {
-        // 更新 - Update both local and cloud
-        await UnifiedExpenseHelper.instance.updateExpense(expense);
-        success = await supabaseService.updateUnifiedExpense(expense.toMap());
-      }
-
-      if (!success) {
-        if (mounted) {
-          setState(() {
-            _isLoading = false;
-          });
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-              content: Text('云端保存失败，请检查网络连接'), backgroundColor: Colors.orange));
+        if (widget.expense == null) {
+          await UnifiedExpenseHelper.instance.insertExpense(expense);
+          final result =
+              await supabaseService.insertUnifiedExpense(expense.toMap());
+          if (result != null) success = true;
+        } else {
+          await UnifiedExpenseHelper.instance.updateExpense(expense);
+          success = await supabaseService.updateUnifiedExpense(expense.toMap());
         }
-        return;
-      }
 
-      if (mounted) {
-        Navigator.pop(context, true);
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('保存失败: $e'), backgroundColor: Colors.red));
-      }
-    }
+        if (!success) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                content: Text('云端保存失败，请检查网络连接'),
+                backgroundColor: Colors.orange));
+          }
+          return;
+        }
+
+        if (mounted) {
+          Navigator.pop(context, true);
+        }
+      },
+    );
   }
 
   @override

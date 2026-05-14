@@ -4,6 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../shared/design_system/peture_design_system.dart';
+import '../../../shared/utils/loading_guard_mixin.dart';
 import '../../../shared/utils/ui_helpers.dart';
 import '../../../services/supabase_edge_service.dart';
 import '../../moderation/data/moderation_client.dart';
@@ -25,7 +26,7 @@ class PetDiaryComposePage extends StatefulWidget {
 }
 
 class _PetDiaryComposePageState extends State<PetDiaryComposePage>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, LoadingGuardMixin {
   final TextEditingController _inputController = TextEditingController();
   final PetDiaryEdgeService _diaryService = PetDiaryEdgeService();
   final SupabaseService _supabaseService = SupabaseService();
@@ -92,85 +93,81 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
 
   /// 生成宠物日记（跳转到生成页面）
   Future<void> _generatePetDiary() async {
-    if (_isSubmitting) return;
+    await runWithLoadingFlag(
+      isLoading: _isSubmitting,
+      assign: (v) => _isSubmitting = v,
+      action: () async {
+        // 检查是否选择了宠物
+        if (_selectedPet == null) {
+          _showCustomDialog(
+            title: '还没有选择主角呢 🐾',
+            content: '请先从上方列表选择一只宠物，\nAI 才能以它的视角写日记哦！',
+            confirmText: '这就去选',
+          );
+          return;
+        }
 
-    // 检查是否选择了宠物
-    if (_selectedPet == null) {
-      _showCustomDialog(
-        title: '还没有选择主角呢 🐾',
-        content: '请先从上方列表选择一只宠物，\nAI 才能以它的视角写日记哦！',
-        confirmText: '这就去选',
-      );
-      return;
-    }
+        final userInput = _inputController.text.trim();
 
-    final userInput = _inputController.text.trim();
+        if (userInput.isEmpty) {
+          _showToast('请先输入内容');
+          return;
+        }
 
-    if (userInput.isEmpty) {
-      _showToast('请先输入内容');
-      return;
-    }
+        // 字数限制检查 (10-500字)
+        if (userInput.length < 10) {
+          _showToast('输入内容太短，至少需要10个字');
+          return;
+        }
 
-    // 字数限制检查 (10-500字)
-    if (userInput.length < 10) {
-      _showToast('输入内容太短，至少需要10个字');
-      return;
-    }
+        if (userInput.length > 500) {
+          _showToast('输入内容超出限制，最多500个字');
+          return;
+        }
+        if (!mounted) return;
 
-    if (userInput.length > 500) {
-      _showToast('输入内容超出限制，最多500个字');
-      return;
-    }
-    if (!mounted) return;
-    setState(() => _isSubmitting = true);
+        final inputPassed = await _moderationGuard.runTextGuard(
+          context: context,
+          scene: ModerationScene.diaryInput,
+          content: userInput,
+          onPassed: () async {},
+        );
+        if (!inputPassed) return;
 
-    final inputPassed = await _moderationGuard.runTextGuard(
-      context: context,
-      scene: ModerationScene.diaryInput,
-      content: userInput,
-      onPassed: () async {},
+        // diary-v4 字段语义：
+        // - nickname: 宠物昵称
+        // - owner_title: 对主人的称呼
+        final petNickname = (_selectedPet?.name.trim().isNotEmpty ?? false)
+            ? _selectedPet!.name.trim()
+            : '毛孩子';
+        final ownerTitle =
+            (_selectedPet?.ownerNickname?.trim().isNotEmpty ?? false)
+                ? _selectedPet!.ownerNickname!.trim()
+                : '主人';
+
+        if (!mounted) return;
+
+        // 直接跳转到结果页面,在那里显示加载动画和流式生成
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => PetDiaryResultPage(
+              originalText: userInput,
+              style: _selectedStyle,
+              diaryService: _diaryService,
+              nickname: petNickname,
+              ownerTitle: ownerTitle,
+              petId: _selectedPet?.id,
+              petName: _selectedPet?.name,
+              petAvatarUrl: _selectedPet?.avatar, // 传递宠物头像
+              breed: _selectedPet?.breed,
+              gender: _selectedPet?.gender,
+              petType: _selectedPet?.type,
+            ),
+          ),
+        );
+      },
     );
-    if (!inputPassed) {
-      if (mounted) {
-        setState(() => _isSubmitting = false);
-      }
-      return;
-    }
-
-    // diary-v4 字段语义：
-    // - nickname: 宠物昵称
-    // - owner_title: 对主人的称呼
-    final petNickname = (_selectedPet?.name.trim().isNotEmpty ?? false)
-        ? _selectedPet!.name.trim()
-        : '毛孩子';
-    final ownerTitle = (_selectedPet?.ownerNickname?.trim().isNotEmpty ?? false)
-        ? _selectedPet!.ownerNickname!.trim()
-        : '主人';
-
-    if (!mounted) return;
-
-    // 直接跳转到结果页面,在那里显示加载动画和流式生成
-    await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => PetDiaryResultPage(
-          originalText: userInput,
-          style: _selectedStyle,
-          diaryService: _diaryService,
-          nickname: petNickname,
-          ownerTitle: ownerTitle,
-          petId: _selectedPet?.id,
-          petName: _selectedPet?.name,
-          petAvatarUrl: _selectedPet?.avatar, // 传递宠物头像
-          breed: _selectedPet?.breed,
-          gender: _selectedPet?.gender,
-          petType: _selectedPet?.type,
-        ),
-      ),
-    );
-    if (mounted) {
-      setState(() => _isSubmitting = false);
-    }
   }
 
   /// 选择风格

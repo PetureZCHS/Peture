@@ -1,0 +1,34 @@
+default_platform(:ios)
+
+platform :ios do
+  desc "Build Flutter iOS IPA and upload to TestFlight"
+  lane :beta do |options|
+    build_name = options[:build_name] || ENV["FLUTTER_BUILD_NAME"]
+    build_number = options[:build_number] || ENV["FLUTTER_BUILD_NUMBER"]
+    export_method = options[:export_method] || "app-store"
+
+    flutter_cmd = ["flutter", "build", "ipa", "--release", "--export-method", export_method]
+    flutter_cmd += ["--build-name", build_name] if build_name && !build_name.empty?
+    flutter_cmd += ["--build-number", build_number] if build_number && !build_number.empty?
+
+    Dir.chdir("..") do
+      sh(flutter_cmd.join(" "))
+    end
+
+    api_key = app_store_connect_api_key(
+      key_id: ENV["ASC_KEY_ID"],
+      issuer_id: ENV["ASC_ISSUER_ID"],
+      key_content: ENV["ASC_KEY_CONTENT"],
+      is_key_content_base64: true
+    )
+
+    upload_to_testflight(
+      ipa: "../build/ios/ipa/*.ipa",
+      skip_waiting_for_build_processing: true,
+      distribute_external: false,
+      notify_external_testers: false,
+      changelog: options[:changelog] || ENV["TESTFLIGHT_CHANGELOG"],
+      api_key: api_key
+    )
+  end
+end

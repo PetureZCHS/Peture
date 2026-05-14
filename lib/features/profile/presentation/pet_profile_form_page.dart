@@ -12,6 +12,7 @@ import 'package:uuid/uuid.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../shared/utils/user_avatar_helper.dart';
 import '../../../shared/utils/avatar_image_helper.dart';
+import '../../../shared/utils/loading_guard_mixin.dart';
 import '../../../services/supabase_service.dart';
 import '../../moderation/data/moderation_client.dart';
 import '../../moderation/domain/moderation_scene.dart';
@@ -27,7 +28,8 @@ class PetProfileFormPage extends StatefulWidget {
   State<PetProfileFormPage> createState() => _PetProfileFormPageState();
 }
 
-class _PetProfileFormPageState extends State<PetProfileFormPage> {
+class _PetProfileFormPageState extends State<PetProfileFormPage>
+    with LoadingGuardMixin {
   late final ModerationGuard _moderationGuard;
   String? _petId;
   File? _avatarFile;
@@ -2043,167 +2045,163 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
   }
 
   Future<void> _savePetProfile() async {
-    if (_petName == null || _petName!.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('请输入宠物昵称')));
-      return;
-    }
-
-    final petId = _petId ?? const Uuid().v4();
-    _petId = petId;
-
-    if (!mounted) return;
-    final petNamePassed = await _moderationGuard.runTextGuard(
-      context: context,
-      scene: ModerationScene.petName,
-      content: _petName!.trim(),
-      onPassed: () async {},
-    );
-    if (!petNamePassed || !mounted) return;
-
-    if (_ownerNickname != null && _ownerNickname!.trim().isNotEmpty) {
-      final ownerNicknamePassed = await _moderationGuard.runTextGuard(
-        context: context,
-        scene: ModerationScene.ownerNickname,
-        content: _ownerNickname!.trim(),
-        onPassed: () async {},
-      );
-      if (!ownerNicknamePassed || !mounted) return;
-    }
-
-    if (_avatarFile != null) {
-      final avatarBytes = await _avatarFile!.readAsBytes();
-      if (!mounted) return;
-      final avatarPassed = await _moderationGuard.runImageGuardByBytes(
-        context: context,
-        scene: ModerationScene.petAvatar,
-        bytes: avatarBytes,
-        onPassed: () async {},
-      );
-      if (!avatarPassed || !mounted) return;
-    }
-
-    if (_lifePhotoFile != null) {
-      final lifePhotoBytes = await _lifePhotoFile!.readAsBytes();
-      if (!mounted) return;
-      final lifePhotoPassed = await _moderationGuard.runImageGuardByBytes(
-        context: context,
-        scene: ModerationScene.imageInput,
-        bytes: lifePhotoBytes,
-        onPassed: () async {},
-      );
-      if (!lifePhotoPassed || !mounted) return;
-    }
-
-    // 保存逻辑，返回数据给上一页
-    // 根据品种自动推断宠物类型（如果用户没有明确选择）
-    String? petType = _petType;
-    if (petType == null && _petSpecies != null) {
-      // 尝试从品种推断类型
-      for (final entry in _speciesOptions.entries) {
-        if (entry.value.contains(_petSpecies)) {
-          petType = entry.key;
-          break;
-        }
-      }
-    }
-
-    // 转换类型名称：狗狗 -> 狗，猫咪 -> 猫
-    String typeForDb = '其他'; // 默认值
-    if (petType == '狗狗') {
-      typeForDb = '狗';
-    } else if (petType == '猫咪') {
-      typeForDb = '猫';
-    } else if (petType != null) {
-      typeForDb = petType;
-    }
-
-    setState(() => _isSaving = true);
-    // 仅保留已有头像值；新选择本地文件时，只有上传成功才更新为远程 URL。
-    String? avatarValue = widget.initialData?['avatar'] as String?;
-    if (_avatarFile != null) {
-      final uploaded = await SupabaseService().uploadPetAvatar(
-        file: _avatarFile!,
-        petId: petId,
-      );
-      if (uploaded != null && uploaded.isNotEmpty) {
-        avatarValue = uploaded;
-      }
-    }
-
-    String? lifePhotoValue = (widget.initialData?['life_photo'] ??
-        widget.initialData?['lifePhoto']) as String?;
-    if (_lifePhotoFile != null) {
-      // 1. 先上传到 Storage（不更新数据库）
-      final uploadResult = await SupabaseService().uploadPetLifePhotoToStorage(
-        file: _lifePhotoFile!,
-        petId: petId,
-      );
-      if (uploadResult == null) {
-        if (mounted) {
-          setState(() => _isSaving = false);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('生活照上传失败，请重试')),
-          );
-        }
+    await runWithLoadingFlag(
+      isLoading: _isSaving,
+      assign: (v) => _isSaving = v,
+      action: () async {
+      if (_petName == null || _petName!.isEmpty) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('请输入宠物昵称')));
         return;
       }
 
-      // 2. 预检查
-      final fileName = uploadResult.path.split('/').last;
-      final precheckResult = await _precheckLifePhoto(
-        fileName: fileName,
-        bucket: 'user-avatars',
-        path: uploadResult.path,
-      );
+      final petId = _petId ?? const Uuid().v4();
+      _petId = petId;
 
-      if (!precheckResult.pass) {
-        // 预检查不通过，删除已上传的文件
-        await SupabaseService().removeStorageObject(
+      final petNamePassed = await _moderationGuard.runTextGuard(
+        context: context,
+        scene: ModerationScene.petName,
+        content: _petName!.trim(),
+        onPassed: () async {},
+      );
+      if (!petNamePassed || !mounted) return;
+
+      if (_ownerNickname != null && _ownerNickname!.trim().isNotEmpty) {
+        final ownerNicknamePassed = await _moderationGuard.runTextGuard(
+          context: context,
+          scene: ModerationScene.ownerNickname,
+          content: _ownerNickname!.trim(),
+          onPassed: () async {},
+        );
+        if (!ownerNicknamePassed || !mounted) return;
+      }
+
+      if (_avatarFile != null) {
+        final avatarBytes = await _avatarFile!.readAsBytes();
+        if (!mounted) return;
+        final avatarPassed = await _moderationGuard.runImageGuardByBytes(
+          context: context,
+          scene: ModerationScene.petAvatar,
+          bytes: avatarBytes,
+          onPassed: () async {},
+        );
+        if (!avatarPassed || !mounted) return;
+      }
+
+      if (_lifePhotoFile != null) {
+        final lifePhotoBytes = await _lifePhotoFile!.readAsBytes();
+        if (!mounted) return;
+        final lifePhotoPassed = await _moderationGuard.runImageGuardByBytes(
+          context: context,
+          scene: ModerationScene.imageInput,
+          bytes: lifePhotoBytes,
+          onPassed: () async {},
+        );
+        if (!lifePhotoPassed || !mounted) return;
+      }
+
+      // 保存逻辑，返回数据给上一页
+      // 根据品种自动推断宠物类型（如果用户没有明确选择）
+      String? petType = _petType;
+      if (petType == null && _petSpecies != null) {
+        for (final entry in _speciesOptions.entries) {
+          if (entry.value.contains(_petSpecies)) {
+            petType = entry.key;
+            break;
+          }
+        }
+      }
+
+      // 转换类型名称：狗狗 -> 狗，猫咪 -> 猫
+      String typeForDb = '其他';
+      if (petType == '狗狗') {
+        typeForDb = '狗';
+      } else if (petType == '猫咪') {
+        typeForDb = '猫';
+      } else if (petType != null) {
+        typeForDb = petType;
+      }
+
+      String? avatarValue = widget.initialData?['avatar'] as String?;
+      if (_avatarFile != null) {
+        final uploaded = await SupabaseService().uploadPetAvatar(
+          file: _avatarFile!,
+          petId: petId,
+        );
+        if (uploaded != null && uploaded.isNotEmpty) {
+          avatarValue = uploaded;
+        }
+      }
+
+      String? lifePhotoValue = (widget.initialData?['life_photo'] ??
+          widget.initialData?['lifePhoto']) as String?;
+      if (_lifePhotoFile != null) {
+        final uploadResult = await SupabaseService().uploadPetLifePhotoToStorage(
+          file: _lifePhotoFile!,
+          petId: petId,
+        );
+        if (uploadResult == null) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('生活照上传失败，请重试')),
+            );
+          }
+          return;
+        }
+
+        final fileName = uploadResult.path.split('/').last;
+        final precheckResult = await _precheckLifePhoto(
+          fileName: fileName,
           bucket: 'user-avatars',
           path: uploadResult.path,
         );
-        if (mounted) {
-          setState(() {
-            _isSaving = false;
-            _lifePhotoPrecheckReason = precheckResult.reason;
-          });
+
+        if (!precheckResult.pass) {
+          await SupabaseService().removeStorageObject(
+            bucket: 'user-avatars',
+            path: uploadResult.path,
+          );
+          if (mounted) {
+            setState(() {
+              _lifePhotoPrecheckReason = precheckResult.reason;
+            });
+          }
+          return;
         }
-        return;
+
+        lifePhotoValue = uploadResult.url;
+        try {
+          await Supabase.instance.client.from('pets').upsert({
+            'id': petId,
+            'life_photo': lifePhotoValue,
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
+          });
+        } catch (e) {
+          debugPrint('保存 life_photo 到 pets 表失败: $e');
+        }
       }
 
-      // 3. 预检查通过，更新数据库
-      lifePhotoValue = uploadResult.url;
-      try {
-        await Supabase.instance.client.from('pets').upsert({
-          'id': petId,
-          'life_photo': lifePhotoValue,
-          'updated_at': DateTime.now().toUtc().toIso8601String(),
-        });
-      } catch (e) {
-        debugPrint('保存 life_photo 到 pets 表失败: $e');
-      }
-    }
-
-    final result = {
-      'id': petId,
-      'avatar': avatarValue,
-      'life_photo': lifePhotoValue,
-      'lifePhoto': lifePhotoValue,
-      'name': _petName,
-      'type': typeForDb, // 宠物类型：狗、猫
-      'breed': _petSpecies, // 品种：边牧犬、布偶猫
-      'birth_date': _birthDate?.toIso8601String(),
-      'gender': _gender,
-      'neuter_status': _neuterStatus,
-      'weight': _weight,
-      'useCustomNickname': _ownerNickname != null && _ownerNickname!.isNotEmpty,
-      'ownerNickname': _ownerNickname,
-    };
-    if (!mounted) return;
-    setState(() => _isSaving = false);
-    Navigator.pop(context, result);
+      final result = {
+        'id': petId,
+        'avatar': avatarValue,
+        'life_photo': lifePhotoValue,
+        'lifePhoto': lifePhotoValue,
+        'name': _petName,
+        'type': typeForDb,
+        'breed': _petSpecies,
+        'birth_date': _birthDate?.toIso8601String(),
+        'gender': _gender,
+        'neuter_status': _neuterStatus,
+        'weight': _weight,
+        'useCustomNickname':
+            _ownerNickname != null && _ownerNickname!.isNotEmpty,
+        'ownerNickname': _ownerNickname,
+      };
+      if (!mounted) return;
+      Navigator.pop(context, result);
+      },
+    );
   }
 
   @override

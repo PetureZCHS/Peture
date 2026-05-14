@@ -1718,9 +1718,23 @@ class _PreparationPageState extends State<PreparationPage>
                                     _uploadStatus != UploadStatus.uploading &&
                                     !_isStartingTask)
                                 ? () async {
+                                    if (mounted) {
+                                      setState(() {
+                                        _isStartingTask = true;
+                                        _isPrecheckingImage = false;
+                                        _uploadError = '';
+                                      });
+                                    }
+
                                     final inputPassed =
                                         await _moderateSelectedImageBeforeGeneration();
                                     if (!inputPassed || !context.mounted) {
+                                      if (mounted) {
+                                        setState(() {
+                                          _isStartingTask = false;
+                                          _isPrecheckingImage = false;
+                                        });
+                                      }
                                       return;
                                     }
 
@@ -1738,6 +1752,10 @@ class _PreparationPageState extends State<PreparationPage>
                                                 const Duration(seconds: 3));
                                       } catch (_) {
                                         if (mounted) {
+                                          setState(() {
+                                            _isStartingTask = false;
+                                            _isPrecheckingImage = false;
+                                          });
                                           messenger.showSnackBar(
                                             const SnackBar(
                                                 content:
@@ -1942,6 +1960,14 @@ class _PreparationPageState extends State<PreparationPage>
                                           _uploadError = '上传结果异常，请重新尝试';
                                         });
                                       }
+                                    }
+                                    if (uploadedFileName == null && mounted) {
+                                      setState(() {
+                                        _isStartingTask = false;
+                                        _isPrecheckingImage = false;
+                                        _uploadStatus = UploadStatus.failed;
+                                        _uploadError = '上传失败，请重试';
+                                      });
                                     }
                                   }
                                 : null,

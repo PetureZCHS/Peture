@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../../../shared/design_system/peture_design_system.dart';
+import '../../../shared/utils/loading_guard_mixin.dart';
 import '../../../shared/models/unified_expense.dart';
 import '../../../shared/database/unified_expense_helper.dart';
 import '../../../services/supabase_service.dart';
@@ -18,7 +19,7 @@ class AddUnifiedExpensePageV2 extends StatefulWidget {
 }
 
 class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, LoadingGuardMixin {
   static const Color _brand = PetureColors.primary;
   static const Color _brandTint = Color(0xFFF9E5DE);
 
@@ -190,25 +191,26 @@ class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
   }
 
   Future<void> _saveExpense() async {
-    if (_selectedCategory == null) return;
+    await runWithLoadingFlag(
+      isLoading: _isLoading,
+      assign: (v) => _isLoading = v,
+      action: () async {
+        if (_selectedCategory == null) return;
 
-    double amount = double.tryParse(_amountStr) ?? 0.0;
-    if (amount <= 0) {
-      _showToast('请输入金额');
-      return;
-    }
+        double amount = double.tryParse(_amountStr) ?? 0.0;
+        if (amount <= 0) {
+          _showToast('请输入金额');
+          return;
+        }
 
-    if (_selectedExpenseType == ExpenseTypeEnum.recurring) {
-      if (_itemNameController.text.trim().isEmpty) {
-        _itemNameController.text = _selectedCategory!.name;
-      }
-      _selectedItemType ??= ItemTypeEnum.consumable;
-    }
+        if (_selectedExpenseType == ExpenseTypeEnum.recurring) {
+          if (_itemNameController.text.trim().isEmpty) {
+            _itemNameController.text = _selectedCategory!.name;
+          }
+          _selectedItemType ??= ItemTypeEnum.consumable;
+        }
 
-    setState(() => _isLoading = true);
-
-    try {
-      final expense = UnifiedExpense(
+        final expense = UnifiedExpense(
         id: widget.expense?.id,
         amount: amount,
         category: _selectedCategory!.name,
@@ -234,36 +236,31 @@ class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
         photoPath: null,
       );
 
-      final supabaseService = SupabaseService();
-      bool success = false;
+        final supabaseService = SupabaseService();
+        bool success = false;
 
-      if (widget.expense == null) {
-        await UnifiedExpenseHelper.instance.insertExpense(expense);
-        final result =
-            await supabaseService.insertUnifiedExpense(expense.toMap());
-        if (result != null) success = true;
-      } else {
-        await UnifiedExpenseHelper.instance.updateExpense(expense);
-        success = await supabaseService.updateUnifiedExpense(expense.toMap());
-      }
-
-      if (!success) {
-        if (mounted) {
-          setState(() => _isLoading = false);
-          _showToast('云端同步失败，已保存到本地', isWarning: true);
+        if (widget.expense == null) {
+          await UnifiedExpenseHelper.instance.insertExpense(expense);
+          final result =
+              await supabaseService.insertUnifiedExpense(expense.toMap());
+          if (result != null) success = true;
+        } else {
+          await UnifiedExpenseHelper.instance.updateExpense(expense);
+          success = await supabaseService.updateUnifiedExpense(expense.toMap());
         }
-      }
 
-      if (mounted) {
-        HapticFeedback.mediumImpact();
-        Navigator.pop(context, true);
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isLoading = false);
-        _showToast('保存失败: $e', isError: true);
-      }
-    }
+        if (!success) {
+          if (mounted) {
+            _showToast('云端同步失败，已保存到本地', isWarning: true);
+          }
+        }
+
+        if (mounted) {
+          HapticFeedback.mediumImpact();
+          Navigator.pop(context, true);
+        }
+      },
+    );
   }
 
   void _showToast(String message,

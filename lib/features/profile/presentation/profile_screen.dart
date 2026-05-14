@@ -652,7 +652,7 @@ class _PetProfileSectionState extends State<PetProfileSection> {
                     ),
                     const SizedBox(height: 10),
                     Text(
-                      '删除后不可恢复，${petToDelete.name} 的宠物档案及关联护照数据将被永久删除。',
+                      '删除后不可恢复，${petToDelete.name} 的宠物档案照数据将被永久删除。',
                       style: TextStyle(
                         fontSize: 14,
                         height: 1.5,

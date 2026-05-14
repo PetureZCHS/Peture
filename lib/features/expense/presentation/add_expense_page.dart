@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import '../../../shared/utils/loading_guard_mixin.dart';
 import '../../../shared/models/expense.dart';
 import '../../../services/supabase_service.dart';
 
@@ -14,7 +15,8 @@ class AddExpensePage extends StatefulWidget {
   State<AddExpensePage> createState() => _AddExpensePageState();
 }
 
-class _AddExpensePageState extends State<AddExpensePage> {
+class _AddExpensePageState extends State<AddExpensePage>
+    with LoadingGuardMixin {
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _amountController = TextEditingController();
   final TextEditingController _noteController = TextEditingController();
@@ -91,82 +93,76 @@ class _AddExpensePageState extends State<AddExpensePage> {
 
   /// 保存账单
   Future<void> _saveExpense() async {
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
-
-    if (_selectedCategory == null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('请选择消费分类')));
-      return;
-    }
-
-    setState(() {
-      _isLoading = true;
-    });
-
-    try {
-      final expense = Expense(
-        id: widget.expense?.id,
-        amount: double.parse(_amountController.text),
-        category: _selectedCategory!,
-        date: DateFormat('yyyy-MM-dd').format(_selectedDate),
-        petId: _selectedPetId,
-        petName: _selectedPetName,
-        note: _noteController.text.isEmpty ? null : _noteController.text,
-        photoPath: null,
-        createdAt:
-            widget.expense?.createdAt ?? DateTime.now().toIso8601String(),
-      );
-
-      final supabaseService = SupabaseService();
-      bool success = false;
-      if (widget.expense == null) {
-        // 新增
-        final result = await supabaseService.insertExpense(expense.toMap());
-        if (result != null) {
-          success = true;
+    await runWithLoadingFlag(
+      isLoading: _isLoading,
+      assign: (v) => _isLoading = v,
+      action: () async {
+        if (!_formKey.currentState!.validate()) {
+          return;
         }
-      } else {
-        // 更新
-        success = await supabaseService.updateExpense(expense.toMap());
-      }
 
-      if (!success) {
-        if (mounted) {
-          setState(() {
-            _isLoading = false;
-          });
+        if (_selectedCategory == null) {
           ScaffoldMessenger.of(
             context,
-          ).showSnackBar(const SnackBar(
-            content: Text('保存失败，请检查网络连接'),
-            backgroundColor: Colors.red,
-          ));
+          ).showSnackBar(const SnackBar(content: Text('请选择消费分类')));
+          return;
         }
-        return;
-      }
 
-      if (mounted) {
-        Navigator.pop(context, true);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(widget.expense == null ? '账单已添加' : '账单已更新')),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(
-          content: Text('保存失败，请检查网络连接'),
-          backgroundColor: Colors.red,
-        ));
-      }
-    }
+        try {
+          final expense = Expense(
+            id: widget.expense?.id,
+            amount: double.parse(_amountController.text),
+            category: _selectedCategory!,
+            date: DateFormat('yyyy-MM-dd').format(_selectedDate),
+            petId: _selectedPetId,
+            petName: _selectedPetName,
+            note: _noteController.text.isEmpty ? null : _noteController.text,
+            photoPath: null,
+            createdAt:
+                widget.expense?.createdAt ?? DateTime.now().toIso8601String(),
+          );
+
+          final supabaseService = SupabaseService();
+          bool success = false;
+          if (widget.expense == null) {
+            final result = await supabaseService.insertExpense(expense.toMap());
+            if (result != null) {
+              success = true;
+            }
+          } else {
+            success = await supabaseService.updateExpense(expense.toMap());
+          }
+
+          if (!success) {
+            if (mounted) {
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(const SnackBar(
+                content: Text('保存失败，请检查网络连接'),
+                backgroundColor: Colors.red,
+              ));
+            }
+            return;
+          }
+
+          if (mounted) {
+            Navigator.pop(context, true);
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(widget.expense == null ? '账单已添加' : '账单已更新')),
+            );
+          }
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(const SnackBar(
+              content: Text('保存失败，请检查网络连接'),
+              backgroundColor: Colors.red,
+            ));
+          }
+        }
+      },
+    );
   }
 
   @override
