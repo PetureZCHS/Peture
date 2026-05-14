@@ -152,7 +152,8 @@ class PetDiaryResultPage extends StatefulWidget {
   final String style;
   final PetDiaryEdgeService? diaryService; // 可选，用于生成新日记
   final String? initialContent;
-  final String? nickname;
+  final String? nickname; // diary-v4: 宠物昵称
+  final String? ownerTitle; // diary-v4: 对主人的称呼
   final String? petId; // 关联的宠物ID
   final String? petName;
   final String? petAvatarUrl; // 新增：宠物头像
@@ -168,6 +169,7 @@ class PetDiaryResultPage extends StatefulWidget {
     this.diaryService,
     this.initialContent,
     this.nickname,
+    this.ownerTitle,
     this.petId,
     this.petName,
     this.petAvatarUrl,
@@ -567,6 +569,7 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
         query: widget.originalText,
         style: widget.style,
         nickname: widget.nickname,
+        ownerTitle: widget.ownerTitle,
         petName: widget.petName,
         breed: widget.breed,
         gender: widget.gender,

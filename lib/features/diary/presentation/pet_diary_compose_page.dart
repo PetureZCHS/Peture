@@ -36,6 +36,7 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
   List<Pet> _pets = [];
   Pet? _selectedPet;
   bool _isLoadingPets = false;
+  bool _isSubmitting = false;
   // 控制宠物列表的展开状态
   bool _isPetSelectorExpanded = false;
 
@@ -91,6 +92,8 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
 
   /// 生成宠物日记（跳转到生成页面）
   Future<void> _generatePetDiary() async {
+    if (_isSubmitting) return;
+
     // 检查是否选择了宠物
     if (_selectedPet == null) {
       _showCustomDialog(
@@ -118,35 +121,45 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
       _showToast('输入内容超出限制，最多500个字');
       return;
     }
+    if (!mounted) return;
+    setState(() => _isSubmitting = true);
+
     final inputPassed = await _moderationGuard.runTextGuard(
       context: context,
       scene: ModerationScene.diaryInput,
       content: userInput,
       onPassed: () async {},
     );
-    if (!inputPassed) return;
-
-    // 获取昵称：优先使用宠物的自定义昵称，否则使用用户默认昵称
-    String? nickname;
-    if (_selectedPet != null &&
-        _selectedPet!.ownerNickname != null &&
-        _selectedPet!.ownerNickname!.isNotEmpty) {
-      nickname = _selectedPet!.ownerNickname;
-    } else {
-      nickname = await _supabaseService.getOwnerNickname();
+    if (!inputPassed) {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+      }
+      return;
     }
+
+    // diary-v4 字段语义：
+    // - nickname: 宠物昵称
+    // - owner_title: 对主人的称呼
+    final petNickname = (_selectedPet?.name.trim().isNotEmpty ?? false)
+        ? _selectedPet!.name.trim()
+        : '毛孩子';
+    final ownerTitle =
+        (_selectedPet?.ownerNickname?.trim().isNotEmpty ?? false)
+        ? _selectedPet!.ownerNickname!.trim()
+        : '主人';
 
     if (!mounted) return;
 
     // 直接跳转到结果页面,在那里显示加载动画和流式生成
-    Navigator.push(
+    await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => PetDiaryResultPage(
           originalText: userInput,
           style: _selectedStyle,
           diaryService: _diaryService,
-          nickname: nickname,
+          nickname: petNickname,
+          ownerTitle: ownerTitle,
           petId: _selectedPet?.id,
           petName: _selectedPet?.name,
           petAvatarUrl: _selectedPet?.avatar, // 传递宠物头像
@@ -156,6 +169,9 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
         ),
       ),
     );
+    if (mounted) {
+      setState(() => _isSubmitting = false);
+    }
   }
 
   /// 选择风格
@@ -563,9 +579,9 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
                           width: double.infinity,
                           height: 56,
                           child: ElevatedButton(
-                            onPressed: _generatePetDiary,
+                            onPressed: _isSubmitting ? null : _generatePetDiary,
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: _selectedPet == null
+                              backgroundColor: (_selectedPet == null || _isSubmitting)
                                   ? PetureColors.textTertiary
                                   : PetureColors.textPrimary,
                               foregroundColor: PetureColors.surfacePure,
@@ -577,11 +593,24 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                if (_selectedPet != null)
+                                if (_selectedPet != null && !_isSubmitting)
                                   const Icon(Icons.edit_note),
-                                SizedBox(width: _selectedPet != null ? 8 : 0),
+                                if (_isSubmitting) ...[
+                                  const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                ] else
+                                  SizedBox(width: _selectedPet != null ? 8 : 0),
                                 Text(
-                                  _selectedPet != null ? "生成日记" : "请先选择宠物",
+                                  _isSubmitting
+                                      ? "准备中..."
+                                      : (_selectedPet != null ? "生成日记" : "请先选择宠物"),
                                   style: const TextStyle(
                                     fontSize: 18,
                                     fontWeight: FontWeight.bold,

@@ -454,7 +454,8 @@ class PetDiaryEdgeService {
   /// 参数说明：
   /// - query: 用户输入的原始内容（必填）
   /// - style: 日记风格（必填）
-  /// - nickname: 宠物主人昵称（可选）
+  /// - nickname: 宠物昵称（v4 必填）
+  /// - ownerTitle: 对主人的称呼（v4 必填）
   /// - breed: 宠物品种（可选）
   ///
   /// 返回一个流，包含 DiaryContentEvent、DiaryDoneEvent、DiaryErrorEvent
@@ -462,6 +463,7 @@ class PetDiaryEdgeService {
     required String query,
     required String style,
     String? nickname,
+    String? ownerTitle,
     String? breed,
     String? petName,
     String? gender,
@@ -477,15 +479,29 @@ class PetDiaryEdgeService {
 
       final accessToken = session.accessToken;
 
-      // ✅ 根据 diary-v3 Edge Function 要求构建请求体
+      // ✅ 根据 diary-v4 Edge Function 要求构建请求体
+      final normalizedNickname =
+          (nickname != null && nickname.trim().isNotEmpty)
+          ? nickname.trim()
+          : (petName != null && petName.trim().isNotEmpty ? petName.trim() : '毛孩子');
+      final normalizedOwnerTitle =
+          (ownerTitle != null && ownerTitle.trim().isNotEmpty)
+          ? ownerTitle.trim()
+          : '主人';
+      final normalizedSpecies =
+          (petType != null && petType.trim().isNotEmpty)
+          ? petType.trim()
+          : '猫';
       final inputs = {
         'query': query,
         'style': style,
-        if (nickname != null) 'nickname': nickname, //主人昵称
-        if (breed != null) 'breed': breed, //宠物品种
+        'nickname': normalizedNickname, // 宠物昵称（v4 必填）
+        'owner_title': normalizedOwnerTitle, // 主人称呼（v4 必填）
+        'species': normalizedSpecies, // 物种（v4 必填）
+        'breed': (breed != null && breed.trim().isNotEmpty) ? breed.trim() : '未知', // 品种（v4 必填）
         if (petName != null) 'pet_name': petName, //宠物名字
         if (gender != null) 'gender': gender, //宠物性别
-        if (petType != null) 'type': petType, //宠物类型，猫狗
+        if (petType != null) 'type': petType, // 宠物类型，猫狗（兼容保留）
       };
 
       final body = {
@@ -493,14 +509,16 @@ class PetDiaryEdgeService {
         'response_mode': 'streaming',
       };
 
-      debugPrint('📝 调用 Diary-v3 Edge Function');
+      debugPrint('📝 调用 Diary-v4 Edge Function');
       debugPrint('📦 参数:');
       debugPrint(
         '   - inputs.query: ${query.substring(0, 30.clamp(0, query.length))}...',
       );
       debugPrint('   - inputs.style: $style');
-      if (nickname != null) debugPrint('   - inputs.nickname: $nickname');
-      if (breed != null) debugPrint('   - inputs.breed: $breed');
+      debugPrint('   - inputs.nickname: ${inputs['nickname']}');
+      debugPrint('   - inputs.owner_title: ${inputs['owner_title']}');
+      debugPrint('   - inputs.species: ${inputs['species']}');
+      debugPrint('   - inputs.breed: ${inputs['breed']}');
       if (petName != null) debugPrint('   - inputs.pet_name: $petName');
       if (gender != null) debugPrint('   - inputs.gender: $gender');
       if (petType != null) debugPrint('   - inputs.type: $petType');
@@ -664,6 +682,7 @@ class PetDiaryEdgeService {
     required String query,
     required String style,
     String? nickname,
+    String? ownerTitle,
     String? breed,
   }) async {
     try {
@@ -676,12 +695,22 @@ class PetDiaryEdgeService {
 
       final accessToken = session.accessToken;
 
-      // ✅ 根据 diary-v3 Edge Function 要求构建请求体
+      // ✅ 根据 diary-v4 Edge Function 要求构建请求体
+      final normalizedNickname =
+          (nickname != null && nickname.trim().isNotEmpty)
+          ? nickname.trim()
+          : '毛孩子';
+      final normalizedOwnerTitle =
+          (ownerTitle != null && ownerTitle.trim().isNotEmpty)
+          ? ownerTitle.trim()
+          : '主人';
       final inputs = {
         'query': query,
         'style': style,
-        if (nickname != null) 'nickname': nickname,
-        if (breed != null) 'breed': breed,
+        'nickname': normalizedNickname, // v4 必填（宠物昵称）
+        'owner_title': normalizedOwnerTitle, // v4 必填（主人称呼）
+        'species': '猫', // blocking 模式下默认值
+        'breed': (breed != null && breed.trim().isNotEmpty) ? breed.trim() : '未知', // v4 必填
       };
 
       final body = {
@@ -689,7 +718,7 @@ class PetDiaryEdgeService {
         'response_mode': 'blocking',
       };
 
-      debugPrint('📝 阻塞模式调用 Diary-v3 Edge Function');
+      debugPrint('📝 阻塞模式调用 Diary-v4 Edge Function');
       debugPrint('📦 请求体: ${jsonEncode(body)}');
 
       final url = Uri.parse(SupabaseConfig.diaryUrl);
