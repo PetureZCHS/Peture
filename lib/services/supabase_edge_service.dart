@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/config/supabase_config.dart';
+import 'analytics_service.dart';
 
 // ============================================================================
 // chat 事件类
@@ -522,6 +523,8 @@ class PetDiaryEdgeService {
       }
 
       final accessToken = session.accessToken;
+      final startedAt = DateTime.now().toUtc();
+      var didReportSuccess = false;
       final userId = supabase.auth.currentUser?.id ?? 'anon';
       final ownerTitle =
           nickname != null && nickname.trim().isNotEmpty ? nickname.trim() : '主人';
@@ -565,6 +568,15 @@ class PetDiaryEdgeService {
       if (gender != null) debugPrint('   - inputs.gender: $gender');
       if (petType != null) debugPrint('   - inputs.type: $petType');
       debugPrint('   - response_mode: streaming');
+      AnalyticsService.track(
+        'diary_generate_start',
+        module: 'diary',
+        properties: {
+          'entry_page': 'pet_diary_edge_service',
+          'style': style,
+          'pet_type': petType,
+        },
+      );
 
       final url = Uri.parse(SupabaseConfig.diaryUrl);
 
@@ -583,6 +595,16 @@ class PetDiaryEdgeService {
       if (response.statusCode != 200) {
         final errorBody = await response.stream.bytesToString();
         debugPrint('❌ Diary Edge Function 错误: $errorBody');
+        AnalyticsService.track(
+          'diary_generate_error',
+          module: 'diary',
+          durationMs: DateTime.now().toUtc().difference(startedAt).inMilliseconds,
+          properties: {
+            'entry_page': 'pet_diary_edge_service',
+            'style': style,
+            'error_code': 'http_${response.statusCode}',
+          },
+        );
         yield DiaryErrorEvent('请求失败 (${response.statusCode}): $errorBody');
         return;
       }
@@ -607,6 +629,19 @@ class PetDiaryEdgeService {
 
             if (dataString.isEmpty || dataString == '[DONE]') {
               debugPrint('📨 Diary [DONE] 事件');
+              if (!didReportSuccess) {
+                didReportSuccess = true;
+                AnalyticsService.track(
+                  'diary_generate_success',
+                  module: 'diary',
+                  durationMs:
+                      DateTime.now().toUtc().difference(startedAt).inMilliseconds,
+                  properties: {
+                    'entry_page': 'pet_diary_edge_service',
+                    'style': style,
+                  },
+                );
+              }
               yield DiaryDoneEvent(accumulatedText);
               continue;
             }
@@ -652,6 +687,21 @@ class PetDiaryEdgeService {
                       }
                     }
                   }
+                  if (!didReportSuccess) {
+                    didReportSuccess = true;
+                    AnalyticsService.track(
+                      'diary_generate_success',
+                      module: 'diary',
+                      durationMs: DateTime.now()
+                          .toUtc()
+                          .difference(startedAt)
+                          .inMilliseconds,
+                      properties: {
+                        'entry_page': 'pet_diary_edge_service',
+                        'style': style,
+                      },
+                    );
+                  }
                   yield DiaryDoneEvent(accumulatedText);
                   break;
 
@@ -681,6 +731,17 @@ class PetDiaryEdgeService {
                 case 'error':
                   final message = json['message'] as String? ?? '未知错误';
                   debugPrint('   ❌ Dify 错误: $message');
+                  AnalyticsService.track(
+                    'diary_generate_error',
+                    module: 'diary',
+                    durationMs:
+                        DateTime.now().toUtc().difference(startedAt).inMilliseconds,
+                    properties: {
+                      'entry_page': 'pet_diary_edge_service',
+                      'style': style,
+                      'error_code': 'dify_error',
+                    },
+                  );
                   yield DiaryErrorEvent(message);
                   return;
 
@@ -708,11 +769,32 @@ class PetDiaryEdgeService {
       debugPrint('   最终文本长度: ${accumulatedText.length} 字符');
 
       if (accumulatedText.isNotEmpty) {
+        if (!didReportSuccess) {
+          AnalyticsService.track(
+            'diary_generate_success',
+            module: 'diary',
+            durationMs:
+                DateTime.now().toUtc().difference(startedAt).inMilliseconds,
+            properties: {
+              'entry_page': 'pet_diary_edge_service',
+              'style': style,
+            },
+          );
+        }
         yield DiaryDoneEvent(accumulatedText);
       }
     } catch (e, stackTrace) {
       debugPrint('❌ Diary Edge Function 调用异常: $e');
       debugPrint('Stack trace: $stackTrace');
+      AnalyticsService.track(
+        'diary_generate_error',
+        module: 'diary',
+        properties: {
+          'entry_page': 'pet_diary_edge_service',
+          'style': style,
+          'error_code': e.runtimeType.toString(),
+        },
+      );
       yield DiaryErrorEvent('生成日记失败: $e');
     }
   }

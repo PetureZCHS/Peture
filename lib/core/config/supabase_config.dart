@@ -28,6 +28,8 @@ class SupabaseConfig {
   static const String difyChatFunctionName = 'chat';
   static const String diaryFunctionName = 'diary-v4'; // 使用 v4 版本
   static const String rechargeFunctionName = 'recharge-test'; // 充值测试函数
+  static const String analyticsCollectFunctionName = 'analytics-collect';
+  static const String analyticsDashboardFunctionName = 'analytics-dashboard';
 
   // Edge Function 完整 URL
   static String get difyChatUrl =>
@@ -37,4 +39,10 @@ class SupabaseConfig {
 
   static String get rechargeUrl =>
       '$projectUrl/functions/v1/$rechargeFunctionName';
+
+  static String get analyticsCollectUrl =>
+      '$projectUrl/functions/v1/$analyticsCollectFunctionName';
+
+  static String get analyticsDashboardUrl =>
+      '$projectUrl/functions/v1/$analyticsDashboardFunctionName';
 }
