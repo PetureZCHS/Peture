@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+// ignore_for_file: unused_element
+
 void _addCustomProject(String name, {String? soundPath}) {}
 void _showAddProjectDialog() {}
 

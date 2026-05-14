@@ -217,7 +217,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
         return;
       }
       final avatarBytes = await cropped.readAsBytes();
-      if (!context.mounted) {
+      if (!mounted) {
         if (mounted) setState(() => _isLoading = false);
         return;
       }

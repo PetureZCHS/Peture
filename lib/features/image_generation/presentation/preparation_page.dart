@@ -920,7 +920,7 @@ class _PreparationPageState extends State<PreparationPage>
         bytes = response.bodyBytes;
       }
     }
-    if (!context.mounted || bytes == null) return bytes != null;
+    if (!mounted || bytes == null) return bytes != null;
     return _moderationGuard.runImageGuardByBytes(
       context: context,
       scene: ModerationScene.imageInput,

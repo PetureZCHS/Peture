@@ -1661,11 +1661,6 @@ class _DogClickerScreenState extends State<DogClickerScreen>
       final currentOption = _filterOptions.isEmpty ? '默认训练' : _filterOptions[_selectedFilterIndex];
       final soundPath = _projectSounds[currentOption] ?? 'mp3/1.mp3';
 
-      if (soundPath == null) {
-        debugPrint('项目 $currentOption 没有配置音效');
-        return;
-      }
-
       // 停止当前播放（如果有），确保快速重播
       await _audioPlayer.stop();
       // 播放对应项目的音频资源
@@ -1777,11 +1772,6 @@ class _DogClickerScreenState extends State<DogClickerScreen>
 
       final currentOption = _filterOptions.isEmpty ? '默认训练' : _filterOptions[_selectedFilterIndex];
       final soundPath = _projectSounds[currentOption] ?? 'mp3/1.mp3';
-
-      if (soundPath == null) {
-        debugPrint('项目 $currentOption 没有配置音效');
-        return;
-      }
 
       // 停止当前播放（如果有），确保快速重播
       await _audioPlayer.stop();

@@ -371,7 +371,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         return;
       }
       final avatarBytes = await cropped.readAsBytes();
-      if (!context.mounted) return;
+      if (!mounted) return;
       final avatarPassed = await _moderationGuard.runImageGuardByBytes(
         context: context,
         scene: ModerationScene.avatar,

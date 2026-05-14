@@ -305,7 +305,7 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
           await AvatarImageHelper.cropAndCompressAvatar(context, file.path);
       if (cropped == null) return;
       final avatarBytes = await cropped.readAsBytes();
-      if (!context.mounted) return;
+      if (!mounted) return;
       final avatarPassed = await _moderationGuard.runImageGuardByBytes(
         context: context,
         scene: ModerationScene.petAvatar,
@@ -348,7 +348,7 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
       );
       final lifePhotoFile = File(compressed?.path ?? picked.path);
       final lifePhotoBytes = await lifePhotoFile.readAsBytes();
-      if (!context.mounted) return;
+      if (!mounted) return;
       final imagePassed = await _moderationGuard.runImageGuardByBytes(
         context: context,
         scene: ModerationScene.imageInput,
@@ -2028,7 +2028,7 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
                   content: nickname,
                   onPassed: () async {},
                 );
-                if (!passed || !mounted) return;
+                if (!passed || !mounted || !context.mounted) return;
                 setState(() {
                   _ownerNickname = nickname;
                 });
@@ -2053,7 +2053,7 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
     final petId = _petId ?? const Uuid().v4();
     _petId = petId;
 
-    if (!context.mounted) return;
+    if (!mounted) return;
     final petNamePassed = await _moderationGuard.runTextGuard(
       context: context,
       scene: ModerationScene.petName,
@@ -2074,7 +2074,7 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
 
     if (_avatarFile != null) {
       final avatarBytes = await _avatarFile!.readAsBytes();
-      if (!context.mounted) return;
+      if (!mounted) return;
       final avatarPassed = await _moderationGuard.runImageGuardByBytes(
         context: context,
         scene: ModerationScene.petAvatar,
@@ -2086,7 +2086,7 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
 
     if (_lifePhotoFile != null) {
       final lifePhotoBytes = await _lifePhotoFile!.readAsBytes();
-      if (!context.mounted) return;
+      if (!mounted) return;
       final lifePhotoPassed = await _moderationGuard.runImageGuardByBytes(
         context: context,
         scene: ModerationScene.imageInput,
