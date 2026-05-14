@@ -460,7 +460,7 @@ class _HomeDashboardContentState extends State<_HomeDashboardContent> {
                       child: _buildSmallCard(
                         context,
                         title: '宠物消费',
-                        subtitle: 'Expenses',
+                        subtitle: '记录每笔养宠开销',
                         icon: Icons.account_balance_wallet_rounded,
                         iconColor: const Color(0xFF6B7280),
                         iconBgColor: const Color(0xFFE5E7EB),
@@ -482,7 +482,7 @@ class _HomeDashboardContentState extends State<_HomeDashboardContent> {
                       child: _buildSmallCard(
                         context,
                         title: '电子档案',
-                        subtitle: 'Vaccine',
+                        subtitle: '保存疫苗与档案',
                         icon: Icons.badge_rounded,
                         iconColor: const Color(0xFF60A5FA),
                         iconBgColor: const Color(0xFFDBEAFE),
@@ -504,7 +504,7 @@ class _HomeDashboardContentState extends State<_HomeDashboardContent> {
                       child: _buildSmallCard(
                         context,
                         title: '训宠响片',
-                        subtitle: 'Training',
+                        subtitle: '用响片辅助训练',
                         icon: Icons.touch_app_rounded,
                         iconColor: const Color(0xFFA78BFA),
                         iconBgColor: const Color(0xFFF3E8FF),
@@ -526,13 +526,13 @@ class _HomeDashboardContentState extends State<_HomeDashboardContent> {
                       child: _buildSmallCard(
                         context,
                         title: 'AI 图像实验室',
-                        subtitle: 'Image Lab',
-                        icon: Icons.auto_fix_high_rounded,
-                        iconColor: const Color(0xFF34D399),
-                        iconBgColor: const Color(0xFFD1FAE5),
+                        subtitle: '生成宠物创意图片',
+                        icon: Icons.photo_filter_rounded,
+                        iconColor: const Color(0xFFEC4899),
+                        iconBgColor: const Color(0xFFFCE7F3),
                         gradientColors: const [
-                          Color(0xFFF2FAF4),
-                          Color(0xFFECF7EF),
+                          Color(0xFFFFF5FA),
+                          Color(0xFFFDF0F6),
                         ],
                         onTap: () {
                           Navigator.of(context).push(
@@ -736,9 +736,8 @@ class _HomeDashboardContentState extends State<_HomeDashboardContent> {
                     Text(
                       subtitle,
                       style: const TextStyle(
-                        fontFamily: '.SF Pro Text',
                         fontSize: 12,
-                        height: 1.2,
+                        height: 1.35,
                         fontWeight: FontWeight.w500,
                         color: PetureColors.textSecondary,
                         letterSpacing: 0,
