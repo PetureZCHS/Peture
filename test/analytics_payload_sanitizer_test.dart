@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:my_pet/services/analytics_service.dart';
 import 'package:my_pet/shared/utils/analytics_payload_sanitizer.dart';
 
 void main() {
@@ -26,6 +27,57 @@ void main() {
 
       expect((result['long'] as String).length, 240);
       expect(result['items'], hasLength(20));
+    });
+  });
+
+  group('reconcileAnalyticsQueueAfterFlush', () {
+    test('preserves events enqueued while a flush is in flight', () {
+      final sentBatch = [
+        {
+          'client_event_id': 'old-1',
+          'event_name': 'app_open',
+        },
+        {
+          'client_event_id': 'old-2',
+          'event_name': 'page_view',
+        },
+      ];
+      final latestQueue = [
+        ...sentBatch,
+        {
+          'client_event_id': 'new-1',
+          'event_name': 'feature_entry',
+        },
+      ];
+
+      final remaining = reconcileAnalyticsQueueAfterFlush(
+        latestQueue,
+        sentBatch,
+      );
+
+      expect(remaining, hasLength(1));
+      expect(remaining.single['client_event_id'], 'new-1');
+    });
+
+    test('falls back for legacy queued events without client_event_id', () {
+      final sentBatch = [
+        {'event_name': 'app_open'},
+      ];
+      final latestQueue = [
+        {'event_name': 'app_open'},
+        {
+          'client_event_id': 'new-1',
+          'event_name': 'page_view',
+        },
+      ];
+
+      final remaining = reconcileAnalyticsQueueAfterFlush(
+        latestQueue,
+        sentBatch,
+      );
+
+      expect(remaining, hasLength(1));
+      expect(remaining.single['client_event_id'], 'new-1');
     });
   });
 }

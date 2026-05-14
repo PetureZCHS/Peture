@@ -190,8 +190,15 @@ class AnalyticsService {
           .timeout(const Duration(seconds: 10));
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
-        final remaining = queue.skip(batch.length).toList();
+        final latestQueue = _decodeQueue(prefs.getString(_queueKey));
+        final remaining = reconcileAnalyticsQueueAfterFlush(
+          latestQueue,
+          batch,
+        );
         await prefs.setString(_queueKey, jsonEncode(remaining));
+        if (remaining.isNotEmpty) {
+          scheduleMicrotask(flush);
+        }
       } else {
         debugPrint(
           'AnalyticsService: Supabase 埋点上报失败 ${response.statusCode} ${response.body}',
@@ -214,6 +221,7 @@ class AnalyticsService {
     final prefs = await SharedPreferences.getInstance();
     final queue = _decodeQueue(prefs.getString(_queueKey));
     final event = <String, dynamic>{
+      'client_event_id': const Uuid().v4(),
       'event_name': eventName,
       'session_id': _sessionId ?? const Uuid().v4(),
       'page_name': pageName,
@@ -282,4 +290,35 @@ class AnalyticsService {
     if (pageName.startsWith('clicker_')) return 'clicker';
     return 'navigation';
   }
+}
+
+@visibleForTesting
+List<Map<String, dynamic>> reconcileAnalyticsQueueAfterFlush(
+  List<Map<String, dynamic>> latestQueue,
+  List<Map<String, dynamic>> sentBatch,
+) {
+  final sentIds = sentBatch
+      .map((event) => event['client_event_id'])
+      .whereType<String>()
+      .toSet();
+  if (sentIds.length == sentBatch.length) {
+    return latestQueue
+        .where((event) => !sentIds.contains(event['client_event_id']))
+        .toList();
+  }
+
+  var fallbackRemovals = sentBatch.length;
+  final remaining = <Map<String, dynamic>>[];
+  for (final event in latestQueue) {
+    final eventId = event['client_event_id'];
+    if (eventId is String && sentIds.contains(eventId)) {
+      continue;
+    }
+    if (eventId == null && fallbackRemovals > 0) {
+      fallbackRemovals -= 1;
+      continue;
+    }
+    remaining.add(event);
+  }
+  return remaining;
 }
