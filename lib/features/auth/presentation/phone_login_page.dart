@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:async';
 
+import '../../../shared/design_system/peture_design_system.dart';
+
 /// 手机号验证码登录页面
 class PhoneLoginPage extends StatefulWidget {
   const PhoneLoginPage({super.key});
@@ -82,12 +84,12 @@ class _PhoneLoginPageState extends State<PhoneLoginPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: PetureColors.background,
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
+        backgroundColor: PetureColors.background,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
+          icon: const Icon(Icons.arrow_back, color: PetureColors.textPrimary),
           onPressed: () => Navigator.of(context).pop(),
         ),
       ),
@@ -101,16 +103,18 @@ class _PhoneLoginPageState extends State<PhoneLoginPage> {
               // 标题
               const Text(
                 '手机号登录',
-                style: TextStyle(
-                  fontSize: 32,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black,
-                ),
+                style: PetureTextStyles.largeTitle,
               ),
               const SizedBox(height: 8),
-              Text(
+              const Text(
                 '请输入手机号获取验证码',
-                style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                style: PetureTextStyles.body,
+              ),
+              const SizedBox(height: 20),
+              const PetureAlertPanel(
+                title: '当前暂不可用',
+                message: '短信验证码登录仍在维护中，请优先使用邮箱登录。',
+                tone: PetureAlertTone.warning,
               ),
               const SizedBox(height: 40),
 
@@ -121,21 +125,10 @@ class _PhoneLoginPageState extends State<PhoneLoginPage> {
                 enabled: !_isCodeSent,
                 maxLength: 11,
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                decoration: InputDecoration(
+                decoration: petureInputDecoration(
                   labelText: '手机号',
                   hintText: '请输入手机号',
                   prefixIcon: const Icon(Icons.phone_android),
-                  counterText: '',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(
-                      color: Color(0xFF5D5FEF),
-                      width: 2,
-                    ),
-                  ),
                 ),
               ),
 
@@ -150,42 +143,21 @@ class _PhoneLoginPageState extends State<PhoneLoginPage> {
                       keyboardType: TextInputType.number,
                       maxLength: 6,
                       inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                      decoration: InputDecoration(
+                      decoration: petureInputDecoration(
                         labelText: '验证码',
                         hintText: '请输入验证码',
                         prefixIcon: const Icon(Icons.verified_user),
-                        counterText: '',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(
-                            color: Color(0xFF5D5FEF),
-                            width: 2,
-                          ),
-                        ),
                       ),
                     ),
                   ),
                   const SizedBox(width: 12),
                   SizedBox(
                     width: 120,
-                    height: 56,
-                    child: ElevatedButton(
+                    child: PetureSecondaryButton(
+                      label: _countdown > 0 ? '${_countdown}s' : '获取验证码',
+                      expand: false,
                       onPressed:
                           _countdown > 0 || _isLoading ? null : _requestSmsCode,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF5D5FEF),
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        elevation: 0,
-                      ),
-                      child: _countdown > 0
-                          ? Text('${_countdown}s')
-                          : const Text('获取验证码'),
                     ),
                   ),
                 ],
@@ -214,10 +186,7 @@ class _PhoneLoginPageState extends State<PhoneLoginPage> {
                     },
                     child: const Text(
                       '《用户服务协议》',
-                      style: TextStyle(
-                        color: Color(0xFF5D5FEF),
-                        decoration: TextDecoration.underline,
-                      ),
+                      style: PetureTextStyles.caption,
                     ),
                   ),
                 ],
@@ -228,33 +197,10 @@ class _PhoneLoginPageState extends State<PhoneLoginPage> {
               // 登录按钮
               SizedBox(
                 width: double.infinity,
-                height: 56,
-                child: ElevatedButton(
+                child: PeturePrimaryButton(
+                  label: '登录',
+                  isLoading: _isLoading,
                   onPressed: _isLoading ? null : _verifySmsCodeAndLogin,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF5D5FEF),
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    elevation: 0,
-                  ),
-                  child: _isLoading
-                      ? const SizedBox(
-                          width: 24,
-                          height: 24,
-                          child: CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 2,
-                          ),
-                        )
-                      : const Text(
-                          '登录',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
                 ),
               ),
 

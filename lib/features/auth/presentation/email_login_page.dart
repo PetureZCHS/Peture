@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/auth_otp_email_context.dart';
 import '../../../services/analytics_service.dart';
+import '../../../shared/design_system/peture_design_system.dart';
 import 'email_register_page.dart';
 
 class EmailLoginPage extends StatefulWidget {
@@ -315,8 +316,13 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(message),
-        backgroundColor: isError ? Colors.red : Colors.green,
+        content: Text(
+          message,
+          style: PetureTextStyles.body.copyWith(
+            color: PetureColors.surfacePure,
+          ),
+        ),
+        backgroundColor: isError ? PetureColors.danger : PetureColors.success,
         duration: const Duration(seconds: 3),
       ),
     );
@@ -330,18 +336,18 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: PetureColors.background,
       resizeToAvoidBottomInset: true, // 确保页面会随键盘调整
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: PetureColors.background,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
+          icon: const Icon(Icons.arrow_back, color: PetureColors.textPrimary),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        title: const Text(
+        title: Text(
           '邮箱登录',
-          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+          style: PetureTextStyles.sectionTitle,
         ),
       ),
       body: SafeArea(
@@ -358,24 +364,20 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
                 // 页面标题
                 const Text(
                   '邮箱登录',
-                  style: TextStyle(
-                    fontSize: 32,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black,
-                  ),
+                  style: PetureTextStyles.largeTitle,
                 ),
                 const SizedBox(height: 8),
                 Text(
                   _useOtpLogin ? '请输入邮箱并获取验证码登录' : '请输入您的邮箱地址和密码',
-                  style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                  style: PetureTextStyles.body,
                 ),
                 const SizedBox(height: 40),
 
                 // 登录方式切换：验证码登录 / 密码登录
                 Container(
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF3F4F6),
-                    borderRadius: BorderRadius.circular(16),
+                    color: PetureColors.surfaceMuted,
+                    borderRadius: BorderRadius.circular(PetureRadius.md),
                   ),
                   padding: const EdgeInsets.all(4),
                   child: Row(
@@ -396,17 +398,15 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
                               color: _useOtpLogin
                                   ? Colors.white
                                   : Colors.transparent,
-                              borderRadius: BorderRadius.circular(12),
+                              borderRadius: BorderRadius.circular(PetureRadius.sm),
                             ),
                             alignment: Alignment.center,
                             child: Text(
                               '验证码登录',
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.bold,
+                              style: PetureTextStyles.label.copyWith(
                                 color: _useOtpLogin
-                                    ? const Color(0xFF5D5FEF)
-                                    : Colors.grey[700],
+                                    ? PetureColors.violet
+                                    : PetureColors.textSecondary,
                               ),
                             ),
                           ),
@@ -428,17 +428,15 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
                               color: !_useOtpLogin
                                   ? Colors.white
                                   : Colors.transparent,
-                              borderRadius: BorderRadius.circular(12),
+                              borderRadius: BorderRadius.circular(PetureRadius.sm),
                             ),
                             alignment: Alignment.center,
                             child: Text(
                               '密码登录',
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.bold,
+                              style: PetureTextStyles.label.copyWith(
                                 color: !_useOtpLogin
-                                    ? const Color(0xFF5D5FEF)
-                                    : Colors.grey[700],
+                                    ? PetureColors.violet
+                                    : PetureColors.textSecondary,
                               ),
                             ),
                           ),
@@ -454,20 +452,10 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
                 TextFormField(
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
-                  decoration: InputDecoration(
+                  decoration: petureInputDecoration(
                     labelText: '邮箱地址',
                     hintText: '请输入您的邮箱地址',
                     prefixIcon: const Icon(Icons.email_outlined),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16.0),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16.0),
-                      borderSide: const BorderSide(
-                        color: Color(0xFF5D5FEF),
-                        width: 2,
-                      ),
-                    ),
                   ),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
@@ -490,20 +478,10 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
                         child: TextFormField(
                           controller: _codeController,
                           keyboardType: TextInputType.number,
-                          decoration: InputDecoration(
+                          decoration: petureInputDecoration(
                             labelText: '验证码',
                             hintText: '请输入6位验证码',
                             prefixIcon: const Icon(Icons.verified_outlined),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(16.0),
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(16.0),
-                              borderSide: const BorderSide(
-                                color: Color(0xFF5D5FEF),
-                                width: 2,
-                              ),
-                            ),
                           ),
                           validator: (value) {
                             if (!_useOtpLogin) return null;
@@ -519,26 +497,13 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
                       ),
                       const SizedBox(width: 12),
                       SizedBox(
-                        height: 56,
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.white,
-                            foregroundColor: const Color(0xFF5D5FEF),
-                            side: const BorderSide(color: Color(0xFF5D5FEF)),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16.0),
-                            ),
-                          ),
+                        height: 48,
+                        child: PetureSecondaryButton(
+                          label: _countdown > 0 ? '重发(${_countdown}s)' : '发送验证码',
                           onPressed: _isLoading || _countdown > 0
                               ? null
                               : _sendLoginCode,
-                          child: Text(
-                            _countdown > 0 ? '重发(${_countdown}s)' : '发送验证码',
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
+                          expand: false,
                         ),
                       ),
                     ],
@@ -548,7 +513,7 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
                   TextFormField(
                     controller: _passwordController,
                     obscureText: _obscurePassword,
-                    decoration: InputDecoration(
+                    decoration: petureInputDecoration(
                       labelText: '密码',
                       hintText: '请输入您的密码',
                       prefixIcon: const Icon(Icons.lock_outline),
@@ -563,16 +528,6 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
                             _obscurePassword = !_obscurePassword;
                           });
                         },
-                      ),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16.0),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16.0),
-                        borderSide: const BorderSide(
-                          color: Color(0xFF5D5FEF),
-                          width: 2,
-                        ),
                       ),
                     ),
                     validator: (value) {
@@ -602,7 +557,7 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
                       activeColor: const Color(0xFF5D5FEF),
                     ),
                     const Text('我已阅读并同意',
-                        style: TextStyle(fontSize: 13, color: Colors.grey)),
+                        style: PetureTextStyles.caption),
                     GestureDetector(
                       onTap: _isLoading
                           ? null
@@ -610,12 +565,7 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
                               _showMessage('请阅读《用户协议与隐私政策》全文', isError: false),
                       child: const Text(
                         '《用户协议与隐私政策》',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Color(0xFF5D5FEF),
-                          fontWeight: FontWeight.bold,
-                          decoration: TextDecoration.underline,
-                        ),
+                        style: PetureTextStyles.caption,
                       ),
                     ),
                   ],
@@ -624,40 +574,12 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
                 const SizedBox(height: 24),
 
                 // 登录按钮
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF5D5FEF),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16.0),
-                      ),
-                      padding: const EdgeInsets.symmetric(vertical: 18.0),
-                      elevation: 0,
-                    ),
-                    onPressed: _isLoading
-                        ? null
-                        : (_useOtpLogin ? _verifyCodeAndLogin : _emailLogin),
-                    child: _isLoading
-                        ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                Colors.white,
-                              ),
-                              strokeWidth: 2,
-                            ),
-                          )
-                        : const Text(
-                            '登录',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                  ),
+                PeturePrimaryButton(
+                  label: '登录',
+                  isLoading: _isLoading,
+                  onPressed: _isLoading
+                      ? null
+                      : (_useOtpLogin ? _verifyCodeAndLogin : _emailLogin),
                 ),
 
                 const SizedBox(height: 24),
@@ -676,14 +598,13 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
                           },
                     child: RichText(
                       text: TextSpan(
-                        style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-                        children: const [
+                        style: PetureTextStyles.body,
+                        children: [
                           TextSpan(text: '还没有账户？ '),
                           TextSpan(
                             text: '立即注册',
-                            style: TextStyle(
-                              color: Color(0xFF5D5FEF),
-                              fontWeight: FontWeight.bold,
+                            style: PetureTextStyles.bodyStrong.copyWith(
+                              color: PetureColors.violet,
                             ),
                           ),
                         ],

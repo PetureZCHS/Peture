@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:async';
 
 import '../../../core/auth_otp_email_context.dart';
+import '../../../shared/design_system/peture_design_system.dart';
 import 'email_login_page.dart';
 
 /// 密码强度等级
@@ -373,18 +374,18 @@ class _EmailRegisterPageState extends State<EmailRegisterPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: PetureColors.background,
       resizeToAvoidBottomInset: true, // 键盘弹出时调整布局
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: PetureColors.background,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
+          icon: const Icon(Icons.arrow_back, color: PetureColors.textPrimary),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        title: const Text(
+        title: Text(
           '注册账户',
-          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+          style: PetureTextStyles.sectionTitle,
         ),
       ),
       body: SafeArea(
@@ -400,72 +401,34 @@ class _EmailRegisterPageState extends State<EmailRegisterPage> {
                 // ===== 页面标题 =====
                 const Text(
                   '创建新账户',
-                  style: TextStyle(
-                    fontSize: 32,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black,
-                  ),
+                  style: PetureTextStyles.largeTitle,
                 ),
                 const SizedBox(height: 8),
                 Text(
                   '请先填写邮箱并完成验证码校验',
-                  style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                  style: PetureTextStyles.body,
                 ),
                 const SizedBox(height: 40),
 
                 // ===== 成功消息显示区域 =====
                 if (_successMessage != null)
-                  Container(
-                    padding: const EdgeInsets.all(16.0),
-                    margin: const EdgeInsets.only(bottom: 24.0),
-                    decoration: BoxDecoration(
-                      color: Colors.green.shade50,
-                      borderRadius: BorderRadius.circular(12.0),
-                      border: Border.all(color: Colors.green.shade200),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(Icons.check_circle, color: Colors.green.shade700),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            _successMessage!,
-                            style: TextStyle(
-                              color: Colors.green.shade900,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                      ],
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 24),
+                    child: PetureAlertPanel(
+                      title: '操作成功',
+                      message: _successMessage,
+                      tone: PetureAlertTone.success,
                     ),
                   ),
 
                 // ===== 错误消息显示区域 =====
                 if (_errorMessage != null)
-                  Container(
-                    padding: const EdgeInsets.all(16.0),
-                    margin: const EdgeInsets.only(bottom: 24.0),
-                    decoration: BoxDecoration(
-                      color: Colors.red.shade50,
-                      borderRadius: BorderRadius.circular(12.0),
-                      border: Border.all(color: Colors.red.shade200),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(Icons.error, color: Colors.red.shade700),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            _errorMessage!,
-                            style: TextStyle(
-                              color: Colors.red.shade900,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ),
-                      ],
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 24),
+                    child: PetureAlertPanel(
+                      title: '操作失败',
+                      message: _errorMessage,
+                      tone: PetureAlertTone.danger,
                     ),
                   ),
 
@@ -474,24 +437,10 @@ class _EmailRegisterPageState extends State<EmailRegisterPage> {
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
                   enabled: !_isLoading, // 加载时禁用输入
-                  decoration: InputDecoration(
+                  decoration: petureInputDecoration(
                     labelText: '邮箱地址 *',
                     hintText: '请输入您的邮箱地址',
                     prefixIcon: const Icon(Icons.email_outlined),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16.0),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16.0),
-                      borderSide: const BorderSide(
-                        color: Color(0xFF5D5FEF),
-                        width: 2,
-                      ),
-                    ),
-                    errorBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16.0),
-                      borderSide: const BorderSide(color: Colors.red, width: 2),
-                    ),
                   ),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
@@ -519,26 +468,10 @@ class _EmailRegisterPageState extends State<EmailRegisterPage> {
                           keyboardType: TextInputType.number,
                           maxLength: 6,
                           enabled: !_isLoading,
-                          decoration: InputDecoration(
+                          decoration: petureInputDecoration(
                             labelText: '验证码 *',
                             hintText: '请输入6位验证码',
                             prefixIcon: const Icon(Icons.verified_user),
-                            counterText: '',
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(16.0),
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(16.0),
-                              borderSide: const BorderSide(
-                                color: Color(0xFF5D5FEF),
-                                width: 2,
-                              ),
-                            ),
-                            errorBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(16.0),
-                              borderSide:
-                                  const BorderSide(color: Colors.red, width: 2),
-                            ),
                           ),
                           validator: (value) {
                             if (value == null || value.isEmpty) {
@@ -554,22 +487,13 @@ class _EmailRegisterPageState extends State<EmailRegisterPage> {
                       const SizedBox(width: 12),
                       SizedBox(
                         width: 120,
-                        child: ElevatedButton(
+                        child: PetureSecondaryButton(
+                          expand: false,
+                          isLoading: _isLoading,
+                          label: _countdown > 0 ? '${_countdown}s' : '重新发送',
                           onPressed: (_countdown > 0 || _isLoading)
                               ? null
                               : _sendVerificationCode,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF5D5FEF),
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16.0),
-                            ),
-                            padding: const EdgeInsets.symmetric(vertical: 18.0),
-                            elevation: 0,
-                          ),
-                          child: _countdown > 0
-                              ? Text('${_countdown}s')
-                              : const Text('重新发送'),
                         ),
                       ),
                     ],
@@ -578,58 +502,14 @@ class _EmailRegisterPageState extends State<EmailRegisterPage> {
                 ],
 
                 // ===== 发送验证码/注册按钮 =====
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF5D5FEF),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16.0),
-                      ),
-                      padding: const EdgeInsets.symmetric(vertical: 18.0),
-                      elevation: 0,
-                      // 加载时禁用按钮
-                      disabledBackgroundColor: Colors.grey.shade300,
-                      disabledForegroundColor: Colors.grey.shade600,
-                    ),
-                    onPressed: _isLoading
-                        ? null
-                        : (_isCodeSent
-                            ? _verifyCodeAndRegister
-                            : _sendVerificationCode),
-                    child: _isLoading
-                        ? Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: const [
-                              SizedBox(
-                                height: 20,
-                                width: 20,
-                                child: CircularProgressIndicator(
-                                  valueColor: AlwaysStoppedAnimation<Color>(
-                                    Colors.white,
-                                  ),
-                                  strokeWidth: 2,
-                                ),
-                              ),
-                              SizedBox(width: 12),
-                              Text(
-                                '处理中...',
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ],
-                          )
-                        : Text(
-                            _isCodeSent ? '下一步，设置密码' : '发送验证码',
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                  ),
+                PeturePrimaryButton(
+                  label: _isCodeSent ? '下一步，设置密码' : '发送验证码',
+                  isLoading: _isLoading,
+                  onPressed: _isLoading
+                      ? null
+                      : (_isCodeSent
+                          ? _verifyCodeAndRegister
+                          : _sendVerificationCode),
                 ),
                 const SizedBox(height: 24),
 
@@ -643,14 +523,13 @@ class _EmailRegisterPageState extends State<EmailRegisterPage> {
                           },
                     child: RichText(
                       text: TextSpan(
-                        style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-                        children: const [
+                        style: PetureTextStyles.body,
+                        children: [
                           TextSpan(text: '已有账户？ '),
                           TextSpan(
                             text: '立即登录',
-                            style: TextStyle(
-                              color: Color(0xFF5D5FEF),
-                              fontWeight: FontWeight.bold,
+                            style: PetureTextStyles.bodyStrong.copyWith(
+                              color: PetureColors.violet,
                             ),
                           ),
                         ],

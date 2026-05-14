@@ -8,6 +8,7 @@ import 'dart:ui';
 import '../../../core/auth_pending_email_login.dart';
 import '../../../main.dart';
 import '../../../services/analytics_service.dart';
+import '../../../shared/design_system/peture_design_system.dart';
 // 导入邮箱登录页面
 import 'email_login_page.dart';
 // 导入手机号验证码登录页面
@@ -328,12 +329,12 @@ class _LoginPageState extends State<LoginPage> with TickerProviderStateMixin {
                   child: Container(
                     padding: const EdgeInsets.fromLTRB(32, 40, 32, 40),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.92), // 稍微不那么透，保证可读性
+                      color: PetureColors.surface.withOpacity(0.92),
                       borderRadius:
                           const BorderRadius.vertical(top: Radius.circular(32)),
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFF5A8EFA).withOpacity(0.15),
+                          color: PetureColors.violet.withOpacity(0.2),
                           blurRadius: 40,
                           offset: const Offset(0, -10),
                         ),
@@ -497,24 +498,27 @@ class _LoginBodyContentState extends State<_LoginBodyContent> {
       children: <Widget>[
         const Text(
           '登录以继续您的萌宠之旅',
-          style: TextStyle(fontSize: 14, color: Colors.grey),
+          style: PetureTextStyles.body,
         ),
         const SizedBox(height: 32),
-        _GradientLoginButton(
+        PeturePrimaryButton(
+          label: '一键登录',
+          icon: Icons.auto_awesome,
           onPressed: () {
             _login();
           },
         ),
         const SizedBox(height: 16),
-        _SecondaryLoginButton(
-          text: '邮箱登录',
+        PetureSecondaryButton(
+          label: '邮箱登录',
+          icon: Icons.email_outlined,
           onPressed: () => Navigator.of(context).push(
             MaterialPageRoute(builder: (context) => const EmailLoginPage()),
           ),
         ),
         const SizedBox(height: 16),
-        _SecondaryLoginButton(
-          text: '手机号验证码登录',
+        PetureSecondaryButton(
+          label: '手机号验证码登录',
           icon: Icons.phone_android,
           onPressed: () => Navigator.of(context).push(
             MaterialPageRoute(builder: (context) => const PhoneLoginPage()),
@@ -533,7 +537,7 @@ class _LoginBodyContentState extends State<_LoginBodyContent> {
             Padding(
               padding: EdgeInsets.symmetric(horizontal: 16),
               child: Text('或使用其他方式登录',
-                  style: TextStyle(color: Colors.grey, fontSize: 12)),
+                  style: PetureTextStyles.caption),
             ),
             Expanded(child: Divider()),
           ],
@@ -541,100 +545,6 @@ class _LoginBodyContentState extends State<_LoginBodyContent> {
         const SizedBox(height: 20),
         _SocialLoginButtons(onLogin: _otherLogin),
       ],
-    );
-  }
-}
-
-// 渐变色一键登录按钮
-class _GradientLoginButton extends StatelessWidget {
-  final VoidCallback onPressed;
-
-  const _GradientLoginButton({required this.onPressed});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      height: 56,
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF5A8EFA), Color(0xFF8B77FF)], // 蓝紫渐变
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-        ),
-        borderRadius: BorderRadius.circular(28),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF5A8EFA).withOpacity(0.4),
-            blurRadius: 12,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onPressed,
-          borderRadius: BorderRadius.circular(28),
-          child: const Center(
-            child: Text(
-              '一键登录',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 1,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// 次要登录按钮
-class _SecondaryLoginButton extends StatelessWidget {
-  final String text;
-  final IconData? icon;
-  final VoidCallback onPressed;
-
-  const _SecondaryLoginButton({
-    required this.text,
-    this.icon,
-    required this.onPressed,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      height: 56,
-      child: OutlinedButton(
-        style: OutlinedButton.styleFrom(
-          foregroundColor: const Color(0xFF5A8EFA),
-          side: const BorderSide(color: Color(0xFFE0E0E0)),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(28.0),
-          ),
-          backgroundColor: Colors.white,
-        ),
-        onPressed: onPressed,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            if (icon != null) ...[
-              Icon(icon, size: 20, color: const Color(0xFF5A8EFA)),
-              const SizedBox(width: 8),
-            ],
-            Text(text,
-                style: const TextStyle(
-                    fontSize: 16,
-                    color: Color(0xFF424242),
-                    fontWeight: FontWeight.w600)),
-          ],
-        ),
-      ),
     );
   }
 }
@@ -662,22 +572,17 @@ class _AgreementRow extends StatelessWidget {
             value: value,
             onChanged: onChanged,
             visualDensity: VisualDensity.compact,
-            activeColor: const Color(0xFF5A8EFA),
+            activeColor: PetureColors.violet,
             shape:
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
           ),
         ),
-        const Text('我已阅读并同意',
-            style: TextStyle(fontSize: 12, color: Colors.grey)),
+        const Text('我已阅读并同意', style: PetureTextStyles.caption),
         GestureDetector(
           onTap: onTap,
-          child: const Text(
+          child: Text(
             '《用户协议与隐私政策》',
-            style: TextStyle(
-              color: Color(0xFF5A8EFA),
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
-            ),
+            style: PetureTextStyles.caption.copyWith(color: PetureColors.violet),
           ),
         ),
       ],
@@ -698,13 +603,13 @@ class _SocialLoginButtons extends StatelessWidget {
       children: [
         _SocialLoginButton(
           icon: Icons.wechat,
-          color: const Color(0xFF07C160),
+          color: PetureColors.mint,
           onTap: () => onLogin('微信'),
         ),
         const SizedBox(width: 32),
         _SocialLoginButton(
           icon: Icons.apple,
-          color: Colors.black,
+          color: PetureColors.textPrimary,
           onTap: () => onLogin('苹果'),
         ),
       ],
@@ -732,16 +637,16 @@ class _SocialLoginButton extends StatelessWidget {
         width: 50,
         height: 50,
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: PetureColors.surfacePure,
           shape: BoxShape.circle,
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.05),
+              color: PetureColors.violet.withOpacity(0.12),
               blurRadius: 10,
               offset: const Offset(0, 4),
             ),
           ],
-          border: Border.all(color: Colors.grey.shade100),
+          border: Border.all(color: PetureColors.border),
         ),
         child: Icon(icon, color: color, size: 28),
       ),
