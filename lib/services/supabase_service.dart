@@ -444,6 +444,31 @@ class SupabaseService {
     if (userId == null) return false;
 
     try {
+      // 先删除依赖 pet_passports 的子表，再删除 pet_passports，最后删除 pets。
+      final passports = await _client
+          .from('pet_passports')
+          .select('id')
+          .eq('user_id', userId)
+          .eq('pet_id', petId);
+
+      final passportIds = (passports as List)
+          .map((e) => e['id']?.toString() ?? '')
+          .where((id) => id.isNotEmpty)
+          .toList();
+
+      if (passportIds.isNotEmpty) {
+        await _client
+            .from('pet_passport_achievements')
+            .delete()
+            .inFilter('passport_id', passportIds);
+      }
+
+      await _client
+          .from('pet_passports')
+          .delete()
+          .eq('user_id', userId)
+          .eq('pet_id', petId);
+
       await _client.from('pets').delete().eq('id', petId).eq('user_id', userId);
 
       return true;

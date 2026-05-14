@@ -597,63 +597,228 @@ class _PetProfileSectionState extends State<PetProfileSection> {
   }
 
   void _deletePet(Pet petToDelete) {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('确认删除'),
-          content: Text('您确定要删除 ${petToDelete.name} 的档案吗？'),
-          actions: <Widget>[
-            TextButton(
-              child: const Text('取消'),
-              onPressed: () {
-                setState(() {});
-                Navigator.of(context).pop();
-              },
-            ),
-            TextButton(
-              style: TextButton.styleFrom(foregroundColor: Colors.red),
-              child: const Text('删除'),
-              onPressed: () async {
-                Navigator.of(context).pop();
-                try {
-                  if (petToDelete.id != null) {
-                    final success = await _supabaseService.deletePet(
-                      petToDelete.id.toString(),
-                    );
-                    if (!success) {
-                      if (mounted) {
-                        ScaffoldMessenger.of(this.context).showSnackBar(
-                          const SnackBar(content: Text('删除失败，请检查网络连接')),
-                        );
-                      }
-                      return;
-                    }
-                    if (mounted) {
-                      setState(() {
-                        pets.removeWhere((pet) => pet.id == petToDelete.id);
-                      });
-                      // 通知其他页面（如医疗记录页）数据已变更
-                      DataChangeNotifier.markPetDataChanged();
+    final targetName = petToDelete.name.trim();
+    String confirmInput = '';
 
-                      ScaffoldMessenger.of(this.context).showSnackBar(
-                        SnackBar(content: Text('${petToDelete.name} 的档案已删除')),
-                      );
-                    }
-                  }
-                } catch (e) {
-                  if (mounted) {
-                    ScaffoldMessenger.of(
-                      this.context,
-                    ).showSnackBar(const SnackBar(content: Text('删除失败，请重试')));
-                  }
-                }
-              },
-            ),
-          ],
+    showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final canDelete = confirmInput.trim() == targetName;
+            return Dialog(
+              backgroundColor: Colors.transparent,
+              insetPadding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: PetureColors.surfacePure,
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.12),
+                      blurRadius: 28,
+                      offset: const Offset(0, 10),
+                    ),
+                  ],
+                ),
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                    Container(
+                      width: 52,
+                      height: 52,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFF1F1),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: const Icon(
+                        Icons.warning_amber_rounded,
+                        color: Color(0xFFE05757),
+                        size: 30,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    const Text(
+                      '高风险操作：删除宠物档案',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.primaryText,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      '删除后不可恢复，${petToDelete.name} 的宠物档案及关联护照数据将被永久删除。',
+                      style: TextStyle(
+                        fontSize: 14,
+                        height: 1.5,
+                        color: AppColors.secondaryText.withOpacity(0.92),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFF8F2),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: const Color(0xFFFFC999)),
+                      ),
+                      child: Text(
+                        '请输入宠物名“$targetName”以确认删除',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF9A5A1F),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      autofocus: true,
+                      onChanged: (value) {
+                        confirmInput = value;
+                        setDialogState(() {});
+                      },
+                      decoration: InputDecoration(
+                        hintText: '输入宠物名',
+                        filled: true,
+                        fillColor: PetureColors.surface,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 12,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: Colors.grey.shade300),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: Colors.grey.shade300),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(
+                            color: AppColors.primary,
+                            width: 1.4,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () => Navigator.of(dialogContext).pop(),
+                            style: OutlinedButton.styleFrom(
+                              minimumSize: const Size.fromHeight(48),
+                              side: BorderSide(color: Colors.grey.shade300),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                            ),
+                            child: const Text('我再想想'),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              gradient: canDelete
+                                  ? const LinearGradient(
+                                      colors: [
+                                        AppColors.primaryGradientStart,
+                                        AppColors.primaryGradientEnd,
+                                      ],
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                    )
+                                  : null,
+                              color: canDelete ? null : Colors.grey.shade300,
+                              borderRadius: BorderRadius.circular(14),
+                              boxShadow: canDelete
+                                  ? [
+                                      BoxShadow(
+                                        color: AppColors.primary.withOpacity(0.28),
+                                        blurRadius: 10,
+                                        offset: const Offset(0, 4),
+                                      ),
+                                    ]
+                                  : null,
+                            ),
+                            child: ElevatedButton(
+                              onPressed: canDelete
+                                  ? () => Navigator.of(dialogContext).pop(true)
+                                  : null,
+                              style: ElevatedButton.styleFrom(
+                                minimumSize: const Size.fromHeight(48),
+                                backgroundColor: Colors.transparent,
+                                disabledBackgroundColor: Colors.transparent,
+                                shadowColor: Colors.transparent,
+                                foregroundColor: Colors.white,
+                                disabledForegroundColor: Colors.white70,
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                              ),
+                              child: const Text(
+                                '确认删除',
+                                style: TextStyle(fontWeight: FontWeight.w700),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                  ),
+                ),
+              ),
+            );
+          },
         );
       },
-    );
+    ).then((confirmed) async {
+      if (confirmed != true) return;
+
+      try {
+        if (petToDelete.id != null) {
+          final success = await _supabaseService.deletePet(
+            petToDelete.id.toString(),
+          );
+          if (!success) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('删除失败，请检查网络连接')),
+              );
+            }
+            return;
+          }
+          if (mounted) {
+            setState(() {
+              pets.removeWhere((pet) => pet.id == petToDelete.id);
+            });
+            DataChangeNotifier.markPetDataChanged();
+
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('${petToDelete.name} 的档案已删除')),
+            );
+          }
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('删除失败，请重试')));
+        }
+      }
+    });
   }
 
   @override
