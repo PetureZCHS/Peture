@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/config/supabase_config.dart';
+import 'analytics_service.dart';
 
 // ============================================================================
 // chat 事件类
@@ -449,6 +450,52 @@ class DiaryErrorEvent implements DiaryStreamEvent {
 /// 宠物日记 Edge Function 服务
 /// 通过 Supabase Edge Function 调用 Dify Workflow API 生成宠物日记
 class PetDiaryEdgeService {
+  String? _extractDiaryText(dynamic value) {
+    if (value == null) return null;
+    if (value is String) {
+      final text = value.trim();
+      return text.isEmpty ? null : value;
+    }
+    if (value is List) {
+      final parts = value
+          .map(_extractDiaryText)
+          .whereType<String>()
+          .where((text) => text.trim().isNotEmpty)
+          .toList();
+      return parts.isEmpty ? null : parts.join('\n');
+    }
+    if (value is Map) {
+      const preferredKeys = [
+        'text',
+        'output',
+        'answer',
+        'result',
+        'content',
+        'diary',
+        'diary_content',
+      ];
+      for (final key in preferredKeys) {
+        if (value.containsKey(key)) {
+          final text = _extractDiaryText(value[key]);
+          if (text != null && text.trim().isNotEmpty) return text;
+        }
+      }
+      for (final entry in value.entries) {
+        final text = _extractDiaryText(entry.value);
+        if (text != null && text.trim().isNotEmpty) return text;
+      }
+    }
+    return null;
+  }
+
+  String _deltaFromText(String nextText, String currentText) {
+    if (nextText == currentText) return '';
+    if (nextText.startsWith(currentText)) {
+      return nextText.substring(currentText.length);
+    }
+    return nextText;
+  }
+
   /// 生成宠物日记（流式输出）
   ///
   /// 参数说明：
@@ -476,35 +523,60 @@ class PetDiaryEdgeService {
       }
 
       final accessToken = session.accessToken;
+      final startedAt = DateTime.now().toUtc();
+      var didReportSuccess = false;
+      final userId = supabase.auth.currentUser?.id ?? 'anon';
+      final ownerTitle =
+          nickname != null && nickname.trim().isNotEmpty ? nickname.trim() : '主人';
+      final species =
+          petType != null && petType.trim().isNotEmpty ? petType.trim() : '宠物';
 
-      // ✅ 根据 diary-v3 Edge Function 要求构建请求体
       final inputs = {
         'query': query,
         'style': style,
-        if (nickname != null) 'nickname': nickname, //主人昵称
-        if (breed != null) 'breed': breed, //宠物品种
-        if (petName != null) 'pet_name': petName, //宠物名字
-        if (gender != null) 'gender': gender, //宠物性别
-        if (petType != null) 'type': petType, //宠物类型，猫狗
+        'owner_title': ownerTitle,
+        'species': species,
+        if (nickname != null && nickname.trim().isNotEmpty)
+          'nickname': nickname.trim(),
+        if (breed != null && breed.trim().isNotEmpty) 'breed': breed.trim(),
+        if (petName != null && petName.trim().isNotEmpty)
+          'pet_name': petName.trim(),
+        if (gender != null && gender.trim().isNotEmpty)
+          'gender': gender.trim(),
+        if (petType != null && petType.trim().isNotEmpty)
+          'type': petType.trim(),
       };
 
       final body = {
         'inputs': inputs,
+        'user': userId,
         'response_mode': 'streaming',
       };
 
-      debugPrint('📝 调用 Diary-v3 Edge Function');
+      debugPrint('📝 调用 Diary-v4 Edge Function');
       debugPrint('📦 参数:');
       debugPrint(
         '   - inputs.query: ${query.substring(0, 30.clamp(0, query.length))}...',
       );
       debugPrint('   - inputs.style: $style');
+      debugPrint('   - user: $userId');
+      debugPrint('   - inputs.owner_title: $ownerTitle');
+      debugPrint('   - inputs.species: $species');
       if (nickname != null) debugPrint('   - inputs.nickname: $nickname');
       if (breed != null) debugPrint('   - inputs.breed: $breed');
       if (petName != null) debugPrint('   - inputs.pet_name: $petName');
       if (gender != null) debugPrint('   - inputs.gender: $gender');
       if (petType != null) debugPrint('   - inputs.type: $petType');
       debugPrint('   - response_mode: streaming');
+      AnalyticsService.track(
+        'diary_generate_start',
+        module: 'diary',
+        properties: {
+          'entry_page': 'pet_diary_edge_service',
+          'style': style,
+          'pet_type': petType,
+        },
+      );
 
       final url = Uri.parse(SupabaseConfig.diaryUrl);
 
@@ -512,7 +584,8 @@ class PetDiaryEdgeService {
       final request = http.Request('POST', url)
         ..headers.addAll({
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer $accessToken', // ✅ 使用用户 Token
+          'apikey': SupabaseConfig.anonKey,
+          'Authorization': 'Bearer $accessToken',
         })
         ..body = jsonEncode(body);
 
@@ -522,6 +595,16 @@ class PetDiaryEdgeService {
       if (response.statusCode != 200) {
         final errorBody = await response.stream.bytesToString();
         debugPrint('❌ Diary Edge Function 错误: $errorBody');
+        AnalyticsService.track(
+          'diary_generate_error',
+          module: 'diary',
+          durationMs: DateTime.now().toUtc().difference(startedAt).inMilliseconds,
+          properties: {
+            'entry_page': 'pet_diary_edge_service',
+            'style': style,
+            'error_code': 'http_${response.statusCode}',
+          },
+        );
         yield DiaryErrorEvent('请求失败 (${response.statusCode}): $errorBody');
         return;
       }
@@ -546,6 +629,19 @@ class PetDiaryEdgeService {
 
             if (dataString.isEmpty || dataString == '[DONE]') {
               debugPrint('📨 Diary [DONE] 事件');
+              if (!didReportSuccess) {
+                didReportSuccess = true;
+                AnalyticsService.track(
+                  'diary_generate_success',
+                  module: 'diary',
+                  durationMs:
+                      DateTime.now().toUtc().difference(startedAt).inMilliseconds,
+                  properties: {
+                    'entry_page': 'pet_diary_edge_service',
+                    'style': style,
+                  },
+                );
+              }
               yield DiaryDoneEvent(accumulatedText);
               continue;
             }
@@ -561,8 +657,8 @@ class PetDiaryEdgeService {
                   // Workflow API 的流式文本块事件
                   final data = json['data'] as Map<String, dynamic>?;
                   if (data != null && data.containsKey('text')) {
-                    final delta = data['text'] as String;
-                    if (delta.isNotEmpty) {
+                    final delta = _extractDiaryText(data['text']);
+                    if (delta != null && delta.isNotEmpty) {
                       accumulatedText += delta;
                       debugPrint('   ✍️ text_chunk: ${delta.length} 字符');
                       yield DiaryContentEvent(
@@ -577,12 +673,11 @@ class PetDiaryEdgeService {
                   // 工作流完成，获取最终文本
                   final data = json['data'] as Map<String, dynamic>?;
                   if (data != null && data.containsKey('outputs')) {
-                    final outputs = data['outputs'] as Map<String, dynamic>?;
-                    if (outputs != null && outputs.containsKey('text')) {
-                      final text = outputs['text'] as String;
+                    final text = _extractDiaryText(data['outputs']);
 
-                      if (text != accumulatedText) {
-                        final delta = text.substring(accumulatedText.length);
+                    if (text != null && text != accumulatedText) {
+                      final delta = _deltaFromText(text, accumulatedText);
+                      if (delta.isNotEmpty) {
                         accumulatedText = text;
                         debugPrint('   ✍️ 完整文本: ${text.length} 字符');
                         yield DiaryContentEvent(
@@ -592,6 +687,21 @@ class PetDiaryEdgeService {
                       }
                     }
                   }
+                  if (!didReportSuccess) {
+                    didReportSuccess = true;
+                    AnalyticsService.track(
+                      'diary_generate_success',
+                      module: 'diary',
+                      durationMs: DateTime.now()
+                          .toUtc()
+                          .difference(startedAt)
+                          .inMilliseconds,
+                      properties: {
+                        'entry_page': 'pet_diary_edge_service',
+                        'style': style,
+                      },
+                    );
+                  }
                   yield DiaryDoneEvent(accumulatedText);
                   break;
 
@@ -600,14 +710,13 @@ class PetDiaryEdgeService {
                   // 如果已经通过 text_chunk 接收了内容，则跳过（避免重复）
                   final data = json['data'] as Map<String, dynamic>?;
                   if (data != null && data.containsKey('outputs')) {
-                    final outputs = data['outputs'] as Map<String, dynamic>?;
-                    if (outputs != null && outputs.containsKey('text')) {
-                      final text = outputs['text'] as String;
+                    final text = _extractDiaryText(data['outputs']);
 
                       // 只有当 node_finished 的文本比已累积的文本更长时才处理
                       // 这样可以避免与 text_chunk 重复
-                      if (text.length > accumulatedText.length) {
-                        final delta = text.substring(accumulatedText.length);
+                    if (text != null && text.length > accumulatedText.length) {
+                      final delta = _deltaFromText(text, accumulatedText);
+                      if (delta.isNotEmpty) {
                         accumulatedText = text;
                         debugPrint('   ✍️ 增量文本: ${delta.length} 字符');
                         yield DiaryContentEvent(
@@ -622,6 +731,17 @@ class PetDiaryEdgeService {
                 case 'error':
                   final message = json['message'] as String? ?? '未知错误';
                   debugPrint('   ❌ Dify 错误: $message');
+                  AnalyticsService.track(
+                    'diary_generate_error',
+                    module: 'diary',
+                    durationMs:
+                        DateTime.now().toUtc().difference(startedAt).inMilliseconds,
+                    properties: {
+                      'entry_page': 'pet_diary_edge_service',
+                      'style': style,
+                      'error_code': 'dify_error',
+                    },
+                  );
                   yield DiaryErrorEvent(message);
                   return;
 
@@ -649,11 +769,32 @@ class PetDiaryEdgeService {
       debugPrint('   最终文本长度: ${accumulatedText.length} 字符');
 
       if (accumulatedText.isNotEmpty) {
+        if (!didReportSuccess) {
+          AnalyticsService.track(
+            'diary_generate_success',
+            module: 'diary',
+            durationMs:
+                DateTime.now().toUtc().difference(startedAt).inMilliseconds,
+            properties: {
+              'entry_page': 'pet_diary_edge_service',
+              'style': style,
+            },
+          );
+        }
         yield DiaryDoneEvent(accumulatedText);
       }
     } catch (e, stackTrace) {
       debugPrint('❌ Diary Edge Function 调用异常: $e');
       debugPrint('Stack trace: $stackTrace');
+      AnalyticsService.track(
+        'diary_generate_error',
+        module: 'diary',
+        properties: {
+          'entry_page': 'pet_diary_edge_service',
+          'style': style,
+          'error_code': e.runtimeType.toString(),
+        },
+      );
       yield DiaryErrorEvent('生成日记失败: $e');
     }
   }
@@ -665,6 +806,9 @@ class PetDiaryEdgeService {
     required String style,
     String? nickname,
     String? breed,
+    String? petName,
+    String? gender,
+    String? petType,
   }) async {
     try {
       // ✅ 获取当前用户的 Session Token
@@ -675,21 +819,35 @@ class PetDiaryEdgeService {
       }
 
       final accessToken = session.accessToken;
+      final userId = supabase.auth.currentUser?.id ?? 'anon';
+      final ownerTitle =
+          nickname != null && nickname.trim().isNotEmpty ? nickname.trim() : '主人';
+      final species =
+          petType != null && petType.trim().isNotEmpty ? petType.trim() : '宠物';
 
-      // ✅ 根据 diary-v3 Edge Function 要求构建请求体
       final inputs = {
         'query': query,
         'style': style,
-        if (nickname != null) 'nickname': nickname,
-        if (breed != null) 'breed': breed,
+        'owner_title': ownerTitle,
+        'species': species,
+        if (nickname != null && nickname.trim().isNotEmpty)
+          'nickname': nickname.trim(),
+        if (breed != null && breed.trim().isNotEmpty) 'breed': breed.trim(),
+        if (petName != null && petName.trim().isNotEmpty)
+          'pet_name': petName.trim(),
+        if (gender != null && gender.trim().isNotEmpty)
+          'gender': gender.trim(),
+        if (petType != null && petType.trim().isNotEmpty)
+          'type': petType.trim(),
       };
 
       final body = {
         'inputs': inputs,
+        'user': userId,
         'response_mode': 'blocking',
       };
 
-      debugPrint('📝 阻塞模式调用 Diary-v3 Edge Function');
+      debugPrint('📝 阻塞模式调用 Diary-v4 Edge Function');
       debugPrint('📦 请求体: ${jsonEncode(body)}');
 
       final url = Uri.parse(SupabaseConfig.diaryUrl);
@@ -697,7 +855,8 @@ class PetDiaryEdgeService {
         url,
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer $accessToken', // ✅ 使用用户 Token
+          'apikey': SupabaseConfig.anonKey,
+          'Authorization': 'Bearer $accessToken',
         },
         body: jsonEncode(body),
       );
@@ -708,11 +867,10 @@ class PetDiaryEdgeService {
         final data = jsonDecode(response.body) as Map<String, dynamic>;
         debugPrint('✅ Diary 响应成功');
 
-        // 从 Dify Workflow 响应中提取文本
-        String? text;
-        if (data['data'] != null && data['data']['outputs'] != null) {
-          text = data['data']['outputs']['text'] as String?;
-        }
+        // Extract diary text from v4 outputs without assuming a fixed key.
+        final responseData = data['data'];
+        final outputs = responseData is Map ? responseData['outputs'] : null;
+        final text = _extractDiaryText(outputs);
 
         if (text != null && text.isNotEmpty) {
           final preview =

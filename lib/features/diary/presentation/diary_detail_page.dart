@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
+import '../../../core/page_tracker_mixin.dart';
 import '../../../services/ai_image_cache_service.dart';
 import '../../../shared/models/pet_diary.dart';
 import '../../content_feedback/domain/content_feedback_kind.dart';
@@ -85,7 +86,6 @@ double _computeWatermarkTextFitScale({
   return (safeMaxWidth / painter.width).clamp(0.45, 1.0);
 }
 
-
 class DiaryDetailPage extends StatelessWidget {
   final PetDiary diary;
 
@@ -93,156 +93,160 @@ class DiaryDetailPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F5),
-      appBar: AppBar(
+    return TrackedPage(
+      pageName: 'diary_detail',
+      child: Scaffold(
         backgroundColor: const Color(0xFFF5F5F5),
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.black87),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(
-          DateFormat('yyyy年MM月dd日').format(diary.timestamp),
-          style: GoogleFonts.notoSerif(
-            color: Colors.black87,
-            fontWeight: FontWeight.bold,
+        appBar: AppBar(
+          backgroundColor: const Color(0xFFF5F5F5),
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_ios_new, color: Colors.black87),
+            onPressed: () => Navigator.pop(context),
           ),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.ios_share, color: Colors.black87),
-            tooltip: '生成分享卡片',
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => DiarySharePage(
-                  diary: diary,
-                  petType: diary.petType,
-                ),
-                ),
-              );
-            },
+          title: Text(
+            DateFormat('yyyy年MM月dd日').format(diary.timestamp),
+            style: GoogleFonts.notoSerif(
+              color: Colors.black87,
+              fontWeight: FontWeight.bold,
+            ),
           ),
-          const SizedBox(width: 8),
-        ],
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header Card
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _getTagIcon(diary.style),
-                  const SizedBox(width: 8),
-                  Text(
-                    diary.style,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey[800],
-                      fontWeight: FontWeight.w600,
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.ios_share, color: Colors.black87),
+              tooltip: '生成分享卡片',
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => DiarySharePage(
+                      diary: diary,
+                      petType: diary.petType,
                     ),
                   ),
-                  const SizedBox(width: 16),
-                  Icon(Icons.access_time, size: 16, color: Colors.grey[500]),
-                  const SizedBox(width: 4),
-                  Text(
-                    DateFormat('HH:mm').format(diary.timestamp),
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey[600],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            // Content
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.03),
-                    blurRadius: 20,
-                    offset: const Offset(0, 10),
-                  ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildHashtagRichText(
-                    diary.content,
-                    style: GoogleFonts.lato(
-                      fontSize: 16,
-                      height: 1.8,
-                      color: Colors.black87,
-                    ),
-                  ),
-                  // AI 生成配图展示
-                  if (diary.aiImg != null && diary.aiImg!.isNotEmpty) ...[
-                    const SizedBox(height: 24),
-                    _buildAiImage(diary.aiImg!),
-                  ],
-                  if (diary.originalText.isNotEmpty) ...[
-                    const SizedBox(height: 32),
-                    const Divider(),
-                    const SizedBox(height: 16),
-                    Text(
-                      '原始记录',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey[500],
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      diary.originalText,
-                      style: TextStyle(
-                        fontSize: 14,
-                        height: 1.6,
-                        color: Colors.grey[600],
-                        fontStyle: FontStyle.italic,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            const SizedBox(height: 20),
-            ContentFeedbackBar(
-              surface: ContentSurface.petDiaryDetail,
-              ref: {
-                if (diary.id != null && diary.id!.isNotEmpty)
-                  'diary_id': diary.id,
-                'content_sha256': contentDigestSha256(diary.content),
-                'style': diary.style,
+                );
               },
             ),
+            const SizedBox(width: 8),
           ],
+        ),
+        body: SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header Card
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _getTagIcon(diary.style),
+                    const SizedBox(width: 8),
+                    Text(
+                      diary.style,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey[800],
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Icon(Icons.access_time, size: 16, color: Colors.grey[500]),
+                    const SizedBox(width: 4),
+                    Text(
+                      DateFormat('HH:mm').format(diary.timestamp),
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // Content
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.03),
+                      blurRadius: 20,
+                      offset: const Offset(0, 10),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildHashtagRichText(
+                      diary.content,
+                      style: GoogleFonts.lato(
+                        fontSize: 16,
+                        height: 1.8,
+                        color: Colors.black87,
+                      ),
+                    ),
+                    // AI 生成配图展示
+                    if (diary.aiImg != null && diary.aiImg!.isNotEmpty) ...[
+                      const SizedBox(height: 24),
+                      _buildAiImage(diary.aiImg!),
+                    ],
+                    if (diary.originalText.isNotEmpty) ...[
+                      const SizedBox(height: 32),
+                      const Divider(),
+                      const SizedBox(height: 16),
+                      Text(
+                        '原始记录',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[500],
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        diary.originalText,
+                        style: TextStyle(
+                          fontSize: 14,
+                          height: 1.6,
+                          color: Colors.grey[600],
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+              ContentFeedbackBar(
+                surface: ContentSurface.petDiaryDetail,
+                ref: {
+                  if (diary.id != null && diary.id!.isNotEmpty)
+                    'diary_id': diary.id,
+                  'content_sha256': contentDigestSha256(diary.content),
+                  'style': diary.style,
+                },
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -333,7 +337,8 @@ class DiaryDetailPage extends StatelessWidget {
   }
 
   /// 解析文本中的 #标签，生成带样式的 InlineSpan 列表（小红书风格蓝色标签）
-  List<InlineSpan> _buildHashtagSpans(String text, {required TextStyle baseStyle}) {
+  List<InlineSpan> _buildHashtagSpans(String text,
+      {required TextStyle baseStyle}) {
     const hashtagStyle = TextStyle(
       color: Color(0xFF2196F3), // 小红书风格的蓝色
       fontWeight: FontWeight.w500,
@@ -497,7 +502,8 @@ class _AuthenticatedImageState extends State<_AuthenticatedImage> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.image_not_supported, size: 48, color: Colors.grey[400]),
+              Icon(Icons.image_not_supported,
+                  size: 48, color: Colors.grey[400]),
               const SizedBox(height: 8),
               Text(
                 '图片加载失败',
@@ -609,9 +615,11 @@ class _ContainedImageWithWatermarkState
           aspectRatio: _aspectRatio!,
           child: LayoutBuilder(
             builder: (context, constraints) {
-              final imageSize = Size(constraints.maxWidth, constraints.maxHeight);
+              final imageSize =
+                  Size(constraints.maxWidth, constraints.maxHeight);
               final metrics = _computeWatermarkMetrics(imageSize);
-              final maxTextWidth = (imageSize.width * 0.75) - (metrics.textPaddingH * 2);
+              final maxTextWidth =
+                  (imageSize.width * 0.75) - (metrics.textPaddingH * 2);
               final textFitScale = _computeWatermarkTextFitScale(
                 text: _watermarkText,
                 maxTextWidth: maxTextWidth,
@@ -629,7 +637,8 @@ class _ContainedImageWithWatermarkState
                         return Container(
                           color: Colors.grey[200],
                           child: Center(
-                            child: Icon(Icons.image_not_supported, color: Colors.grey[400]),
+                            child: Icon(Icons.image_not_supported,
+                                color: Colors.grey[400]),
                           ),
                         );
                       },
@@ -646,7 +655,8 @@ class _ContainedImageWithWatermarkState
                         ),
                         decoration: BoxDecoration(
                           color: Colors.black.withOpacity(0.22),
-                          borderRadius: BorderRadius.circular(metrics.borderRadius),
+                          borderRadius:
+                              BorderRadius.circular(metrics.borderRadius),
                         ),
                         child: ConstrainedBox(
                           constraints: BoxConstraints(
@@ -660,7 +670,8 @@ class _ContainedImageWithWatermarkState
                               color: Colors.white.withOpacity(0.85),
                               fontSize: metrics.fontSize * textFitScale,
                               fontWeight: FontWeight.w600,
-                              letterSpacing: metrics.letterSpacing * textFitScale,
+                              letterSpacing:
+                                  metrics.letterSpacing * textFitScale,
                               shadows: [
                                 Shadow(
                                   color: Colors.black.withOpacity(0.25),
@@ -843,7 +854,8 @@ class _FullscreenImageWithWatermark extends StatelessWidget {
           aspectRatio: aspectRatio,
           child: LayoutBuilder(
             builder: (context, constraints) {
-              final imageSize = Size(constraints.maxWidth, constraints.maxHeight);
+              final imageSize =
+                  Size(constraints.maxWidth, constraints.maxHeight);
               final metrics = _computeWatermarkMetrics(imageSize);
               final maxTextWidth =
                   (imageSize.width * 0.75) - (metrics.textPaddingH * 2);
@@ -890,7 +902,8 @@ class _FullscreenImageWithWatermark extends StatelessWidget {
                               color: Colors.white.withOpacity(0.85),
                               fontSize: metrics.fontSize * textFitScale,
                               fontWeight: FontWeight.w600,
-                              letterSpacing: metrics.letterSpacing * textFitScale,
+                              letterSpacing:
+                                  metrics.letterSpacing * textFitScale,
                               shadows: [
                                 Shadow(
                                   color: Colors.black.withOpacity(0.25),

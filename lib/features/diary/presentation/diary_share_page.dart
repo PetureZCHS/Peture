@@ -222,7 +222,7 @@ class _DiarySharePageState extends State<DiarySharePage>
   }
 
   @override
-  String get analyticsPageName => 'DiarySharePage';
+  String get analyticsPageName => 'diary_share';
 
   @override
   Widget build(BuildContext context) {
@@ -609,7 +609,8 @@ class _DiarySharePageState extends State<DiarySharePage>
   }
 
   /// 解析文本中的 #标签，生成带样式的 InlineSpan 列表（小红书风格蓝色标签）
-  List<InlineSpan> _buildHashtagSpans(String text, {required TextStyle baseStyle}) {
+  List<InlineSpan> _buildHashtagSpans(String text,
+      {required TextStyle baseStyle}) {
     const hashtagStyle = TextStyle(
       color: Color(0xFF2196F3), // 小红书风格的蓝色
       fontWeight: FontWeight.w500,

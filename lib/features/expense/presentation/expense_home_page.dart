@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../../../core/page_tracker_mixin.dart';
 import '../../../shared/models/expense.dart';
 import '../../../services/supabase_service.dart';
 import 'add_expense_page.dart';
@@ -13,7 +14,8 @@ class ExpenseHomePage extends StatefulWidget {
   State<ExpenseHomePage> createState() => _ExpenseHomePageState();
 }
 
-class _ExpenseHomePageState extends State<ExpenseHomePage> {
+class _ExpenseHomePageState extends State<ExpenseHomePage>
+    with PageTrackerMixin<ExpenseHomePage> {
   final SupabaseService _supabaseService = SupabaseService();
   List<Expense> _expenses = [];
   Map<String, List<Expense>> _groupedExpenses = {};
@@ -23,6 +25,9 @@ class _ExpenseHomePageState extends State<ExpenseHomePage> {
   // 模拟的时间选择和账本选择
   final String _currentDateRange = '本月';
   final String _currentLedger = '我的账本';
+
+  @override
+  String get analyticsPageName => 'expense_home';
 
   @override
   void initState() {

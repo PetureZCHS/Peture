@@ -13,6 +13,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../../core/page_tracker_mixin.dart';
 import '../../../services/supabase_edge_service.dart';
 import '../../../shared/models/pet_diary.dart';
 import '../../../services/supabase_service.dart';
@@ -181,7 +182,7 @@ class PetDiaryResultPage extends StatefulWidget {
 }
 
 class _PetDiaryResultPageState extends State<PetDiaryResultPage>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, PageTrackerMixin<PetDiaryResultPage> {
   late AnimationController _animationController;
   late AnimationController _cursorAnimationController; // 光标闪烁
   late AnimationController _loadingAnimationController; // 加载动画
@@ -222,6 +223,9 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
 
   // 日记ID（用于保存后更新图片）
   String? _diaryId;
+
+  @override
+  String get analyticsPageName => 'diary_result';
 
   @override
   void initState() {
