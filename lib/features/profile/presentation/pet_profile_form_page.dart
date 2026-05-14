@@ -2433,23 +2433,29 @@ class _PetProfileFormPageState extends State<PetProfileFormPage> {
                     decoration: BoxDecoration(
                       gradient: _isSaving
                           ? const LinearGradient(
-                              colors: [Color(0xFFB0C4DE), Color(0xFF9CAFC9)],
+                              colors: [Color(0xFFD7C9C1), Color(0xFFCDBDB5)],
                               begin: Alignment.topCenter,
                               end: Alignment.bottomCenter,
                             )
                           : const LinearGradient(
-                              colors: [Color(0xFF6B9EFF), Color(0xFF4E7EFF)],
+                              colors: [Color(0xFFE3A07B), Color(0xFFD98D72)],
                               begin: Alignment.topCenter,
                               end: Alignment.bottomCenter,
                             ),
                       borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: _isSaving
+                            ? const Color(0x00FFFFFF)
+                            : const Color(0xFFF1C2AC),
+                        width: 1,
+                      ),
                       boxShadow: _isSaving
                           ? []
                           : [
                               BoxShadow(
-                                color: const Color(0xFF5A8EFA).withOpacity(0.3),
-                                blurRadius: 12,
-                                offset: const Offset(0, 4),
+                                color: const Color(0xFFC88768).withOpacity(0.22),
+                                blurRadius: 10,
+                                offset: const Offset(0, 3),
                               ),
                             ],
                     ),
