@@ -324,14 +324,6 @@ class _WeightTrendCardState extends State<WeightTrendCard> {
                       ),
                       Row(
                         children: [
-                          IconButton(
-                            icon: const Icon(Icons.add_circle_outline_rounded),
-                            color: const Color(0xFFFF5E62),
-                            onPressed: () {
-                              // TODO: 添加体重记录功能
-                              HapticFeedback.lightImpact();
-                            },
-                          ),
                           Icon(
                             _isExpanded
                                 ? Icons.keyboard_arrow_up_rounded

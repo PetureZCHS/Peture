@@ -44,7 +44,22 @@ class PetureFeatureTile extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(title, style: PetureTextStyles.bodyStrong),
+                SizedBox(
+                  width: double.infinity,
+                  child: FittedBox(
+                    alignment: Alignment.centerLeft,
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      title,
+                      style: PetureTextStyles.bodyStrong.copyWith(
+                        fontSize: 16,
+                        height: 1.22,
+                        fontWeight: FontWeight.w700,
+                        color: PetureColors.textPrimary.withOpacity(0.88),
+                      ),
+                    ),
+                  ),
+                ),
                 if (subtitle != null) ...[
                   const SizedBox(height: PetureSpacing.xs),
                   Text(

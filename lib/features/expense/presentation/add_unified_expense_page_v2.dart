@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import '../../../shared/design_system/peture_design_system.dart';
 import '../../../shared/models/unified_expense.dart';
 import '../../../shared/database/unified_expense_helper.dart';
 import '../../../services/supabase_service.dart';
@@ -18,6 +19,9 @@ class AddUnifiedExpensePageV2 extends StatefulWidget {
 
 class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
     with SingleTickerProviderStateMixin {
+  static const Color _brand = PetureColors.primary;
+  static const Color _brandTint = Color(0xFFF9E5DE);
+
   // 基础状态
   ExpenseTypeEnum _selectedExpenseType = ExpenseTypeEnum.oneOff;
   String _amountStr = '';
@@ -169,7 +173,7 @@ class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
         return Theme(
           data: Theme.of(context).copyWith(
             colorScheme: const ColorScheme.light(
-              primary: Color(0xFFFF6B6B),
+              primary: _brand,
               onPrimary: Colors.white,
               surface: Colors.white,
               onSurface: Color(0xFF1C1C1E),
@@ -298,7 +302,7 @@ class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
         : UnifiedExpenseCategory.recurringCategories;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F7),
+      backgroundColor: PetureColors.background,
       body: SafeArea(
         child: Column(
           children: [
@@ -316,7 +320,7 @@ class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
                     const SizedBox(height: 12),
                     _buildCategorySection(categories),
                     _buildMetaInfo(),
-                    const Divider(height: 1, color: Color(0xFFF2F2F7)),
+                    const Divider(height: 1, color: PetureColors.border),
                     _buildNoteField(),
                     const Spacer(),
                     _buildKeypad(),
@@ -332,7 +336,7 @@ class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
 
   Widget _buildHeader() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
       child: Row(
         children: [
           // 关闭按钮
@@ -368,7 +372,7 @@ class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
             ),
           ],
         ),
-        child: Icon(icon, size: 22, color: const Color(0xFF1C1C1E)),
+        child: Icon(icon, size: 22, color: PetureColors.textPrimary),
       ),
     );
   }
@@ -377,8 +381,9 @@ class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
     return Container(
       padding: const EdgeInsets.all(3),
       decoration: BoxDecoration(
-        color: const Color(0xFFE8E8ED),
+        color: PetureColors.surfaceMuted,
         borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: PetureColors.border.withOpacity(0.7)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -425,8 +430,9 @@ class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
           style: TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w600,
-            color:
-                isSelected ? const Color(0xFF1C1C1E) : const Color(0xFF8E8E93),
+                color: isSelected
+                    ? PetureColors.textPrimary
+                    : PetureColors.textSecondary,
           ),
         ),
       ),
@@ -435,7 +441,7 @@ class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
 
   Widget _buildAmountDisplay() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+        padding: const EdgeInsets.fromLTRB(24, 14, 24, 12),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
@@ -462,11 +468,10 @@ class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
                     width: 28,
                     height: 28,
                     decoration: BoxDecoration(
-                      color: const Color(0xFFFFE5E5),
+                      color: _brandTint,
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: const Icon(Icons.pets,
-                        size: 16, color: Color(0xFFFF6B6B)),
+                    child: const Icon(Icons.pets, size: 16, color: _brand),
                   ),
                   const SizedBox(width: 8),
                   Text(
@@ -475,13 +480,13 @@ class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
                       color: _selectedPetName != null
-                          ? const Color(0xFF1C1C1E)
-                          : const Color(0xFF8E8E93),
+                          ? PetureColors.textPrimary
+                          : PetureColors.textSecondary,
                     ),
                   ),
                   const SizedBox(width: 4),
                   const Icon(Icons.keyboard_arrow_down_rounded,
-                      size: 18, color: Color(0xFF8E8E93)),
+                      size: 18, color: PetureColors.textSecondary),
                 ],
               ),
             ),
@@ -499,7 +504,7 @@ class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
                     style: TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.w600,
-                      color: Color(0xFFFF6B6B),
+                      color: _brand,
                     ),
                   ),
                   Text(
@@ -507,7 +512,7 @@ class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
                     style: const TextStyle(
                       fontSize: 42,
                       fontWeight: FontWeight.bold,
-                      color: Color(0xFFFF6B6B),
+                      color: _brand,
                       height: 1,
                       fontFeatures: [FontFeature.tabularFigures()],
                     ),
@@ -563,7 +568,8 @@ class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
                 children: [
                   Icon(Icons.pets_outlined, size: 48, color: Color(0xFFE0E0E0)),
                   SizedBox(height: 12),
-                  Text('暂无宠物', style: TextStyle(color: Color(0xFF8E8E93))),
+                  Text('暂无宠物',
+                      style: TextStyle(color: PetureColors.textSecondary)),
                 ],
               ),
             ),
@@ -593,10 +599,10 @@ class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFFFFF0F0) : Colors.transparent,
+          color: isSelected ? _brandTint : Colors.transparent,
           borderRadius: BorderRadius.circular(14),
           border: isSelected
-              ? Border.all(color: const Color(0xFFFF6B6B), width: 1.5)
+              ? Border.all(color: _brand, width: 1.5)
               : null,
         ),
         child: Row(
@@ -606,15 +612,15 @@ class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
               height: 40,
               decoration: BoxDecoration(
                 color: isPublic
-                    ? const Color(0xFFF5F5F7)
-                    : const Color(0xFFFFE5E5),
+                    ? PetureColors.surfaceMuted
+                    : _brandTint,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(
                 isPublic ? Icons.home_rounded : Icons.pets,
                 color: isPublic
                     ? const Color(0xFF8E8E93)
-                    : const Color(0xFFFF6B6B),
+                    : _brand,
                 size: 20,
               ),
             ),
@@ -625,13 +631,12 @@ class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                  color: const Color(0xFF1C1C1E),
+                  color: PetureColors.textPrimary,
                 ),
               ),
             ),
             if (isSelected)
-              const Icon(Icons.check_circle,
-                  color: Color(0xFFFF6B6B), size: 22),
+              const Icon(Icons.check_circle, color: _brand, size: 22),
           ],
         ),
       ),
@@ -644,18 +649,27 @@ class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
       ..._customCategories.where((c) => c.expenseType == _selectedExpenseType)
     ];
 
-    return SizedBox(
-      height: 100,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        itemCount: allCategories.length + 1,
-        itemBuilder: (context, index) {
-          if (index == allCategories.length) {
-            return _buildAddCategoryItem();
-          }
-          return _buildCategoryItem(allCategories[index]);
-        },
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      decoration: BoxDecoration(
+        color: PetureColors.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: PetureColors.border.withOpacity(0.75)),
+      ),
+      child: SizedBox(
+        height: 96,
+        child: ListView.builder(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 6),
+          itemCount: allCategories.length + 1,
+          itemBuilder: (context, index) {
+            if (index == allCategories.length) {
+              return _buildAddCategoryItem();
+            }
+            return _buildCategoryItem(allCategories[index]);
+          },
+        ),
       ),
     );
   }
@@ -705,7 +719,8 @@ class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                color: isSelected ? Color(cat.color) : const Color(0xFF8E8E93),
+                color:
+                    isSelected ? Color(cat.color) : PetureColors.textSecondary,
               ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -730,7 +745,7 @@ class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
               width: 52,
               height: 52,
               decoration: BoxDecoration(
-                color: const Color(0xFFF5F5F7),
+                color: PetureColors.surfaceMuted,
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
                     color: const Color(0xFFE5E5EA),
@@ -738,12 +753,13 @@ class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
                     strokeAlign: BorderSide.strokeAlignInside),
               ),
               child: const Icon(Icons.add_rounded,
-                  color: Color(0xFF8E8E93), size: 26),
+                  color: PetureColors.textSecondary, size: 26),
             ),
             const SizedBox(height: 8),
             const Text(
               '添加',
-              style: TextStyle(fontSize: 11, color: Color(0xFF8E8E93)),
+              style:
+                  TextStyle(fontSize: 11, color: PetureColors.textSecondary),
             ),
           ],
         ),
@@ -753,11 +769,11 @@ class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
 
   void _showAddCategoryDialog() {
     final nameController = TextEditingController();
-    int selectedColor = 0xFFFF6B6B;
+    int selectedColor = _brand.value;
     int selectedIcon = Icons.category.codePoint;
 
     final colors = [
-      0xFFFF6B6B,
+      0xFFD9805D,
       0xFFFF8A65,
       0xFFFFB74D,
       0xFFFFD54F,
@@ -822,7 +838,7 @@ class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
                       decoration: InputDecoration(
                         hintText: '分类名称',
                         filled: true,
-                        fillColor: const Color(0xFFF5F5F7),
+                        fillColor: PetureColors.surfaceMuted,
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(14),
                           borderSide: BorderSide.none,
@@ -908,7 +924,7 @@ class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
                             decoration: BoxDecoration(
                               color: isSelected
                                   ? Color(selectedColor)
-                                  : const Color(0xFFF5F5F7),
+                                  : PetureColors.surfaceMuted,
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Icon(
@@ -934,7 +950,7 @@ class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
                             child: Container(
                               padding: const EdgeInsets.symmetric(vertical: 14),
                               decoration: BoxDecoration(
-                                color: const Color(0xFFF5F5F7),
+                                color: PetureColors.surfaceMuted,
                                 borderRadius: BorderRadius.circular(14),
                               ),
                               child: const Center(
@@ -995,7 +1011,7 @@ class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
 
   Widget _buildMetaInfo() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
       child: Row(
         children: [
           _buildMetaChip(
@@ -1016,7 +1032,7 @@ class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
             _buildMetaChip(
               Icons.pets,
               _selectedPetName!,
-              color: const Color(0xFFFF6B6B),
+              color: _brand,
             ),
           ],
         ],
@@ -1038,13 +1054,13 @@ class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: color?.withOpacity(0.1) ?? const Color(0xFFF5F5F7),
+          color: color?.withOpacity(0.1) ?? PetureColors.surfaceMuted,
           borderRadius: BorderRadius.circular(20),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 14, color: color ?? const Color(0xFF8E8E93)),
+            Icon(icon, size: 14, color: color ?? PetureColors.textSecondary),
             const SizedBox(width: 6),
             Text(
               text,
@@ -1062,17 +1078,17 @@ class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
 
   Widget _buildNoteField() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       child: TextField(
         controller: _noteController,
         focusNode: _noteFocusNode,
         decoration: InputDecoration(
           hintText: '添加备注...',
-          hintStyle: const TextStyle(color: Color(0xFFC7C7CC)),
+          hintStyle: const TextStyle(color: PetureColors.textTertiary),
           border: InputBorder.none,
           isDense: true,
           prefixIcon: const Icon(Icons.edit_note_rounded,
-              color: Color(0xFFC7C7CC), size: 22),
+              color: PetureColors.textTertiary, size: 22),
           prefixIconConstraints: const BoxConstraints(minWidth: 36),
         ),
         style: const TextStyle(fontSize: 15),
@@ -1082,11 +1098,11 @@ class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
 
   Widget _buildKeypad() {
     return Container(
-      color: const Color(0xFFFAFAFA),
+      color: PetureColors.surface,
       padding: EdgeInsets.only(
         left: 8,
         right: 8,
-        top: 8,
+        top: 10,
         bottom: MediaQuery.of(context).padding.bottom + 8,
       ),
       child: Row(
@@ -1140,6 +1156,7 @@ class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: PetureColors.border.withOpacity(0.65)),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withOpacity(0.04),
@@ -1150,13 +1167,13 @@ class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
           ),
           child: Center(
             child: icon != null
-                ? Icon(icon, color: const Color(0xFF1C1C1E), size: 22)
+                ? Icon(icon, color: PetureColors.textPrimary, size: 22)
                 : Text(
                     value,
                     style: const TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.w500,
-                      color: Color(0xFF1C1C1E),
+                      color: PetureColors.textPrimary,
                     ),
                   ),
           ),
@@ -1176,12 +1193,12 @@ class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
             gradient: const LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [Color(0xFFFF6B6B), Color(0xFFFF8E8E)],
+              colors: [Color(0xFFD9805D), Color(0xFFE7A24E)],
             ),
             borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFFFF6B6B).withOpacity(0.4),
+                color: const Color(0xFFD9805D).withOpacity(0.35),
                 blurRadius: 12,
                 offset: const Offset(0, 4),
               ),

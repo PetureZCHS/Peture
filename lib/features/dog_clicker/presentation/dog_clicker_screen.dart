@@ -1889,10 +1889,11 @@ class _DogClickerScreenState extends State<DogClickerScreen>
           // 注意：extendBodyBehindAppBar=true，需手动计入状态栏+AppBar高度
           Builder(
             builder: (context) {
-              final topPadding = MediaQuery.of(context).padding.top + kToolbarHeight;
+              final topPadding =
+                  MediaQuery.of(context).padding.top + kToolbarHeight;
               return Center(
                 child: SingleChildScrollView(
-                  padding: EdgeInsets.fromLTRB(12.0, topPadding + 8, 12.0, 24),
+                  padding: EdgeInsets.fromLTRB(12.0, topPadding - 30, 12.0, 24),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [

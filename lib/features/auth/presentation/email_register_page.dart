@@ -1,32 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:async';
 
 import '../../../core/auth_otp_email_context.dart';
 import '../../../shared/design_system/peture_design_system.dart';
 import 'email_login_page.dart';
-
-/// 密码强度等级
-enum PasswordStrength {
-  weak, // 弱：只有单一种类（大写/小写/数字）
-  medium, // 中：有两种种类
-  strong, // 强：有三种种类（大写+小写+数字）
-}
-
-/// 密码强度检测结果
-class _PasswordStrengthResult {
-  final PasswordStrength strength;
-  final String message;
-  final Color color;
-  final bool isValid; // 是否满足注册要求（强度≥中 且 长度≥8）
-
-  _PasswordStrengthResult({
-    required this.strength,
-    required this.message,
-    required this.color,
-    required this.isValid,
-  });
-}
 
 /// 用户注册页面
 ///
@@ -74,6 +53,8 @@ class _EmailRegisterPageState extends State<EmailRegisterPage> {
 
   /// 错误消息：注册失败时显示
   String? _errorMessage;
+
+  bool get _isCodeReady => RegExp(r'^\d{6}$').hasMatch(_codeController.text);
 
   @override
   void dispose() {
@@ -415,8 +396,8 @@ class _EmailRegisterPageState extends State<EmailRegisterPage> {
                   Padding(
                     padding: const EdgeInsets.only(bottom: 24),
                     child: PetureAlertPanel(
-                      title: '操作成功',
-                      message: _successMessage,
+                      title: _successMessage!,
+                      message: null,
                       tone: PetureAlertTone.success,
                     ),
                   ),
@@ -436,6 +417,7 @@ class _EmailRegisterPageState extends State<EmailRegisterPage> {
                 TextFormField(
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
+                  onChanged: (_) => setState(() {}),
                   enabled: !_isLoading, // 加载时禁用输入
                   decoration: petureInputDecoration(
                     labelText: '邮箱地址 *',
@@ -455,8 +437,7 @@ class _EmailRegisterPageState extends State<EmailRegisterPage> {
                 const SizedBox(height: 24),
 
                 // 此处不再设置密码，仅在后续“密码设置页”完成
-                const SizedBox(height: 8),
-                const SizedBox(height: 24),
+                const SizedBox(height: 12),
 
                 // ===== 验证码输入区域 =====
                 if (_isCodeSent) ...[
@@ -466,13 +447,18 @@ class _EmailRegisterPageState extends State<EmailRegisterPage> {
                         child: TextFormField(
                           controller: _codeController,
                           keyboardType: TextInputType.number,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                            LengthLimitingTextInputFormatter(6),
+                          ],
                           maxLength: 6,
+                          onChanged: (_) => setState(() {}),
                           enabled: !_isLoading,
                           decoration: petureInputDecoration(
                             labelText: '验证码 *',
                             hintText: '请输入6位验证码',
                             prefixIcon: const Icon(Icons.verified_user),
-                          ),
+                          ).copyWith(counterText: ''),
                           validator: (value) {
                             if (value == null || value.isEmpty) {
                               return '请输入验证码';
@@ -487,6 +473,7 @@ class _EmailRegisterPageState extends State<EmailRegisterPage> {
                       const SizedBox(width: 12),
                       SizedBox(
                         width: 120,
+                        height: 56,
                         child: PetureSecondaryButton(
                           expand: false,
                           isLoading: _isLoading,
@@ -508,7 +495,7 @@ class _EmailRegisterPageState extends State<EmailRegisterPage> {
                   onPressed: _isLoading
                       ? null
                       : (_isCodeSent
-                          ? _verifyCodeAndRegister
+                          ? (_isCodeReady ? _verifyCodeAndRegister : null)
                           : _sendVerificationCode),
                 ),
                 const SizedBox(height: 24),
@@ -561,79 +548,74 @@ class _EmailPasswordSetupPageState extends State<EmailPasswordSetupPage> {
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _confirmPasswordController =
       TextEditingController();
+  final FocusNode _passwordFocusNode = FocusNode();
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   final SupabaseClient _supabase = Supabase.instance.client;
 
   bool _isPasswordVisible = false;
   bool _isLoading = false;
+  bool _showPasswordRules = false;
   String? _errorMessage;
-
-  _PasswordStrengthResult get _passwordStrength =>
-      _evaluatePassword(_passwordController.text);
 
   @override
   void dispose() {
     _passwordController.dispose();
     _confirmPasswordController.dispose();
+    _passwordFocusNode.dispose();
     super.dispose();
   }
 
-  /// 评估密码强度（允许包含特殊符号）
-  _PasswordStrengthResult _evaluatePassword(String password) {
-    if (password.isEmpty) {
-      return _PasswordStrengthResult(
-        strength: PasswordStrength.weak,
-        message: '',
-        color: Colors.grey,
-        isValid: false,
-      );
-    }
+  bool get _hasMinLength => _passwordController.text.length >= 8;
+  bool get _hasUppercase =>
+      _passwordController.text.contains(RegExp(r'[A-Z]'));
+  bool get _hasLowercase =>
+      _passwordController.text.contains(RegExp(r'[a-z]'));
+  bool get _hasDigit => _passwordController.text.contains(RegExp(r'[0-9]'));
+  bool get _isValidPassword =>
+      _hasMinLength && _hasUppercase && _hasLowercase && _hasDigit;
+  bool get _canSubmit =>
+      _isValidPassword &&
+      _confirmPasswordController.text.isNotEmpty &&
+      _confirmPasswordController.text == _passwordController.text &&
+      !_isPasswordVisible;
 
-    // 检查包含的字符类型：大写、小写、数字、特殊字符
-    bool hasUpperCase = password.contains(RegExp(r'[A-Z]'));
-    bool hasLowerCase = password.contains(RegExp(r'[a-z]'));
-    bool hasDigit = password.contains(RegExp(r'[0-9]'));
-    bool hasSpecial = password.contains(RegExp(r'[^A-Za-z0-9]'));
-
-    int typeCount = 0;
-    if (hasUpperCase) typeCount++;
-    if (hasLowerCase) typeCount++;
-    if (hasDigit) typeCount++;
-    if (hasSpecial) typeCount++;
-
-    PasswordStrength strength;
-    String message;
-    Color color;
-
-    if (typeCount <= 1) {
-      strength = PasswordStrength.weak;
-      message = '弱：建议同时包含字母、数字或符号中的至少两种';
-      color = Colors.red;
-    } else if (typeCount == 2) {
-      strength = PasswordStrength.medium;
-      message = '中：密码强度良好';
-      color = Colors.orange;
-    } else {
-      strength = PasswordStrength.strong;
-      message = '强：密码强度优秀';
-      color = Colors.green;
-    }
-
-    bool isValid = strength != PasswordStrength.weak && password.length >= 8;
-    if (!isValid && password.length < 8) {
-      message = '密码长度至少8位，建议混合使用字母、数字和符号';
-    }
-
-    return _PasswordStrengthResult(
-      strength: strength,
-      message: message,
-      color: color,
-      isValid: isValid,
+  Widget _buildRuleChecklist() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildRuleItem('至少 8 个字符', _hasMinLength),
+        const SizedBox(height: 8),
+        _buildRuleItem('包含大写字母', _hasUppercase),
+        const SizedBox(height: 8),
+        _buildRuleItem('包含小写字母', _hasLowercase),
+        const SizedBox(height: 8),
+        _buildRuleItem('包含数字', _hasDigit),
+      ],
     );
   }
 
-  bool _isValidPassword(String password) {
-    return _evaluatePassword(password).isValid;
+  Widget _buildRuleItem(String label, bool checked) {
+    final activeColor = const Color(0xFF4AA785);
+    final inactiveColor = const Color(0xFFB9B9BE);
+    return AnimatedDefaultTextStyle(
+      duration: const Duration(milliseconds: 180),
+      style: TextStyle(
+        fontSize: 14,
+        fontWeight: checked ? FontWeight.w600 : FontWeight.w500,
+        color: checked ? activeColor : inactiveColor,
+      ),
+      child: Row(
+        children: [
+          Icon(
+            checked ? Icons.check_circle_rounded : Icons.radio_button_unchecked,
+            size: 22,
+            color: checked ? activeColor : inactiveColor,
+          ),
+          const SizedBox(width: 10),
+          Text(label),
+        ],
+      ),
+    );
   }
 
   Future<void> _submitPassword() async {
@@ -652,12 +634,9 @@ class _EmailPasswordSetupPageState extends State<EmailPasswordSetupPage> {
       return;
     }
 
-    if (!_isValidPassword(password)) {
-      final result = _evaluatePassword(password);
+    if (!_isValidPassword) {
       setState(() {
-        _errorMessage = result.message.isNotEmpty
-            ? result.message
-            : '密码长度至少8位，建议混合使用字母、数字和符号';
+        _errorMessage = '请先满足全部密码规则后再提交';
       });
       return;
     }
@@ -721,17 +700,17 @@ class _EmailPasswordSetupPageState extends State<EmailPasswordSetupPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: PetureColors.background,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: PetureColors.background,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
+          icon: const Icon(Icons.arrow_back, color: PetureColors.textPrimary),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        title: const Text(
+        title: Text(
           '设置密码',
-          style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
+          style: PetureTextStyles.sectionTitle,
         ),
       ),
       body: SafeArea(
@@ -745,16 +724,12 @@ class _EmailPasswordSetupPageState extends State<EmailPasswordSetupPage> {
                 const SizedBox(height: 40),
                 Text(
                   '为 ${widget.email} 设置登录密码',
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black,
-                  ),
+                  style: PetureTextStyles.largeTitle,
                 ),
                 const SizedBox(height: 8),
-                const Text(
-                  '密码允许包含字母、数字和符号，推荐长度不少于 8 位。',
-                  style: TextStyle(fontSize: 14, color: Colors.grey),
+                Text(
+                  '请设置一个安全密码，用于后续邮箱登录。',
+                  style: PetureTextStyles.body,
                 ),
                 const SizedBox(height: 24),
 
@@ -788,12 +763,19 @@ class _EmailPasswordSetupPageState extends State<EmailPasswordSetupPage> {
                 // 密码输入框
                 TextFormField(
                   controller: _passwordController,
+                  focusNode: _passwordFocusNode,
                   obscureText: !_isPasswordVisible,
                   enabled: !_isLoading,
+                  onTap: () {
+                    if (_showPasswordRules) return;
+                    setState(() {
+                      _showPasswordRules = true;
+                    });
+                  },
                   onChanged: (_) => setState(() {}),
-                  decoration: InputDecoration(
+                  decoration: petureInputDecoration(
                     labelText: '密码 *',
-                    hintText: '至少8位，建议混合字母、数字和符号',
+                    hintText: '请输入新密码',
                     prefixIcon: const Icon(Icons.lock_outlined),
                     suffixIcon: IconButton(
                       icon: Icon(
@@ -807,91 +789,28 @@ class _EmailPasswordSetupPageState extends State<EmailPasswordSetupPage> {
                         });
                       },
                     ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16.0),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16.0),
-                      borderSide: BorderSide(
-                        color: _passwordController.text.isNotEmpty
-                            ? _passwordStrength.color
-                            : const Color(0xFF5D5FEF),
-                        width: 2,
-                      ),
-                    ),
                   ),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
                       return '请输入密码';
                     }
-                    if (!_isValidPassword(value)) {
-                      final result = _evaluatePassword(value);
-                      return result.message.isNotEmpty
-                          ? result.message
-                          : '密码长度至少8位，建议混合使用字母、数字和符号';
+                    if (!_isValidPassword) {
+                      return '请先满足全部密码规则';
                     }
                     return null;
                   },
                 ),
 
-                // 密码强度显示
-                if (_passwordController.text.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Container(
-                          height: 4,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(2),
-                            color: Colors.grey[200],
-                          ),
-                          child: FractionallySizedBox(
-                            alignment: Alignment.centerLeft,
-                            widthFactor: _passwordStrength.strength ==
-                                    PasswordStrength.weak
-                                ? 0.33
-                                : _passwordStrength.strength ==
-                                        PasswordStrength.medium
-                                    ? 0.66
-                                    : 1.0,
-                            child: Container(
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(2),
-                                color: _passwordStrength.color,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Text(
-                        _passwordStrength.strength == PasswordStrength.weak
-                            ? '弱'
-                            : _passwordStrength.strength ==
-                                    PasswordStrength.medium
-                                ? '中'
-                                : '强',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          color: _passwordStrength.color,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      _passwordStrength.message,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: _passwordStrength.color,
-                      ),
-                    ),
-                  ),
-                ],
+                AnimatedSize(
+                  duration: const Duration(milliseconds: 220),
+                  curve: Curves.easeOutCubic,
+                  child: _showPasswordRules
+                      ? Padding(
+                          padding: const EdgeInsets.only(top: 12),
+                          child: _buildRuleChecklist(),
+                        )
+                      : const SizedBox.shrink(),
+                ),
 
                 const SizedBox(height: 24),
 
@@ -901,13 +820,11 @@ class _EmailPasswordSetupPageState extends State<EmailPasswordSetupPage> {
                     controller: _confirmPasswordController,
                     obscureText: true,
                     enabled: !_isLoading,
-                    decoration: InputDecoration(
+                    onChanged: (_) => setState(() {}),
+                    decoration: petureInputDecoration(
                       labelText: '确认密码 *',
                       hintText: '请再次输入密码',
                       prefixIcon: const Icon(Icons.lock_outline),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16.0),
-                      ),
                     ),
                     validator: (value) {
                       if (value == null || value.isEmpty) {
@@ -922,43 +839,16 @@ class _EmailPasswordSetupPageState extends State<EmailPasswordSetupPage> {
                   const SizedBox(height: 24),
                 ],
 
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF5D5FEF),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16.0),
-                      ),
-                      padding: const EdgeInsets.symmetric(vertical: 18.0),
-                      elevation: 0,
-                    ),
-                    onPressed: _isLoading
-                        ? null
-                        : () {
-                            if (_formKey.currentState?.validate() ?? false) {
-                              _submitPassword();
-                            }
-                          },
-                    child: _isLoading
-                        ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(
-                              valueColor:
-                                  AlwaysStoppedAnimation<Color>(Colors.white),
-                              strokeWidth: 2,
-                            ),
-                          )
-                        : const Text(
-                            '完成注册',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                  ),
+                PeturePrimaryButton(
+                  label: '完成注册',
+                  isLoading: _isLoading,
+                  onPressed: _isLoading || !_canSubmit
+                      ? null
+                      : () {
+                          if (_formKey.currentState?.validate() ?? false) {
+                            _submitPassword();
+                          }
+                        },
                 ),
 
                 const SizedBox(height: 32),

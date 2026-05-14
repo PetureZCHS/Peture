@@ -1,9 +1,13 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/auth_otp_email_context.dart';
+import '../../../core/auth_terms_consent.dart';
+import '../../home/presentation/home_screen.dart';
 import '../../../services/analytics_service.dart';
 import '../../../shared/design_system/peture_design_system.dart';
 import 'email_register_page.dart';
@@ -42,27 +46,35 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   final SupabaseClient _supabase = Supabase.instance.client;
   bool _isLoading = false;
+  bool _isSendingCode = false;
   bool _obscurePassword = true; // 控制密码是否可见
 
   // 登录模式：true = 邮箱验证码登录（默认），false = 密码登录
   bool _useOtpLogin = true;
 
   /// 是否同意《用户协议与隐私政策》（含友盟等统计说明）
-  bool _agreedToTerms = false;
+  bool _agreedToTerms = AuthTermsConsent.value;
 
   int _countdown = 0;
   Timer? _countdownTimer;
+  static final Uri _termsUri = Uri.parse('https://PetureZCHS.github.io/terms');
+  static final Uri _privacyUri =
+      Uri.parse('https://PetureZCHS.github.io/privacy');
 
-  void _returnToRootAfterLogin() {
+  void _enterHomeAfterLogin() {
     if (!mounted) return;
     FocusScope.of(context).unfocus();
     unawaited(AnalyticsService.acceptConsentAndInit());
-    Navigator.of(context).popUntil((route) => route.isFirst);
+    Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const HomeScreen()),
+      (route) => false,
+    );
   }
 
   @override
   void initState() {
     super.initState();
+    AuthTermsConsent.accepted.addListener(_syncConsentState);
 
     // 预填邮箱
     if (widget.initialEmail != null) {
@@ -90,11 +102,28 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
 
   @override
   void dispose() {
+    AuthTermsConsent.accepted.removeListener(_syncConsentState);
     _emailController.dispose();
     _passwordController.dispose();
     _codeController.dispose();
     _countdownTimer?.cancel();
     super.dispose();
+  }
+
+  void _syncConsentState() {
+    if (!mounted) return;
+    final next = AuthTermsConsent.value;
+    if (_agreedToTerms == next) return;
+    setState(() {
+      _agreedToTerms = next;
+    });
+  }
+
+  void _onConsentChanged(bool value) {
+    setState(() {
+      _agreedToTerms = value;
+    });
+    AuthTermsConsent.set(value);
   }
 
   // 启动验证码倒计时
@@ -120,8 +149,15 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
 
   bool _ensureTermsAccepted() {
     if (_agreedToTerms) return true;
-    _showMessage('请先阅读并同意《用户协议与隐私政策》');
+    _showMessage('请先阅读并同意《用户协议》与《隐私政策》');
     return false;
+  }
+
+  Future<void> _openLegal(Uri uri) async {
+    final ok = await launchUrl(uri, mode: LaunchMode.inAppBrowserView);
+    if (!ok && mounted) {
+      _showMessage('链接打开失败，请稍后重试');
+    }
   }
 
   // 邮箱登录（只使用密码登录）
@@ -147,8 +183,10 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
       debugPrint('✅ 密码登录成功');
       debugPrint('User: ${response.user?.email}');
 
-      if (response.user != null && mounted) {
-        _returnToRootAfterLogin();
+      if (_supabase.auth.currentSession != null && mounted) {
+        _enterHomeAfterLogin();
+      } else {
+        _showMessage('登录状态未建立，请稍后重试');
       }
     } on AuthException catch (e) {
       debugPrint('❌ 密码登录失败: ${e.message}');
@@ -183,6 +221,8 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
     }
   }
 
+  bool get _isOtpCodeReady => RegExp(r'^\d{6}$').hasMatch(_codeController.text);
+
   // 发送邮箱验证码（用于登录）
   Future<void> _sendLoginCode() async {
     if (!_ensureTermsAccepted()) return;
@@ -199,7 +239,7 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
     }
 
     setState(() {
-      _isLoading = true;
+      _isSendingCode = true;
     });
 
     try {
@@ -241,7 +281,7 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
     } finally {
       if (mounted) {
         setState(() {
-          _isLoading = false;
+          _isSendingCode = false;
         });
       }
     }
@@ -272,7 +312,11 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
 
       if ((response.session != null || response.user != null) && mounted) {
         debugPrint('✅ 验证码登录成功: ${response.user?.email}');
-        _returnToRootAfterLogin();
+        if (_supabase.auth.currentSession != null) {
+          _enterHomeAfterLogin();
+        } else {
+          _showMessage('登录状态未建立，请稍后重试');
+        }
       } else {
         _showMessage('验证码验证失败，请重试');
       }
@@ -344,10 +388,6 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: PetureColors.textPrimary),
           onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: Text(
-          '邮箱登录',
-          style: PetureTextStyles.sectionTitle,
         ),
       ),
       body: SafeArea(
@@ -452,6 +492,7 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
                 TextFormField(
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
+                  onChanged: (_) => setState(() {}),
                   decoration: petureInputDecoration(
                     labelText: '邮箱地址',
                     hintText: '请输入您的邮箱地址',
@@ -478,6 +519,11 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
                         child: TextFormField(
                           controller: _codeController,
                           keyboardType: TextInputType.number,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                            LengthLimitingTextInputFormatter(6),
+                          ],
+                          onChanged: (_) => setState(() {}),
                           decoration: petureInputDecoration(
                             labelText: '验证码',
                             hintText: '请输入6位验证码',
@@ -500,7 +546,8 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
                         height: 48,
                         child: PetureSecondaryButton(
                           label: _countdown > 0 ? '重发(${_countdown}s)' : '发送验证码',
-                          onPressed: _isLoading || _countdown > 0
+                          isLoading: _isSendingCode,
+                          onPressed: _isSendingCode || _countdown > 0
                               ? null
                               : _sendLoginCode,
                           expand: false,
@@ -552,20 +599,29 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
                       value: _agreedToTerms,
                       onChanged: _isLoading
                           ? null
-                          : (v) => setState(() => _agreedToTerms = v ?? false),
+                          : (v) => _onConsentChanged(v ?? false),
                       visualDensity: VisualDensity.compact,
                       activeColor: const Color(0xFF5D5FEF),
                     ),
                     const Text('我已阅读并同意',
                         style: PetureTextStyles.caption),
                     GestureDetector(
-                      onTap: _isLoading
-                          ? null
-                          : () =>
-                              _showMessage('请阅读《用户协议与隐私政策》全文', isError: false),
-                      child: const Text(
-                        '《用户协议与隐私政策》',
-                        style: PetureTextStyles.caption,
+                      onTap: _isLoading ? null : () => _openLegal(_termsUri),
+                      child: Text(
+                        '《用户协议》',
+                        style: PetureTextStyles.caption.copyWith(
+                          color: PetureColors.violet,
+                        ),
+                      ),
+                    ),
+                    const Text(' 与 ', style: PetureTextStyles.caption),
+                    GestureDetector(
+                      onTap: _isLoading ? null : () => _openLegal(_privacyUri),
+                      child: Text(
+                        '《隐私政策》',
+                        style: PetureTextStyles.caption.copyWith(
+                          color: PetureColors.violet,
+                        ),
                       ),
                     ),
                   ],
@@ -579,7 +635,9 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
                   isLoading: _isLoading,
                   onPressed: _isLoading
                       ? null
-                      : (_useOtpLogin ? _verifyCodeAndLogin : _emailLogin),
+                      : (_useOtpLogin
+                          ? (_isOtpCodeReady ? _verifyCodeAndLogin : null)
+                          : _emailLogin),
                 ),
 
                 const SizedBox(height: 24),

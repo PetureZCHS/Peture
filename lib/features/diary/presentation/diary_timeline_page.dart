@@ -23,6 +23,7 @@ class DiaryTimelinePage extends StatefulWidget {
 }
 
 class _DiaryTimelinePageState extends State<DiaryTimelinePage> {
+  static const Color _pageBg = Color(0xFFF7F4EF);
   List<PetDiary> _allDiaries = [];
   List<PetDiary> _filteredDiaries = [];
   bool _isLoading = true;
@@ -89,7 +90,7 @@ class _DiaryTimelinePageState extends State<DiaryTimelinePage> {
       backgroundColor: Colors.transparent,
       builder: (context) => Container(
         decoration: const BoxDecoration(
-          color: Colors.white,
+          color: Color(0xFFFFFBF7),
           borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
         padding: const EdgeInsets.all(20),
@@ -143,9 +144,9 @@ class _DiaryTimelinePageState extends State<DiaryTimelinePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F5),
+      backgroundColor: _pageBg,
       appBar: AppBar(
-        backgroundColor: const Color(0xFFF5F5F5),
+        backgroundColor: _pageBg,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new, color: Colors.black87),

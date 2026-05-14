@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../auth/presentation/login_page.dart';
+import 'about_page.dart';
 import 'account_security_page.dart';
 import '../../../shared/utils/china_regions_loader.dart';
 import '../../../shared/utils/user_avatar_helper.dart';
@@ -47,22 +48,22 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
   // 图标渐变配置
   static const List<LinearGradient> _iconGradients = [
     LinearGradient(
-      colors: [Color(0xFF5A8EFA), Color(0xFF8B77FF)],
+      colors: [Color(0xFF7FA2E8), Color(0xFFA699E8)],
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
     ),
     LinearGradient(
-      colors: [Color(0xFF43E97B), Color(0xFF38F9D7)],
+      colors: [Color(0xFF78D2AF), Color(0xFF87DDBF)],
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
     ),
     LinearGradient(
-      colors: [Color(0xFFFFA726), Color(0xFFFF7043)],
+      colors: [Color(0xFFE7B26B), Color(0xFFE89A80)],
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
     ),
     LinearGradient(
-      colors: [Color(0xFFEC407A), Color(0xFFAB47BC)],
+      colors: [Color(0xFFD991B6), Color(0xFFB88FCF)],
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
     ),
@@ -70,7 +71,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
 
   // 主渐变色
   static const LinearGradient _primaryGradient = LinearGradient(
-    colors: [Color(0xFF5A8EFA), Color(0xFF8B77FF)],
+    colors: [Color(0xFF7FA2E8), Color(0xFFA699E8)],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
@@ -846,7 +847,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
         title: ShaderMask(
           shaderCallback: (bounds) => _primaryGradient.createShader(bounds),
           child: const Text(
-            '个人资料',
+            '设置',
             style: TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.w800,
@@ -855,7 +856,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
               shadows: [
                 Shadow(
                   blurRadius: 8,
-                  color: Color(0x405A8EFA),
+                  color: Color(0x337FA2E8),
                   offset: Offset(0, 2),
                 ),
               ],
@@ -977,12 +978,26 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
                       _buildSettingsTile(
                         icon: Icons.shield_outlined,
                         gradientIndex: 2,
-                        title: '账户安全',
+                        title: '账号安全',
                         subtitle: '修改密码、账号注销等',
                         onTap: () {
                           Navigator.of(context).push(
                             MaterialPageRoute(
                               builder: (context) => const AccountSecurityPage(),
+                            ),
+                          );
+                        },
+                      ),
+                      _buildDivider(),
+                      _buildSettingsTile(
+                        icon: Icons.info_outline,
+                        gradientIndex: 1,
+                        title: '关于我们',
+                        subtitle: '用户协议、隐私政策',
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => const AboutPage(),
                             ),
                           );
                         },
@@ -1051,7 +1066,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
                       gradient: _primaryGradient,
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFF5A8EFA).withOpacity(0.3),
+                          color: const Color(0xFF7FA2E8).withOpacity(0.24),
                           blurRadius: 16,
                           offset: const Offset(0, 6),
                         ),
@@ -1084,7 +1099,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
                                   style: const TextStyle(
                                     fontSize: 28,
                                     fontWeight: FontWeight.bold,
-                                    color: Color(0xFF5A8EFA),
+                                    color: Color(0xFF7FA2E8),
                                   ),
                                 )
                               : null,

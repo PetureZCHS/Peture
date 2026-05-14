@@ -789,6 +789,7 @@ class _PetProfileSectionState extends State<PetProfileSection> {
                 child: ListView.separated(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
+                  padding: EdgeInsets.zero,
                   itemCount: pets.length,
                   itemBuilder: (context, index) {
                     final pet = pets[index];
@@ -895,6 +896,13 @@ class _PetProfileCardState extends State<PetProfileCard>
 
   void _onTapCancel() {
     _scaleController.reverse();
+  }
+
+  String _formatAgeWithSpaces(String age) {
+    return age
+        .replaceAllMapped(RegExp(r'(\d+)岁'), (m) => '${m.group(1)} 岁 ')
+        .replaceAllMapped(RegExp(r'(\d+)个月'), (m) => '${m.group(1)} 个月')
+        .trim();
   }
 
   @override
@@ -1049,7 +1057,7 @@ class _PetProfileCardState extends State<PetProfileCard>
                                   Row(
                                     children: [
                                       Text(
-                                        widget.pet.age,
+                                        _formatAgeWithSpaces(widget.pet.age),
                                         style: TextStyle(
                                           fontSize: 13,
                                           color: AppColors.secondaryText
@@ -1195,20 +1203,20 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage>
     VoidCallback? onTap,
   }) {
     final content = Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-            color: accentColor.withOpacity(0.15),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
+            color: accentColor.withOpacity(0.1),
+            blurRadius: 14,
+            offset: const Offset(0, 5),
           ),
           BoxShadow(
             color: Colors.black.withOpacity(0.03),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+            blurRadius: 6,
+            offset: const Offset(0, 1),
           ),
         ],
       ),
@@ -1216,26 +1224,26 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage>
         children: [
           // 图标容器
           Container(
-            width: 48,
-            height: 48,
+            width: 44,
+            height: 44,
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  accentColor.withOpacity(0.3),
-                  accentColor.withOpacity(0.1),
+                  accentColor.withOpacity(0.22),
+                  accentColor.withOpacity(0.08),
                 ],
               ),
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(14),
             ),
             child: Icon(
               icon,
-              color: accentColor.withOpacity(0.8),
-              size: 24,
+              color: accentColor.withOpacity(0.72),
+              size: 22,
             ),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 12),
           // 标签和值
           Expanded(
             child: Column(
@@ -1244,16 +1252,16 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage>
                 Text(
                   label,
                   style: TextStyle(
-                    fontSize: 13,
+                    fontSize: 12,
                     fontWeight: FontWeight.w500,
                     color: AppColors.secondaryText.withOpacity(0.8),
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 2),
                 Text(
                   value,
                   style: TextStyle(
-                    fontSize: 16,
+                    fontSize: 14,
                     fontWeight: FontWeight.bold,
                     color: isPlaceholder ? Colors.grey : AppColors.primaryText,
                   ),
@@ -1274,10 +1282,10 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage>
 
     return Material(
       color: Colors.transparent,
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: BorderRadius.circular(18),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(18),
         child: content,
       ),
     );
@@ -1335,8 +1343,8 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage>
           child: ClipOval(
             child: CachedNetworkImage(
               imageUrl: avatar,
-              width: 140,
-              height: 140,
+              width: 124,
+              height: 124,
               fit: BoxFit.cover,
               errorWidget: (context, url, error) =>
                   _buildPetAvatarPlaceholder(),
@@ -1351,8 +1359,8 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage>
             child: ClipOval(
               child: Image.file(
                 file,
-                width: 140,
-                height: 140,
+                width: 124,
+                height: 124,
                 fit: BoxFit.cover,
                 errorBuilder: (context, error, stackTrace) =>
                     _buildPetAvatarPlaceholder(),
@@ -1401,8 +1409,8 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage>
 
   Widget _buildPetAvatarPlaceholder() {
     return Container(
-      width: 140,
-      height: 140,
+      width: 124,
+      height: 124,
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
@@ -1417,7 +1425,7 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage>
       child: Icon(
         Icons.pets,
         color: Colors.white.withOpacity(0.9),
-        size: 56,
+        size: 50,
       ),
     );
   }
@@ -1733,7 +1741,7 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage>
                 title: Text(
                   '${_currentPet.name} 的档案',
                   style: const TextStyle(
-                    fontSize: 20,
+                    fontSize: 19,
                     fontWeight: FontWeight.bold,
                     color: AppColors.primaryText,
                   ),
@@ -1754,8 +1762,8 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage>
                     decoration: BoxDecoration(
                       gradient: const LinearGradient(
                         colors: [
-                          AppColors.primaryGradientStart,
-                          AppColors.primaryGradientEnd,
+                          Color(0xFFD79466),
+                          Color(0xFFE5A65E),
                         ],
                       ),
                       borderRadius: BorderRadius.circular(12),
@@ -1774,7 +1782,7 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage>
                             children: [
                               Icon(Icons.edit_rounded,
                                   color: Colors.white, size: 18),
-                              SizedBox(width: 6),
+                              SizedBox(width: 5),
                               Text(
                                 '编辑',
                                 style: TextStyle(
@@ -1798,37 +1806,37 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage>
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 8),
                       // 宠物头像区域
                       FadeTransition(
                         opacity: _fadeAnimation,
                         child: _buildPetAvatar(),
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 14),
                       // 宠物名字
                       FadeTransition(
                         opacity: _fadeAnimation,
                         child: Text(
                           _currentPet.name,
                           style: const TextStyle(
-                            fontSize: 28,
+                            fontSize: 24,
                             fontWeight: FontWeight.bold,
                             color: AppColors.primaryText,
                           ),
                         ),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 6),
                       // 品种标签
                       FadeTransition(
                         opacity: _fadeAnimation,
                         child: Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 6),
+                              horizontal: 14, vertical: 5),
                           decoration: BoxDecoration(
                             gradient: LinearGradient(
                               colors: [
-                                _petThemeColor.withOpacity(0.6),
-                                _petThemeColor.withOpacity(0.3),
+                                _petThemeColor.withOpacity(0.4),
+                                _petThemeColor.withOpacity(0.18),
                               ],
                             ),
                             borderRadius: BorderRadius.circular(20),
@@ -1836,14 +1844,14 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage>
                           child: Text(
                             _currentPet.breed,
                             style: TextStyle(
-                              fontSize: 14,
+                              fontSize: 13,
                               fontWeight: FontWeight.w600,
                               color: AppColors.primaryText.withOpacity(0.8),
                             ),
                           ),
                         ),
                       ),
-                      const SizedBox(height: 32),
+                      const SizedBox(height: 18),
                       // 基本信息分组
                       _buildInfoGroup(
                         title: '基本信息',
@@ -1854,16 +1862,16 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage>
                             icon: Icons.pets_rounded,
                             label: '宠物类型',
                             value: _currentPet.type,
-                            accentColor: Colors.orange[400]!,
+                            accentColor: Colors.orange[300]!,
                           ),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 8),
                           _buildInfoItem(
                             icon: Icons.category_rounded,
                             label: '品种',
                             value: _currentPet.breed,
-                            accentColor: Colors.blue[400]!,
+                            accentColor: Colors.blue[300]!,
                           ),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 8),
                           _buildInfoItem(
                             icon: _currentPet.gender == '妹妹'
                                 ? Icons.female_rounded
@@ -1871,12 +1879,12 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage>
                             label: '性别',
                             value: _currentPet.gender,
                             accentColor: _currentPet.gender == '妹妹'
-                                ? Colors.pink[400]!
-                                : Colors.blue[400]!,
+                                ? Colors.pink[300]!
+                                : Colors.blue[300]!,
                           ),
                         ],
                       ),
-                      const SizedBox(height: 28),
+                      const SizedBox(height: 16),
                       // 身体特征分组
                       _buildInfoGroup(
                         title: '身体特征',
@@ -1888,29 +1896,29 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage>
                               icon: Icons.calendar_today_rounded,
                               label: '出生日期',
                               value: _currentPet.birthDate!.split('T')[0],
-                              accentColor: Colors.teal[400]!,
+                              accentColor: Colors.teal[300]!,
                             ),
                           if (_currentPet.birthDate != null)
-                            const SizedBox(height: 12),
+                            const SizedBox(height: 8),
                           _buildInfoItem(
                             icon: Icons.cake_rounded,
                             label: '年龄',
                             value: _formatAgeWithSpaces(_currentPet.age),
-                            accentColor: Colors.purple[400]!,
+                            accentColor: Colors.purple[300]!,
                           ),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 8),
                           _buildInfoItem(
                             icon: Icons.scale_rounded,
                             label: '体重',
                             value: _currentPet.weight != null
                                 ? '${_currentPet.weight!.toStringAsFixed(1)} kg'
                                 : '未填写',
-                            accentColor: Colors.green[400]!,
+                            accentColor: Colors.green[300]!,
                             isPlaceholder: _currentPet.weight == null,
                           ),
                         ],
                       ),
-                      const SizedBox(height: 28),
+                      const SizedBox(height: 16),
                       // 其他信息分组
                       _buildInfoGroup(
                         title: '其他信息',
@@ -1922,10 +1930,10 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage>
                               icon: Icons.health_and_safety_rounded,
                               label: '绝育状态',
                               value: _currentPet.neuterStatus!,
-                              accentColor: Colors.red[400]!,
+                              accentColor: Colors.red[300]!,
                             ),
                           if (_currentPet.neuterStatus != null)
-                            const SizedBox(height: 12),
+                            const SizedBox(height: 8),
                           _buildInfoItem(
                             icon: Icons.person_outline_rounded,
                             label: '我的称呼',
@@ -1933,17 +1941,17 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage>
                                     _currentPet.ownerNickname!.isNotEmpty
                                 ? _currentPet.ownerNickname!
                                 : '主人',
-                            accentColor: Colors.indigo[400]!,
+                            accentColor: Colors.indigo[300]!,
                           ),
                         ],
                       ),
-                      const SizedBox(height: 28),
+                      const SizedBox(height: 16),
                       // 生活照卡片
                       FadeTransition(
                         opacity: _fadeAnimation,
                         child: _buildLifePhotoCard(),
                       ),
-                      const SizedBox(height: 50),
+                      const SizedBox(height: 28),
                     ],
                   ),
                 ),

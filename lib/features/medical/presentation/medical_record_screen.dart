@@ -582,6 +582,13 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen>
     return '${latestWeight.weight.toStringAsFixed(1)}kg';
   }
 
+  String _formatAgeWithSpaces(String age) {
+    return age
+        .replaceAllMapped(RegExp(r'(\d+)岁'), (m) => '${m.group(1)} 岁 ')
+        .replaceAllMapped(RegExp(r'(\d+)个月'), (m) => '${m.group(1)} 个月')
+        .trim();
+  }
+
   String _getHealthStatus() {
     if (_weightRecords.isEmpty) return '未评估';
 
@@ -910,7 +917,7 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen>
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '${pet.age} • ${pet.breed}',
+                      '${_formatAgeWithSpaces(pet.age)} • ${pet.breed}',
                       style: AppTheme.captionText.copyWith(
                         color: AppTheme.textSecondary,
                       ),
@@ -994,7 +1001,7 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen>
                 SliverPadding(
                   padding: const EdgeInsets.fromLTRB(
                     AppTheme.horizontalPadding,
-                    60, // Increased top padding to account for status bar/header space since AppBar is gone
+                    24,
                     AppTheme.horizontalPadding,
                     AppTheme.horizontalPadding +
                         80, // Add bottom padding for nav bar
@@ -1156,7 +1163,11 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen>
                                     Row(
                                       children: [
                                         Text(
-                                          _selectedPet?.age ?? '',
+                                          _selectedPet?.age == null
+                                              ? ''
+                                              : _formatAgeWithSpaces(
+                                                  _selectedPet!.age,
+                                                ),
                                           style: AppTheme.bodyText.copyWith(
                                             fontSize: 14,
                                           ),
@@ -1255,7 +1266,7 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen>
         Text(
           title,
           style: AppTheme.captionText.copyWith(
-            color: Colors.white.withOpacity(0.75),
+            color: AppTheme.textSecondary.withOpacity(0.85),
             fontSize: 13,
           ),
         ),
@@ -1263,7 +1274,7 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen>
         Text(
           value,
           style: AppTheme.bodyTextMedium.copyWith(
-            color: Colors.white,
+            color: AppTheme.textPrimary,
             fontSize: 15,
             fontWeight: FontWeight.w600,
           ),
@@ -1428,6 +1439,8 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen>
           },
         ),
         const SizedBox(height: 16),
+        _buildTabActionSwitcher(),
+        const SizedBox(height: 16),
         // Content List
         AnimatedSwitcher(
           duration: const Duration(milliseconds: 350),
@@ -1441,56 +1454,85 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen>
               child: SlideTransition(position: slideAnimation, child: child),
             );
           },
-          child: _selectedTabIndex == 0
-              ? _buildHealthLogList()
-              : Column(
-                  children: [
-                    // Add Reminder Button (Only visible in Reminders tab)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 16),
-                      child: Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          onTap: _showAddReminderDialog,
-                          borderRadius: BorderRadius.circular(16),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            decoration: BoxDecoration(
-                              border: Border.all(
-                                color: AppTheme.primary.withOpacity(0.3),
-                                width: 1,
-                              ),
-                              borderRadius: BorderRadius.circular(16),
-                              color: AppTheme.primary.withOpacity(0.05),
-                            ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  Icons.add_circle_outline,
-                                  color: AppTheme.primary,
-                                  size: 20,
-                                ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  '添加提醒',
-                                  style: TextStyle(
-                                    color: AppTheme.primary,
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 15,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    _buildRemindersList(),
-                  ],
-                ),
+          child: _selectedTabIndex == 0 ? _buildHealthLogList() : _buildRemindersList(),
         ),
       ],
+    );
+  }
+
+  Widget _buildTabActionSwitcher() {
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 280),
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeInCubic,
+      transitionBuilder: (child, animation) {
+        final slide = Tween<Offset>(
+          begin: const Offset(0.0, 0.06),
+          end: Offset.zero,
+        ).animate(animation);
+        return FadeTransition(
+          opacity: animation,
+          child: SlideTransition(position: slide, child: child),
+        );
+      },
+      child: _selectedTabIndex == 0
+          ? _buildTabActionButton(
+              key: const ValueKey('health_action'),
+              label: '记录健康',
+              onTap: () {
+                HapticFeedback.lightImpact();
+                _showAddEventChoiceDialog();
+              },
+            )
+          : _buildTabActionButton(
+              key: const ValueKey('reminder_action'),
+              label: '添加提醒',
+              onTap: _showAddReminderDialog,
+            ),
+    );
+  }
+
+  Widget _buildTabActionButton({
+    required Key key,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return SizedBox(
+      key: key,
+      width: double.infinity,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            decoration: BoxDecoration(
+              border: Border.all(
+                color: AppTheme.primary.withOpacity(0.3),
+                width: 1,
+              ),
+              borderRadius: BorderRadius.circular(16),
+              color: AppTheme.primary.withOpacity(0.05),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.add_circle_outline,
+                  color: AppTheme.primary,
+                  size: 20,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  label,
+                  style: AppTheme.buttonText.copyWith(color: AppTheme.primary),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -1526,53 +1568,16 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen>
       key: const ValueKey<int>(1),
       child: Column(
         children: [
-          // Add Health Record Button (Moved here)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 16),
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                onTap: () {
-                  HapticFeedback.lightImpact();
-                  _showAddEventChoiceDialog();
-                },
-                borderRadius: BorderRadius.circular(16),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  decoration: BoxDecoration(
-                    border: Border.all(
-                      color: AppTheme.primary.withOpacity(0.3),
-                      width: 1,
-                    ),
-                    borderRadius: BorderRadius.circular(16),
-                    color: AppTheme.primary.withOpacity(0.05),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.add_circle_outline,
-                        color: AppTheme.primary,
-                        size: 20,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        '记录健康',
-                        style: AppTheme.buttonText.copyWith(
-                          color: AppTheme.primary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
           if (_healthLog.isEmpty)
-            const Center(
-              child: _EmptyState(
-                icon: Icons.history_edu_outlined,
-                message: '暂无健康日志',
+            const Padding(
+              padding: EdgeInsets.only(top: 28),
+              child: Align(
+                alignment: Alignment.topCenter,
+                child: _EmptyState(
+                  icon: Icons.history_edu_outlined,
+                  message: '暂无健康日志',
+                  compact: true,
+                ),
               ),
             )
           else
@@ -1703,10 +1708,15 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen>
     return Container(
       key: const ValueKey<int>(2),
       child: _reminders.isEmpty
-          ? const Center(
-              child: _EmptyState(
-                icon: Icons.alarm_on_outlined,
-                message: '暂无提醒事项',
+          ? const Padding(
+              padding: EdgeInsets.only(top: 28),
+              child: Align(
+                alignment: Alignment.topCenter,
+                child: _EmptyState(
+                  icon: Icons.alarm_on_outlined,
+                  message: '暂无提醒事项',
+                  compact: true,
+                ),
               ),
             )
           : Column(
@@ -2945,40 +2955,49 @@ class HealthLogCard extends StatelessWidget {
 }
 
 class _EmptyState extends StatelessWidget {
-  const _EmptyState({required this.icon, required this.message});
+  const _EmptyState({
+    required this.icon,
+    required this.message,
+    this.compact = false,
+  });
   final IconData icon;
   final String message;
+  final bool compact;
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 56.0, horizontal: 24.0),
+      padding: EdgeInsets.symmetric(
+        vertical: compact ? 20.0 : 56.0,
+        horizontal: 24.0,
+      ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            padding: const EdgeInsets.all(20),
+            padding: EdgeInsets.all(compact ? 14 : 20),
             decoration: BoxDecoration(
               color: AppTheme.shadow.withOpacity(0.05),
               shape: BoxShape.circle,
             ),
             child: Icon(
               icon,
-              size: 48,
+              size: compact ? 36 : 48,
               color: AppTheme.shadow.withOpacity(0.4),
             ),
           ),
-          const SizedBox(height: 24),
+          SizedBox(height: compact ? 14 : 24),
           Text(
             message,
             style: AppTheme.bodyTextMedium.copyWith(
               color: AppTheme.textSecondary,
-              fontSize: 16,
+              fontSize: compact ? 15 : 16,
             ),
           ),
-          const SizedBox(height: 8),
+          SizedBox(height: compact ? 6 : 8),
           Text(
             '点击上方按钮添加记录',
             style: AppTheme.captionText.copyWith(
-              fontSize: 13,
+              fontSize: compact ? 12 : 13,
               color: AppTheme.textTertiary.withOpacity(0.7),
             ),
           ),

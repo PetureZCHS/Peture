@@ -31,6 +31,7 @@ class LibraryScreen extends StatefulWidget {
 }
 
 class _LibraryScreenState extends State<LibraryScreen> {
+  static const Color _pageBg = Color(0xFFF7F4EF);
   bool _isLoading = true;
   List<Book> _books = [];
 
@@ -131,28 +132,28 @@ class _LibraryScreenState extends State<LibraryScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F5), // Soft off-white
+      backgroundColor: _pageBg,
       body: RefreshIndicator(
         onRefresh: _fetchData,
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
             SliverAppBar(
-            backgroundColor: const Color(0xFFF5F5F5),
-            floating: true,
+            backgroundColor: _pageBg,
+            floating: false,
             pinned: true,
             elevation: 0,
-            centerTitle: false,
-            expandedHeight: 100,
-            flexibleSpace: FlexibleSpaceBar(
-              titlePadding: const EdgeInsets.only(left: 20, bottom: 16),
-              title: Text(
-                '书库',
-                style: GoogleFonts.notoSerif(
-                  color: Colors.black87,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 28, // Large title like Apple Books
-                ),
+            centerTitle: true,
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back_ios_new, color: Colors.black87),
+              onPressed: () => Navigator.pop(context),
+            ),
+            title: Text(
+              '萌宠日记本',
+              style: GoogleFonts.notoSerif(
+                color: Colors.black87,
+                fontWeight: FontWeight.bold,
+                fontSize: 20,
               ),
             ),
           ),

@@ -87,6 +87,7 @@ double _computeWatermarkTextFitScale({
 
 
 class DiaryDetailPage extends StatelessWidget {
+  static const Color _pageBg = Color(0xFFF7F4EF);
   final PetDiary diary;
 
   const DiaryDetailPage({super.key, required this.diary});
@@ -94,9 +95,9 @@ class DiaryDetailPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F5),
+      backgroundColor: _pageBg,
       appBar: AppBar(
-        backgroundColor: const Color(0xFFF5F5F5),
+        backgroundColor: _pageBg,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new, color: Colors.black87),

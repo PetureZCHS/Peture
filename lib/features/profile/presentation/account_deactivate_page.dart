@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -6,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/auth_otp_email_context.dart';
 import '../../../shared/design_system/peture_design_system.dart';
+import '../../../shared/utils/ui_helpers.dart';
 import '../../auth/presentation/login_page.dart';
 
 /// 账号注销：两次确认 → 绑定邮箱验证码 → 校验通过后调用 Edge 删除并全局退出。
@@ -362,13 +364,52 @@ class _AccountDeactivatePageState extends State<AccountDeactivatePage> {
 
   @override
   Widget build(BuildContext context) {
-    return PeturePageScaffold(
-      title: '账号注销',
-      child: Column(
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      extendBodyBehindAppBar: true,
+      appBar: AppBar(
+        backgroundColor: AppColors.background.withOpacity(0.85),
+        elevation: 0,
+        centerTitle: true,
+        flexibleSpace: ClipRRect(
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+            child: Container(color: Colors.transparent),
+          ),
+        ),
+        title: const Text(
+          '账号注销',
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.w700,
+            color: AppColors.textDark,
+          ),
+        ),
+        leading: Container(
+          margin: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.5),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.white.withOpacity(0.6), width: 1),
+          ),
+          child: IconButton(
+            icon: const Icon(
+              Icons.arrow_back_ios_new_rounded,
+              color: Color(0xFF1D1D1F),
+              size: 18,
+            ),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+        ),
+      ),
+      body: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 120, 20, 24),
+        child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             if (_awaitingOtp)
-              PetureCard(
+              _buildGlassCard(
+                child: PetureCard(
                 child: Text.rich(
                   TextSpan(
                     style: _bodyBaseStyle,
@@ -383,7 +424,7 @@ class _AccountDeactivatePageState extends State<AccountDeactivatePage> {
                       const TextSpan(text: '。'),
                     ],
                   ),
-                ),
+                )),
               )
             else ...[
               PetureAlertPanel(
@@ -392,7 +433,8 @@ class _AccountDeactivatePageState extends State<AccountDeactivatePage> {
                 message: '注销后账号与所有数据会被永久删除，无法恢复。',
               ),
               const SizedBox(height: PetureSpacing.md),
-              PetureCard(
+              _buildGlassCard(
+                child: PetureCard(
                 variant: PetureCardVariant.danger,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -422,12 +464,13 @@ class _AccountDeactivatePageState extends State<AccountDeactivatePage> {
                       ),
                     ),
                   ],
-                ),
+                )),
               ),
             ],
             if (_awaitingOtp) ...[
               const SizedBox(height: PetureSpacing.md),
-              PetureCard(
+              _buildGlassCard(
+                child: PetureCard(
                 child: Column(
                   children: [
                     TextField(
@@ -464,7 +507,7 @@ class _AccountDeactivatePageState extends State<AccountDeactivatePage> {
                       onPressed: _isSubmitting ? null : _cancelOtpStep,
                     ),
                   ],
-                ),
+                )),
               ),
             ],
             const Spacer(),
@@ -481,6 +524,34 @@ class _AccountDeactivatePageState extends State<AccountDeactivatePage> {
                 isLoading: _isSubmitting,
               ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGlassCard({required Widget child}) {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        gradient: LinearGradient(
+          colors: [
+            Colors.white.withOpacity(0.65),
+            Colors.white.withOpacity(0.55),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        border: Border.all(color: Colors.white.withOpacity(0.5), width: 1),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+          child: Container(
+            color: Colors.white.withOpacity(0.1),
+            child: child,
+          ),
+        ),
       ),
     );
   }

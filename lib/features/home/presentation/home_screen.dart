@@ -416,67 +416,31 @@ class _HomeDashboardContentState extends State<_HomeDashboardContent> {
               parent: BouncingScrollPhysics()),
           padding: EdgeInsets.fromLTRB(20, topPadding + 60, 20, 130),
           children: [
-            const PetureSectionHeader(
-              title: '今天也好好照顾它',
-              subtitle: '把常用工具放在顺手的位置。',
-            ),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(20),
-                gradient: PetureGradients.warmSurface,
-                border: Border.all(
-                  color: Colors.white.withOpacity(0.9),
-                  width: 1,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: PetureColors.primary.withOpacity(0.12),
-                    blurRadius: 22,
-                    offset: const Offset(0, 10),
-                  ),
-                ],
-              ),
-              child: Row(
+            const SizedBox(height: 4),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 2, vertical: 6),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: PetureColors.primary.withOpacity(0.16),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: const Icon(
-                      Icons.pets_rounded,
-                      size: 22,
-                      color: PetureColors.primary,
+                  Text(
+                    '欢迎回来',
+                    style: TextStyle(
+                      fontSize: 28,
+                      height: 1.14,
+                      fontWeight: FontWeight.w800,
+                      color: PetureColors.textPrimary,
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          '欢迎回来，继续陪它好好长大',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                            color: PetureColors.textPrimary,
-                          ),
-                        ),
-                        SizedBox(height: 4),
-                        Text(
-                          '消费、档案、日记、训练与创作，都在这里。',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                            color: PetureColors.textSecondary,
-                          ),
-                        ),
-                      ],
+                  SizedBox(height: 4),
+                  Text(
+                    '今天也和它一起闪闪发光',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 16,
+                      height: 1.2,
+                      fontWeight: FontWeight.w600,
+                      color: PetureColors.textSecondary,
                     ),
                   ),
                 ],
@@ -491,10 +455,44 @@ class _HomeDashboardContentState extends State<_HomeDashboardContent> {
                   runSpacing: featureSpacing,
                   children: [
                     SizedBox(
+                      width: constraints.maxWidth,
+                      child: PetureFeatureTile(
+                        title: '第一人称日记',
+                        subtitle: '今天的心情，我替它说',
+                        icon: Icons.menu_book_rounded,
+                        accentColor: PetureColors.amber,
+                        onTap: () {
+                          HapticFeedback.lightImpact();
+                          Navigator.of(context).push(
+                            CupertinoPageRoute(
+                              builder: (_) => const PetDiaryComposePage(),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    SizedBox(
+                      width: constraints.maxWidth,
+                      child: PetureFeatureTile(
+                        title: 'AI 图像实验室',
+                        subtitle: '一张照片，解锁花式新造型',
+                        icon: Icons.auto_fix_high_rounded,
+                        accentColor: PetureColors.primary,
+                        onTap: () {
+                          HapticFeedback.lightImpact();
+                          Navigator.of(context).push(
+                            CupertinoPageRoute(
+                              builder: (_) => const PreparationPage(),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    SizedBox(
                       width: width,
                       child: PetureFeatureTile(
                         title: '宠物消费',
-                        subtitle: 'Expenses',
+                        subtitle: '每笔都清楚',
                         icon: Icons.account_balance_wallet_rounded,
                         accentColor: PetureColors.blue,
                         onTap: () {
@@ -511,7 +509,7 @@ class _HomeDashboardContentState extends State<_HomeDashboardContent> {
                       width: width,
                       child: PetureFeatureTile(
                         title: '电子档案',
-                        subtitle: 'Vaccine',
+                        subtitle: '档案随时查',
                         icon: Icons.badge_rounded,
                         accentColor: PetureColors.mint,
                         onTap: () {
@@ -527,25 +525,8 @@ class _HomeDashboardContentState extends State<_HomeDashboardContent> {
                     SizedBox(
                       width: width,
                       child: PetureFeatureTile(
-                        title: '第一人称日记',
-                        subtitle: 'Diary',
-                        icon: Icons.menu_book_rounded,
-                        accentColor: PetureColors.amber,
-                        onTap: () {
-                          HapticFeedback.lightImpact();
-                          Navigator.of(context).push(
-                            CupertinoPageRoute(
-                              builder: (_) => const PetDiaryComposePage(),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                    SizedBox(
-                      width: width,
-                      child: PetureFeatureTile(
                         title: '训宠响片',
-                        subtitle: 'Training',
+                        subtitle: '一按就到位',
                         icon: Icons.touch_app_rounded,
                         accentColor: PetureColors.violet,
                         onTap: () {
@@ -553,23 +534,6 @@ class _HomeDashboardContentState extends State<_HomeDashboardContent> {
                           Navigator.of(context).push(
                             CupertinoPageRoute(
                               builder: (_) => const DogClickerScreen(),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                    SizedBox(
-                      width: constraints.maxWidth,
-                      child: PetureFeatureTile(
-                        title: 'AI 图像实验室',
-                        subtitle: 'Image Lab',
-                        icon: Icons.auto_fix_high_rounded,
-                        accentColor: PetureColors.primary,
-                        onTap: () {
-                          HapticFeedback.lightImpact();
-                          Navigator.of(context).push(
-                            CupertinoPageRoute(
-                              builder: (_) => const PreparationPage(),
                             ),
                           );
                         },

@@ -1,14 +1,16 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../shared/utils/ui_helpers.dart';
-import 'account_deactivate_page.dart';
-import 'change_password_page.dart';
 
-/// 账号安全：修改密码、注销等（与主流 App 分组一致）。
-class AccountSecurityPage extends StatelessWidget {
-  const AccountSecurityPage({super.key});
+class AboutPage extends StatelessWidget {
+  const AboutPage({super.key});
+
+  static final Uri _termsUri = Uri.parse('https://PetureZCHS.github.io/terms');
+  static final Uri _privacyUri =
+      Uri.parse('https://PetureZCHS.github.io/privacy');
 
   static const List<LinearGradient> _iconGradients = [
     LinearGradient(
@@ -21,17 +23,19 @@ class AccountSecurityPage extends StatelessWidget {
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
     ),
-    LinearGradient(
-      colors: [Color(0xFFE7B26B), Color(0xFFE89A80)],
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
-    ),
-    LinearGradient(
-      colors: [Color(0xFFD991B6), Color(0xFFB88FCF)],
-      begin: Alignment.topLeft,
-      end: Alignment.bottomRight,
-    ),
   ];
+
+  Future<void> _openLegal(
+    BuildContext context,
+    Uri uri,
+  ) async {
+    final ok = await launchUrl(uri, mode: LaunchMode.inAppBrowserView);
+    if (!ok && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('链接打开失败，请稍后重试')),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -49,7 +53,7 @@ class AccountSecurityPage extends StatelessWidget {
           ),
         ),
         title: const Text(
-          '账号安全',
+          '关于我们',
           style: TextStyle(
             fontSize: 20,
             fontWeight: FontWeight.w700,
@@ -62,13 +66,6 @@ class AccountSecurityPage extends StatelessWidget {
             color: Colors.white.withOpacity(0.5),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: Colors.white.withOpacity(0.6), width: 1),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.04),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
           ),
           child: IconButton(
             icon: const Icon(
@@ -82,38 +79,25 @@ class AccountSecurityPage extends StatelessWidget {
       ),
       body: SingleChildScrollView(
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const SizedBox(height: 120),
             _buildGlassCard(
               children: [
-                _securityEntry(
+                _entry(
                   context: context,
-                  title: '修改密码',
-                  subtitle: '更新登录密码',
-                  icon: Icons.lock_outline_rounded,
+                  title: '用户协议',
+                  icon: Icons.description_outlined,
                   gradientIndex: 0,
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (context) => const ChangePasswordPage(),
-                      ),
-                    );
-                  },
+                  onTap: () => _openLegal(context, _termsUri),
                 ),
                 _buildDivider(),
-                _securityEntry(
+                _entry(
                   context: context,
-                  title: '账号注销',
-                  subtitle: '删除账号及全部数据，不可恢复',
-                  icon: Icons.no_accounts_outlined,
-                  gradientIndex: 3,
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (context) => const AccountDeactivatePage(),
-                      ),
-                    );
-                  },
+                  title: '隐私政策',
+                  icon: Icons.privacy_tip_outlined,
+                  gradientIndex: 1,
+                  onTap: () => _openLegal(context, _privacyUri),
                 ),
               ],
             ),
@@ -130,24 +114,11 @@ class AccountSecurityPage extends StatelessWidget {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
         gradient: LinearGradient(
-          colors: [
-            Colors.white.withOpacity(0.65),
-            Colors.white.withOpacity(0.55),
-          ],
+          colors: [Colors.white.withOpacity(0.65), Colors.white.withOpacity(0.55)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.5),
-          width: 1,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        border: Border.all(color: Colors.white.withOpacity(0.5), width: 1),
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(20),
@@ -170,10 +141,9 @@ class AccountSecurityPage extends StatelessWidget {
     );
   }
 
-  Widget _securityEntry({
+  Widget _entry({
     required BuildContext context,
     required String title,
-    required String subtitle,
     required IconData icon,
     required int gradientIndex,
     required VoidCallback onTap,
@@ -182,8 +152,6 @@ class AccountSecurityPage extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        splashColor: const Color(0xFF7FA2E8).withOpacity(0.08),
-        highlightColor: const Color(0xFF7FA2E8).withOpacity(0.04),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           child: Row(
@@ -192,50 +160,20 @@ class AccountSecurityPage extends StatelessWidget {
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  gradient:
-                      _iconGradients[gradientIndex % _iconGradients.length],
+                  gradient: _iconGradients[gradientIndex % _iconGradients.length],
                   borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: _iconGradients[gradientIndex %
-                              _iconGradients.length]
-                          .colors
-                          .first
-                          .withOpacity(0.22),
-                      blurRadius: 8,
-                      offset: const Offset(0, 3),
-                    ),
-                  ],
                 ),
                 child: Icon(icon, color: Colors.white, size: 20),
               ),
               const SizedBox(width: 14),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        color: AppColors.textDark,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 0.2,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: AppColors.textGrey,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    color: AppColors.textDark,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
               const SizedBox(width: 8),

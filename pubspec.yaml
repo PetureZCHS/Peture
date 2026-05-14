@@ -91,6 +91,8 @@ dependencies:
   
   # --- Unicode 字符处理（用于打字机效果正确处理 emoji）---
   characters: ^1.3.0
+  # --- 打开外部协议链接 ---
+  url_launcher: ^6.3.1
 
 dev_dependencies:
   sentry_dart_plugin: ^3.2.1

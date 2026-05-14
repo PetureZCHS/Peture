@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -8,7 +9,7 @@ import '../../../core/auth_pending_email_login.dart';
 import '../../../core/root_navigator_key.dart';
 import '../../auth/presentation/login_page.dart';
 import '../../../shared/design_system/peture_design_system.dart';
-import '../../../shared/utils/password_policy.dart';
+import '../../../shared/utils/ui_helpers.dart';
 
 class ChangePasswordPage extends StatefulWidget {
   const ChangePasswordPage({super.key});
@@ -27,15 +28,13 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
   bool _obscureOld = true;
   bool _obscureNew = true;
   bool _obscureConfirm = true;
+  bool _showPasswordRules = false;
 
   /// 开启：邮箱 OTP 验证身份（未设密码 / 长期验证码登录）；关闭：输入当前密码验证。
   bool _verifyIdentityWithEmailOtp = false;
   bool _otpMailSent = false;
   int _otpCooldownSec = 0;
   Timer? _otpCooldownTimer;
-
-  PasswordValidationResult get _newStrength =>
-      evaluateAppPassword(_newPasswordController.text.trim());
 
   @override
   void dispose() {
@@ -170,6 +169,46 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
     );
   }
 
+  Widget _buildRuleChecklist() {
+    final password = _newPasswordController.text.trim();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildRuleItem('至少 8 个字符', password.length >= 8),
+        const SizedBox(height: 8),
+        _buildRuleItem('包含大写字母', password.contains(RegExp(r'[A-Z]'))),
+        const SizedBox(height: 8),
+        _buildRuleItem('包含小写字母', password.contains(RegExp(r'[a-z]'))),
+        const SizedBox(height: 8),
+        _buildRuleItem('包含数字', password.contains(RegExp(r'[0-9]'))),
+      ],
+    );
+  }
+
+  Widget _buildRuleItem(String label, bool checked) {
+    final activeColor = const Color(0xFF4AA785);
+    final inactiveColor = const Color(0xFFB9B9BE);
+    return AnimatedDefaultTextStyle(
+      duration: const Duration(milliseconds: 180),
+      style: TextStyle(
+        fontSize: 14,
+        fontWeight: checked ? FontWeight.w600 : FontWeight.w500,
+        color: checked ? activeColor : inactiveColor,
+      ),
+      child: Row(
+        children: [
+          Icon(
+            checked ? Icons.check_circle_rounded : Icons.radio_button_unchecked,
+            size: 22,
+            color: checked ? activeColor : inactiveColor,
+          ),
+          const SizedBox(width: 10),
+          Text(label),
+        ],
+      ),
+    );
+  }
+
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -267,66 +306,123 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
 
   @override
   Widget build(BuildContext context) {
-    return PeturePageScaffold(
-      title: '修改密码',
-      child: Form(
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      extendBodyBehindAppBar: true,
+      appBar: AppBar(
+        backgroundColor: AppColors.background.withOpacity(0.85),
+        elevation: 0,
+        centerTitle: true,
+        flexibleSpace: ClipRRect(
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+            child: Container(color: Colors.transparent),
+          ),
+        ),
+        title: const Text(
+          '修改密码',
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.w700,
+            color: AppColors.textDark,
+          ),
+        ),
+        leading: Container(
+          margin: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.5),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.white.withOpacity(0.6), width: 1),
+          ),
+          child: IconButton(
+            icon: const Icon(
+              Icons.arrow_back_ios_new_rounded,
+              color: Color(0xFF1D1D1F),
+              size: 18,
+            ),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+        ),
+      ),
+      body: Form(
         key: _formKey,
         child: ListView(
+          padding: const EdgeInsets.fromLTRB(20, 120, 20, 28),
           children: [
-            Text(
-              '$appPasswordRulesUserDescription\n\n'
-              '修改成功后须使用新密码重新登录，其他设备上的登录将一并退出。',
-              style: PetureTextStyles.body.copyWith(
-                height: 1.45,
-                color: PetureColors.textSecondary,
+            _buildGlassCard(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '设置新密码',
+                      style: PetureTextStyles.sectionTitle.copyWith(
+                        fontWeight: FontWeight.w800,
+                        color: PetureColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      '修改成功后将使用新密码重新登录，其他设备会自动退出。',
+                      style: PetureTextStyles.caption.copyWith(
+                        height: 1.4,
+                        color: PetureColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
             const SizedBox(height: PetureSpacing.md),
-            PetureCard(
-              padding: EdgeInsets.zero,
-              child: SwitchListTile(
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                title: Text(
-                  '使用邮箱验证码验证身份',
-                  style: PetureTextStyles.bodyStrong.copyWith(
-                    color: PetureColors.textPrimary,
+            _buildGlassCard(
+              child: PetureCard(
+                padding: EdgeInsets.zero,
+                child: SwitchListTile(
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
                   ),
-                ),
-                subtitle: Padding(
-                  padding: const EdgeInsets.only(top: 6, right: 8),
-                  child: Text(
-                    '适合长期用验证码登录或记不清当前密码的情况',
-                    style: PetureTextStyles.caption.copyWith(
-                      height: 1.35,
-                      color: PetureColors.textSecondary,
+                  title: Text(
+                    '使用邮箱验证码验证身份',
+                    style: PetureTextStyles.bodyStrong.copyWith(
+                      color: PetureColors.textPrimary,
                     ),
                   ),
+                  subtitle: Padding(
+                    padding: const EdgeInsets.only(top: 6, right: 8),
+                    child: Text(
+                      '适合长期用验证码登录或记不清当前密码的情况',
+                      style: PetureTextStyles.caption.copyWith(
+                        height: 1.35,
+                        color: PetureColors.textSecondary,
+                      ),
+                    ),
+                  ),
+                  value: _verifyIdentityWithEmailOtp,
+                  activeTrackColor: PetureColors.primary.withOpacity(0.45),
+                  activeThumbColor: PetureColors.primary,
+                  onChanged: _isSubmitting
+                      ? null
+                      : (v) {
+                          setState(() {
+                            _verifyIdentityWithEmailOtp = v;
+                            _otpMailSent = false;
+                            _otpController.clear();
+                            _otpCooldownTimer?.cancel();
+                            _otpCooldownSec = 0;
+                          });
+                        },
                 ),
-                value: _verifyIdentityWithEmailOtp,
-                activeTrackColor: PetureColors.primary.withOpacity(0.45),
-                activeThumbColor: PetureColors.primary,
-                onChanged: _isSubmitting
-                    ? null
-                    : (v) {
-                        setState(() {
-                          _verifyIdentityWithEmailOtp = v;
-                          _otpMailSent = false;
-                          _otpController.clear();
-                          _otpCooldownTimer?.cancel();
-                          _otpCooldownSec = 0;
-                        });
-                      },
               ),
             ),
             const SizedBox(height: PetureSpacing.lg),
-            PetureCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
+            _buildGlassCard(
+              child: PetureCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
                     if (!_verifyIdentityWithEmailOtp) ...[
                       TextFormField(
                         controller: _oldPasswordController,
@@ -415,59 +511,47 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                       controller: _newPasswordController,
                       obscureText: _obscureNew,
                       enabled: !_isSubmitting,
-                      onChanged: (_) => setState(() {}),
+                      onTap: () {
+                        if (!_showPasswordRules) {
+                          setState(() => _showPasswordRules = true);
+                        }
+                      },
                       decoration: _fieldDecoration(
                         label: '新密码',
-                        hint: '至少 8 位，两种及以上字符类型',
+                        hint: '至少 8 位，且包含大小写字母与数字',
                         icon: Icons.lock_outline_rounded,
                         suffix: IconButton(
                           onPressed: () =>
-                              setState(() => _obscureNew = !_obscureNew),
-                            icon: Icon(
-                              _obscureNew
-                                  ? Icons.visibility_off_outlined
-                                  : Icons.visibility_outlined,
-                              color: PetureColors.textSecondary,
-                            ),
+                              setState(() {
+                                final next = !_obscureNew;
+                                _obscureNew = next;
+                                _obscureConfirm = next;
+                              }),
+                          icon: Icon(
+                            _obscureNew
+                                ? Icons.visibility_off_outlined
+                                : Icons.visibility_outlined,
+                            color: PetureColors.textSecondary,
                           ),
+                        ),
                       ),
                       validator: (value) {
                         final pwd = (value ?? '').trim();
                         if (pwd.isEmpty) return '请输入新密码';
-                        final result = evaluateAppPassword(pwd);
-                        if (!result.isValid) {
-                          return result.message.isNotEmpty
-                              ? result.message
-                              : '密码不符合安全要求';
+                        final hasUpper = pwd.contains(RegExp(r'[A-Z]'));
+                        final hasLower = pwd.contains(RegExp(r'[a-z]'));
+                        final hasDigit = pwd.contains(RegExp(r'[0-9]'));
+                        if (pwd.length < 8 || !hasUpper || !hasLower || !hasDigit) {
+                          return '需至少 8 位，且包含大写、小写字母和数字';
                         }
                         return null;
                       },
                     ),
-                    if (_newPasswordController.text.trim().isNotEmpty) ...[
+                    if (_showPasswordRules) ...[
                       const SizedBox(height: 10),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(4),
-                        child: LinearProgressIndicator(
-                          value: _newStrength.strength == PasswordStrength.weak
-                              ? 0.33
-                              : _newStrength.strength ==
-                                      PasswordStrength.medium
-                                  ? 0.66
-                                  : 1,
-                          backgroundColor: Colors.grey.shade200,
-                          valueColor:
-                              AlwaysStoppedAnimation<Color>(_newStrength.color),
-                          minHeight: 4,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        _newStrength.message,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: _newStrength.color,
-                          fontWeight: FontWeight.w500,
-                        ),
+                      ValueListenableBuilder<TextEditingValue>(
+                        valueListenable: _newPasswordController,
+                        builder: (context, _, __) => _buildRuleChecklist(),
                       ),
                     ],
                     const SizedBox(height: 16),
@@ -481,15 +565,19 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                         icon: Icons.lock_rounded,
                         suffix: IconButton(
                           onPressed: () => setState(
-                            () => _obscureConfirm = !_obscureConfirm,
+                            () {
+                              final next = !_obscureConfirm;
+                              _obscureConfirm = next;
+                              _obscureNew = next;
+                            },
                           ),
-                            icon: Icon(
-                              _obscureConfirm
-                                  ? Icons.visibility_off_outlined
-                                  : Icons.visibility_outlined,
-                              color: PetureColors.textSecondary,
-                            ),
+                          icon: Icon(
+                            _obscureConfirm
+                                ? Icons.visibility_off_outlined
+                                : Icons.visibility_outlined,
+                            color: PetureColors.textSecondary,
                           ),
+                        ),
                       ),
                       validator: (value) {
                         if ((value ?? '').trim() !=
@@ -500,6 +588,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                       },
                     ),
                   ],
+                ),
               ),
             ),
             const SizedBox(height: PetureSpacing.xl),
@@ -509,6 +598,33 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
               isLoading: _isSubmitting,
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGlassCard({required Widget child}) {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        gradient: LinearGradient(
+          colors: [
+            Colors.white.withOpacity(0.65),
+            Colors.white.withOpacity(0.55),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        border: Border.all(color: Colors.white.withOpacity(0.5), width: 1),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+          child: Container(
+            color: Colors.white.withOpacity(0.1),
+            child: child,
+          ),
         ),
       ),
     );

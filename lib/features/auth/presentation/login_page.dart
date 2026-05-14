@@ -3,16 +3,14 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import 'dart:ui';
+import 'package:url_launcher/url_launcher.dart';
 
-// 导入主应用文件
 import '../../../core/auth_pending_email_login.dart';
-import '../../../main.dart';
+import '../../../core/auth_terms_consent.dart';
 import '../../../services/analytics_service.dart';
 import '../../../shared/design_system/peture_design_system.dart';
 // 导入邮箱登录页面
 import 'email_login_page.dart';
-// 导入手机号验证码登录页面
-import 'phone_login_page.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -467,28 +465,68 @@ class _LoginBodyContent extends StatefulWidget {
 }
 
 class _LoginBodyContentState extends State<_LoginBodyContent> {
-  bool _agreedToTerms = false;
+  bool _agreedToTerms = AuthTermsConsent.value;
+  bool _showConsentHint = false;
+  static final Uri _termsUri = Uri.parse('https://PetureZCHS.github.io/terms');
+  static final Uri _privacyUri =
+      Uri.parse('https://PetureZCHS.github.io/privacy');
 
-  Future<void> _login() async {
+  @override
+  void initState() {
+    super.initState();
+    AuthTermsConsent.accepted.addListener(_syncConsentState);
+  }
+
+  @override
+  void dispose() {
+    AuthTermsConsent.accepted.removeListener(_syncConsentState);
+    super.dispose();
+  }
+
+  void _syncConsentState() {
+    if (!mounted) return;
+    final next = AuthTermsConsent.value;
+    if (_agreedToTerms == next) return;
+    setState(() {
+      _agreedToTerms = next;
+    });
+  }
+
+  void _onConsentChanged(bool value) {
+    setState(() {
+      _agreedToTerms = value;
+      if (value) {
+        _showConsentHint = false;
+      }
+    });
+    AuthTermsConsent.set(value);
+  }
+
+  Future<void> _openEmailLogin() async {
     if (!_agreedToTerms) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('请先阅读并同意服务协议'),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+      setState(() {
+        _showConsentHint = true;
+      });
       return;
     }
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (context) => const MyApp()),
+    if (_showConsentHint) {
+      setState(() {
+        _showConsentHint = false;
+      });
+    }
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (context) => const EmailLoginPage()),
     );
     unawaited(AnalyticsService.acceptConsentAndInit());
   }
 
-  void _otherLogin(String method) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('您选择了 $method 登录')),
-    );
+  Future<void> _openLegal(Uri uri) async {
+    final ok = await launchUrl(uri, mode: LaunchMode.inAppBrowserView);
+    if (!ok && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('链接打开失败，请稍后重试')),
+      );
+    }
   }
 
   @override
@@ -501,49 +539,38 @@ class _LoginBodyContentState extends State<_LoginBodyContent> {
           style: PetureTextStyles.body,
         ),
         const SizedBox(height: 32),
-        PeturePrimaryButton(
-          label: '一键登录',
-          icon: Icons.auto_awesome,
-          onPressed: () {
-            _login();
-          },
-        ),
-        const SizedBox(height: 16),
         PetureSecondaryButton(
           label: '邮箱登录',
           icon: Icons.email_outlined,
-          onPressed: () => Navigator.of(context).push(
-            MaterialPageRoute(builder: (context) => const EmailLoginPage()),
-          ),
-        ),
-        const SizedBox(height: 16),
-        PetureSecondaryButton(
-          label: '手机号验证码登录',
-          icon: Icons.phone_android,
-          onPressed: () => Navigator.of(context).push(
-            MaterialPageRoute(builder: (context) => const PhoneLoginPage()),
-          ),
+          onPressed: _openEmailLogin,
         ),
         const SizedBox(height: 24),
         _AgreementRow(
           value: _agreedToTerms,
-          onChanged: (value) => setState(() => _agreedToTerms = value ?? false),
-          onTap: () => _otherLogin('服务协议'),
+          onChanged: (value) => _onConsentChanged(value ?? false),
+          onTapTerms: () => _openLegal(_termsUri),
+          onTapPrivacy: () => _openLegal(_privacyUri),
         ),
-        const SizedBox(height: 24),
-        Row(
-          children: const [
-            Expanded(child: Divider()),
-            Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16),
-              child: Text('或使用其他方式登录',
-                  style: PetureTextStyles.caption),
-            ),
-            Expanded(child: Divider()),
-          ],
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 220),
+          switchInCurve: Curves.easeOutCubic,
+          switchOutCurve: Curves.easeInCubic,
+          child: _showConsentHint
+              ? Padding(
+                  key: const ValueKey<String>('consent-hint'),
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(
+                    '请先勾选并同意《用户协议》与《隐私政策》',
+                    style: PetureTextStyles.caption.copyWith(
+                      color: const Color(0xFFD9805D),
+                    ),
+                  ),
+                )
+              : const SizedBox(
+                  key: ValueKey<String>('consent-hint-empty'),
+                  height: 0,
+                ),
         ),
-        const SizedBox(height: 20),
-        _SocialLoginButtons(onLogin: _otherLogin),
       ],
     );
   }
@@ -553,12 +580,14 @@ class _LoginBodyContentState extends State<_LoginBodyContent> {
 class _AgreementRow extends StatelessWidget {
   final bool value;
   final ValueChanged<bool?> onChanged;
-  final VoidCallback onTap;
+  final VoidCallback onTapTerms;
+  final VoidCallback onTapPrivacy;
 
   const _AgreementRow({
     required this.value,
     required this.onChanged,
-    required this.onTap,
+    required this.onTapTerms,
+    required this.onTapPrivacy,
   });
 
   @override
@@ -579,77 +608,21 @@ class _AgreementRow extends StatelessWidget {
         ),
         const Text('我已阅读并同意', style: PetureTextStyles.caption),
         GestureDetector(
-          onTap: onTap,
+          onTap: onTapTerms,
           child: Text(
-            '《用户协议与隐私政策》',
+            '《用户协议》',
+            style: PetureTextStyles.caption.copyWith(color: PetureColors.violet),
+          ),
+        ),
+        const Text(' 与 ', style: PetureTextStyles.caption),
+        GestureDetector(
+          onTap: onTapPrivacy,
+          child: Text(
+            '《隐私政策》',
             style: PetureTextStyles.caption.copyWith(color: PetureColors.violet),
           ),
         ),
       ],
-    );
-  }
-}
-
-// 社交登录按钮行
-class _SocialLoginButtons extends StatelessWidget {
-  final void Function(String method) onLogin;
-
-  const _SocialLoginButtons({required this.onLogin});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        _SocialLoginButton(
-          icon: Icons.wechat,
-          color: PetureColors.mint,
-          onTap: () => onLogin('微信'),
-        ),
-        const SizedBox(width: 32),
-        _SocialLoginButton(
-          icon: Icons.apple,
-          color: PetureColors.textPrimary,
-          onTap: () => onLogin('苹果'),
-        ),
-      ],
-    );
-  }
-}
-
-// 单个社交登录按钮
-class _SocialLoginButton extends StatelessWidget {
-  final IconData icon;
-  final Color color;
-  final VoidCallback onTap;
-
-  const _SocialLoginButton({
-    required this.icon,
-    required this.color,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 50,
-        height: 50,
-        decoration: BoxDecoration(
-          color: PetureColors.surfacePure,
-          shape: BoxShape.circle,
-          boxShadow: [
-            BoxShadow(
-              color: PetureColors.violet.withOpacity(0.12),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-          border: Border.all(color: PetureColors.border),
-        ),
-        child: Icon(icon, color: color, size: 28),
-      ),
     );
   }
 }

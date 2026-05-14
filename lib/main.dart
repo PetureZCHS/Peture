@@ -87,21 +87,25 @@ class _RootRouterState extends State<RootRouter> {
       final event = authState.event;
       final session = authState.session;
 
-      // Token 刷新失败、签出、用户删除等都会触发 session 为空，此时回到登录页
-      if (event == AuthChangeEvent.signedIn && session != null) {
-        setState(() {
-          _session = session;
-        });
-      } else if (event == AuthChangeEvent.tokenRefreshed) {
-        setState(() {
-          _session = session;
-        });
-      } else if (event == AuthChangeEvent.signedOut ||
-          event == AuthChangeEvent.userDeleted ||
-          session == null) {
-        setState(() {
-          _session = null;
-        });
+      // 仅在明确签出/删号时清空会话，避免某些中间事件携带 null session 造成误回登录页。
+      switch (event) {
+        case AuthChangeEvent.signedIn:
+        case AuthChangeEvent.tokenRefreshed:
+        case AuthChangeEvent.userUpdated:
+        case AuthChangeEvent.initialSession:
+          setState(() {
+            _session = session;
+          });
+          break;
+        case AuthChangeEvent.signedOut:
+        case AuthChangeEvent.userDeleted:
+          setState(() {
+            _session = null;
+          });
+          break;
+        default:
+          // 其他事件（如密码恢复）不主动改动当前路由态
+          break;
       }
     });
   }

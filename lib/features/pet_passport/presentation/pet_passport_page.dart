@@ -459,58 +459,70 @@ class _PetPassportPageState extends State<PetPassportPage>
   }
 
   Widget _buildPassportView() {
+    final topInset = MediaQuery.of(context).padding.top;
+    final appBarClearance = topInset + kToolbarHeight + 24;
+
     return Column(
       children: [
-        const SizedBox(height: kToolbarHeight + 20),
+        SizedBox(height: appBarClearance),
         if (_pets.length > 1) _buildEnhancedPetSelector(),
         Expanded(
-          child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              child: GestureDetector(
-                onTap: _flipCard,
-                onTapDown: _onTapDown,
-                onTapUp: _onTapUp,
-                onTapCancel: _onTapCancel,
-                child: AnimatedBuilder(
-                  animation: _flipController,
-                  builder: (context, child) {
-                    final angle = _flipController.value * math.pi;
-                    final scale = _isPressed ? 0.97 : 1.0;
-                    
-                    final shadowOpacity = 0.2 + (_flipController.value - 0.5).abs() * 0.1;
-                    
-                    return Transform.scale(
-                        scale: scale,
-                        child: Container(
-                          decoration: BoxDecoration(
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(shadowOpacity),
-                                blurRadius: 20 + (_isPressed ? 10 : 0),
-                                offset: const Offset(0, 10),
-                              ),
-                            ],
-                          ),
-                          child: Transform(
-                            transform: Matrix4.identity()
-                              ..setEntry(3, 2, 0.001)
-                              ..rotateY(angle),
-                            alignment: Alignment.center,
-                            child: angle < math.pi / 2
-                                ? _buildEnhancedPassportFront()
-                                : Transform(
-                                    transform: Matrix4.identity()..rotateY(math.pi),
-                                    alignment: Alignment.center,
-                                    child: _buildEnhancedPassportBack(),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Center(
+                  child: FittedBox(
+                    fit: BoxFit.contain,
+                    child: GestureDetector(
+                      onTap: _flipCard,
+                      onTapDown: _onTapDown,
+                      onTapUp: _onTapUp,
+                      onTapCancel: _onTapCancel,
+                      child: AnimatedBuilder(
+                        animation: _flipController,
+                        builder: (context, child) {
+                          final angle = _flipController.value * math.pi;
+                          final scale = _isPressed ? 0.97 : 1.0;
+
+                          final shadowOpacity =
+                              0.2 + (_flipController.value - 0.5).abs() * 0.1;
+
+                          return Transform.scale(
+                            scale: scale,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(shadowOpacity),
+                                    blurRadius: 20 + (_isPressed ? 10 : 0),
+                                    offset: const Offset(0, 10),
                                   ),
-                           ),
-                         ),
-                       );
-                  },
+                                ],
+                              ),
+                              child: Transform(
+                                transform: Matrix4.identity()
+                                  ..setEntry(3, 2, 0.001)
+                                  ..rotateY(angle),
+                                alignment: Alignment.center,
+                                child: angle < math.pi / 2
+                                    ? _buildEnhancedPassportFront()
+                                    : Transform(
+                                        transform:
+                                            Matrix4.identity()..rotateY(math.pi),
+                                        alignment: Alignment.center,
+                                        child: _buildEnhancedPassportBack(),
+                                      ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
                 ),
-              ),
-            ),
+              );
+            },
           ),
         ),
         _buildEnhancedHint(),
@@ -716,7 +728,7 @@ class _PetPassportPageState extends State<PetPassportPage>
 
     final screenWidth = MediaQuery.of(context).size.width;
     final cardWidth = (screenWidth - 48).clamp(300.0, 360.0);
-    final cardHeight = cardWidth * 1.55;
+    final cardHeight = cardWidth * 1.42;
 
     return Container(
       width: cardWidth,
@@ -798,14 +810,14 @@ class _PetPassportPageState extends State<PetPassportPage>
 
             // Content
             Padding(
-              padding: const EdgeInsets.all(24.0),
+              padding: const EdgeInsets.all(20.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   // Elegant header with gradient text
                   _buildPassportHeader(),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 16),
 
                   // Photo and basic info row
                   Row(
@@ -813,7 +825,7 @@ class _PetPassportPageState extends State<PetPassportPage>
                     children: [
                       // Decorative photo frame
                       _buildDecorativePhotoFrame(passport),
-                      const SizedBox(width: 16),
+                      const SizedBox(width: 12),
 
                       // Info column with icons
                       Expanded(
@@ -825,19 +837,19 @@ class _PetPassportPageState extends State<PetPassportPage>
                               '姓名',
                               pet.name,
                             ),
-                            const SizedBox(height: 10),
+                            const SizedBox(height: 8),
                             _buildInfoRowWithIcon(
                               Icons.category,
                               '品种',
                               pet.breed,
                             ),
-                            const SizedBox(height: 10),
+                            const SizedBox(height: 8),
                             _buildInfoRowWithIcon(
                               pet.gender == '公' ? Icons.male : Icons.female,
                               '性别',
                               pet.gender,
                             ),
-                            const SizedBox(height: 10),
+                            const SizedBox(height: 8),
                             _buildInfoRowWithIcon(
                               Icons.cake,
                               '年龄',
@@ -849,7 +861,7 @@ class _PetPassportPageState extends State<PetPassportPage>
                     ],
                   ),
 
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 14),
                   Container(
                     height: 1,
                     decoration: BoxDecoration(
@@ -862,14 +874,14 @@ class _PetPassportPageState extends State<PetPassportPage>
                       ),
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 12),
 
                   // MBTI section with enhanced styling
                   if (passport?.mbtiType != null) ...[
                     _buildEnhancedMBTISection(passport!),
                   ],
 
-                  const Spacer(),
+                  const SizedBox(height: 12),
 
                   // Bottom info row with owner and adoption date
                   _buildBottomInfoRow(pet, passport),
@@ -1247,7 +1259,7 @@ class _PetPassportPageState extends State<PetPassportPage>
 
     final screenWidth = MediaQuery.of(context).size.width;
     final cardWidth = (screenWidth - 48).clamp(300.0, 360.0);
-    final cardHeight = cardWidth * 1.55;
+    final cardHeight = cardWidth * 1.42;
 
     return Container(
       width: cardWidth,
@@ -1320,13 +1332,8 @@ class _PetPassportPageState extends State<PetPassportPage>
                     // Achievements grid with enhanced badges
                     _buildSectionTitleWithIcon(Icons.emoji_events, '成就徽章'),
                     const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: (passport?.achievements ?? [])
-                          .take(6)
-                          .map((a) => _buildEnhancedAchievementBadge(a))
-                          .toList(),
+                    _buildAchievementLayout(
+                      (passport?.achievements ?? []).take(6).toList(),
                     ),
 
                     const SizedBox(height: 10),
@@ -1439,12 +1446,17 @@ class _PetPassportPageState extends State<PetPassportPage>
     );
   }
 
-  Widget _buildEnhancedAchievementBadge(Achievement achievement) {
+  Widget _buildEnhancedAchievementBadge(
+    Achievement achievement, {
+    double? width,
+  }) {
     final gradientColors = _getAchievementGradient(achievement.iconName);
     
     return SizedBox(
-      width: 80,
+      width: width ?? 80,
       child: Container(
+        constraints: const BoxConstraints(minHeight: 96),
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
         decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.1),
         borderRadius: BorderRadius.circular(14),
@@ -1488,13 +1500,35 @@ class _PetPassportPageState extends State<PetPassportPage>
               color: Colors.white,
               fontSize: 10,
               fontWeight: FontWeight.w600,
+              height: 1.2,
             ),
-            maxLines: 2,
+            maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
         ],
       ),
       ),
+    );
+  }
+
+  Widget _buildAchievementLayout(List<Achievement> achievements) {
+    if (achievements.isEmpty) return const SizedBox.shrink();
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const columnCount = 3;
+        const spacing = 8.0;
+        final cellWidth =
+            (constraints.maxWidth - (spacing * (columnCount - 1))) / columnCount;
+
+        return Wrap(
+          spacing: spacing,
+          runSpacing: spacing,
+          alignment: WrapAlignment.start,
+          children: achievements
+              .map((a) => _buildEnhancedAchievementBadge(a, width: cellWidth))
+              .toList(),
+        );
+      },
     );
   }
 
