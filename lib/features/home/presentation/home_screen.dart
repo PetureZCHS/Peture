@@ -130,7 +130,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       extendBody: true,
       resizeToAvoidBottomInset: false,
       backgroundColor: AppColors.background,
-
       body: Stack(
         children: [
           IndexedStack(
@@ -168,8 +167,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     const double indicatorHeight = 40.0;
     const double navHeight = 68.0;
 
-    final LinearGradient currentGradient =
-        _navGradients[_currentIndex];
+    final LinearGradient currentGradient = _navGradients[_currentIndex];
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
@@ -313,13 +311,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       width: currentWidth,
                       height: currentHeight,
                       decoration: BoxDecoration(
-                        borderRadius:
-                            BorderRadius.circular(currentHeight / 2),
+                        borderRadius: BorderRadius.circular(currentHeight / 2),
                         gradient: currentGradient,
                         boxShadow: [
                           BoxShadow(
-                            color: currentGradient.colors.first.withOpacity(
-                                0.4 + (stretchFactor * 0.2)),
+                            color: currentGradient.colors.first
+                                .withOpacity(0.4 + (stretchFactor * 0.2)),
                             blurRadius: 12 + (stretchFactor * 10),
                             spreadRadius: -2,
                             offset: const Offset(0, 2),
@@ -342,8 +339,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
                       _buildNavItem(0, Icons.home_rounded, Icons.home_outlined),
-                      _buildNavItem(
-                          1, Icons.assignment_rounded, Icons.assignment_outlined),
+                      _buildNavItem(1, Icons.assignment_rounded,
+                          Icons.assignment_outlined),
                       _buildNavItem(2, Icons.person_rounded,
                           Icons.person_outline_rounded),
                     ],
@@ -405,12 +402,11 @@ class _HomeDashboardContentState extends State<_HomeDashboardContent> {
   @override
   Widget build(BuildContext context) {
     final double topPadding = MediaQuery.of(context).padding.top;
-    const double featureSpacing = 12;
+    const double featureSpacing = 16;
 
     return Stack(
       children: [
         const _AmbientBackground(),
-
         ListView(
           physics: const AlwaysScrollableScrollPhysics(
               parent: BouncingScrollPhysics()),
@@ -418,85 +414,61 @@ class _HomeDashboardContentState extends State<_HomeDashboardContent> {
           children: [
             const SizedBox(height: 4),
             const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 2, vertical: 6),
+              padding: EdgeInsets.symmetric(horizontal: 4, vertical: 6),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '欢迎回来',
+                    'Peture',
                     style: TextStyle(
-                      fontSize: 28,
+                      fontSize: 34,
                       height: 1.14,
+                      letterSpacing: -0.5,
                       fontWeight: FontWeight.w800,
                       color: PetureColors.textPrimary,
                     ),
                   ),
-                  SizedBox(height: 4),
+                  SizedBox(height: 8),
                   Text(
-                    '今天也和它一起闪闪发光',
+                    '记录毛孩子的完美瞬间',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontSize: 16,
+                      fontSize: 15,
                       height: 1.2,
-                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.5,
+                      fontWeight: FontWeight.w500,
                       color: PetureColors.textSecondary,
                     ),
                   ),
                 ],
               ),
             ),
+            const SizedBox(height: 24),
+            _buildHeroCard(context),
             const SizedBox(height: 16),
             LayoutBuilder(
               builder: (context, constraints) {
-                final double width = (constraints.maxWidth - featureSpacing) / 2;
+                final double width =
+                    (constraints.maxWidth - featureSpacing) / 2;
                 return Wrap(
                   spacing: featureSpacing,
                   runSpacing: featureSpacing,
                   children: [
                     SizedBox(
-                      width: constraints.maxWidth,
-                      child: PetureFeatureTile(
-                        title: '第一人称日记',
-                        subtitle: '今天的心情，我替它说',
-                        icon: Icons.menu_book_rounded,
-                        accentColor: PetureColors.amber,
-                        onTap: () {
-                          HapticFeedback.lightImpact();
-                          Navigator.of(context).push(
-                            CupertinoPageRoute(
-                              builder: (_) => const PetDiaryComposePage(),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                    SizedBox(
-                      width: constraints.maxWidth,
-                      child: PetureFeatureTile(
-                        title: 'AI 图像实验室',
-                        subtitle: '一张照片，解锁花式新造型',
-                        icon: Icons.auto_fix_high_rounded,
-                        accentColor: PetureColors.primary,
-                        onTap: () {
-                          HapticFeedback.lightImpact();
-                          Navigator.of(context).push(
-                            CupertinoPageRoute(
-                              builder: (_) => const PreparationPage(),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                    SizedBox(
                       width: width,
-                      child: PetureFeatureTile(
+                      child: _buildSmallCard(
+                        context,
                         title: '宠物消费',
-                        subtitle: '每笔都清楚',
+                        subtitle: 'Expenses',
                         icon: Icons.account_balance_wallet_rounded,
-                        accentColor: PetureColors.blue,
+                        iconColor: const Color(0xFF6B7280),
+                        iconBgColor: const Color(0xFFE5E7EB),
+                        gradientColors: const [
+                          Color(0xFFFCF5ED),
+                          Color(0xFFFDF0E5),
+                        ],
                         onTap: () {
-                          HapticFeedback.lightImpact();
                           Navigator.of(context).push(
                             CupertinoPageRoute(
                               builder: (_) => const UnifiedExpenseHomePage(),
@@ -507,13 +479,18 @@ class _HomeDashboardContentState extends State<_HomeDashboardContent> {
                     ),
                     SizedBox(
                       width: width,
-                      child: PetureFeatureTile(
+                      child: _buildSmallCard(
+                        context,
                         title: '电子档案',
-                        subtitle: '档案随时查',
+                        subtitle: 'Vaccine',
                         icon: Icons.badge_rounded,
-                        accentColor: PetureColors.mint,
+                        iconColor: const Color(0xFF60A5FA),
+                        iconBgColor: const Color(0xFFDBEAFE),
+                        gradientColors: const [
+                          Color(0xFFF3F6FA),
+                          Color(0xFFEFF2F6),
+                        ],
                         onTap: () {
-                          HapticFeedback.lightImpact();
                           Navigator.of(context).push(
                             CupertinoPageRoute(
                               builder: (_) => const PetPassportPage(),
@@ -524,16 +501,43 @@ class _HomeDashboardContentState extends State<_HomeDashboardContent> {
                     ),
                     SizedBox(
                       width: width,
-                      child: PetureFeatureTile(
+                      child: _buildSmallCard(
+                        context,
                         title: '训宠响片',
-                        subtitle: '一按就到位',
+                        subtitle: 'Training',
                         icon: Icons.touch_app_rounded,
-                        accentColor: PetureColors.violet,
+                        iconColor: const Color(0xFFA78BFA),
+                        iconBgColor: const Color(0xFFF3E8FF),
+                        gradientColors: const [
+                          Color(0xFFFDF4ED),
+                          Color(0xFFFBECE6),
+                        ],
                         onTap: () {
-                          HapticFeedback.lightImpact();
                           Navigator.of(context).push(
                             CupertinoPageRoute(
                               builder: (_) => const DogClickerScreen(),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    SizedBox(
+                      width: width,
+                      child: _buildSmallCard(
+                        context,
+                        title: 'AI 图像实验室',
+                        subtitle: 'Image Lab',
+                        icon: Icons.auto_fix_high_rounded,
+                        iconColor: const Color(0xFF34D399),
+                        iconBgColor: const Color(0xFFD1FAE5),
+                        gradientColors: const [
+                          Color(0xFFF2FAF4),
+                          Color(0xFFECF7EF),
+                        ],
+                        onTap: () {
+                          Navigator.of(context).push(
+                            CupertinoPageRoute(
+                              builder: (_) => const PreparationPage(),
                             ),
                           );
                         },
@@ -543,11 +547,10 @@ class _HomeDashboardContentState extends State<_HomeDashboardContent> {
                 );
               },
             ),
-
-            const SizedBox(height: 30),
+            const SizedBox(height: 36),
             Center(
               child: Text(
-                '更多能力正在打磨中',
+                '更多功能敬请期待...',
                 style: TextStyle(
                   color: AppColors.textGrey.withOpacity(0.5),
                   fontSize: 12,
@@ -558,8 +561,197 @@ class _HomeDashboardContentState extends State<_HomeDashboardContent> {
             const SizedBox(height: 20),
           ],
         ),
-
       ],
+    );
+  }
+
+  Widget _buildHeroCard(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.lightImpact();
+        Navigator.of(context).push(
+          CupertinoPageRoute(
+            builder: (_) => const PetDiaryComposePage(),
+          ),
+        );
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(28),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 20,
+              offset: const Offset(0, 10),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(28),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(22),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(28),
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Colors.white.withOpacity(0.85),
+                    Colors.white.withOpacity(0.55),
+                  ],
+                ),
+                border: Border.all(
+                    color: Colors.white.withOpacity(0.9), width: 1.5),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF4AC283).withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: const Icon(Icons.menu_book_rounded,
+                            color: Color(0xFF4AC283), size: 22),
+                      ),
+                      Container(
+                        width: 32,
+                        height: 32,
+                        decoration: const BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.chevron_right_rounded,
+                            color: Color(0xFF4AC283), size: 20),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  const Text(
+                    '第一人称日记',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w600,
+                      color: PetureColors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    '以毛孩子的独特口吻，\n自动为您生成并记录那些珍贵的瞬间。',
+                    style: TextStyle(
+                      fontSize: 13,
+                      height: 1.5,
+                      fontWeight: FontWeight.w500,
+                      color: PetureColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSmallCard(
+    BuildContext context, {
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required Color iconColor,
+    required Color iconBgColor,
+    required List<Color> gradientColors,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.lightImpact();
+        onTap();
+      },
+      child: Container(
+        height: 135,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 18,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(24),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(24),
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: gradientColors.map((c) => c.withOpacity(0.9)).toList(),
+              ),
+              border:
+                  Border.all(color: Colors.white.withOpacity(0.8), width: 1.5),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    color: iconBgColor,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(icon, color: iconColor, size: 18),
+                ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontFamily: 'PingFang SC',
+                        fontFamilyFallback: ['Heiti SC', 'Arial Unicode MS'],
+                        fontSize: 16,
+                        height: 1.18,
+                        fontWeight: FontWeight.w600,
+                        color: PetureColors.textPrimary,
+                        letterSpacing: 0,
+                        shadows: [],
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(
+                        fontFamily: '.SF Pro Text',
+                        fontSize: 12,
+                        height: 1.2,
+                        fontWeight: FontWeight.w500,
+                        color: PetureColors.textSecondary,
+                        letterSpacing: 0,
+                        shadows: [],
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
