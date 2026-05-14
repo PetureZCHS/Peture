@@ -1317,7 +1317,7 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
     } catch (e) {
       debugPrint('保存带水印图片失败: $e');
       if (mounted) {
-        String message = '保存失败，请检查相册权限';
+        String message = '保存失败，请检查保存权限设置';
         if (e is GalException) {
           message = '保存失败: ${e.type.message}';
         }
@@ -1372,7 +1372,7 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
       debugPrint('保存失败: $e');
       if (mounted) {
         // 如果是 gal 抛出的异常，可能是权限或不支持
-        String message = '保存失败，请检查相册权限';
+        String message = '保存失败，请检查保存权限设置';
         if (e is GalException) {
           message = '保存失败: ${e.type.message}';
         } else {

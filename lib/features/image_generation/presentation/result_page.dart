@@ -963,39 +963,30 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
                                         return;
                                       }
 
-                                      PermissionStatus status;
+                                      PermissionStatus? status;
+                                      var canSaveToGallery = false;
                                       if (Platform.isIOS) {
-                                        // iOS 双兜底：优先请求 add-only，失败后回退到 photos。
-                                        final addOnlyStatus = await Permission
+                                        // iOS 最小权限：仅申请新增照片权限（不请求全相册读取）。
+                                        status = await Permission
                                             .photosAddOnly
                                             .request();
-                                        if (addOnlyStatus.isGranted ||
-                                            addOnlyStatus ==
-                                                PermissionStatus.limited) {
-                                          status = addOnlyStatus;
-                                        } else if (addOnlyStatus
-                                                .isPermanentlyDenied ||
-                                            addOnlyStatus ==
-                                                PermissionStatus.restricted) {
-                                          status = addOnlyStatus;
-                                        } else {
-                                          status =
-                                              await Permission.photos.request();
-                                        }
+                                        canSaveToGallery = status.isGranted ||
+                                            status == PermissionStatus.limited;
                                       } else if (Platform.isAndroid) {
-                                        // Android 13+ (API 33+) 使用 READ_MEDIA_IMAGES (Permission.photos)
-                                        // Android 12 及以下 (API 32-) 使用 READ_EXTERNAL_STORAGE (Permission.storage)
+                                        // Android 最小权限：
+                                        // - Android 10+ (API 29+) 可直接保存到媒体库，不主动请求读取权限
+                                        // - Android 9 及以下才请求 storage 兜底
                                         _cachedAndroidSdkInt ??=
                                             (await DeviceInfoPlugin()
                                                     .androidInfo)
                                                 .version
                                                 .sdkInt;
-                                        if (_cachedAndroidSdkInt! >= 33) {
-                                          status =
-                                              await Permission.photos.request();
+                                        if (_cachedAndroidSdkInt! >= 29) {
+                                          canSaveToGallery = true;
                                         } else {
                                           status = await Permission.storage
                                               .request();
+                                          canSaveToGallery = status.isGranted;
                                         }
                                       } else {
                                         // 桌面或其他不支持保存到相册的平台
@@ -1008,12 +999,11 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
                                         return;
                                       }
 
-                                      if (status.isGranted ||
-                                          status == PermissionStatus.limited) {
-                                        // 权限已授予，继续保存
-                                      } else if (status.isPermanentlyDenied ||
-                                          status ==
-                                              PermissionStatus.restricted) {
+                                      if (!canSaveToGallery &&
+                                          (status?.isPermanentlyDenied ==
+                                                  true ||
+                                              status ==
+                                                  PermissionStatus.restricted)) {
                                         // 权限被永久拒绝或受限，引导用户到设置
                                         if (context.mounted) {
                                           showDialog(
@@ -1022,7 +1012,7 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
                                               return AlertDialog(
                                                 title: const Text('权限被拒绝'),
                                                 content: const Text(
-                                                    '相册权限已被拒绝，请前往设置开启。'),
+                                                    '保存权限已被拒绝，请前往设置开启后再尝试写入相册。'),
                                                 actions: [
                                                   TextButton(
                                                     onPressed: () {
@@ -1045,13 +1035,13 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
                                           );
                                         }
                                         return;
-                                      } else {
+                                      } else if (!canSaveToGallery) {
                                         // 权限被拒绝，但可以再次请求
                                         if (context.mounted) {
                                           ScaffoldMessenger.of(context)
                                               .showSnackBar(const SnackBar(
-                                                  content:
-                                                      Text("需要相册权限才能保存图片")));
+                                                  content: Text(
+                                                      "需要保存权限才能写入相册")));
                                         }
                                         return;
                                       }
