@@ -426,7 +426,7 @@ entrypoint = "./functions/diary-gen-image/index.ts"
 
 [functions.analytics-collect]
 enabled = true
-verify_jwt = false
+verify_jwt = true
 entrypoint = "./functions/analytics-collect/index.ts"
 
 [functions.analytics-dashboard]

@@ -80,4 +80,37 @@ void main() {
       expect(remaining.single['client_event_id'], 'new-1');
     });
   });
+
+  group('appendAnalyticsEventToQueue', () {
+    test('preserves existing queued events and appends the new event', () {
+      final result = appendAnalyticsEventToQueue(
+        [
+          {'client_event_id': 'old-1'},
+        ],
+        {'client_event_id': 'new-1'},
+        maxQueueSize: 10,
+      );
+
+      expect(result.map((event) => event['client_event_id']), [
+        'old-1',
+        'new-1',
+      ]);
+    });
+
+    test('keeps the newest events when the queue exceeds the size limit', () {
+      final result = appendAnalyticsEventToQueue(
+        [
+          {'client_event_id': 'old-1'},
+          {'client_event_id': 'old-2'},
+        ],
+        {'client_event_id': 'new-1'},
+        maxQueueSize: 2,
+      );
+
+      expect(result.map((event) => event['client_event_id']), [
+        'old-2',
+        'new-1',
+      ]);
+    });
+  });
 }

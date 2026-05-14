@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS public.analytics_event_definitions (
 
 CREATE TABLE IF NOT EXISTS public.analytics_events (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  client_event_id uuid,
   user_id uuid REFERENCES auth.users(id) ON DELETE SET NULL,
   anonymous_id text,
   session_id uuid NOT NULL,
@@ -50,6 +51,9 @@ CREATE TABLE IF NOT EXISTS public.admin_users (
 
 CREATE INDEX IF NOT EXISTS idx_analytics_events_occurred_at
   ON public.analytics_events (occurred_at DESC);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_analytics_events_client_event_id
+  ON public.analytics_events (client_event_id);
 
 CREATE INDEX IF NOT EXISTS idx_analytics_events_event_time
   ON public.analytics_events (event_name, occurred_at DESC);

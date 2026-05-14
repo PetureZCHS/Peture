@@ -14,6 +14,7 @@ import '../../medical/presentation/medical_record_screen.dart';
 import '../../profile/presentation/profile_screen.dart';
 import '../../../shared/utils/ui_helpers.dart';
 import '../../../shared/utils/data_change_notifier.dart';
+import '../../../core/page_tracker_mixin.dart';
 
 // =========================================================
 // 主页面骨架（3 tab：首页 / 医疗 / 个人，去社区）
@@ -26,7 +27,8 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
+class _HomeScreenState extends State<HomeScreen>
+    with TickerProviderStateMixin, PageTrackerMixin<HomeScreen> {
   int _currentIndex = 0;
   double _currentPosition = 0.0;
   int _lastHapticIndex = 0;
@@ -39,6 +41,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   /// 标记是否需要刷新健康记录页面
   bool _needsMedicalScreenRefresh = true;
+
+  @override
+  String get analyticsPageName => 'home';
 
   /// 3 tab 的渐变列表
   static final List<LinearGradient> _navGradients = [
@@ -129,7 +134,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       extendBody: true,
       resizeToAvoidBottomInset: false,
       backgroundColor: AppColors.background,
-
       body: Stack(
         children: [
           IndexedStack(
@@ -167,8 +171,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     const double indicatorHeight = 40.0;
     const double navHeight = 68.0;
 
-    final LinearGradient currentGradient =
-        _navGradients[_currentIndex];
+    final LinearGradient currentGradient = _navGradients[_currentIndex];
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
@@ -312,13 +315,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       width: currentWidth,
                       height: currentHeight,
                       decoration: BoxDecoration(
-                        borderRadius:
-                            BorderRadius.circular(currentHeight / 2),
+                        borderRadius: BorderRadius.circular(currentHeight / 2),
                         gradient: currentGradient,
                         boxShadow: [
                           BoxShadow(
-                            color: currentGradient.colors.first.withOpacity(
-                                0.4 + (stretchFactor * 0.2)),
+                            color: currentGradient.colors.first
+                                .withOpacity(0.4 + (stretchFactor * 0.2)),
                             blurRadius: 12 + (stretchFactor * 10),
                             spreadRadius: -2,
                             offset: const Offset(0, 2),
@@ -341,8 +343,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
                       _buildNavItem(0, Icons.home_rounded, Icons.home_outlined),
-                      _buildNavItem(
-                          1, Icons.assignment_rounded, Icons.assignment_outlined),
+                      _buildNavItem(1, Icons.assignment_rounded,
+                          Icons.assignment_outlined),
                       _buildNavItem(2, Icons.person_rounded,
                           Icons.person_outline_rounded),
                     ],
@@ -408,7 +410,6 @@ class _HomeDashboardContentState extends State<_HomeDashboardContent> {
     return Stack(
       children: [
         const _AmbientBackground(),
-
         ListView(
           physics: const AlwaysScrollableScrollPhysics(
               parent: BouncingScrollPhysics()),
@@ -477,7 +478,6 @@ class _HomeDashboardContentState extends State<_HomeDashboardContent> {
             const SizedBox(height: 20),
           ],
         ),
-
       ],
     );
   }
@@ -488,8 +488,7 @@ class _HomeDashboardContentState extends State<_HomeDashboardContent> {
     return GestureDetector(
       onTap: () {
         HapticFeedback.lightImpact();
-        Navigator.of(context)
-            .push(CupertinoPageRoute(builder: (_) => page));
+        Navigator.of(context).push(CupertinoPageRoute(builder: (_) => page));
       },
       child: Container(
         width: width,
@@ -512,8 +511,8 @@ class _HomeDashboardContentState extends State<_HomeDashboardContent> {
               decoration: BoxDecoration(
                 color: Colors.white.withOpacity(0.65),
                 borderRadius: BorderRadius.circular(24),
-                border: Border.all(
-                    color: Colors.white.withOpacity(0.6), width: 1),
+                border:
+                    Border.all(color: Colors.white.withOpacity(0.6), width: 1),
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,

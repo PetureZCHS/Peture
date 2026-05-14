@@ -6,13 +6,6 @@ const MAX_BATCH_SIZE = 50;
 const MAX_EVENT_NAME_LENGTH = 80;
 const MAX_TEXT_LENGTH = 240;
 const MAX_PROPERTIES_BYTES = 4096;
-const ANONYMOUS_EVENT_NAMES = new Set([
-  "app_open",
-  "page_view",
-  "page_leave",
-  "button_click",
-  "feature_entry",
-]);
 
 const SENSITIVE_KEY_PATTERN =
   /(password|passwd|pwd|token|secret|authorization|phone|mobile|email|mail|address|location|lat|lng|longitude|latitude|content|message|prompt|answer|text|image|url|avatar|photo)/i;
@@ -129,6 +122,10 @@ Deno.serve(async (req) => {
   }
 
   const userId = await resolveUserId(req);
+  if (!userId) {
+    return jsonResponse({ error: "Unauthorized" }, 401);
+  }
+
   const anonymousId = trimText(payload.anonymous_id, 128);
   const supabase = createServiceRoleClient();
   const definitions = await supabase
@@ -159,10 +156,6 @@ Deno.serve(async (req) => {
       rejected.push({ index, reason: "event_name is disabled or unknown" });
       return;
     }
-    if (!userId && !ANONYMOUS_EVENT_NAMES.has(eventName)) {
-      rejected.push({ index, reason: "anonymous event_name is not allowed" });
-      return;
-    }
 
     const sessionId = record.session_id ?? payload.session_id;
     if (!isUuid(sessionId)) {
@@ -176,8 +169,20 @@ Deno.serve(async (req) => {
       return;
     }
 
+    const rawClientEventId = record.client_event_id;
+    const clientEventId = rawClientEventId === undefined || rawClientEventId === null
+      ? crypto.randomUUID()
+      : isUuid(rawClientEventId)
+      ? rawClientEventId
+      : null;
+    if (!clientEventId) {
+      rejected.push({ index, reason: "client_event_id must be uuid" });
+      return;
+    }
+
     const duration = Number(record.duration_ms);
     accepted.push({
+      client_event_id: clientEventId,
       user_id: userId,
       anonymous_id: anonymousId,
       session_id: sessionId,
@@ -196,7 +201,12 @@ Deno.serve(async (req) => {
   });
 
   if (accepted.length > 0) {
-    const { error } = await supabase.from("analytics_events").insert(accepted);
+    const { error } = await supabase
+      .from("analytics_events")
+      .upsert(accepted, {
+        onConflict: "client_event_id",
+        ignoreDuplicates: true,
+      });
     if (error) {
       console.error("[analytics-collect] insert error", error);
       return jsonResponse({ error: "Failed to insert analytics events" }, 500);

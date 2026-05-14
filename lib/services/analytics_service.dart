@@ -24,6 +24,7 @@ class AnalyticsService {
   static bool _isFlushing = false;
   static String? _anonymousId;
   static String? _sessionId;
+  static Future<void> _queueMutation = Future.value();
   static final Map<String, DateTime> _pageStartTimes = {};
 
   static Future<void> init() async {
@@ -165,9 +166,12 @@ class AnalyticsService {
   static Future<void> flush() async {
     if (_isFlushing) return;
     _isFlushing = true;
+    var shouldFlushAgain = false;
     try {
       final prefs = await SharedPreferences.getInstance();
-      final queue = _decodeQueue(prefs.getString(_queueKey));
+      final queue = await _withQueueMutation(
+        () async => _decodeQueue(prefs.getString(_queueKey)),
+      );
       if (queue.isEmpty) return;
 
       final batch = queue.take(_maxBatchSize).toList();
@@ -190,15 +194,18 @@ class AnalyticsService {
           .timeout(const Duration(seconds: 10));
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
-        final latestQueue = _decodeQueue(prefs.getString(_queueKey));
-        final remaining = reconcileAnalyticsQueueAfterFlush(
-          latestQueue,
-          batch,
+        final remaining = await _withQueueMutation(
+          () async {
+            final latestQueue = _decodeQueue(prefs.getString(_queueKey));
+            final nextQueue = reconcileAnalyticsQueueAfterFlush(
+              latestQueue,
+              batch,
+            );
+            await prefs.setString(_queueKey, jsonEncode(nextQueue));
+            return nextQueue;
+          },
         );
-        await prefs.setString(_queueKey, jsonEncode(remaining));
-        if (remaining.isNotEmpty) {
-          scheduleMicrotask(flush);
-        }
+        shouldFlushAgain = remaining.isNotEmpty;
       } else {
         debugPrint(
           'AnalyticsService: Supabase 埋点上报失败 ${response.statusCode} ${response.body}',
@@ -208,6 +215,9 @@ class AnalyticsService {
       debugPrint('AnalyticsService: Supabase 埋点上报异常 $error');
     } finally {
       _isFlushing = false;
+    }
+    if (shouldFlushAgain) {
+      scheduleMicrotask(flush);
     }
   }
 
@@ -219,7 +229,6 @@ class AnalyticsService {
     Map<String, dynamic>? properties,
   }) async {
     final prefs = await SharedPreferences.getInstance();
-    final queue = _decodeQueue(prefs.getString(_queueKey));
     final event = <String, dynamic>{
       'client_event_id': const Uuid().v4(),
       'event_name': eventName,
@@ -238,12 +247,32 @@ class AnalyticsService {
       'properties': sanitizeAnalyticsProperties(properties),
     }..removeWhere((_, value) => value == null);
 
-    queue.add(event);
-    final bounded = queue.length > _maxQueueSize
-        ? queue.sublist(queue.length - _maxQueueSize)
-        : queue;
-    await prefs.setString(_queueKey, jsonEncode(bounded));
+    await _withQueueMutation(() async {
+      final queue = _decodeQueue(prefs.getString(_queueKey));
+      final bounded = appendAnalyticsEventToQueue(
+        queue,
+        event,
+        maxQueueSize: _maxQueueSize,
+      );
+      await prefs.setString(_queueKey, jsonEncode(bounded));
+    });
     await flush();
+  }
+
+  static Future<T> _withQueueMutation<T>(Future<T> Function() action) {
+    final previous = _queueMutation;
+    final completer = Completer<void>();
+    _queueMutation = completer.future;
+
+    return previous.catchError((_) {}).then((_) async {
+      try {
+        return await action();
+      } finally {
+        if (!completer.isCompleted) {
+          completer.complete();
+        }
+      }
+    });
   }
 
   static List<Map<String, dynamic>> _decodeQueue(String? raw) {
@@ -290,6 +319,18 @@ class AnalyticsService {
     if (pageName.startsWith('clicker_')) return 'clicker';
     return 'navigation';
   }
+}
+
+@visibleForTesting
+List<Map<String, dynamic>> appendAnalyticsEventToQueue(
+  List<Map<String, dynamic>> queue,
+  Map<String, dynamic> event, {
+  int maxQueueSize = 500,
+}) {
+  final nextQueue = [...queue, event];
+  return nextQueue.length > maxQueueSize
+      ? nextQueue.sublist(nextQueue.length - maxQueueSize)
+      : nextQueue;
 }
 
 @visibleForTesting
