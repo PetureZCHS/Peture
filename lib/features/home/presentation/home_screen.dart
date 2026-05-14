@@ -12,6 +12,7 @@ import '../../dog_clicker/presentation/dog_clicker_screen.dart';
 import '../../expense/presentation/unified_expense_home_page.dart';
 import '../../medical/presentation/medical_record_screen.dart';
 import '../../profile/presentation/profile_screen.dart';
+import '../../../shared/design_system/peture_design_system.dart';
 import '../../../shared/utils/ui_helpers.dart';
 import '../../../shared/utils/data_change_notifier.dart';
 
@@ -42,9 +43,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   /// 3 tab 的渐变列表
   static final List<LinearGradient> _navGradients = [
-    AppColors.navTab0,
-    AppColors.navTab2,
-    AppColors.navTab3,
+    PetureGradients.brand,
+    PetureGradients.mint,
+    PetureGradients.tech,
   ];
 
   @override
@@ -404,6 +405,7 @@ class _HomeDashboardContentState extends State<_HomeDashboardContent> {
   @override
   Widget build(BuildContext context) {
     final double topPadding = MediaQuery.of(context).padding.top;
+    const double featureSpacing = 12;
 
     return Stack(
       children: [
@@ -414,50 +416,165 @@ class _HomeDashboardContentState extends State<_HomeDashboardContent> {
               parent: BouncingScrollPhysics()),
           padding: EdgeInsets.fromLTRB(20, topPadding + 60, 20, 130),
           children: [
-            // 功能网格 — 仅 5 个上架功能
+            const PetureSectionHeader(
+              title: '今天也好好照顾它',
+              subtitle: '把常用工具放在顺手的位置。',
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(20),
+                gradient: PetureGradients.warmSurface,
+                border: Border.all(
+                  color: Colors.white.withOpacity(0.9),
+                  width: 1,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: PetureColors.primary.withOpacity(0.12),
+                    blurRadius: 22,
+                    offset: const Offset(0, 10),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: PetureColors.primary.withOpacity(0.16),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: const Icon(
+                      Icons.pets_rounded,
+                      size: 22,
+                      color: PetureColors.primary,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          '欢迎回来，继续陪它好好长大',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: PetureColors.textPrimary,
+                          ),
+                        ),
+                        SizedBox(height: 4),
+                        Text(
+                          '消费、档案、日记、训练与创作，都在这里。',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: PetureColors.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
             LayoutBuilder(
               builder: (context, constraints) {
-                double width = (constraints.maxWidth - 12) / 2;
+                final double width = (constraints.maxWidth - featureSpacing) / 2;
                 return Wrap(
-                  spacing: 12,
-                  runSpacing: 12,
+                  spacing: featureSpacing,
+                  runSpacing: featureSpacing,
                   children: [
-                    _buildFeatureCard(
-                        width,
-                        '宠物消费',
-                        'Expenses',
-                        Icons.account_balance_wallet_rounded,
-                        const LinearGradient(
-                            colors: [Color(0xFF6A85B6), Color(0xFFBAC8E0)]),
-                        const UnifiedExpenseHomePage()),
-                    _buildFeatureCard(
-                        width,
-                        '电子档案',
-                        'Vaccine',
-                        Icons.badge_rounded,
-                        AppColors.coolGradient,
-                        const PetPassportPage()),
-                    _buildFeatureCard(
-                        width,
-                        '第一人称日记',
-                        'Diary',
-                        Icons.menu_book_rounded,
-                        AppColors.natureGradient,
-                        const PetDiaryComposePage()),
-                    _buildFeatureCard(
-                        width,
-                        '训宠响片',
-                        'Training',
-                        Icons.touch_app_rounded,
-                        AppColors.magicGradient,
-                        const DogClickerScreen()),
-                    _buildFeatureCard(
-                        width,
-                        'AI 图像实验室',
-                        'Image Lab',
-                        Icons.auto_fix_high_rounded,
-                        AppColors.natureGradient,
-                        const PreparationPage()),
+                    SizedBox(
+                      width: width,
+                      child: PetureFeatureTile(
+                        title: '宠物消费',
+                        subtitle: 'Expenses',
+                        icon: Icons.account_balance_wallet_rounded,
+                        accentColor: PetureColors.blue,
+                        onTap: () {
+                          HapticFeedback.lightImpact();
+                          Navigator.of(context).push(
+                            CupertinoPageRoute(
+                              builder: (_) => const UnifiedExpenseHomePage(),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    SizedBox(
+                      width: width,
+                      child: PetureFeatureTile(
+                        title: '电子档案',
+                        subtitle: 'Vaccine',
+                        icon: Icons.badge_rounded,
+                        accentColor: PetureColors.mint,
+                        onTap: () {
+                          HapticFeedback.lightImpact();
+                          Navigator.of(context).push(
+                            CupertinoPageRoute(
+                              builder: (_) => const PetPassportPage(),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    SizedBox(
+                      width: width,
+                      child: PetureFeatureTile(
+                        title: '第一人称日记',
+                        subtitle: 'Diary',
+                        icon: Icons.menu_book_rounded,
+                        accentColor: PetureColors.amber,
+                        onTap: () {
+                          HapticFeedback.lightImpact();
+                          Navigator.of(context).push(
+                            CupertinoPageRoute(
+                              builder: (_) => const PetDiaryComposePage(),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    SizedBox(
+                      width: width,
+                      child: PetureFeatureTile(
+                        title: '训宠响片',
+                        subtitle: 'Training',
+                        icon: Icons.touch_app_rounded,
+                        accentColor: PetureColors.violet,
+                        onTap: () {
+                          HapticFeedback.lightImpact();
+                          Navigator.of(context).push(
+                            CupertinoPageRoute(
+                              builder: (_) => const DogClickerScreen(),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    SizedBox(
+                      width: constraints.maxWidth,
+                      child: PetureFeatureTile(
+                        title: 'AI 图像实验室',
+                        subtitle: 'Image Lab',
+                        icon: Icons.auto_fix_high_rounded,
+                        accentColor: PetureColors.primary,
+                        onTap: () {
+                          HapticFeedback.lightImpact();
+                          Navigator.of(context).push(
+                            CupertinoPageRoute(
+                              builder: (_) => const PreparationPage(),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
                   ],
                 );
               },
@@ -466,7 +583,7 @@ class _HomeDashboardContentState extends State<_HomeDashboardContent> {
             const SizedBox(height: 30),
             Center(
               child: Text(
-                "更多功能敬请期待...",
+                '更多能力正在打磨中',
                 style: TextStyle(
                   color: AppColors.textGrey.withOpacity(0.5),
                   fontSize: 12,
@@ -479,99 +596,6 @@ class _HomeDashboardContentState extends State<_HomeDashboardContent> {
         ),
 
       ],
-    );
-  }
-
-  Widget _buildFeatureCard(double width, String title, String subtitle,
-      IconData icon, LinearGradient gradient, Widget page,
-      {int subtitleMaxLines = 1}) {
-    return GestureDetector(
-      onTap: () {
-        HapticFeedback.lightImpact();
-        Navigator.of(context)
-            .push(CupertinoPageRoute(builder: (_) => page));
-      },
-      child: Container(
-        width: width,
-        height: width * 0.82,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: [
-            BoxShadow(
-                color: Colors.black.withOpacity(0.05),
-                blurRadius: 15,
-                offset: const Offset(0, 8)),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(24),
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.65),
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(
-                    color: Colors.white.withOpacity(0.6), width: 1),
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    Colors.white.withOpacity(0.8),
-                    Colors.white.withOpacity(0.4),
-                  ],
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Container(
-                    width: 38,
-                    height: 38,
-                    decoration: BoxDecoration(
-                      color: gradient.colors.first.withOpacity(0.15),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(icon, color: gradient.colors.first, size: 20),
-                  ),
-                  Flexible(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          title,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.textDark,
-                            letterSpacing: -0.4,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 3),
-                        Text(
-                          subtitle,
-                          style: TextStyle(
-                              fontSize: 11,
-                              color: AppColors.textGrey,
-                              fontWeight: FontWeight.w500,
-                              letterSpacing: 0.3),
-                          maxLines: subtitleMaxLines,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
     );
   }
 }
