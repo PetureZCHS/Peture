@@ -31,7 +31,7 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
   final SupabaseService _supabaseService = SupabaseService();
   late final ModerationGuard _moderationGuard;
   late AnimationController _orbController;
-  
+
   // 宠物选择
   List<Pet> _pets = [];
   Pet? _selectedPet;
@@ -54,7 +54,7 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
       vsync: this,
       duration: const Duration(seconds: 10),
     )..repeat(reverse: true);
-    
+
     _loadPets();
   }
 
@@ -143,8 +143,7 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
     final petNickname = (_selectedPet?.name.trim().isNotEmpty ?? false)
         ? _selectedPet!.name.trim()
         : '毛孩子';
-    final ownerTitle =
-        (_selectedPet?.ownerNickname?.trim().isNotEmpty ?? false)
+    final ownerTitle = (_selectedPet?.ownerNickname?.trim().isNotEmpty ?? false)
         ? _selectedPet!.ownerNickname!.trim()
         : '主人';
 
@@ -269,7 +268,7 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
                 ),
               ),
               const SizedBox(height: 24),
-              
+
               // 标题
               Text(
                 title,
@@ -281,7 +280,7 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
                 ),
               ),
               const SizedBox(height: 12),
-              
+
               // 内容
               Text(
                 content,
@@ -293,7 +292,7 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
                 ),
               ),
               const SizedBox(height: 28),
-              
+
               // 按钮
               SizedBox(
                 width: double.infinity,
@@ -336,302 +335,319 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
       ),
       child: Scaffold(
         backgroundColor: AppColors.background,
-        body: Stack(
-        children: [
-          // 背景层
-          Stack(
+        body: GestureDetector(
+          behavior: HitTestBehavior.translucent,
+          onTap: () => FocusScope.of(context).unfocus(),
+          child: Stack(
             children: [
-              Container(color: AppColors.background),
-              // 状态栏区域半透明遮罩，确保图标清晰可见
-              Positioned(
-                top: 0,
-                left: 0,
-                right: 0,
-                height: MediaQuery.of(context).padding.top + 44,
-                child: Container(
-                  color: AppColors.background.withOpacity(0.85),
+              // 背景层
+              Stack(
+                children: [
+                  Container(color: AppColors.background),
+                  // 状态栏区域半透明遮罩，确保图标清晰可见
+                  Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    height: MediaQuery.of(context).padding.top + 44,
+                    child: Container(
+                      color: AppColors.background.withOpacity(0.85),
+                    ),
+                  ),
+                  AnimatedBuilder(
+                    animation: _orbController,
+                    builder: (context, child) {
+                      return Positioned(
+                        top: -100 + (_orbController.value * 40),
+                        left: -50 + (_orbController.value * 20),
+                        child: Container(
+                          width: 500,
+                          height: 500,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: AppColors.orb1.withOpacity(0.5),
+                          ),
+                        ).blurred(sigmaX: 90, sigmaY: 90),
+                      );
+                    },
+                  ),
+                  AnimatedBuilder(
+                    animation: _orbController,
+                    builder: (context, child) {
+                      return Positioned(
+                        top: 300 +
+                            (math.sin(_orbController.value * math.pi) * 60),
+                        right: -100,
+                        child: Container(
+                          width: 350,
+                          height: 350,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: AppColors.orb3.withOpacity(0.4),
+                          ),
+                        ).blurred(sigmaX: 80, sigmaY: 80),
+                      );
+                    },
+                  ),
+                  AnimatedBuilder(
+                    animation: _orbController,
+                    builder: (context, child) {
+                      return Positioned(
+                        bottom: -150,
+                        left: -80 + (_orbController.value * 150),
+                        child: Container(
+                          width: 600,
+                          height: 400,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: AppColors.orb2.withOpacity(0.5),
+                          ),
+                        ).blurred(sigmaX: 100, sigmaY: 100),
+                      );
+                    },
+                  ),
+                ],
+              ),
+
+              SafeArea(
+                child: Column(
+                  children: [
+                    _buildTopHeader(),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const SizedBox(height: 20),
+                            // Kimi 风格精灵小球
+                            const _KimiBall(),
+                            const SizedBox(height: 12),
+                            // 标题区域
+                            const Text(
+                              "Hello, 记录美好",
+                              style: TextStyle(
+                                fontSize: 36,
+                                fontWeight: FontWeight.bold,
+                                color: PetureColors.textPrimary,
+                                letterSpacing: -1.0,
+                                height: 1.2,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              "今天发生了什么有趣的事？",
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w400,
+                                color: PetureColors.textSecondary,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                            const SizedBox(height: 30),
+
+                            // 1. 引导选择宠物
+                            const Text(
+                              "第一步：选择主角",
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: PetureColors.textPrimary,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            _buildPetSelector(),
+
+                            const SizedBox(height: 24),
+
+                            // 2. 引导记录
+                            const Text(
+                              "第二步：记录日常",
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: PetureColors.textPrimary,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+
+                            // 输入框区域
+                            Container(
+                              padding: const EdgeInsets.all(20),
+                              decoration: BoxDecoration(
+                                color: PetureColors.surface.withOpacity(0.92),
+                                borderRadius: BorderRadius.circular(24),
+                                border: Border.all(
+                                    color: PetureColors.surfacePure, width: 2),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.05),
+                                    blurRadius: 20,
+                                    offset: const Offset(0, 10),
+                                  ),
+                                ],
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  TextField(
+                                    controller: _inputController,
+                                    maxLines: null,
+                                    minLines: 5,
+                                    maxLength: 500,
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      height: 1.6,
+                                      color: Colors.black87,
+                                    ),
+                                    decoration: InputDecoration(
+                                      hintText: '例如：今天带十六去公园玩了，它追着蝴蝶跑了好久...',
+                                      hintStyle: TextStyle(
+                                        color: PetureColors.textTertiary,
+                                        fontSize: 16,
+                                      ),
+                                      border: InputBorder.none,
+                                      counterStyle: TextStyle(
+                                        color: PetureColors.textTertiary,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ),
+
+                                  const SizedBox(height: 16),
+
+                                  // 风格选择
+                                  SingleChildScrollView(
+                                    scrollDirection: Axis.horizontal,
+                                    child: Row(
+                                      children: _availableStyles.map((style) {
+                                        final isSelected =
+                                            _selectedStyle == style;
+                                        return Padding(
+                                          padding:
+                                              const EdgeInsets.only(right: 8.0),
+                                          child: ChoiceChip(
+                                            label: Text(style),
+                                            selected: isSelected,
+                                            onSelected: (selected) {
+                                              if (selected) {
+                                                _onStyleSelected(style);
+                                              }
+                                            },
+                                            backgroundColor:
+                                                PetureColors.surfaceMuted,
+                                            selectedColor: PetureColors.primary
+                                                .withOpacity(0.2),
+                                            labelStyle: TextStyle(
+                                              color: isSelected
+                                                  ? PetureColors.primary
+                                                  : Colors.grey.shade600,
+                                              fontWeight: isSelected
+                                                  ? FontWeight.bold
+                                                  : FontWeight.normal,
+                                            ),
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(20),
+                                              side: BorderSide(
+                                                color: isSelected
+                                                    ? PetureColors.primary
+                                                    : Colors.transparent,
+                                              ),
+                                            ),
+                                          ),
+                                        );
+                                      }).toList(),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+
+                            const SizedBox(height: 16),
+                            // 示例文本按钮
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: TextButton.icon(
+                                onPressed: _onExampleTap,
+                                icon: Icon(Icons.auto_awesome,
+                                    size: 16,
+                                    color: PetureColors.textSecondary),
+                                label: Text(
+                                  "试一试示例",
+                                  style: TextStyle(
+                                      color: PetureColors.textSecondary,
+                                      fontSize: 14),
+                                ),
+                              ),
+                            ),
+
+                            const SizedBox(height: 30),
+
+                            // 生成按钮
+                            SizedBox(
+                              width: double.infinity,
+                              height: 56,
+                              child: ElevatedButton(
+                                onPressed:
+                                    _isSubmitting ? null : _generatePetDiary,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor:
+                                      (_selectedPet == null || _isSubmitting)
+                                          ? PetureColors.textTertiary
+                                          : PetureColors.textPrimary,
+                                  foregroundColor: PetureColors.surfacePure,
+                                  elevation: 0,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(28),
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    if (_selectedPet != null && !_isSubmitting)
+                                      const Icon(Icons.edit_note),
+                                    if (_isSubmitting) ...[
+                                      const SizedBox(
+                                        width: 18,
+                                        height: 18,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                    ] else
+                                      SizedBox(
+                                          width: _selectedPet != null ? 8 : 0),
+                                    Text(
+                                      _isSubmitting
+                                          ? "准备中..."
+                                          : (_selectedPet != null
+                                              ? "生成日记"
+                                              : "请先选择宠物"),
+                                      style: const TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 40),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ),
-              AnimatedBuilder(
-                animation: _orbController,
-                builder: (context, child) {
-                  return Positioned(
-                    top: -100 + (_orbController.value * 40),
-                    left: -50 + (_orbController.value * 20),
-                    child: Container(
-                      width: 500,
-                      height: 500,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: AppColors.orb1.withOpacity(0.5),
-                      ),
-                    ).blurred(sigmaX: 90, sigmaY: 90),
-                  );
-                },
-              ),
-              AnimatedBuilder(
-                animation: _orbController,
-                builder: (context, child) {
-                  return Positioned(
-                    top: 300 + (math.sin(_orbController.value * math.pi) * 60),
-                    right: -100,
-                    child: Container(
-                      width: 350,
-                      height: 350,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: AppColors.orb3.withOpacity(0.4),
-                      ),
-                    ).blurred(sigmaX: 80, sigmaY: 80),
-                  );
-                },
-              ),
-              AnimatedBuilder(
-                animation: _orbController,
-                builder: (context, child) {
-                  return Positioned(
-                    bottom: -150,
-                    left: -80 + (_orbController.value * 150),
-                    child: Container(
-                      width: 600,
-                      height: 400,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: AppColors.orb2.withOpacity(0.5),
-                      ),
-                    ).blurred(sigmaX: 100, sigmaY: 100),
-                  );
-                },
               ),
             ],
           ),
-
-          SafeArea(
-            child: Column(
-              children: [
-                _buildTopHeader(),
-                Expanded(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const SizedBox(height: 20),
-                        // Kimi 风格精灵小球
-                        const _KimiBall(),
-                        const SizedBox(height: 12),
-                        // 标题区域
-                        const Text(
-                          "Hello, 记录美好",
-                          style: TextStyle(
-                            fontSize: 36,
-                            fontWeight: FontWeight.bold,
-                            color: PetureColors.textPrimary,
-                            letterSpacing: -1.0,
-                            height: 1.2,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          "今天发生了什么有趣的事？",
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w400,
-                            color: PetureColors.textSecondary,
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                        const SizedBox(height: 30),
-
-                        // 1. 引导选择宠物
-                        const Text(
-                          "第一步：选择主角",
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: PetureColors.textPrimary,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        _buildPetSelector(),
-
-                        const SizedBox(height: 24),
-
-                        // 2. 引导记录
-                        const Text(
-                          "第二步：记录日常",
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: PetureColors.textPrimary,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-
-                        // 输入框区域
-                        Container(
-                          padding: const EdgeInsets.all(20),
-                          decoration: BoxDecoration(
-                            color: PetureColors.surface.withOpacity(0.92),
-                            borderRadius: BorderRadius.circular(24),
-                            border: Border.all(color: PetureColors.surfacePure, width: 2),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.05),
-                                blurRadius: 20,
-                                offset: const Offset(0, 10),
-                              ),
-                            ],
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              TextField(
-                                controller: _inputController,
-                                maxLines: null,
-                                minLines: 5,
-                                maxLength: 500,
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  height: 1.6,
-                                  color: Colors.black87,
-                                ),
-                                decoration: InputDecoration(
-                                  hintText: '例如：今天带十六去公园玩了，它追着蝴蝶跑了好久...',
-                                  hintStyle: TextStyle(
-                                    color: PetureColors.textTertiary,
-                                    fontSize: 16,
-                                  ),
-                                  border: InputBorder.none,
-                                  counterStyle: TextStyle(
-                                    color: PetureColors.textTertiary,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ),
-
-                              const SizedBox(height: 16),
-
-                              // 风格选择
-                              SingleChildScrollView(
-                                scrollDirection: Axis.horizontal,
-                                child: Row(
-                                  children: _availableStyles.map((style) {
-                                    final isSelected = _selectedStyle == style;
-                                    return Padding(
-                                      padding:
-                                          const EdgeInsets.only(right: 8.0),
-                                      child: ChoiceChip(
-                                        label: Text(style),
-                                        selected: isSelected,
-                                        onSelected: (selected) {
-                                          if (selected) _onStyleSelected(style);
-                                        },
-                                        backgroundColor: PetureColors.surfaceMuted,
-                                        selectedColor: PetureColors.primary
-                                            .withOpacity(0.2),
-                                        labelStyle: TextStyle(
-                                          color: isSelected
-                                              ? PetureColors.primary
-                                              : Colors.grey.shade600,
-                                          fontWeight: isSelected
-                                              ? FontWeight.bold
-                                              : FontWeight.normal,
-                                        ),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius:
-                                              BorderRadius.circular(20),
-                                          side: BorderSide(
-                                            color: isSelected
-                                                ? PetureColors.primary
-                                                : Colors.transparent,
-                                          ),
-                                        ),
-                                      ),
-                                    );
-                                  }).toList(),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-
-                        const SizedBox(height: 16),
-                        // 示例文本按钮
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: TextButton.icon(
-                            onPressed: _onExampleTap,
-                            icon: Icon(Icons.auto_awesome,
-                                size: 16, color: PetureColors.textSecondary),
-                            label: Text(
-                              "试一试示例",
-                              style: TextStyle(
-                                  color: PetureColors.textSecondary, fontSize: 14),
-                            ),
-                          ),
-                        ),
-
-                        const SizedBox(height: 30),
-
-                        // 生成按钮
-                        SizedBox(
-                          width: double.infinity,
-                          height: 56,
-                          child: ElevatedButton(
-                            onPressed: _isSubmitting ? null : _generatePetDiary,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: (_selectedPet == null || _isSubmitting)
-                                  ? PetureColors.textTertiary
-                                  : PetureColors.textPrimary,
-                              foregroundColor: PetureColors.surfacePure,
-                              elevation: 0,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(28),
-                              ),
-                            ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                if (_selectedPet != null && !_isSubmitting)
-                                  const Icon(Icons.edit_note),
-                                if (_isSubmitting) ...[
-                                  const SizedBox(
-                                    width: 18,
-                                    height: 18,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: Colors.white,
-                                    ),
-                                  ),
-                                  const SizedBox(width: 8),
-                                ] else
-                                  SizedBox(width: _selectedPet != null ? 8 : 0),
-                                Text(
-                                  _isSubmitting
-                                      ? "准备中..."
-                                      : (_selectedPet != null ? "生成日记" : "请先选择宠物"),
-                                  style: const TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 40),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
+        ),
       ),
-    ),
-  );
+    );
   }
 
   Widget _buildTopHeader() {
@@ -700,7 +716,8 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
         ),
         child: Row(
           children: [
-            Icon(Icons.pets_outlined, size: 20, color: PetureColors.textTertiary),
+            Icon(Icons.pets_outlined,
+                size: 20, color: PetureColors.textTertiary),
             const SizedBox(width: 10),
             Text(
               '还没有添加宠物哦',
