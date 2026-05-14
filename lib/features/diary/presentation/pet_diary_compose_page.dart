@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../../shared/design_system/peture_design_system.dart';
 import '../../../shared/utils/ui_helpers.dart';
 import '../../../services/supabase_edge_service.dart';
 import '../../moderation/data/moderation_client.dart';
@@ -224,7 +225,7 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
         child: Container(
           padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: PetureColors.surfacePure,
             borderRadius: BorderRadius.circular(24),
             boxShadow: [
               BoxShadow(
@@ -260,7 +261,7 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
                 style: const TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
-                  color: Color(0xFF1A1A1A),
+                  color: PetureColors.textPrimary,
                 ),
               ),
               const SizedBox(height: 12),
@@ -284,8 +285,8 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
                 child: ElevatedButton(
                   onPressed: () => Navigator.of(context).pop(),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF1A1A1A),
-                    foregroundColor: Colors.white,
+                    backgroundColor: PetureColors.textPrimary,
+                    foregroundColor: PetureColors.surfacePure,
                     elevation: 0,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(26),
@@ -315,7 +316,7 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
         statusBarBrightness: Brightness.light,
         statusBarColor: Colors.transparent,
         systemNavigationBarIconBrightness: Brightness.dark,
-        systemNavigationBarColor: Colors.white,
+        systemNavigationBarColor: PetureColors.surfacePure,
       ),
       child: Scaffold(
         backgroundColor: AppColors.background,
@@ -409,7 +410,7 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
                           style: TextStyle(
                             fontSize: 36,
                             fontWeight: FontWeight.bold,
-                            color: Color(0xFF1A1A1A),
+                            color: PetureColors.textPrimary,
                             letterSpacing: -1.0,
                             height: 1.2,
                           ),
@@ -420,7 +421,7 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
                           style: TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.w400,
-                            color: Colors.grey.shade500,
+                            color: PetureColors.textSecondary,
                             letterSpacing: 0.5,
                           ),
                         ),
@@ -432,7 +433,7 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
-                            color: Color(0xFF1A1A1A),
+                            color: PetureColors.textPrimary,
                           ),
                         ),
                         const SizedBox(height: 12),
@@ -446,7 +447,7 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
-                            color: Color(0xFF1A1A1A),
+                            color: PetureColors.textPrimary,
                           ),
                         ),
                         const SizedBox(height: 12),
@@ -455,9 +456,9 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
                         Container(
                           padding: const EdgeInsets.all(20),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.8),
+                            color: PetureColors.surface.withOpacity(0.92),
                             borderRadius: BorderRadius.circular(24),
-                            border: Border.all(color: Colors.white, width: 2),
+                            border: Border.all(color: PetureColors.surfacePure, width: 2),
                             boxShadow: [
                               BoxShadow(
                                 color: Colors.black.withOpacity(0.05),
@@ -482,12 +483,12 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
                                 decoration: InputDecoration(
                                   hintText: '例如：今天带十六去公园玩了，它追着蝴蝶跑了好久...',
                                   hintStyle: TextStyle(
-                                    color: Colors.grey.shade400,
+                                    color: PetureColors.textTertiary,
                                     fontSize: 16,
                                   ),
                                   border: InputBorder.none,
                                   counterStyle: TextStyle(
-                                    color: Colors.grey.shade400,
+                                    color: PetureColors.textTertiary,
                                     fontSize: 12,
                                   ),
                                 ),
@@ -510,12 +511,12 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
                                         onSelected: (selected) {
                                           if (selected) _onStyleSelected(style);
                                         },
-                                        backgroundColor: Colors.grey.shade100,
-                                        selectedColor: const Color(0xFF4facfe)
+                                        backgroundColor: PetureColors.surfaceMuted,
+                                        selectedColor: PetureColors.primary
                                             .withOpacity(0.2),
                                         labelStyle: TextStyle(
                                           color: isSelected
-                                              ? const Color(0xFF4facfe)
+                                              ? PetureColors.primary
                                               : Colors.grey.shade600,
                                           fontWeight: isSelected
                                               ? FontWeight.bold
@@ -526,7 +527,7 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
                                               BorderRadius.circular(20),
                                           side: BorderSide(
                                             color: isSelected
-                                                ? const Color(0xFF4facfe)
+                                                ? PetureColors.primary
                                                 : Colors.transparent,
                                           ),
                                         ),
@@ -546,11 +547,11 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
                           child: TextButton.icon(
                             onPressed: _onExampleTap,
                             icon: Icon(Icons.auto_awesome,
-                                size: 16, color: Colors.grey.shade500),
+                                size: 16, color: PetureColors.textSecondary),
                             label: Text(
                               "试一试示例",
                               style: TextStyle(
-                                  color: Colors.grey.shade500, fontSize: 14),
+                                  color: PetureColors.textSecondary, fontSize: 14),
                             ),
                           ),
                         ),
@@ -565,9 +566,9 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
                             onPressed: _generatePetDiary,
                             style: ElevatedButton.styleFrom(
                               backgroundColor: _selectedPet == null
-                                  ? Colors.grey.shade400
-                                  : const Color(0xFF1A1A1A),
-                              foregroundColor: Colors.white,
+                                  ? PetureColors.textTertiary
+                                  : PetureColors.textPrimary,
+                              foregroundColor: PetureColors.surfacePure,
                               elevation: 0,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(28),
@@ -657,9 +658,9 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
         height: 52,
         padding: const EdgeInsets.symmetric(horizontal: 16),
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.8),
+          color: PetureColors.surface.withOpacity(0.92),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.white, width: 2),
+          border: Border.all(color: PetureColors.surfacePure, width: 2),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withOpacity(0.05),
@@ -670,11 +671,11 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
         ),
         child: Row(
           children: [
-            Icon(Icons.pets_outlined, size: 20, color: Colors.grey.shade400),
+            Icon(Icons.pets_outlined, size: 20, color: PetureColors.textTertiary),
             const SizedBox(width: 10),
             Text(
               '还没有添加宠物哦',
-              style: TextStyle(color: Colors.grey.shade400, fontSize: 15),
+              style: TextStyle(color: PetureColors.textTertiary, fontSize: 15),
             ),
           ],
         ),
@@ -693,8 +694,8 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: _isPetSelectorExpanded
-                  ? Colors.white
-                  : Colors.white.withOpacity(0.8),
+                  ? PetureColors.surfacePure
+                  : PetureColors.surface.withOpacity(0.92),
               borderRadius: BorderRadius.only(
                 topLeft: const Radius.circular(16),
                 topRight: const Radius.circular(16),
@@ -703,8 +704,8 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
               ),
               border: Border.all(
                 color: _isPetSelectorExpanded
-                    ? Colors.blue.withOpacity(0.3)
-                    : Colors.white,
+                    ? PetureColors.primary.withOpacity(0.3)
+                    : PetureColors.surfacePure,
                 width: _isPetSelectorExpanded ? 1 : 2,
               ),
               boxShadow: _isPetSelectorExpanded
@@ -734,13 +735,13 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
                       shape: BoxShape.circle,
                     ),
                     child: Icon(Icons.pets,
-                        color: Colors.grey.shade400, size: 20),
+                        color: PetureColors.textTertiary, size: 20),
                   ),
                   const SizedBox(width: 12),
                   const Text(
                     '点击选择主角 🐾',
                     style: TextStyle(
-                      color: Color(0xFF1A1A1A),
+                      color: PetureColors.textPrimary,
                       fontSize: 16,
                       fontWeight: FontWeight.w500,
                     ),
@@ -755,7 +756,7 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
                         Text(
                           _selectedPet!.name,
                           style: const TextStyle(
-                            color: Color(0xFF1A1A1A),
+                            color: PetureColors.textPrimary,
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
                           ),
@@ -763,7 +764,7 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
                         Text(
                           '${_selectedPet!.breed} · ${_selectedPet!.gender}',
                           style: TextStyle(
-                            color: Colors.grey.shade500,
+                            color: PetureColors.textSecondary,
                             fontSize: 12,
                           ),
                         ),
@@ -779,7 +780,7 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
                     Icons.keyboard_arrow_down_rounded,
                     color: _isPetSelectorExpanded
                         ? Colors.blue
-                        : Colors.grey.shade400,
+                        : PetureColors.textTertiary,
                   ),
                 ),
               ],
@@ -793,12 +794,12 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
             height: _isPetSelectorExpanded ? null : 0,
             constraints: const BoxConstraints(maxHeight: 300),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: PetureColors.surfacePure,
               borderRadius: const BorderRadius.only(
                 bottomLeft: Radius.circular(16),
                 bottomRight: Radius.circular(16),
               ),
-              border: Border.all(color: Colors.grey.shade100),
+              border: Border.all(color: PetureColors.surfaceMuted),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withOpacity(0.05),
@@ -845,7 +846,7 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
                                   style: TextStyle(
                                     color: isSelected
                                         ? Colors.blue
-                                        : const Color(0xFF1A1A1A),
+                                        : PetureColors.textPrimary,
                                     fontWeight: isSelected
                                         ? FontWeight.bold
                                         : FontWeight.normal,
@@ -857,7 +858,7 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
                                   style: TextStyle(
                                     color: isSelected
                                         ? Colors.blue.withOpacity(0.7)
-                                        : Colors.grey.shade500,
+                                        : PetureColors.textSecondary,
                                     fontSize: 12,
                                   ),
                                 ),
@@ -1061,13 +1062,13 @@ class _KimiBallState extends State<_KimiBall> with TickerProviderStateMixin {
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [
-                Color(0xFF4facfe),
+                PetureColors.primary,
                 Color(0xFF00f2fe),
               ],
             ),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF4facfe).withOpacity(0.4),
+                color: PetureColors.primary.withOpacity(0.4),
                 blurRadius: 16,
                 offset: const Offset(0, 8),
               ),
@@ -1104,7 +1105,7 @@ class _KimiBallState extends State<_KimiBall> with TickerProviderStateMixin {
             width: 6,
             height: height > 1.5 ? height : 1.5,
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: PetureColors.surfacePure,
               borderRadius: BorderRadius.circular(3),
             ),
           ),

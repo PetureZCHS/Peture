@@ -17,6 +17,7 @@ import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../../../services/supabase_service.dart';
+import '../../../shared/design_system/peture_design_system.dart';
 import '../../../shared/models/pet.dart';
 import '../../../shared/utils/ui_helpers.dart';
 import '../../moderation/data/moderation_client.dart';
@@ -25,23 +26,23 @@ import '../../moderation/utils/moderation_guard.dart';
 import 'loading_page.dart';
 
 class AppColors {
-  static const Color background = Color(0xFFFAF5FF);
-  static const Color surface = Color(0xFFFFFFFF);
-  static const Color primary = Color(0xFF7C3AED);
-  static const Color secondary = Color(0xFF6366F1);
-  static const Color accent = Color(0xFFEC4899);
-  static const Color textDark = Color(0xFF1D1D1F);
-  static const Color textGrey = Color(0xFF6B7280);
-  static const Color textLight = Color(0xFF9CA3AF);
+  static const Color background = PetureColors.background;
+  static const Color surface = PetureColors.surfacePure;
+  static const Color primary = PetureColors.violet;
+  static const Color secondary = PetureColors.blue;
+  static const Color accent = PetureColors.primary;
+  static const Color textDark = PetureColors.textPrimary;
+  static const Color textGrey = PetureColors.textSecondary;
+  static const Color textLight = PetureColors.textTertiary;
 
-  static const Color orb1 = Color(0xFFD8B4FE);
-  static const Color orb2 = Color(0xFFA78BFA);
-  static const Color orb3 = Color(0xFFF9A8D4);
+  static const Color orb1 = PetureColors.surfaceMuted;
+  static const Color orb2 = PetureColors.backgroundAlt;
+  static const Color orb3 = PetureColors.border;
 
   static const List<Color> primaryGradient = [
-    Color(0xFF7C3AED),
-    Color(0xFF6366F1),
-    Color(0xFFEC4899),
+    PetureColors.violet,
+    PetureColors.blue,
+    PetureColors.primary,
   ];
 }
 

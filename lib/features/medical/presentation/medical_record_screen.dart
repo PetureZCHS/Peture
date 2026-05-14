@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 // 添加数据库助手导入
 import '../../../services/supabase_service.dart';
+import '../../../shared/design_system/peture_design_system.dart';
 import '../../../shared/models/pet.dart';
 import '../../../shared/utils/data_change_notifier.dart';
 import '../../../shared/widgets/weight_trend_card.dart';
@@ -15,19 +16,18 @@ import '../../../shared/utils/ui_helpers.dart';
 // 1. 设计系统 (升级版)
 // =========================================================
 class AppTheme {
-  // --- Colors (Mapped to AppColors from ui_helpers) ---
-  static const Color primary = AppColors.primary;
-  static const Color primaryVariant = Color(0xFF8B77FF);
-  static const Color background = AppColors.background;
-  static const Color surface = Colors.white;
-  static const Color textPrimary = AppColors.primaryText;
-  static const Color textSecondary = AppColors.secondaryText;
-  static const Color textTertiary = Color(0xFF8E8E93);
-  static const Color lightBlue = Color(0xFFEAF2FF);
-  static const Color shadow = Color(0xFFB0C4DE);
-  static const Color accentGreen = Color(0xFF34D399);
-  static const Color accentYellow = Color(0xFFFBBF24);
-  static const Color accentYellowDark = Color(0xFFB45309);
+  static const Color primary = PetureColors.primary;
+  static const Color primaryVariant = PetureColors.violet;
+  static const Color background = PetureColors.background;
+  static const Color surface = PetureColors.surfacePure;
+  static const Color textPrimary = PetureColors.textPrimary;
+  static const Color textSecondary = PetureColors.textSecondary;
+  static const Color textTertiary = PetureColors.textTertiary;
+  static const Color lightBlue = PetureColors.backgroundAlt;
+  static const Color shadow = PetureColors.border;
+  static const Color accentGreen = PetureColors.success;
+  static const Color accentYellow = PetureColors.amber;
+  static const Color accentYellowDark = PetureColors.warning;
 
   static const LinearGradient primaryGradient = LinearGradient(
     colors: [primary, primaryVariant],
@@ -36,55 +36,13 @@ class AppTheme {
   );
 
   // --- Text Styles & Spacing ---
-  static const TextStyle heading1 = TextStyle(
-    fontSize: 28,
-    fontWeight: FontWeight.w700,
-    color: textPrimary,
-    letterSpacing: -0.5,
-    height: 1.2,
-  );
-  static const TextStyle heading2 = TextStyle(
-    fontSize: 22,
-    fontWeight: FontWeight.w600,
-    color: textPrimary,
-    letterSpacing: -0.3,
-    height: 1.3,
-  );
-  static const TextStyle heading3 = TextStyle(
-    fontSize: 18,
-    fontWeight: FontWeight.w600,
-    color: textPrimary,
-    letterSpacing: -0.2,
-    height: 1.4,
-  );
-  static const TextStyle bodyText = TextStyle(
-    fontSize: 16,
-    fontWeight: FontWeight.w400,
-    color: textSecondary,
-    letterSpacing: 0.0,
-    height: 1.5,
-  );
-  static const TextStyle bodyTextMedium = TextStyle(
-    fontSize: 16,
-    fontWeight: FontWeight.w500,
-    color: textPrimary,
-    letterSpacing: 0.0,
-    height: 1.5,
-  );
-  static const TextStyle subtitleText = TextStyle(
-    fontSize: 14,
-    fontWeight: FontWeight.w400,
-    color: textTertiary,
-    letterSpacing: 0.1,
-    height: 1.4,
-  );
-  static const TextStyle captionText = TextStyle(
-    fontSize: 12,
-    fontWeight: FontWeight.w400,
-    color: textTertiary,
-    letterSpacing: 0.2,
-    height: 1.3,
-  );
+  static const TextStyle heading1 = PetureTextStyles.title;
+  static const TextStyle heading2 = PetureTextStyles.sectionTitle;
+  static const TextStyle heading3 = PetureTextStyles.bodyStrong;
+  static const TextStyle bodyText = PetureTextStyles.body;
+  static const TextStyle bodyTextMedium = PetureTextStyles.bodyStrong;
+  static const TextStyle subtitleText = PetureTextStyles.label;
+  static const TextStyle captionText = PetureTextStyles.caption;
   static const TextStyle buttonText = TextStyle(
     fontSize: 16,
     fontWeight: FontWeight.w600,

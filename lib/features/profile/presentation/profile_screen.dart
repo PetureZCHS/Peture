@@ -6,6 +6,7 @@ import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../../services/supabase_service.dart';
+import '../../../shared/design_system/peture_design_system.dart';
 import '../../../shared/models/pet.dart';
 import '../../../shared/utils/data_change_notifier.dart';
 import 'account_settings_page.dart';
@@ -22,31 +23,11 @@ import '../../moderation/utils/moderation_guard.dart';
 // =========================================================
 
 class AppStyles {
-  static const TextStyle sectionTitle = TextStyle(
-    fontSize: 20,
-    fontWeight: FontWeight.bold,
-    color: AppColors.primaryText,
-    letterSpacing: 0.5,
-  );
-  static const TextStyle petName = TextStyle(
-    fontSize: 18,
-    fontWeight: FontWeight.w600,
-    color: AppColors.primaryText,
-  );
-  static const TextStyle petDetails = TextStyle(
-    fontSize: 14,
-    color: AppColors.secondaryText,
-    height: 1.4,
-  );
-  static const TextStyle ownerId = TextStyle(
-    fontSize: 14,
-    color: AppColors.secondaryText,
-  );
-  static const TextStyle listItemTitle = TextStyle(
-    fontSize: 16,
-    fontWeight: FontWeight.w500,
-    color: AppColors.primaryText,
-  );
+  static const TextStyle sectionTitle = PetureTextStyles.sectionTitle;
+  static const TextStyle petName = PetureTextStyles.bodyStrong;
+  static const TextStyle petDetails = PetureTextStyles.body;
+  static const TextStyle ownerId = PetureTextStyles.body;
+  static const TextStyle listItemTitle = PetureTextStyles.label;
 }
 
 class AppSpaces {
@@ -110,7 +91,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: PetureColors.background,
       body: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(
             parent: BouncingScrollPhysics()),

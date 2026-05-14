@@ -5,6 +5,7 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'package:audioplayers/audioplayers.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../../shared/design_system/peture_design_system.dart';
 import '../../../shared/utils/ui_helpers.dart';
 import '../../../shared/widgets/skeuomorphic_clicker_device.dart';
 
@@ -417,7 +418,7 @@ class _DogClickerScreenState extends State<DogClickerScreen>
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
                         gradient: const LinearGradient(
-                          colors: [Color(0xFF5A8EFA), Color(0xFF8B77FF)],
+                          colors: [PetureColors.primary, PetureColors.violet],
                         ),
                         borderRadius: BorderRadius.circular(12),
                       ),
@@ -465,7 +466,7 @@ class _DogClickerScreenState extends State<DogClickerScreen>
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                       borderSide: const BorderSide(
-                        color: Color(0xFF5A8EFA),
+                        color: PetureColors.primary,
                         width: 2,
                       ),
                     ),
@@ -531,8 +532,8 @@ class _DogClickerScreenState extends State<DogClickerScreen>
                             gradient: LinearGradient(
                               colors: isSelected
                                   ? [
-                                      const Color(0xFF5A8EFA),
-                                      const Color(0xFF8B77FF)
+                                      PetureColors.primary,
+                                      PetureColors.violet
                                     ]
                                   : [
                                       const Color(0xFFF0F0F0),
@@ -542,7 +543,7 @@ class _DogClickerScreenState extends State<DogClickerScreen>
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
                               color: isSelected
-                                  ? const Color(0xFF5A8EFA)
+                                  ? PetureColors.primary
                                   : Colors.transparent,
                               width: 2,
                             ),
@@ -638,7 +639,7 @@ class _DogClickerScreenState extends State<DogClickerScreen>
                               }
                             },
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF5A8EFA),
+                        backgroundColor: PetureColors.primary,
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(
                           horizontal: 24,
@@ -708,7 +709,7 @@ class _DogClickerScreenState extends State<DogClickerScreen>
               gradient: const LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [Color(0xFF2A2A2A), Color(0xFF1A1A1A)],
+                colors: [PetureColors.textPrimary, PetureColors.textPrimary],
               ),
               borderRadius: BorderRadius.circular(24),
             ),
@@ -723,7 +724,7 @@ class _DogClickerScreenState extends State<DogClickerScreen>
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
                         gradient: const LinearGradient(
-                          colors: [Color(0xFF5A8EFA), Color(0xFF8B77FF)],
+                          colors: [PetureColors.primary, PetureColors.violet],
                         ),
                         borderRadius: BorderRadius.circular(12),
                       ),
@@ -791,8 +792,8 @@ class _DogClickerScreenState extends State<DogClickerScreen>
                               end: Alignment.bottomRight,
                               colors: isSelected
                                   ? [
-                                      const Color(0xFF5A8EFA),
-                                      const Color(0xFF8B77FF)
+                                      PetureColors.primary,
+                                      PetureColors.violet
                                     ]
                                   : [
                                       const Color(0xFF3A3A3A),
@@ -900,7 +901,7 @@ class _DogClickerScreenState extends State<DogClickerScreen>
                         }
                       },
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF5A8EFA),
+                        backgroundColor: PetureColors.primary,
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(
                           horizontal: 24,
@@ -982,7 +983,7 @@ class _DogClickerScreenState extends State<DogClickerScreen>
             gradient: const LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [Color(0xFF2A2A2A), Color(0xFF1A1A1A)],
+              colors: [PetureColors.textPrimary, PetureColors.textPrimary],
             ),
             borderRadius: BorderRadius.circular(20),
             border: Border.all(color: const Color(0xFF3A3A3A)),
@@ -1098,7 +1099,7 @@ class _DogClickerScreenState extends State<DogClickerScreen>
             gradient: const LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [Color(0xFF2A2A2A), Color(0xFF1A1A1A)],
+              colors: [PetureColors.textPrimary, PetureColors.textPrimary],
             ),
             borderRadius: BorderRadius.circular(20),
             border: Border.all(color: const Color(0xFF3A3A3A)),
@@ -1232,7 +1233,7 @@ class _DogClickerScreenState extends State<DogClickerScreen>
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [Color(0xFF2A2A2A), Color(0xFF1A1A1A)],
+              colors: [PetureColors.textPrimary, PetureColors.textPrimary],
             ),
             borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
           ),
@@ -2175,7 +2176,7 @@ class _DogClickerScreenState extends State<DogClickerScreen>
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
               colors: [
-                Color(0xFF1A1A1A),
+                PetureColors.textPrimary,
                 Color(0xFF0F0F0F),
               ],
             ),
@@ -2873,7 +2874,7 @@ class _DogClickerScreenState extends State<DogClickerScreen>
           ],
         ),
         borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: const Color(0xFF8B77FF).withOpacity(0.2), width: 1),
+        border: Border.all(color: PetureColors.violet.withOpacity(0.2), width: 1),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.3),
@@ -2889,13 +2890,13 @@ class _DogClickerScreenState extends State<DogClickerScreen>
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: const Color(0xFF5A8EFA).withOpacity(0.15),
-              border: Border.all(color: const Color(0xFF5A8EFA).withOpacity(0.3), width: 1),
+              color: PetureColors.primary.withOpacity(0.15),
+              border: Border.all(color: PetureColors.primary.withOpacity(0.3), width: 1),
             ),
             child: const Icon(
               Icons.pets_rounded,
               size: 48,
-              color: Color(0xFF8B77FF),
+              color: PetureColors.violet,
             ),
           ),
           const SizedBox(height: 24),
@@ -2967,9 +2968,9 @@ class _DogClickerScreenState extends State<DogClickerScreen>
               ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.transparent,
-                foregroundColor: const Color(0xFF5A8EFA),
+                foregroundColor: PetureColors.primary,
                 elevation: 0,
-                side: const BorderSide(color: Color(0xFF5A8EFA), width: 1.5),
+                side: const BorderSide(color: PetureColors.primary, width: 1.5),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),
                 ),

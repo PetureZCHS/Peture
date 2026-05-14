@@ -7,31 +7,31 @@ import 'dart:convert';
 import 'package:fl_chart/fl_chart.dart';
 import '../../../shared/models/unified_expense.dart';
 import '../../../services/supabase_service.dart';
+import '../../../shared/design_system/peture_design_system.dart';
 import 'add_unified_expense_page.dart';
 
 // --- Local Style Constants to match Home Screen ---
 class ExpenseStyles {
-  // Modern Clean Style
   static const LinearGradient bgGradient = LinearGradient(
     colors: [
-      Color(0xFFF5F7FA), // Light Blue Grey
-      Color(0xFFFFFFFF), // White
+      PetureColors.background,
+      PetureColors.surface,
     ],
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
   );
 
   static const LinearGradient vibrantGradient = LinearGradient(
-    colors: [Color(0xFF4facfe), Color(0xFF00f2fe)], // Blue gradient
+    colors: [PetureColors.blue, PetureColors.mint],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
 
-  static const Color textDark = Color(0xFF2C3E50); // Dark Slate
-  static const Color textGrey = Color(0xFF7F8C8D); // Grey
+  static const Color textDark = PetureColors.textPrimary;
+  static const Color textGrey = PetureColors.textSecondary;
 
   static const LinearGradient mainGradient = LinearGradient(
-    colors: [Color(0xFF667EEA), Color(0xFF764BA2)], // Blue to Purple
+    colors: [PetureColors.primary, PetureColors.violet],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
@@ -39,9 +39,9 @@ class ExpenseStyles {
   static BoxDecoration glassDecoration({double radius = 20}) {
     return BoxDecoration(
       borderRadius: BorderRadius.circular(radius),
-      color: Colors.white,
+      color: PetureColors.surfacePure,
       border: Border.all(
-        color: Colors.grey.withOpacity(0.1),
+        color: PetureColors.border.withOpacity(0.7),
         width: 1.0,
       ),
       boxShadow: [
@@ -494,7 +494,7 @@ class _UnifiedExpenseHomePageState extends State<UnifiedExpenseHomePage>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA),
+      backgroundColor: PetureColors.background,
       body: Stack(
         children: [
           // 1. Clean Gradient Background
@@ -1785,4 +1785,3 @@ class _CuteEmptyStateState extends State<CuteEmptyState>
     );
   }
 }
-
