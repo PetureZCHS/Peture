@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:io';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../../shared/design_system/peture_design_system.dart';
 import '../../../shared/utils/loading_guard_mixin.dart';
 import '../../../shared/utils/ui_helpers.dart';
@@ -14,7 +16,6 @@ import '../../moderation/utils/moderation_guard.dart';
 import '../../../shared/models/pet.dart';
 import '../../../services/supabase_service.dart';
 import 'pet_diary_result_page.dart';
-import 'dart:io';
 import '../../library/presentation/library_screen.dart';
 
 /// 撰写日记页面 - AI将用户输入改写成宠物第一人称
@@ -934,12 +935,12 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
       if (isHttp) {
         return ClipRRect(
           borderRadius: BorderRadius.circular(radius),
-          child: Image.network(
-            a,
+          child: CachedNetworkImage(
+            imageUrl: a,
             width: size,
             height: size,
             fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) => _petAvatarFallback(size),
+            errorWidget: (_, __, ___) => _petAvatarFallback(size),
           ),
         );
       }

@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:path/path.dart' as p;
@@ -734,38 +735,24 @@ class _PetProfileFormPageState extends State<PetProfileFormPage>
                                                 ],
                                               ),
                                               child: ClipOval(
-                                                child: Image.network(
-                                                  breed['image']!,
+                                                child: CachedNetworkImage(
+                                                  imageUrl: breed['image']!,
                                                   fit: BoxFit.cover,
-                                                  loadingBuilder: (context,
-                                                      child, loadingProgress) {
-                                                    if (loadingProgress ==
-                                                        null) {
-                                                      return child;
-                                                    }
-                                                    return Center(
-                                                      child: SizedBox(
-                                                        width: 16,
-                                                        height: 16,
-                                                        child:
-                                                            CircularProgressIndicator(
-                                                          strokeWidth: 2,
-                                                          value: loadingProgress
-                                                                      .expectedTotalBytes !=
-                                                                  null
-                                                              ? loadingProgress
-                                                                      .cumulativeBytesLoaded /
-                                                                  loadingProgress
-                                                                      .expectedTotalBytes!
-                                                              : null,
-                                                        ),
+                                                  placeholder: (context, url) =>
+                                                      const Center(
+                                                    child: SizedBox(
+                                                      width: 16,
+                                                      height: 16,
+                                                      child:
+                                                          CircularProgressIndicator(
+                                                        strokeWidth: 2,
                                                       ),
-                                                    );
-                                                  },
-                                                  errorBuilder: (
+                                                    ),
+                                                  ),
+                                                  errorWidget: (
                                                     context,
+                                                    url,
                                                     error,
-                                                    stackTrace,
                                                   ) {
                                                     return Container(
                                                       color:
@@ -1953,12 +1940,12 @@ class _PetProfileFormPageState extends State<PetProfileFormPage>
         fit: BoxFit.cover,
       );
     } else if (_lifePhotoUrl != null && _lifePhotoUrl!.isNotEmpty) {
-      thumb = Image.network(
-        _lifePhotoUrl!,
+      thumb = CachedNetworkImage(
+        imageUrl: _lifePhotoUrl!,
         width: 44,
         height: 44,
         fit: BoxFit.cover,
-        errorBuilder: (context, error, stackTrace) => Container(
+        errorWidget: (context, url, error) => Container(
           width: 44,
           height: 44,
           color: const Color(0xFFF2F3F7),

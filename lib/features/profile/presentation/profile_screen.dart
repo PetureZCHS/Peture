@@ -63,6 +63,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _loadUserProfile() async {
     try {
+      final localAvatar = await UserAvatarHelper.getCurrentUserAvatarPath();
+      if (mounted && localAvatar != null) {
+        setState(() => _avatarPath = localAvatar);
+      }
+
       // 从 Supabase 加载昵称和头像 URL
       final profile = await _supabaseService.getUserProfile();
       final avatarUrl = profile?['avatar_url'] as String?;
@@ -72,11 +77,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _avatarUrl = avatarUrl;
         });
       }
-      final localAvatar = await UserAvatarHelper.ensureCachedAvatarFile(
+      final cachedAvatar = await UserAvatarHelper.ensureCachedAvatarFile(
         avatarUrl,
         _supabaseService.cacheUserAvatarFromPublicUrl,
       );
-      if (mounted) setState(() => _avatarPath = localAvatar);
+      if (mounted && cachedAvatar != null) {
+        setState(() => _avatarPath = cachedAvatar);
+      }
     } catch (e) {
       debugPrint('加载用户资料失败: $e');
     }
@@ -872,7 +879,7 @@ class _PetProfileSectionState extends State<PetProfileSection> {
                       }
 
                       // 计算年龄（根据出生日期）
-                      String age = '1岁0个月';
+                      String age = '未知';
                       if (petData['birth_date'] != null) {
                         final birthDate =
                             DateTime.tryParse(petData['birth_date']);
@@ -1146,13 +1153,13 @@ class _PetProfileCardState extends State<PetProfileCard>
                                                   .startsWith('http://') ||
                                               widget.pet.avatar!
                                                   .startsWith('https://')
-                                          ? Image.network(
-                                              widget.pet.avatar!,
+                                          ? CachedNetworkImage(
+                                              imageUrl: widget.pet.avatar!,
                                               width: 80,
                                               height: 80,
                                               fit: BoxFit.cover,
-                                              errorBuilder:
-                                                  (context, error, stackTrace) {
+                                              errorWidget:
+                                                  (context, url, error) {
                                                 return Container(
                                                   color: AppColors
                                                               .petTypeColors[
@@ -1814,7 +1821,7 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage>
     }
 
     // 计算年龄
-    String age = _currentPet.age;
+    String age = '未知';
     if (result['birth_date'] != null) {
       try {
         final birthDate = DateTime.parse(result['birth_date']);
@@ -1828,6 +1835,7 @@ class _PetProfileDetailsPageState extends State<PetProfileDetailsPage>
         age = '$years岁$months个月';
       } catch (e) {
         debugPrint('Error calculating age: $e');
+        age = '未知';
       }
     }
 

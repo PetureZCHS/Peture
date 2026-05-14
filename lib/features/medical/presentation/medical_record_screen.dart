@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/physics.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:intl/intl.dart';
 // 添加数据库助手导入
 import '../../../services/supabase_service.dart';
@@ -944,13 +945,13 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen>
   }) {
     if (avatar != null && avatar.isNotEmpty) {
       if (avatar.startsWith('http://') || avatar.startsWith('https://')) {
-        return Image.network(
-          avatar,
+        return CachedNetworkImage(
+          imageUrl: avatar,
           key: ValueKey<String>(avatar),
           width: width,
           height: height,
           fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => _buildPetAvatarFallback(width, height),
+          errorWidget: (_, __, ___) => _buildPetAvatarFallback(width, height),
         );
       }
       final file = File(avatar);
@@ -1237,13 +1238,16 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen>
           ),
         ),
         // 展开的宠物选择器
-        AnimatedCrossFade(
-          duration: const Duration(milliseconds: 300),
-          crossFadeState: _isSelectorExpanded
-              ? CrossFadeState.showSecond
-              : CrossFadeState.showFirst,
-          firstChild: const SizedBox.shrink(),
-          secondChild: _buildExpandedPetSelector(),
+        // 使用纯尺寸动画，避免 Impeller 在透明度继承路径上的校验报错。
+        ClipRect(
+          child: AnimatedSize(
+            duration: const Duration(milliseconds: 260),
+            curve: Curves.easeOutCubic,
+            alignment: Alignment.topCenter,
+            child: _isSelectorExpanded
+                ? _buildExpandedPetSelector()
+                : const SizedBox.shrink(),
+          ),
         ),
 
         // 体重趋势卡片
@@ -1445,13 +1449,21 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen>
         AnimatedSwitcher(
           duration: const Duration(milliseconds: 350),
           transitionBuilder: (Widget child, Animation<double> animation) {
+            final sizeAnimation = CurvedAnimation(
+              parent: animation,
+              curve: Curves.easeOutCubic,
+              reverseCurve: Curves.easeInCubic,
+            );
             final slideAnimation = Tween<Offset>(
               begin: const Offset(0.05, 0),
               end: Offset.zero,
-            ).animate(animation);
-            return FadeTransition(
-              opacity: animation,
-              child: SlideTransition(position: slideAnimation, child: child),
+            ).animate(sizeAnimation);
+            return ClipRect(
+              child: SizeTransition(
+                sizeFactor: sizeAnimation,
+                axisAlignment: -1.0,
+                child: SlideTransition(position: slideAnimation, child: child),
+              ),
             );
           },
           child: _selectedTabIndex == 0 ? _buildHealthLogList() : _buildRemindersList(),
@@ -1466,13 +1478,21 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen>
       switchInCurve: Curves.easeOutCubic,
       switchOutCurve: Curves.easeInCubic,
       transitionBuilder: (child, animation) {
+        final sizeAnimation = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+          reverseCurve: Curves.easeInCubic,
+        );
         final slide = Tween<Offset>(
           begin: const Offset(0.0, 0.06),
           end: Offset.zero,
-        ).animate(animation);
-        return FadeTransition(
-          opacity: animation,
-          child: SlideTransition(position: slide, child: child),
+        ).animate(sizeAnimation);
+        return ClipRect(
+          child: SizeTransition(
+            sizeFactor: sizeAnimation,
+            axisAlignment: -1.0,
+            child: SlideTransition(position: slide, child: child),
+          ),
         );
       },
       child: _selectedTabIndex == 0
