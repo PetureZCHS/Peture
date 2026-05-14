@@ -481,8 +481,8 @@ class _HomeDashboardContentState extends State<_HomeDashboardContent> {
                       width: width,
                       child: _buildSmallCard(
                         context,
-                        title: '电子档案',
-                        subtitle: '保存疫苗与档案',
+                        title: '宠物身份证',
+                        subtitle: '身份信息一目了然',
                         icon: Icons.badge_rounded,
                         iconColor: const Color(0xFF60A5FA),
                         iconBgColor: const Color(0xFFDBEAFE),
