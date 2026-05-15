@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:intl/intl.dart';
+import '../../../core/page_tracker_mixin.dart';
 // 添加数据库助手导入
 import '../../../services/supabase_service.dart';
 import '../../../shared/design_system/peture_design_system.dart';
@@ -345,7 +346,7 @@ class MedicalRecordScreen extends StatefulWidget {
 }
 
 class _MedicalRecordScreenState extends State<MedicalRecordScreen>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, PageTrackerMixin<MedicalRecordScreen> {
   // --- State variables ---
   List<Pet> _allPets = [];
   Pet? _selectedPet;
@@ -368,6 +369,9 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen>
 
   /// 传给 [WeightTrendCard]，在体重增删改后递增以触发图表重新拉取云端数据。
   int _weightTrendRefreshNonce = 0;
+
+  @override
+  String get analyticsPageName => 'pet_profile_medical_record';
 
   @override
   void initState() {

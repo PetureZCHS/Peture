@@ -423,3 +423,13 @@ entrypoint = "./functions/diary-gen-image/index.ts"
 # Specifies static files to be bundled with the function. Supports glob patterns.
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/diary-gen-image/*.html" ]
+
+[functions.analytics-collect]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/analytics-collect/index.ts"
+
+[functions.analytics-dashboard]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/analytics-dashboard/index.ts"

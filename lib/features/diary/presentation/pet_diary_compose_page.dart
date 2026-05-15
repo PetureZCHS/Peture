@@ -5,6 +5,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import '../../../core/page_tracker_mixin.dart';
 import '../../../shared/design_system/peture_design_system.dart';
 import '../../../shared/utils/loading_guard_mixin.dart';
 import '../../../shared/utils/ui_helpers.dart';
@@ -27,7 +28,10 @@ class PetDiaryComposePage extends StatefulWidget {
 }
 
 class _PetDiaryComposePageState extends State<PetDiaryComposePage>
-    with SingleTickerProviderStateMixin, LoadingGuardMixin {
+    with
+        SingleTickerProviderStateMixin,
+        LoadingGuardMixin,
+        PageTrackerMixin<PetDiaryComposePage> {
   final TextEditingController _inputController = TextEditingController();
   final PetDiaryEdgeService _diaryService = PetDiaryEdgeService();
   final SupabaseService _supabaseService = SupabaseService();
@@ -47,6 +51,9 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
 
   // 可用的风格列表
   final List<String> _availableStyles = ['哲学', '搞笑', '治愈', '中二', '小红书'];
+
+  @override
+  String get analyticsPageName => 'diary_compose';
 
   @override
   void initState() {

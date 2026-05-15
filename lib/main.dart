@@ -8,6 +8,7 @@ import 'package:sentry_flutter/sentry_flutter.dart'; // 添加 Sentry
 import 'core/app_route_observer.dart';
 import 'core/root_navigator_key.dart';
 import 'features/auth/presentation/login_page.dart';
+import 'features/admin_analytics/presentation/admin_analytics_app.dart';
 import 'features/home/presentation/home_screen.dart';
 import 'core/config/supabase_config.dart';
 import 'shared/design_system/peture_design_system.dart';
@@ -53,8 +54,10 @@ void main() async {
       // 初始化日期格式化的本地化数据（中文）
       await initializeDateFormatting('zh_CN', null);
 
-      // 启动根路由，根据登录状态自动切换
-      runApp(const RootRouter());
+      const appMode = String.fromEnvironment('APP_MODE', defaultValue: 'app');
+      runApp(
+        appMode == 'admin' ? const AdminAnalyticsApp() : const RootRouter(),
+      );
     },
   );
 }

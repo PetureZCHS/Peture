@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../../../core/page_tracker_mixin.dart';
 import '../../../shared/utils/loading_guard_mixin.dart';
 import '../../../shared/models/unified_expense.dart';
 import '../../../shared/database/unified_expense_helper.dart';
@@ -15,11 +16,14 @@ class AddUnifiedExpensePage extends StatefulWidget {
 }
 
 class _AddUnifiedExpensePageState extends State<AddUnifiedExpensePage>
-    with LoadingGuardMixin {
+    with LoadingGuardMixin, PageTrackerMixin<AddUnifiedExpensePage> {
   // State - Using Feature UI approach
   ExpenseTypeEnum _selectedExpenseType = ExpenseTypeEnum.oneOff;
   String _amountStr = '0.00';
   bool _isTyping = false;
+
+  @override
+  String get analyticsPageName => 'expense_add_unified';
 
   UnifiedExpenseCategory? _selectedCategory;
   DateTime _selectedDate = DateTime.now();

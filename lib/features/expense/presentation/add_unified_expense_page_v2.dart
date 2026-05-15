@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import '../../../core/page_tracker_mixin.dart';
 import '../../../shared/design_system/peture_design_system.dart';
 import '../../../shared/utils/loading_guard_mixin.dart';
 import '../../../shared/models/unified_expense.dart';
@@ -19,9 +20,15 @@ class AddUnifiedExpensePageV2 extends StatefulWidget {
 }
 
 class _AddUnifiedExpensePageV2State extends State<AddUnifiedExpensePageV2>
-    with SingleTickerProviderStateMixin, LoadingGuardMixin {
+    with
+        SingleTickerProviderStateMixin,
+        LoadingGuardMixin,
+        PageTrackerMixin<AddUnifiedExpensePageV2> {
   static const Color _brand = PetureColors.primary;
   static const Color _brandTint = Color(0xFFF9E5DE);
+
+  @override
+  String get analyticsPageName => 'expense_add_unified_v2';
 
   // 基础状态
   ExpenseTypeEnum _selectedExpenseType = ExpenseTypeEnum.oneOff;

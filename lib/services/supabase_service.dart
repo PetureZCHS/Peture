@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../shared/models/conversation.dart';
 import '../shared/models/pet_diary.dart';
 import '../shared/models/fitness_course.dart';
+import 'analytics_service.dart';
 import 'avatar_cache_service.dart';
 
 /// Supabase 数据库服务类
@@ -317,8 +318,24 @@ class SupabaseService {
           throw TimeoutException('请求超时，请检查网络连接');
         },
       );
+      AnalyticsService.track(
+        'pet_profile_created',
+        module: 'pet_profile',
+        properties: {
+          'entry_page': 'supabase_service',
+          'pet_type': petData['type'] ?? petData['species'],
+        },
+      );
       return response['id'] as String?;
     } catch (e) {
+      AnalyticsService.track(
+        'error_event',
+        module: 'pet_profile',
+        properties: {
+          'operation': 'insert_pet',
+          'error_code': e.runtimeType.toString(),
+        },
+      );
       debugPrint('插入宠物失败: $e');
       debugPrint('用户ID: $userId');
       debugPrint('宠物数据: $pet');
@@ -2176,11 +2193,39 @@ class SupabaseService {
           .select()
           .single();
 
+      AnalyticsService.track(
+        'expense_created',
+        module: 'expense',
+        properties: {
+          'entry_page': 'supabase_service',
+          'category': expenseData['category'],
+          'amount_bucket': _amountBucket(expenseData['amount']),
+        },
+      );
       return response['id'] as String?;
     } catch (e) {
+      AnalyticsService.track(
+        'error_event',
+        module: 'expense',
+        properties: {
+          'operation': 'insert_unified_expense',
+          'error_code': e.runtimeType.toString(),
+        },
+      );
       debugPrint('插入统一消费记录失败: $e');
       return null;
     }
+  }
+
+  String _amountBucket(dynamic amount) {
+    final value = amount is num
+        ? amount.toDouble()
+        : double.tryParse(amount?.toString() ?? '') ?? 0;
+    if (value < 50) return '0_50';
+    if (value < 200) return '50_200';
+    if (value < 500) return '200_500';
+    if (value < 1000) return '500_1000';
+    return '1000_plus';
   }
 
   /// 获取所有统一消费记录

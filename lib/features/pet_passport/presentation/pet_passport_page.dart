@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'dart:math' as math;
 import 'dart:io';
 import 'dart:ui';
+import '../../../core/page_tracker_mixin.dart';
 import '../../../shared/models/pet.dart';
 import '../../../shared/models/pet_passport.dart';
 import '../../../services/supabase_service.dart';
@@ -23,7 +24,7 @@ class PetPassportPage extends StatefulWidget {
 }
 
 class _PetPassportPageState extends State<PetPassportPage>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, PageTrackerMixin<PetPassportPage> {
   List<Pet> _pets = [];
   final Map<String, PetPassport?> _passports = {};
   bool _isLoading = true;
@@ -41,6 +42,9 @@ class _PetPassportPageState extends State<PetPassportPage>
 
   static const _placeholderPassportOwnerNames = {'铲屎官', '主人'};
   late final VoidCallback _petDataRefreshListener;
+
+  @override
+  String get analyticsPageName => 'pet_profile_passport';
 
   @override
   void initState() {

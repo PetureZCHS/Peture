@@ -5,6 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 
+/// Manual harness kept under test/ for local debugging.
+/// The empty entrypoint prevents `flutter test` from failing during discovery.
+void main() {}
+
 /// 简单的测试页面
 ///
 /// 使用方法：

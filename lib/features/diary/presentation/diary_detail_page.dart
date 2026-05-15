@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
+import '../../../core/page_tracker_mixin.dart';
 import '../../../services/ai_image_cache_service.dart';
 import '../../../shared/models/pet_diary.dart';
 import '../../content_feedback/domain/content_feedback_kind.dart';
@@ -94,9 +95,11 @@ class DiaryDetailPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: _pageBg,
-      appBar: AppBar(
+    return TrackedPage(
+      pageName: 'diary_detail',
+      child: Scaffold(
+        backgroundColor: _pageBg,
+        appBar: AppBar(
         backgroundColor: _pageBg,
         elevation: 0,
         leading: IconButton(
@@ -246,7 +249,7 @@ class DiaryDetailPage extends StatelessWidget {
           ],
         ),
       ),
-    );
+    ));
   }
 
   Color _getTagColor(String style) {

@@ -11,6 +11,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../../core/page_tracker_mixin.dart';
 import '../../../shared/utils/user_avatar_helper.dart';
 import '../../../shared/utils/avatar_image_helper.dart';
 import '../../../shared/utils/loading_guard_mixin.dart';
@@ -30,11 +31,14 @@ class PetProfileFormPage extends StatefulWidget {
 }
 
 class _PetProfileFormPageState extends State<PetProfileFormPage>
-    with LoadingGuardMixin {
+    with LoadingGuardMixin, PageTrackerMixin<PetProfileFormPage> {
   late final ModerationGuard _moderationGuard;
   String? _petId;
   File? _avatarFile;
   File? _lifePhotoFile;
+
+  @override
+  String get analyticsPageName => 'pet_profile_form';
 
   /// 编辑模式下云端头像 URL（仅展示，未重新选择文件时保留）
   String? _avatarUrl;

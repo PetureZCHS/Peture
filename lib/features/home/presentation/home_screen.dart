@@ -12,6 +12,7 @@ import '../../dog_clicker/presentation/dog_clicker_screen.dart';
 import '../../expense/presentation/unified_expense_home_page.dart';
 import '../../medical/presentation/medical_record_screen.dart';
 import '../../profile/presentation/profile_screen.dart';
+import '../../../core/page_tracker_mixin.dart';
 import '../../../shared/design_system/peture_design_system.dart';
 import '../../../shared/utils/ui_helpers.dart';
 import '../../../shared/utils/data_change_notifier.dart';
@@ -27,7 +28,8 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
+class _HomeScreenState extends State<HomeScreen>
+    with TickerProviderStateMixin, PageTrackerMixin<HomeScreen> {
   int _currentIndex = 0;
   double _currentPosition = 0.0;
   int _lastHapticIndex = 0;
@@ -37,6 +39,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   /// 用于通知 MedicalRecordScreen 刷新数据的通知器
   final ValueNotifier<int> _medicalScreenRefreshNotifier =
       ValueNotifier<int>(0);
+
+  @override
+  String get analyticsPageName => 'home';
 
   /// 标记是否需要刷新健康记录页面
   bool _needsMedicalScreenRefresh = true;

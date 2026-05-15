@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import '../../../core/page_tracker_mixin.dart';
 import '../../../services/ai_image_cache_service.dart';
 import '../../../shared/models/pet_diary.dart';
 import '../../../services/supabase_service.dart';
@@ -22,7 +23,8 @@ class DiaryTimelinePage extends StatefulWidget {
   State<DiaryTimelinePage> createState() => _DiaryTimelinePageState();
 }
 
-class _DiaryTimelinePageState extends State<DiaryTimelinePage> {
+class _DiaryTimelinePageState extends State<DiaryTimelinePage>
+    with PageTrackerMixin<DiaryTimelinePage> {
   static const Color _pageBg = Color(0xFFF7F4EF);
   List<PetDiary> _allDiaries = [];
   List<PetDiary> _filteredDiaries = [];
@@ -31,6 +33,9 @@ class _DiaryTimelinePageState extends State<DiaryTimelinePage> {
   String? _selectedTag; // Null means all
 
   final List<String> _availableTags = ['哲学', '搞笑', '治愈', '中二', '小红书'];
+
+  @override
+  String get analyticsPageName => 'diary_timeline';
 
   @override
   void initState() {

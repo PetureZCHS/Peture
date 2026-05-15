@@ -5,6 +5,7 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'package:audioplayers/audioplayers.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../../core/page_tracker_mixin.dart';
 import '../../../shared/design_system/peture_design_system.dart';
 import '../../../shared/utils/ui_helpers.dart';
 import '../../../shared/widgets/skeuomorphic_clicker_device.dart';
@@ -19,7 +20,7 @@ class DogClickerScreen extends StatefulWidget {
 }
 
 class _DogClickerScreenState extends State<DogClickerScreen>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, PageTrackerMixin<DogClickerScreen> {
   // 预设音效列表
   static const List<Map<String, String>> presetSounds = [
     {'name': '音效 1', 'path': 'mp3/1.mp3', 'emoji': '🔊'},
@@ -29,6 +30,9 @@ class _DogClickerScreenState extends State<DogClickerScreen>
     {'name': '音效 5', 'path': 'mp3/5.mp3', 'emoji': '✨'},
     {'name': '音效 6', 'path': 'mp3/6.mp3', 'emoji': '🎺'},
   ];
+
+  @override
+  String get analyticsPageName => 'clicker_home';
 
   late AnimationController _orbController;
   late AudioPlayer _audioPlayer;

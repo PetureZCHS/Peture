@@ -16,6 +16,7 @@ import 'package:uuid/uuid.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../../../core/page_tracker_mixin.dart';
 import '../../../services/supabase_service.dart';
 import '../../../shared/design_system/peture_design_system.dart';
 import '../../../shared/models/pet.dart';
@@ -165,7 +166,7 @@ class AiStylePreset {
 }
 
 class _PreparationPageState extends State<PreparationPage>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, PageTrackerMixin<PreparationPage> {
   late final ModerationGuard _moderationGuard;
 
   static const String _presetView = 'vw_ai_image_presets';
@@ -207,6 +208,9 @@ class _PreparationPageState extends State<PreparationPage>
   List<AiStylePreset> _styles = const [];
   Set<String> _imageCachingPresetIds = <String>{};
   Set<String> _imageCacheFailedPresetIds = <String>{};
+
+  @override
+  String get analyticsPageName => 'ai_image_preparation';
 
   @override
   void initState() {

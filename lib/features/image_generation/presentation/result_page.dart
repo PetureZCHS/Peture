@@ -15,6 +15,7 @@ import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import '../../../core/page_tracker_mixin.dart';
 import '../../../shared/utils/ui_helpers.dart';
 import '../../../shared/utils/avatar_image_helper.dart';
 import '../../../shared/utils/user_avatar_helper.dart';
@@ -159,7 +160,8 @@ class ResultPage extends StatefulWidget {
   State<ResultPage> createState() => _ResultPageState();
 }
 
-class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
+class _ResultPageState extends State<ResultPage>
+    with TickerProviderStateMixin, PageTrackerMixin<ResultPage> {
   late AnimationController _orbController;
   late AnimationController _shimmerController;
   late AnimationController _saveButtonShimmerController;
@@ -172,6 +174,9 @@ class _ResultPageState extends State<ResultPage> with TickerProviderStateMixin {
   bool _shouldDeleteTempFile = false;
   bool _enableWatermark = true;
   bool _isSettingAvatar = false;
+
+  @override
+  String get analyticsPageName => 'ai_image_result';
 
   bool _isLocalFilePath(String? path) {
     if (path == null || path.isEmpty) return false;

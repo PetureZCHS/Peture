@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import '../../../core/page_tracker_mixin.dart';
 import '../../../services/supabase_service.dart';
 import '../../../shared/design_system/peture_design_system.dart';
 import '../../../shared/models/pet.dart';
@@ -45,7 +46,8 @@ class ProfileScreen extends StatefulWidget {
   State<ProfileScreen> createState() => _ProfileScreenState();
 }
 
-class _ProfileScreenState extends State<ProfileScreen> {
+class _ProfileScreenState extends State<ProfileScreen>
+    with PageTrackerMixin<ProfileScreen> {
   final SupabaseService _supabaseService = SupabaseService();
   final ImagePicker _picker = ImagePicker();
   late final ModerationGuard _moderationGuard;
@@ -53,6 +55,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String _userNickname = '';
   String? _avatarPath;
   String? _avatarUrl; // Supabase Storage 的 URL
+
+  @override
+  String get analyticsPageName => 'pet_profile_home';
 
   @override
   void initState() {
@@ -240,7 +245,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
           onPressed: () {
             Navigator.push(
               context,
-              MaterialPageRoute(builder: (context) => const AccountSettingsPage()),
+              MaterialPageRoute(
+                  builder: (context) => const AccountSettingsPage()),
             ).then((_) => _loadUserProfile()); // 返回时刷新资料
           },
         ),
@@ -1322,12 +1328,17 @@ class PetProfileDetailsPage extends StatefulWidget {
 }
 
 class _PetProfileDetailsPageState extends State<PetProfileDetailsPage>
-    with SingleTickerProviderStateMixin {
+    with
+        SingleTickerProviderStateMixin,
+        PageTrackerMixin<PetProfileDetailsPage> {
   late Pet _currentPet;
   final _supabaseService = SupabaseService();
   bool _isSyncingProfile = false;
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
+
+  @override
+  String get analyticsPageName => 'pet_profile_detail';
 
   @override
   void initState() {
