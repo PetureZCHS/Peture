@@ -20,6 +20,7 @@ import '../../../core/page_tracker_mixin.dart';
 import '../../../services/supabase_service.dart';
 import '../../../shared/design_system/peture_design_system.dart';
 import '../../../shared/models/pet.dart';
+import '../../../shared/utils/data_change_notifier.dart';
 import '../../../shared/utils/ui_helpers.dart';
 import '../../moderation/data/moderation_client.dart';
 import '../../moderation/domain/moderation_scene.dart';
@@ -195,6 +196,8 @@ class _PreparationPageState extends State<PreparationPage>
   bool _isPetSelectorExpanded = false;
   bool _isStartingTask = false;
   bool _isPrecheckingImage = false;
+  bool _isPickingImage = false;
+  bool _isUsingSelectedPetLifePhoto = false;
   bool _isLoadingStyles = true;
   String _selectedAspectRatio = _defaultAspectRatio;
   int _styleLoadEpoch = 0;
@@ -277,6 +280,7 @@ class _PreparationPageState extends State<PreparationPage>
       setState(() {
         _selectedImage = null;
         _selectedImageUrl = null;
+        _isUsingSelectedPetLifePhoto = false;
       });
       return;
     }
@@ -287,6 +291,7 @@ class _PreparationPageState extends State<PreparationPage>
       setState(() {
         _selectedImage = null;
         _selectedImageUrl = lifePhoto;
+        _isUsingSelectedPetLifePhoto = true;
       });
       return;
     }
@@ -302,6 +307,7 @@ class _PreparationPageState extends State<PreparationPage>
     setState(() {
       _selectedImage = resolvedFile;
       _selectedImageUrl = null;
+      _isUsingSelectedPetLifePhoto = resolvedFile != null;
     });
   }
 
@@ -895,7 +901,10 @@ class _PreparationPageState extends State<PreparationPage>
   Future<void> _pickImage() async {
     final picker = ImagePicker();
     final pickedFile = await picker.pickImage(source: ImageSource.gallery);
-    if (pickedFile != null) {
+    if (pickedFile == null || !mounted) return;
+
+    setState(() => _isPickingImage = true);
+    try {
       final file = File(pickedFile.path);
       final bytes = await file.readAsBytes();
       if (!mounted) return;
@@ -910,7 +919,12 @@ class _PreparationPageState extends State<PreparationPage>
         _selectedImage = file;
         _uploadError = '';
         _uploadStatus = UploadStatus.idle;
+        _isUsingSelectedPetLifePhoto = false;
       });
+    } finally {
+      if (mounted) {
+        setState(() => _isPickingImage = false);
+      }
     }
   }
 
@@ -1084,6 +1098,103 @@ class _PreparationPageState extends State<PreparationPage>
     }
   }
 
+  Future<void> _syncPetLifePhotoIfNeeded() async {
+    final pet = _selectedPet;
+    if (pet == null) return;
+    final petId = pet.id?.trim() ?? '';
+    if (petId.isEmpty) return;
+
+    final existingLifePhoto = pet.lifePhoto?.trim();
+    if (existingLifePhoto != null && existingLifePhoto.isNotEmpty) return;
+
+    final supabase = Supabase.instance.client;
+    final userId = supabase.auth.currentUser?.id;
+    if (userId == null || userId.isEmpty) return;
+
+    String? syncedUrl;
+
+    try {
+      if (_selectedImage != null) {
+        syncedUrl = await _supabaseService.uploadPetLifePhoto(
+          file: _selectedImage!,
+          petId: petId,
+        );
+      } else if (_selectedImageUrl != null && _selectedImageUrl!.isNotEmpty) {
+        final uri = Uri.parse(_selectedImageUrl!);
+        final resp = await http.get(uri);
+        if (resp.statusCode == 200) {
+          final storagePath =
+              '$userId/$petId/lifephoto_${DateTime.now().millisecondsSinceEpoch}.jpg';
+          await supabase.storage.from('user-avatars').uploadBinary(
+                storagePath,
+                resp.bodyBytes,
+                fileOptions: const FileOptions(
+                  upsert: true,
+                  contentType: 'image/jpeg',
+                ),
+              );
+          syncedUrl = supabase.storage
+              .from('user-avatars')
+              .getPublicUrl(storagePath)
+              .split('?')
+              .first;
+          syncedUrl = '$syncedUrl?t=${DateTime.now().millisecondsSinceEpoch}';
+          await supabase.from('pets').update({
+            'life_photo': syncedUrl,
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
+          }).eq('id', petId).eq('user_id', userId);
+        }
+      }
+    } catch (e) {
+      debugPrint('同步宠物生活照失败: $e');
+      return;
+    }
+
+    if (syncedUrl == null || syncedUrl.isEmpty || !mounted) return;
+
+    setState(() {
+      _selectedPet = Pet(
+        id: pet.id,
+        type: pet.type,
+        name: pet.name,
+        age: pet.age,
+        gender: pet.gender,
+        breed: pet.breed,
+        avatar: pet.avatar,
+        lifePhoto: syncedUrl,
+        birthDate: pet.birthDate,
+        neuterStatus: pet.neuterStatus,
+        weight: pet.weight,
+        ownerNickname: pet.ownerNickname,
+        useCustomNickname: pet.useCustomNickname,
+      );
+      _isUsingSelectedPetLifePhoto = true;
+
+      _pets = _pets.map((item) {
+        if (item.id == pet.id) {
+          return Pet(
+            id: item.id,
+            type: item.type,
+            name: item.name,
+            age: item.age,
+            gender: item.gender,
+            breed: item.breed,
+            avatar: item.avatar,
+            lifePhoto: syncedUrl,
+            birthDate: item.birthDate,
+            neuterStatus: item.neuterStatus,
+            weight: item.weight,
+            ownerNickname: item.ownerNickname,
+            useCustomNickname: item.useCustomNickname,
+          );
+        }
+        return item;
+      }).toList(growable: false);
+    });
+
+    DataChangeNotifier.markPetDataChanged();
+  }
+
   Future<File?> _compressAndConvertImage(File file) async {
     try {
       final dir = await getTemporaryDirectory();
@@ -1137,18 +1248,50 @@ class _PreparationPageState extends State<PreparationPage>
     }
   }
 
+  Map<String, String> _functionAuthHeaders() {
+    final token = Supabase.instance.client.auth.currentSession?.accessToken;
+    return {
+      if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+      'Content-Type': 'application/json',
+    };
+  }
+
+  bool _shouldTreatAsAuthExpired(FunctionException e) {
+    final client = Supabase.instance.client;
+    final hasSession = client.auth.currentSession != null;
+    final hasUser = client.auth.currentUser != null;
+    final message = e.toString().toLowerCase();
+    final details = (e.details?.toString().toLowerCase() ?? '');
+    final combined = '$message $details';
+
+    final hasExplicitAuthHint = combined.contains('jwt') ||
+        combined.contains('token') ||
+        combined.contains('not logged in') ||
+        combined.contains('auth') ||
+        combined.contains('unauthorized') ||
+        combined.contains('invalid claim') ||
+        combined.contains('expired');
+
+    // 仅在本地会话缺失，或服务端明确给出鉴权失效信号时，才提示重新登录。
+    return !hasSession || !hasUser || hasExplicitAuthHint;
+  }
+
   Future<ImagePrecheckResult> _precheckUploadedImage({
     required String uploadedFileName,
   }) async {
     final supabase = Supabase.instance.client;
+    const precheckTimeout = Duration(seconds: 15);
 
     try {
-      final response = await supabase.functions.invoke(
-        'img-gen-precheck',
-        body: {
-          'file_name': uploadedFileName,
-        },
-      );
+      final response = await supabase.functions
+          .invoke(
+            'img-gen-precheck',
+            body: {
+              'file_name': uploadedFileName,
+            },
+            headers: _functionAuthHeaders(),
+          )
+          .timeout(precheckTimeout);
 
       dynamic payload = response.data;
       if (payload is String && payload.isNotEmpty) {
@@ -1190,9 +1333,15 @@ class _PreparationPageState extends State<PreparationPage>
           message.contains('403') ||
           message.contains('unauthorized') ||
           message.contains('forbidden')) {
+        if (_shouldTreatAsAuthExpired(e)) {
+          return const ImagePrecheckResult(
+            pass: false,
+            reason: '登录状态已失效，请重新登录后重试',
+          );
+        }
         return const ImagePrecheckResult(
           pass: false,
-          reason: '登录状态已失效，请重新登录后重试',
+          reason: '图片检测服务暂时不可用，请稍后重试',
         );
       }
       if (message.contains('timeout')) {
@@ -1382,58 +1531,102 @@ class _PreparationPageState extends State<PreparationPage>
                                     ),
                                     child: (_selectedImage == null &&
                                             _selectedImageUrl == null)
-                                        ? Column(
-                                            mainAxisAlignment:
-                                                MainAxisAlignment.center,
+                                        ? Stack(
                                             children: [
-                                              Container(
-                                                padding:
-                                                    const EdgeInsets.all(16),
-                                                decoration: BoxDecoration(
-                                                  color: AppColors.primary
-                                                      .withOpacity(0.1),
-                                                  shape: BoxShape.circle,
-                                                ),
-                                                child: Icon(
-                                                  Icons
-                                                      .add_photo_alternate_outlined,
-                                                  size: 40,
-                                                  color: AppColors.primary
-                                                      .withOpacity(0.7),
+                                              Positioned.fill(
+                                                child: Column(
+                                                  mainAxisAlignment:
+                                                      MainAxisAlignment.center,
+                                                  children: [
+                                                    Container(
+                                                      padding:
+                                                          const EdgeInsets.all(
+                                                              16),
+                                                      decoration: BoxDecoration(
+                                                        color: AppColors.primary
+                                                            .withOpacity(0.1),
+                                                        shape: BoxShape.circle,
+                                                      ),
+                                                      child: Icon(
+                                                        Icons
+                                                            .add_photo_alternate_outlined,
+                                                        size: 40,
+                                                        color: AppColors.primary
+                                                            .withOpacity(0.7),
+                                                      ),
+                                                    ),
+                                                    const SizedBox(height: 16),
+                                                    Text(
+                                                      (_selectedPet!.lifePhoto ==
+                                                                  null ||
+                                                              _selectedPet!
+                                                                  .lifePhoto!
+                                                                  .isEmpty)
+                                                          ? '您还未上传${_selectedPet!.name}的生活照\n请上传'
+                                                          : '正在载入 ${_selectedPet!.name} 的生活照',
+                                                      textAlign:
+                                                          TextAlign.center,
+                                                      style: TextStyle(
+                                                        color: AppColors.textGrey
+                                                            .withOpacity(0.9),
+                                                        fontSize: 16,
+                                                        fontWeight:
+                                                            FontWeight.w500,
+                                                      ),
+                                                    ),
+                                                    const SizedBox(height: 8),
+                                                    const Text(
+                                                      "尽量包含宠物全身",
+                                                      style: TextStyle(
+                                                        color: AppColors
+                                                            .textLight,
+                                                        fontSize: 12,
+                                                      ),
+                                                    ),
+                                                    const SizedBox(height: 2),
+                                                    const Text(
+                                                      "确保面部清晰可见",
+                                                      style: TextStyle(
+                                                        color: AppColors
+                                                            .textLight,
+                                                        fontSize: 12,
+                                                      ),
+                                                    ),
+                                                  ],
                                                 ),
                                               ),
-                                              const SizedBox(height: 16),
-                                              Text(
-                                                (_selectedPet!.lifePhoto ==
-                                                            null ||
-                                                        _selectedPet!
-                                                            .lifePhoto!.isEmpty)
-                                                    ? '您还未上传${_selectedPet!.name}的生活照\n请上传'
-                                                    : '正在载入 ${_selectedPet!.name} 的生活照',
-                                                textAlign: TextAlign.center,
-                                                style: TextStyle(
-                                                  color: AppColors.textGrey
-                                                      .withOpacity(0.9),
-                                                  fontSize: 16,
-                                                  fontWeight: FontWeight.w500,
+                                              if (_isPickingImage)
+                                                Container(
+                                                  color: Colors.white
+                                                      .withOpacity(0.72),
+                                                  child: const Center(
+                                                    child: Column(
+                                                      mainAxisSize:
+                                                          MainAxisSize.min,
+                                                      children: [
+                                                        SizedBox(
+                                                          width: 24,
+                                                          height: 24,
+                                                          child:
+                                                              CircularProgressIndicator(
+                                                            strokeWidth: 2.2,
+                                                          ),
+                                                        ),
+                                                        SizedBox(height: 10),
+                                                        Text(
+                                                          '正在处理照片...',
+                                                          style: TextStyle(
+                                                            fontSize: 14,
+                                                            fontWeight:
+                                                                FontWeight.w600,
+                                                            color: AppColors
+                                                                .textDark,
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
                                                 ),
-                                              ),
-                                              const SizedBox(height: 8),
-                                              const Text(
-                                                "尽量包含宠物全身",
-                                                style: TextStyle(
-                                                  color: AppColors.textLight,
-                                                  fontSize: 12,
-                                                ),
-                                              ),
-                                              const SizedBox(height: 2),
-                                              const Text(
-                                                "确保面部清晰可见",
-                                                style: TextStyle(
-                                                  color: AppColors.textLight,
-                                                  fontSize: 12,
-                                                ),
-                                              ),
                                             ],
                                           )
                                         : Stack(
@@ -1491,7 +1684,9 @@ class _PreparationPageState extends State<PreparationPage>
                                                 right: 8,
                                                 bottom: 8,
                                                 child: GestureDetector(
-                                                  onTap: () async {
+                                                  onTap: _isPickingImage
+                                                      ? null
+                                                      : () async {
                                                     await _pickImage();
                                                   },
                                                   child: Container(
@@ -1527,6 +1722,55 @@ class _PreparationPageState extends State<PreparationPage>
                                                   ),
                                                 ),
                                               ),
+                                              if (_isPickingImage)
+                                                Positioned.fill(
+                                                  child: Container(
+                                                    color: Colors.black
+                                                        .withOpacity(0.24),
+                                                    alignment: Alignment.center,
+                                                    child: Container(
+                                                      padding: const EdgeInsets
+                                                          .symmetric(
+                                                          horizontal: 14,
+                                                          vertical: 10),
+                                                      decoration: BoxDecoration(
+                                                        color: Colors.black
+                                                            .withOpacity(0.55),
+                                                        borderRadius:
+                                                            BorderRadius
+                                                                .circular(14),
+                                                      ),
+                                                      child: const Row(
+                                                        mainAxisSize:
+                                                            MainAxisSize.min,
+                                                        children: [
+                                                          SizedBox(
+                                                            width: 18,
+                                                            height: 18,
+                                                            child:
+                                                                CircularProgressIndicator(
+                                                              strokeWidth: 2.1,
+                                                              color:
+                                                                  Colors.white,
+                                                            ),
+                                                          ),
+                                                          SizedBox(width: 10),
+                                                          Text(
+                                                            '正在处理照片...',
+                                                            style: TextStyle(
+                                                              color:
+                                                                  Colors.white,
+                                                              fontSize: 13,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .w600,
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ),
                                             ],
                                           ),
                                   ),
@@ -1853,10 +2097,21 @@ class _PreparationPageState extends State<PreparationPage>
                                               _selectedImage!);
                                     }
 
+                                    // 仅当生活照发生变化时才执行 precheck。
+                                    // 若沿用宠物已有 life_photo，则跳过重复 precheck。
+                                    final shouldRunPrecheckForLifePhoto =
+                                        _selectedPet == null
+                                            ? true
+                                            : !_isUsingSelectedPetLifePhoto;
+
+                                    // 如果该宠物原本没有生活照，则同步到宠物档案（Storage + Database）
+                                    await _syncPetLifePhotoIfNeeded();
+
                                     if (uploadedFileName != null && mounted) {
                                       setState(() {
                                         _isStartingTask = true;
-                                        _isPrecheckingImage = true;
+                                        _isPrecheckingImage =
+                                            shouldRunPrecheckForLifePhoto;
                                         _uploadError = '';
                                       });
 
@@ -1879,39 +2134,41 @@ class _PreparationPageState extends State<PreparationPage>
                                         final supabase =
                                             Supabase.instance.client;
 
-                                        final precheckResult =
-                                            await _precheckUploadedImage(
-                                          uploadedFileName: uploadedFileName,
-                                        );
+                                        if (shouldRunPrecheckForLifePhoto) {
+                                          final precheckResult =
+                                              await _precheckUploadedImage(
+                                            uploadedFileName: uploadedFileName,
+                                          );
 
-                                        if (!precheckResult.pass) {
-                                          // 预检不通过，清理已上传的原图，避免存储泄漏和隐私残留
-                                          final cleanupUserId =
-                                              supabase.auth.currentUser?.id;
-                                          if (cleanupUserId != null) {
-                                            final cleanupPath =
-                                                '$cleanupUserId/original/$uploadedFileName';
-                                            try {
-                                              await supabase.storage
-                                                  .from('ai-wallpapers')
-                                                  .remove([cleanupPath]);
-                                              debugPrint(
-                                                  '🗑️ 预检不通过，已清理上传文件: $cleanupPath');
-                                            } catch (e) {
-                                              debugPrint('⚠️ 清理上传文件失败: $e');
+                                          if (!precheckResult.pass) {
+                                            // 预检不通过，清理已上传的原图，避免存储泄漏和隐私残留
+                                            final cleanupUserId =
+                                                supabase.auth.currentUser?.id;
+                                            if (cleanupUserId != null) {
+                                              final cleanupPath =
+                                                  '$cleanupUserId/original/$uploadedFileName';
+                                              try {
+                                                await supabase.storage
+                                                    .from('ai-wallpapers')
+                                                    .remove([cleanupPath]);
+                                                debugPrint(
+                                                    '🗑️ 预检不通过，已清理上传文件: $cleanupPath');
+                                              } catch (e) {
+                                                debugPrint('⚠️ 清理上传文件失败: $e');
+                                              }
                                             }
+                                            if (mounted) {
+                                              setState(() {
+                                                _isStartingTask = false;
+                                                _isPrecheckingImage = false;
+                                                _uploadStatus =
+                                                    UploadStatus.failed;
+                                                _uploadError =
+                                                    precheckResult.reason;
+                                              });
+                                            }
+                                            return;
                                           }
-                                          if (mounted) {
-                                            setState(() {
-                                              _isStartingTask = false;
-                                              _isPrecheckingImage = false;
-                                              _uploadStatus =
-                                                  UploadStatus.failed;
-                                              _uploadError =
-                                                  precheckResult.reason;
-                                            });
-                                          }
-                                          return;
                                         }
 
                                         if (mounted) {
@@ -1928,6 +2185,7 @@ class _PreparationPageState extends State<PreparationPage>
                                             'file_name': uploadedFileName,
                                             'style': style,
                                           },
+                                          headers: _functionAuthHeaders(),
                                         );
 
                                         if (!context.mounted) return;

@@ -72,6 +72,19 @@ class _AvatarCropPageState extends State<AvatarCropPage> {
     }
   }
 
+  void _resetRotation() {
+    final current = _controller.cropImageData;
+    if (current == null) return;
+    _controller.setData(
+      CropImageData(
+        x: current.x,
+        y: current.y,
+        scale: current.scale,
+        angle: 0,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final file = File(widget.imagePath);
@@ -151,36 +164,64 @@ class _AvatarCropPageState extends State<AvatarCropPage> {
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
-              child: SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: FilledButton(
-                  onPressed: _busy ? null : _onDone,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: _primaryBlue,
-                    foregroundColor: Colors.white,
-                    disabledBackgroundColor: _primaryBlue.withOpacity(0.5),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(24),
+              child: Row(
+                children: [
+                  SizedBox(
+                    height: 48,
+                    child: OutlinedButton.icon(
+                      onPressed: _busy ? null : _resetRotation,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.white,
+                        side: BorderSide(color: Colors.white.withOpacity(0.5)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(24),
+                        ),
+                      ),
+                      icon: const Icon(Icons.refresh_rounded, size: 18),
+                      label: const Text(
+                        '回正',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ),
                   ),
-                  child: _busy
-                      ? const SizedBox(
-                          width: 22,
-                          height: 22,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2.2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Text(
-                          '完成',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: SizedBox(
+                      height: 48,
+                      child: FilledButton(
+                        onPressed: _busy ? null : _onDone,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: _primaryBlue,
+                          foregroundColor: Colors.white,
+                          disabledBackgroundColor:
+                              _primaryBlue.withOpacity(0.5),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(24),
                           ),
                         ),
-                ),
+                        child: _busy
+                            ? const SizedBox(
+                                width: 22,
+                                height: 22,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2.2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Text(
+                                '完成',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
             ],

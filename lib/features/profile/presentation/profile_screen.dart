@@ -546,6 +546,17 @@ class _PetProfileSectionState extends State<PetProfileSection> {
   }
 
   void _addPet(Pet newPet) {
+    // 表单页已完成 pets 写库并返回 id 时，这里只刷新本地列表，避免重复 insert 导致主键冲突
+    if (newPet.id != null && newPet.id!.trim().isNotEmpty) {
+      _loadPets();
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('宠物档案添加成功')));
+      }
+      return;
+    }
+
     _supabaseService.insertPet(newPet.toMap()).then((generatedId) {
       if (generatedId != null) {
         final petWithId = Pet(
@@ -594,6 +605,11 @@ class _PetProfileSectionState extends State<PetProfileSection> {
 
       if (errorStr.contains('foreign key') || errorStr.contains('user_id')) {
         errorMessage = '添加失败：用户ID格式错误，请重新登录';
+      } else if (errorStr.contains('duplicate key') ||
+          errorStr.contains('pets_pkey') ||
+          errorStr.contains('23505')) {
+        errorMessage = '该宠物档案已存在，已为你刷新最新数据';
+        _loadPets();
       } else if (errorStr.contains('null') || errorStr.contains('not null')) {
         errorMessage = '添加失败：缺少必要字段';
       } else if (errorStr.contains('network') ||

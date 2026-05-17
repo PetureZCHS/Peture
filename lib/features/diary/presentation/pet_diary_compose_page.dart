@@ -18,6 +18,7 @@ import '../../../shared/models/pet.dart';
 import '../../../services/supabase_service.dart';
 import 'pet_diary_result_page.dart';
 import '../../library/presentation/library_screen.dart';
+import '../../profile/presentation/pet_profile_form_page.dart';
 
 /// 撰写日记页面 - AI将用户输入改写成宠物第一人称
 class PetDiaryComposePage extends StatefulWidget {
@@ -497,6 +498,7 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
                                 children: [
                                   TextField(
                                     controller: _inputController,
+                                    onChanged: (_) => setState(() {}),
                                     maxLines: null,
                                     minLines: 5,
                                     maxLength: 500,
@@ -570,22 +572,23 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
                             ),
 
                             const SizedBox(height: 16),
-                            // 示例文本按钮
-                            Align(
-                              alignment: Alignment.centerRight,
-                              child: TextButton.icon(
-                                onPressed: _onExampleTap,
-                                icon: Icon(Icons.auto_awesome,
-                                    size: 16,
-                                    color: PetureColors.textSecondary),
-                                label: Text(
-                                  "试一试示例",
-                                  style: TextStyle(
-                                      color: PetureColors.textSecondary,
-                                      fontSize: 14),
+                            // 示例文本按钮（仅在输入框为空时显示）
+                            if (_inputController.text.isEmpty)
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: TextButton.icon(
+                                  onPressed: _onExampleTap,
+                                  icon: Icon(Icons.auto_awesome,
+                                      size: 16,
+                                      color: PetureColors.textSecondary),
+                                  label: Text(
+                                    "填入示例",
+                                    style: TextStyle(
+                                        color: PetureColors.textSecondary,
+                                        fontSize: 14),
+                                  ),
                                 ),
                               ),
-                            ),
 
                             const SizedBox(height: 30),
 
@@ -704,31 +707,46 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
     }
 
     if (_pets.isEmpty) {
-      return Container(
-        height: 52,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        decoration: BoxDecoration(
-          color: PetureColors.surface.withOpacity(0.92),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: PetureColors.surfacePure, width: 2),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 20,
-              offset: const Offset(0, 10),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Icon(Icons.pets_outlined,
-                size: 20, color: PetureColors.textTertiary),
-            const SizedBox(width: 10),
-            Text(
-              '还没有添加宠物哦',
-              style: TextStyle(color: PetureColors.textTertiary, fontSize: 15),
-            ),
-          ],
+      return InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () async {
+          await Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const PetProfileFormPage()),
+          );
+          _loadPets();
+        },
+        child: Container(
+          height: 52,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          decoration: BoxDecoration(
+            color: PetureColors.surface.withOpacity(0.92),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: PetureColors.surfacePure, width: 2),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 20,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.pets_outlined,
+                  size: 20, color: PetureColors.textTertiary),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  '还没有添加宠物，前往「我的 > 添加宠物」',
+                  style:
+                      TextStyle(color: PetureColors.textTertiary, fontSize: 14),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Icon(Icons.arrow_forward_ios_rounded,
+                  size: 14, color: PetureColors.textTertiary),
+            ],
+          ),
         ),
       );
     }

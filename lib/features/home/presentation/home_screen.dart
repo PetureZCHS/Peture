@@ -12,6 +12,7 @@ import '../../dog_clicker/presentation/dog_clicker_screen.dart';
 import '../../expense/presentation/unified_expense_home_page.dart';
 import '../../medical/presentation/medical_record_screen.dart';
 import '../../profile/presentation/profile_screen.dart';
+import '../../profile/presentation/feedback_page.dart';
 import '../../../core/page_tracker_mixin.dart';
 import '../../../shared/design_system/peture_design_system.dart';
 import '../../../shared/utils/ui_helpers.dart';
@@ -418,34 +419,43 @@ class _HomeDashboardContentState extends State<_HomeDashboardContent> {
           padding: EdgeInsets.fromLTRB(20, topPadding + 60, 20, 130),
           children: [
             const SizedBox(height: 4),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 4, vertical: 6),
-              child: Column(
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+              child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Peture',
-                    style: TextStyle(
-                      fontSize: 34,
-                      height: 1.14,
-                      letterSpacing: -0.5,
-                      fontWeight: FontWeight.w800,
-                      color: PetureColors.textPrimary,
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Peture',
+                          style: TextStyle(
+                            fontSize: 34,
+                            height: 1.14,
+                            letterSpacing: -0.5,
+                            fontWeight: FontWeight.w800,
+                            color: PetureColors.textPrimary,
+                          ),
+                        ),
+                        SizedBox(height: 8),
+                        Text(
+                          '记录毛孩子的完美瞬间',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 15,
+                            height: 1.2,
+                            letterSpacing: 0.5,
+                            fontWeight: FontWeight.w500,
+                            color: PetureColors.textSecondary,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  SizedBox(height: 8),
-                  Text(
-                    '记录毛孩子的完美瞬间',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 15,
-                      height: 1.2,
-                      letterSpacing: 0.5,
-                      fontWeight: FontWeight.w500,
-                      color: PetureColors.textSecondary,
-                    ),
-                  ),
+                  const SizedBox(width: 12),
+                  _buildFeedbackEntry(context),
                 ],
               ),
             ),
@@ -567,6 +577,54 @@ class _HomeDashboardContentState extends State<_HomeDashboardContent> {
           ],
         ),
       ],
+    );
+  }
+
+  Widget _buildFeedbackEntry(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.selectionClick();
+        Navigator.of(context).push(
+          CupertinoPageRoute(
+            builder: (_) => const FeedbackPage(),
+          ),
+        );
+      },
+      child: Container(
+        height: 36,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(18),
+          color: Colors.white.withOpacity(0.7),
+          border: Border.all(color: Colors.white.withOpacity(0.85), width: 1),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              CupertinoIcons.chat_bubble_2_fill,
+              size: 15,
+              color: Color(0xFFD88960),
+            ),
+            SizedBox(width: 6),
+            Text(
+              '意见反馈',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: PetureColors.textPrimary,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

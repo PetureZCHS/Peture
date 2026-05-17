@@ -132,6 +132,16 @@ class _RootRouterState extends State<RootRouter> {
         Locale('en', 'US'), // 英文
       ],
       locale: const Locale('zh', 'CN'),
+      builder: (context, child) {
+        final mediaQuery = MediaQuery.of(context);
+        return MediaQuery(
+          data: mediaQuery.copyWith(
+            // 允许系统字体放大，但设置上限以避免核心页面文字溢出/错位。
+            textScaler: mediaQuery.textScaler.clamp(maxScaleFactor: 1.15),
+          ),
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
       home: _session != null ? const MyApp() : const LoginPage(),
     );
   }

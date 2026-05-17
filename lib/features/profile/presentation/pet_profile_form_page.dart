@@ -311,6 +311,15 @@ class _PetProfileFormPageState extends State<PetProfileFormPage>
       final cropped =
           await AvatarImageHelper.cropAndCompressAvatar(context, file.path);
       if (cropped == null) return;
+
+      final previousAvatarFile = _avatarFile;
+      final previousAvatarUrl = _avatarUrl;
+      setState(() {
+        // 先立即回填头像，避免用户感知“没有生效”。
+        _avatarFile = cropped;
+        _avatarUrl = null;
+      });
+
       final avatarBytes = await cropped.readAsBytes();
       if (!mounted) return;
       final avatarPassed = await _moderationGuard.runImageGuardByBytes(
@@ -319,11 +328,14 @@ class _PetProfileFormPageState extends State<PetProfileFormPage>
         bytes: avatarBytes,
         onPassed: () async {},
       );
-      if (!avatarPassed || !mounted) return;
-      setState(() {
-        _avatarFile = cropped;
-        _avatarUrl = null;
-      });
+      if (!avatarPassed || !mounted) {
+        setState(() {
+          // 审核未通过时回滚到原头像状态。
+          _avatarFile = previousAvatarFile;
+          _avatarUrl = previousAvatarUrl;
+        });
+        return;
+      }
     } catch (e) {
       debugPrint('选择头像失败: $e');
     }
@@ -375,6 +387,22 @@ class _PetProfileFormPageState extends State<PetProfileFormPage>
   }
 
   /// 图片质量预检查 - 调用 img-gen-precheck Edge Function
+  String _toUserFriendlyPrecheckReason(String reason) {
+    final normalized = reason.trim();
+    if (normalized.isEmpty) {
+      return '图片检测服务暂时不可用，请稍后重试';
+    }
+    final lower = normalized.toLowerCase();
+    final containsProviderDetail = lower.contains('siliconflow') ||
+        lower.contains('api returned status') ||
+        lower.contains('openai') ||
+        lower.contains('model');
+    if (containsProviderDetail) {
+      return '图片检测服务暂时不可用，请稍后重试';
+    }
+    return normalized;
+  }
+
   Future<({bool pass, String reason})> _precheckLifePhoto({
     required String fileName,
     required String bucket,
@@ -409,7 +437,9 @@ class _PetProfileFormPageState extends State<PetProfileFormPage>
 
       return (
         pass: false,
-        reason: reason.isNotEmpty ? reason : '图片不符合生成要求，请更换后重试'
+        reason: reason.isNotEmpty
+            ? _toUserFriendlyPrecheckReason(reason)
+            : '图片不符合生成要求，请更换后重试'
       );
     } on SocketException {
       return (pass: false, reason: '图片检测失败：网络连接异常，请检查网络后重试');
@@ -417,11 +447,37 @@ class _PetProfileFormPageState extends State<PetProfileFormPage>
       return (pass: false, reason: '图片检测超时，请稍后再试');
     } on FunctionException catch (e) {
       debugPrint('❌ 生活照预检函数调用失败: $e');
-      final message = e.toString().toLowerCase();
-      if (message.contains('401') ||
-          message.contains('403') ||
-          message.contains('unauthorized') ||
-          message.contains('forbidden')) {
+      final rawMessage = e.toString();
+      final message = rawMessage.toLowerCase();
+
+      try {
+        dynamic details = e.details;
+        if (details is String && details.isNotEmpty) {
+          details = jsonDecode(details);
+        }
+        if (details is Map) {
+          final reason = (details['reason'] ??
+                  details['message'] ??
+                  details['error'] ??
+                  details['detail'] ??
+                  '')
+              .toString()
+              .trim();
+          if (reason.isNotEmpty) {
+            return (
+              pass: false,
+              reason: _toUserFriendlyPrecheckReason(reason),
+            );
+          }
+        }
+      } catch (_) {}
+
+      final bool isAuthExpired = message.contains('401') ||
+          message.contains('jwt') ||
+          message.contains('invalid token') ||
+          message.contains('token expired') ||
+          message.contains('unauthorized');
+      if (isAuthExpired) {
         return (pass: false, reason: '登录状态已失效，请重新登录后重试');
       }
       if (message.contains('timeout')) {
@@ -1229,7 +1285,7 @@ class _PetProfileFormPageState extends State<PetProfileFormPage>
                       width: double.infinity,
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF5A8EFA),
+                          backgroundColor: const Color(0xFFE3A07B),
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 15),
                           shape: RoundedRectangleBorder(
@@ -1345,7 +1401,7 @@ class _PetProfileFormPageState extends State<PetProfileFormPage>
                       width: double.infinity,
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF5A8EFA),
+                          backgroundColor: const Color(0xFFE3A07B),
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 15),
                           shape: RoundedRectangleBorder(
@@ -1459,7 +1515,7 @@ class _PetProfileFormPageState extends State<PetProfileFormPage>
                       width: double.infinity,
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF5A8EFA),
+                          backgroundColor: const Color(0xFFE3A07B),
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 15),
                           shape: RoundedRectangleBorder(
@@ -1599,12 +1655,19 @@ class _PetProfileFormPageState extends State<PetProfileFormPage>
                                           padding: const EdgeInsets.only(
                                             bottom: 12,
                                           ),
-                                          child: Text(
-                                            '${value.toInt()}',
-                                            style: const TextStyle(
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.w600,
-                                              color: Color(0xFF1A1A1A),
+                                          child: SizedBox(
+                                            width: 30,
+                                            child: Text(
+                                              '${value.toInt()}',
+                                              textAlign: TextAlign.center,
+                                              maxLines: 1,
+                                              softWrap: false,
+                                              overflow: TextOverflow.visible,
+                                              style: const TextStyle(
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.w600,
+                                                color: Color(0xFF1A1A1A),
+                                              ),
                                             ),
                                           ),
                                         )
@@ -1706,7 +1769,7 @@ class _PetProfileFormPageState extends State<PetProfileFormPage>
                         width: double.infinity,
                         child: ElevatedButton(
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF5A8EFA),
+                            backgroundColor: const Color(0xFFE3A07B),
                             foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(vertical: 14),
                             shape: RoundedRectangleBorder(
@@ -1826,7 +1889,7 @@ class _PetProfileFormPageState extends State<PetProfileFormPage>
                         Expanded(
                           child: ElevatedButton(
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF5A8EFA),
+                              backgroundColor: const Color(0xFFE3A07B),
                               foregroundColor: Colors.white,
                               padding: const EdgeInsets.symmetric(
                                 vertical: 14,
@@ -1993,45 +2056,139 @@ class _PetProfileFormPageState extends State<PetProfileFormPage>
   void _showNicknameEditor() {
     final controller =
         TextEditingController(text: _ownerNickname ?? _defaultOwnerNickname);
-    showDialog(
+    showGeneralDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('宠物对你的称呼'),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(
-            labelText: '称呼',
-            hintText: '例如：妈妈、姐姐、爸爸',
+      barrierDismissible: true,
+      barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
+      barrierColor: Colors.black54,
+      transitionDuration: const Duration(milliseconds: 300),
+      pageBuilder: (
+        BuildContext buildContext,
+        Animation animation,
+        Animation secondaryAnimation,
+      ) {
+        return Center(
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 30),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          '宠物对你的称呼',
+                          style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close, size: 22),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          onPressed: () => Navigator.pop(buildContext),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    TextField(
+                      controller: controller,
+                      autofocus: true,
+                      maxLength: 10,
+                      decoration: InputDecoration(
+                        hintText: '例如：妈妈、姐姐、爸爸',
+                        hintStyle: TextStyle(color: Colors.grey.shade400),
+                        filled: true,
+                        fillColor: const Color(0xFFF7F8FA),
+                        border: OutlineInputBorder(
+                          borderSide: BorderSide.none,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 14,
+                        ),
+                        counterText: '',
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextButton(
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 14,
+                              ),
+                              backgroundColor: const Color(0xFFF5F5F5),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            onPressed: () => Navigator.pop(buildContext),
+                            child: Text(
+                              '取消',
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: Colors.grey.shade700,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFFE3A07B),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(
+                                vertical: 14,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              elevation: 0,
+                            ),
+                            onPressed: () {
+                              final nickname = controller.text.trim();
+                              if (nickname.isEmpty) {
+                                return;
+                              }
+                              setState(() {
+                                _ownerNickname = nickname;
+                              });
+                              Navigator.pop(buildContext);
+                            },
+                            child: const Text(
+                              '确认',
+                              style: TextStyle(fontSize: 16),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
-          maxLength: 10,
-          autofocus: true,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('取消'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              final nickname = controller.text.trim();
-              if (nickname.isNotEmpty) {
-                final passed = await _moderationGuard.runTextGuard(
-                  context: context,
-                  scene: ModerationScene.ownerNickname,
-                  content: nickname,
-                  onPassed: () async {},
-                );
-                if (!passed || !mounted || !context.mounted) return;
-                setState(() {
-                  _ownerNickname = nickname;
-                });
-                Navigator.pop(context);
-              }
-            },
-            child: const Text('保存'),
-          ),
-        ],
-      ),
+        );
+      },
+      transitionBuilder: (context, animation, secondaryAnimation, child) {
+        return ScaleTransition(
+          scale: CurvedAnimation(parent: animation, curve: Curves.easeOutBack),
+          child: FadeTransition(opacity: animation, child: child),
+        );
+      },
     );
   }
 
@@ -2162,15 +2319,6 @@ class _PetProfileFormPageState extends State<PetProfileFormPage>
         }
 
         lifePhotoValue = uploadResult.url;
-        try {
-          await Supabase.instance.client.from('pets').upsert({
-            'id': petId,
-            'life_photo': lifePhotoValue,
-            'updated_at': DateTime.now().toUtc().toIso8601String(),
-          });
-        } catch (e) {
-          debugPrint('保存 life_photo 到 pets 表失败: $e');
-        }
       }
 
       final result = {
@@ -2189,6 +2337,67 @@ class _PetProfileFormPageState extends State<PetProfileFormPage>
             _ownerNickname != null && _ownerNickname!.isNotEmpty,
         'ownerNickname': _ownerNickname,
       };
+
+      String ageForDb = '未知';
+      if (_birthDate != null) {
+        final now = DateTime.now();
+        int years = now.year - _birthDate!.year;
+        int months = now.month - _birthDate!.month;
+        if (months < 0 || (months == 0 && now.day < _birthDate!.day)) {
+          years--;
+          months += 12;
+        }
+        if (now.day < _birthDate!.day && months > 0) {
+          months--;
+        }
+        if (years < 0) years = 0;
+        if (months < 0) months = 0;
+        ageForDb = '$years岁$months个月';
+      }
+
+      final userId = Supabase.instance.client.auth.currentUser?.id;
+      if (userId == null || userId.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('登录状态异常，请重新登录后重试')),
+          );
+        }
+        return;
+      }
+
+      final dbPayload = <String, dynamic>{
+        'id': petId,
+        'user_id': userId,
+        'name': _petName,
+        'type': typeForDb,
+        'age': ageForDb,
+        'breed': _petSpecies,
+        'birth_date': _birthDate?.toIso8601String().split('T').first,
+        'gender': _gender,
+        'neuter_status': _neuterStatus == '已绝育',
+        'weight': _weight,
+        'avatar': avatarValue,
+        'life_photo': lifePhotoValue,
+        'owner_nickname': _ownerNickname,
+        'use_custom_nickname': _ownerNickname != null && _ownerNickname!.isNotEmpty,
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      }..removeWhere((_, value) => value == null);
+
+      try {
+        await Supabase.instance.client.from('pets').upsert(
+          dbPayload,
+          onConflict: 'id',
+        );
+      } catch (e) {
+        debugPrint('保存 pets 表失败: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('保存档案失败，请稍后重试')),
+          );
+        }
+        return;
+      }
+
       if (!mounted) return;
       Navigator.pop(context, result);
       },
