@@ -2101,7 +2101,7 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen>
                       ScaffoldMessenger.of(this.context).showSnackBar(
                         const SnackBar(
                           content: Text('更新失败，请重试'),
-                          backgroundColor: Colors.red,
+                          backgroundColor: PetureColors.danger,
                         ),
                       );
                     }
@@ -2317,7 +2317,7 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen>
                       ScaffoldMessenger.of(this.context).showSnackBar(
                         const SnackBar(
                           content: Text('更新失败，请重试'),
-                          backgroundColor: Colors.red,
+                          backgroundColor: PetureColors.danger,
                         ),
                       );
                     }
@@ -2464,7 +2464,7 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen>
                       ScaffoldMessenger.of(this.context).showSnackBar(
                         const SnackBar(
                           content: Text('更新失败，请重试'),
-                          backgroundColor: Colors.red,
+                          backgroundColor: PetureColors.danger,
                         ),
                       );
                     }
@@ -2610,7 +2610,7 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen>
                       ScaffoldMessenger.of(this.context).showSnackBar(
                         const SnackBar(
                           content: Text('更新失败，请重试'),
-                          backgroundColor: Colors.red,
+                          backgroundColor: PetureColors.danger,
                         ),
                       );
                     }
@@ -2756,7 +2756,7 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen>
                   Navigator.of(context).pop(true);
                 },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red,
+                  backgroundColor: PetureColors.danger,
                   foregroundColor: Colors.white,
                 ),
                 child: const Text('删除'),
@@ -2773,7 +2773,7 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen>
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: Colors.red,
+        backgroundColor: PetureColors.danger,
         behavior: SnackBarBehavior.floating,
       ),
     );

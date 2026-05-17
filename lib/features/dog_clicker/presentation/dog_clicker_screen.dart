@@ -259,7 +259,7 @@ class _DogClickerScreenState extends State<DogClickerScreen>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('已删除「$projectName」的训练记录'),
-            backgroundColor: Colors.green[700],
+            backgroundColor: PetureColors.success,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
@@ -287,7 +287,7 @@ class _DogClickerScreenState extends State<DogClickerScreen>
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: const Text('该训练项目已存在'),
-              backgroundColor: Colors.orange[700],
+              backgroundColor: PetureColors.warning,
               behavior: SnackBarBehavior.floating,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
@@ -328,7 +328,7 @@ class _DogClickerScreenState extends State<DogClickerScreen>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('已添加训练项目「$projectName」'),
-            backgroundColor: Colors.green[700],
+            backgroundColor: PetureColors.success,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
@@ -377,7 +377,7 @@ class _DogClickerScreenState extends State<DogClickerScreen>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('已删除训练项目「$projectName」'),
-            backgroundColor: Colors.green[700],
+            backgroundColor: PetureColors.success,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
@@ -894,7 +894,7 @@ class _DogClickerScreenState extends State<DogClickerScreen>
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
                                 content: Text('已为「$projectName」设置新音效'),
-                                backgroundColor: Colors.green[700],
+                                backgroundColor: PetureColors.success,
                                 behavior: SnackBarBehavior.floating,
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(12),
@@ -965,7 +965,7 @@ class _DogClickerScreenState extends State<DogClickerScreen>
               }
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
+              backgroundColor: PetureColors.danger,
               foregroundColor: Colors.white,
             ),
             child: const Text('删除'),
@@ -1063,7 +1063,7 @@ class _DogClickerScreenState extends State<DogClickerScreen>
                         await _deleteCustomProject(projectName);
                       },
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.red,
+                        backgroundColor: PetureColors.danger,
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(
@@ -1185,7 +1185,7 @@ class _DogClickerScreenState extends State<DogClickerScreen>
                         _resetCurrentProjectData();
                       },
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.orange[700],
+                        backgroundColor: PetureColors.warning,
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(

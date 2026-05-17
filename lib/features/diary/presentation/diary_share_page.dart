@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import '../../../shared/design_system/peture_design_system.dart';
 import 'package:flutter/rendering.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
@@ -854,7 +855,7 @@ class _DiarySharePageState extends State<DiarySharePage>
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('✅ 已保存到相册'),
-              backgroundColor: Colors.green,
+              backgroundColor: PetureColors.success,
             ),
           );
         }
@@ -865,7 +866,7 @@ class _DiarySharePageState extends State<DiarySharePage>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('操作失败: ${e.toString()}'),
-            backgroundColor: Colors.red,
+            backgroundColor: PetureColors.danger,
           ),
         );
       }

@@ -139,7 +139,7 @@ class _AccountDeactivatePageState extends State<AccountDeactivatePage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('验证码已发送至 ${_maskEmail(email)}'),
-          backgroundColor: Colors.green.shade700,
+          backgroundColor: PetureColors.success,
         ),
       );
     } on AuthException catch (e) {
@@ -308,7 +308,7 @@ class _AccountDeactivatePageState extends State<AccountDeactivatePage> {
               child: const Text('取消'),
             ),
             FilledButton(
-              style: FilledButton.styleFrom(backgroundColor: Colors.red),
+              style: FilledButton.styleFrom(backgroundColor: PetureColors.danger),
               onPressed: () => Navigator.of(context).pop(true),
               child: const Text('我已了解并接受后果'),
             ),
@@ -330,7 +330,7 @@ class _AccountDeactivatePageState extends State<AccountDeactivatePage> {
               child: const Text('取消'),
             ),
             FilledButton(
-              style: FilledButton.styleFrom(backgroundColor: Colors.red),
+              style: FilledButton.styleFrom(backgroundColor: PetureColors.danger),
               onPressed: () => Navigator.of(context).pop(true),
               child: const Text('发送验证码'),
             ),

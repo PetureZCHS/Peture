@@ -3,6 +3,7 @@
 import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import '../../../shared/design_system/peture_design_system.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../auth/presentation/login_page.dart';
@@ -356,7 +357,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('性别保存失败：$msg'),
-            backgroundColor: Colors.red,
+            backgroundColor: PetureColors.danger,
             duration: const Duration(seconds: 4),
           ),
         );
@@ -393,7 +394,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('出生日期保存失败：$msg'),
-            backgroundColor: Colors.red,
+            backgroundColor: PetureColors.danger,
             duration: const Duration(seconds: 4),
           ),
         );
@@ -538,7 +539,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('地区保存失败：$msg'),
-            backgroundColor: Colors.red,
+            backgroundColor: PetureColors.danger,
             duration: const Duration(seconds: 4),
           ),
         );
@@ -579,7 +580,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
                     content: Text('昵称不能为空'),
-                    backgroundColor: Colors.red,
+                    backgroundColor: PetureColors.danger,
                   ),
                 );
                 return;
@@ -616,7 +617,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
                 content: Text('✅ 昵称修改成功'),
-                backgroundColor: Colors.green,
+                backgroundColor: PetureColors.success,
                 duration: Duration(seconds: 2),
               ),
             );
@@ -627,7 +628,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text('❌ 昵称修改失败：$msg'),
-                backgroundColor: Colors.red,
+                backgroundColor: PetureColors.danger,
                 duration: const Duration(seconds: 4),
               ),
             );
@@ -639,7 +640,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
             context,
           ).showSnackBar(SnackBar(
             content: Text('❌ 昵称修改失败: $e'),
-            backgroundColor: Colors.red,
+            backgroundColor: PetureColors.danger,
             duration: const Duration(seconds: 3),
           ));
         }
@@ -682,7 +683,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
                     content: Text('称呼不能为空'),
-                    backgroundColor: Colors.red,
+                    backgroundColor: PetureColors.danger,
                   ),
                 );
                 return;
@@ -718,7 +719,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
                 content: Text('✅ 称呼修改成功'),
-                backgroundColor: Colors.green,
+                backgroundColor: PetureColors.success,
                 duration: Duration(seconds: 2),
               ),
             );
@@ -729,7 +730,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text('❌ 称呼修改失败：$msg'),
-                backgroundColor: Colors.red,
+                backgroundColor: PetureColors.danger,
                 duration: const Duration(seconds: 4),
               ),
             );
@@ -741,7 +742,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
             context,
           ).showSnackBar(SnackBar(
             content: Text('❌ 称呼修改失败: $e'),
-            backgroundColor: Colors.red,
+            backgroundColor: PetureColors.danger,
             duration: const Duration(seconds: 3),
           ));
         }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../shared/design_system/peture_design_system.dart';
 import 'package:intl/intl.dart';
 import '../../../core/page_tracker_mixin.dart';
 import '../../../shared/utils/loading_guard_mixin.dart';
@@ -246,7 +247,7 @@ class _AddUnifiedExpensePageState extends State<AddUnifiedExpensePage>
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
                 content: Text('云端保存失败，请检查网络连接'),
-                backgroundColor: Colors.orange));
+                backgroundColor: PetureColors.warning));
           }
           return;
         }

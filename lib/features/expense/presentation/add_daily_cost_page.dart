@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../shared/design_system/peture_design_system.dart';
 import 'package:intl/intl.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
@@ -198,7 +199,7 @@ class _AddDailyCostPageState extends State<AddDailyCostPage>
             context,
           ).showSnackBar(const SnackBar(
             content: Text('保存失败，请检查网络连接'),
-            backgroundColor: Colors.red,
+            backgroundColor: PetureColors.danger,
           ));
         }
         return;
@@ -213,7 +214,7 @@ class _AddDailyCostPageState extends State<AddDailyCostPage>
           context,
         ).showSnackBar(const SnackBar(
           content: Text('保存失败，请检查网络连接'),
-          backgroundColor: Colors.red,
+          backgroundColor: PetureColors.danger,
         ));
       }
     } finally {

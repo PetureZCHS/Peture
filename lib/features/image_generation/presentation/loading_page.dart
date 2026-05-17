@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import '../../../shared/design_system/peture_design_system.dart';
 import 'dart:io';
 import 'dart:async';
 import 'dart:ui';
@@ -173,7 +174,7 @@ class _LoadingPageState extends State<LoadingPage>
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('生成超时，请重试'),
-              backgroundColor: Colors.orange,
+              backgroundColor: PetureColors.warning,
             ),
           );
           Future.delayed(const Duration(milliseconds: 800), () {
@@ -193,7 +194,7 @@ class _LoadingPageState extends State<LoadingPage>
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: Colors.red,
+        backgroundColor: PetureColors.danger,
         duration: const Duration(seconds: 4),
       ),
     );

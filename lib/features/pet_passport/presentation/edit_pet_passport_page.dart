@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../shared/design_system/peture_design_system.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'dart:io';
@@ -385,7 +386,7 @@ class _EditPetPassportPageState extends State<EditPetPassportPage>
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('选择照片失败: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('选择照片失败: $e'), backgroundColor: PetureColors.danger),
         );
       }
     }
@@ -878,7 +879,7 @@ class _EditPetPassportPageState extends State<EditPetPassportPage>
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
                 content: Text('保存失败，请检查网络连接'),
-                backgroundColor: Colors.red,
+                backgroundColor: PetureColors.danger,
               ),
             );
           }
@@ -912,7 +913,7 @@ class _EditPetPassportPageState extends State<EditPetPassportPage>
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('保存失败: $e'), backgroundColor: Colors.red),
+            SnackBar(content: Text('保存失败: $e'), backgroundColor: PetureColors.danger),
           );
         }
       }

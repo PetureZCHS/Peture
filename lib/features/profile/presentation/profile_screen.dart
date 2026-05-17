@@ -283,7 +283,7 @@ class _ProfileScreenState extends State<ProfileScreen>
               if (nickname.isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
-                      content: Text('昵称不能为空'), backgroundColor: Colors.red),
+                      content: Text('昵称不能为空'), backgroundColor: PetureColors.danger),
                 );
                 return;
               }
@@ -312,17 +312,17 @@ class _ProfileScreenState extends State<ProfileScreen>
           setState(() => _userNickname = result.trim());
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-                content: Text('✅ 昵称修改成功'), backgroundColor: Colors.green),
+                content: Text('✅ 昵称修改成功'), backgroundColor: PetureColors.success),
           );
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-                content: Text('❌ 昵称修改失败'), backgroundColor: Colors.red),
+                content: Text('❌ 昵称修改失败'), backgroundColor: PetureColors.danger),
           );
         }
       } catch (e) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('❌ 昵称修改失败: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('❌ 昵称修改失败: $e'), backgroundColor: PetureColors.danger),
         );
       }
     }
@@ -469,7 +469,7 @@ class _ProfileScreenState extends State<ProfileScreen>
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('❌ 更换头像失败: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('❌ 更换头像失败: $e'), backgroundColor: PetureColors.danger),
         );
       }
     }

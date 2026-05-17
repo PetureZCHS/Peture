@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import '../../../shared/design_system/peture_design_system.dart';
 import '../../../core/page_tracker_mixin.dart';
 import '../../../services/supabase_service.dart';
 import '../../../shared/models/pet_diary.dart';
@@ -48,7 +49,7 @@ class _PetDiaryListPageState extends State<PetDiaryListPage>
           _isLoading = false;
         });
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('加载失败: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('加载失败: $e'), backgroundColor: PetureColors.danger),
         );
       }
     }
@@ -73,7 +74,7 @@ class _PetDiaryListPageState extends State<PetDiaryListPage>
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('删除失败，请检查网络连接'),
-              backgroundColor: Colors.red,
+              backgroundColor: PetureColors.danger,
             ),
           );
         }
@@ -81,7 +82,7 @@ class _PetDiaryListPageState extends State<PetDiaryListPage>
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('删除失败: $e'), backgroundColor: Colors.red),
+          SnackBar(content: Text('删除失败: $e'), backgroundColor: PetureColors.danger),
         );
       }
     }

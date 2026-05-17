@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../shared/design_system/peture_design_system.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import '../../../core/page_tracker_mixin.dart';
@@ -143,7 +144,7 @@ class _AddExpensePageState extends State<AddExpensePage>
                 context,
               ).showSnackBar(const SnackBar(
                 content: Text('保存失败，请检查网络连接'),
-                backgroundColor: Colors.red,
+                backgroundColor: PetureColors.danger,
               ));
             }
             return;
@@ -161,7 +162,7 @@ class _AddExpensePageState extends State<AddExpensePage>
               context,
             ).showSnackBar(const SnackBar(
               content: Text('保存失败，请检查网络连接'),
-              backgroundColor: Colors.red,
+              backgroundColor: PetureColors.danger,
             ));
           }
         }

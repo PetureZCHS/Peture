@@ -6,6 +6,7 @@ import 'dart:ui' as ui;
 import 'dart:ui';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import '../../../shared/design_system/peture_design_system.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:gal/gal.dart';
@@ -637,7 +638,7 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
                     Expanded(child: Text('生成失败: ${event.error}')),
                   ],
                 ),
-                backgroundColor: Colors.red,
+                backgroundColor: PetureColors.danger,
                 behavior: SnackBarBehavior.floating,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10),
@@ -685,7 +686,7 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('生成失败: $e'),
-            backgroundColor: Colors.red,
+            backgroundColor: PetureColors.danger,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(10),
@@ -768,7 +769,7 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: const Text('请等待日记生成完成'),
-          backgroundColor: Colors.orange,
+          backgroundColor: PetureColors.warning,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),
@@ -800,7 +801,7 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('保存失败，请检查网络连接'),
-              backgroundColor: Colors.red,
+              backgroundColor: PetureColors.danger,
             ),
           );
         }
@@ -819,7 +820,7 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('保存失败: $e'),
-            backgroundColor: Colors.red,
+            backgroundColor: PetureColors.danger,
             behavior: SnackBarBehavior.floating,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(10),
@@ -1328,7 +1329,7 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(message),
-            backgroundColor: Colors.red,
+            backgroundColor: PetureColors.danger,
           ),
         );
       }
@@ -1386,7 +1387,7 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(message),
-            backgroundColor: Colors.red,
+            backgroundColor: PetureColors.danger,
           ),
         );
       }
