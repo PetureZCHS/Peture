@@ -2545,49 +2545,36 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
               borderRadius: BorderRadius.circular(16),
               child: AspectRatio(
                 aspectRatio: 16 / 9,
-                child: LayoutBuilder(
-                  builder: (context, constraints) => RepaintBoundary(
-                    key: _imageWithWatermarkKey,
-                    child: Stack(
-                      children: [
-                        Positioned.fill(
-                          child: Hero(
-                            tag: 'diary_generated_image',
-                            child: Image.file(
-                              _generatedDiaryImageFile!,
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) {
-                                return Container(
-                                  color: const Color(0xFFF3F4F6),
-                                  alignment: Alignment.center,
-                                  child: const Text('图片加载失败'),
-                                );
-                              },
+                child: LayoutBuilder(builder: (context, constraints) {
+                  return Stack(
+                    children: [
+                      RepaintBoundary(
+                        key: _imageWithWatermarkKey,
+                        child: Stack(
+                          children: [
+                            Positioned.fill(
+                              child: Hero(
+                                tag: 'diary_generated_image',
+                                child: Image.file(
+                                  _generatedDiaryImageFile!,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) {
+                                    return Container(
+                                      color: const Color(0xFFF3F4F6),
+                                      alignment: Alignment.center,
+                                      child: const Text('图片加载失败'),
+                                    );
+                                  },
+                                ),
+                              ),
                             ),
-                          ),
+                            _buildWatermarkOverlay(constraints),
+                          ],
                         ),
-                        _buildWatermarkOverlay(constraints),
-                        // 添加点击提示图标
-                        Positioned(
-                          right: 12,
-                          top: 12,
-                          child: Container(
-                            padding: const EdgeInsets.all(6),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withOpacity(0.4),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: const Icon(
-                              Icons.zoom_in,
-                              color: Colors.white,
-                              size: 16,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+                      ),
+                    ],
+                  );
+                }),
               ),
             ),
           ),

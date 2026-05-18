@@ -1,39 +1,32 @@
-# TestFlight Upload
+fastlane documentation
+----
 
-## 1) Prepare env vars
+# Installation
 
-```bash
-cd ios/fastlane
-cp .env.example .env
+Make sure you have the latest version of the Xcode command line tools installed:
+
+```sh
+xcode-select --install
 ```
 
-Fill in:
+For _fastlane_ installation instructions, see [Installing _fastlane_](https://docs.fastlane.tools/#installing-fastlane)
 
-- `ASC_KEY_ID`
-- `ASC_ISSUER_ID`
-- `ASC_KEY_CONTENT` (Base64 of `AuthKey_XXXX.p8`)
+# Available Actions
 
-## 2) Run upload
+## iOS
 
-```bash
-cd ios
-bundle exec fastlane beta
+### ios beta
+
+```sh
+[bundle exec] fastlane ios beta
 ```
 
-Or from project root (shorter):
+Build Flutter iOS IPA and upload to TestFlight
 
-```bash
-make tf
-```
+----
 
-Or pass version on demand:
+This README.md is auto-generated and will be re-generated every time [_fastlane_](https://fastlane.tools) is run.
 
-```bash
-bundle exec fastlane beta build_name:1.0.1 build_number:12 changelog:"修复已知问题"
-```
+More information about _fastlane_ can be found on [fastlane.tools](https://fastlane.tools).
 
-Root shortcut with params:
-
-```bash
-make tf BUILD_NAME=1.0.1 BUILD_NUMBER=12 NOTE="修复已知问题"
-```
+The documentation of _fastlane_ can be found on [docs.fastlane.tools](https://docs.fastlane.tools).

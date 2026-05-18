@@ -1,11 +1,56 @@
 default_platform(:ios)
 
 platform :ios do
+  def compute_and_apply_flutter_version!(build_name, build_number)
+    return [build_name, build_number] unless build_name.to_s.empty? || build_number.to_s.empty?
+
+    pubspec_path = File.expand_path("../../pubspec.yaml", __dir__)
+    pubspec_content = File.read(pubspec_path)
+    version_match = pubspec_content.match(/^version:\s*([0-9]+)\.([0-9]+)\.([0-9]+)\+([0-9]+)\s*$/)
+
+    UI.user_error!("pubspec.yaml 中未找到合法 version（示例: 1.2.3+45）") if version_match.nil?
+
+    major = version_match[1].to_i
+    minor = version_match[2].to_i
+    patch = version_match[3].to_i
+    build = version_match[4].to_i
+
+    computed_build_name = "#{major}.#{minor}.#{patch + 1}"
+    computed_build_number = (build + 1).to_s
+
+    build_name = computed_build_name if build_name.to_s.empty?
+    build_number = computed_build_number if build_number.to_s.empty?
+
+    new_version_line = "version: #{build_name}+#{build_number}"
+    updated_content = pubspec_content.sub(/^version:\s*.*$/, new_version_line)
+    File.write(pubspec_path, updated_content)
+    UI.message("✅ 已更新 pubspec 版本: #{new_version_line}")
+    [build_name, build_number]
+  end
+
+  def resolve_latest_ipa!
+    ipa_candidates = Dir[File.expand_path("../../build/ios/ipa/*.ipa", __dir__)]
+    UI.user_error!("未找到 IPA 文件，请先检查 flutter build ipa 输出") if ipa_candidates.empty?
+    ipa_candidates.max_by { |f| File.mtime(f) }
+  end
+
+  def asc_api_key!
+    app_store_connect_api_key(
+      key_id: ENV["ASC_KEY_ID"],
+      issuer_id: ENV["ASC_ISSUER_ID"],
+      key_content: ENV["ASC_KEY_CONTENT"],
+      is_key_content_base64: true
+    )
+  end
+
   desc "Build Flutter iOS IPA and upload to TestFlight"
   lane :beta do |options|
-    build_name = options[:build_name] || ENV["FLUTTER_BUILD_NAME"]
-    build_number = options[:build_number] || ENV["FLUTTER_BUILD_NUMBER"]
+    # 仅将 options 视为“显式传入”；避免本机 ENV 残留导致版本不自增。
+    build_name = options[:build_name]
+    build_number = options[:build_number]
     export_method = options[:export_method] || "app-store"
+
+    build_name, build_number = compute_and_apply_flutter_version!(build_name, build_number)
 
     flutter_cmd = ["flutter", "build", "ipa", "--release", "--export-method", export_method]
     flutter_cmd += ["--build-name", build_name] if build_name && !build_name.empty?
@@ -15,20 +60,42 @@ platform :ios do
       sh(flutter_cmd.join(" "))
     end
 
-    api_key = app_store_connect_api_key(
-      key_id: ENV["ASC_KEY_ID"],
-      issuer_id: ENV["ASC_ISSUER_ID"],
-      key_content: ENV["ASC_KEY_CONTENT"],
-      is_key_content_base64: true
-    )
+    ipa_path = resolve_latest_ipa!
+    UI.message("📦 使用 IPA: #{ipa_path}")
 
     upload_to_testflight(
-      ipa: "../build/ios/ipa/*.ipa",
+      ipa: ipa_path,
       skip_waiting_for_build_processing: true,
       distribute_external: false,
       notify_external_testers: false,
+      uses_non_exempt_encryption: false,
       changelog: options[:changelog] || ENV["TESTFLIGHT_CHANGELOG"],
+      api_key: asc_api_key!
+    )
+  end
+
+  desc "Build + upload TestFlight + 自动提交到 App Store 审核（减少手工选构建）"
+  lane :release_auto do |options|
+    beta(options)
+
+    api_key = asc_api_key!
+    latest_build = latest_testflight_build_number(
+      app_identifier: CredentialsManager::AppfileConfig.try_fetch_value(:app_identifier),
+      version: options[:app_version],
       api_key: api_key
+    )
+
+    deliver(
+      api_key: api_key,
+      skip_metadata: true,
+      skip_screenshots: true,
+      submit_for_review: true,
+      automatic_release: false,
+      force: true,
+      build_number: latest_build.to_s,
+      submission_information: {
+        export_compliance_uses_encryption: false
+      }
     )
   end
 end
