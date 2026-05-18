@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import 'dart:ui';
 import 'dart:async';
+import 'dart:io' show Platform;
 import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
@@ -742,8 +743,10 @@ class _LoginBodyContentState extends State<_LoginBodyContent> {
           style: PetureTextStyles.body,
         ),
         const SizedBox(height: 32),
-        _buildAppleButton(),
-        const SizedBox(height: 12),
+        if (Platform.isIOS) ...[
+          _buildAppleButton(),
+          const SizedBox(height: 12),
+        ],
         PetureSecondaryButton(
           label: '邮箱登录',
           icon: Icons.email_outlined,
