@@ -45,6 +45,7 @@ dependencies:
 
   # --- 认证相关依赖 ---
   flutter_secure_storage: ^9.2.2
+  sign_in_with_apple: ^6.1.4
 
   # --- 图表依赖 ---
   fl_chart: ^0.69.0

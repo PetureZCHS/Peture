@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -56,6 +57,9 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
 
   int _countdown = 0;
   Timer? _countdownTimer;
+  static const String _otpCooldownExpireGlobalKey =
+      'email_login_otp_expire_at_global';
+  static const String _otpCooldownExpirePrefix = 'email_login_otp_expire_at_';
   static final Uri _termsUri = Uri.parse('https://PetureZCHS.github.io/terms');
   static final Uri _privacyUri =
       Uri.parse('https://PetureZCHS.github.io/privacy');
@@ -89,6 +93,8 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
       _useOtpLogin = true;
       _startCountdown();
     }
+
+    unawaited(_restoreCountdownIfNeeded());
 
     // 进入页面后弹提示（如：已注册，可直接用验证码登录）
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -131,16 +137,78 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
       _countdown = 60;
     });
 
+    unawaited(_persistOtpCooldownExpireAt(seconds: _countdown));
+
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (_countdown <= 1) {
         timer.cancel();
         setState(() {
           _countdown = 0;
         });
+        unawaited(_clearOtpCooldownExpireAt());
       } else {
         setState(() {
           _countdown--;
         });
+      }
+    });
+  }
+
+  String _cooldownStorageKeyForEmail(String email) =>
+      '$_otpCooldownExpirePrefix${email.toLowerCase()}';
+
+  Future<void> _persistOtpCooldownExpireAt({required int seconds}) async {
+    final email = _emailController.text.trim();
+    final prefs = await SharedPreferences.getInstance();
+    final expireAtMs =
+        DateTime.now().millisecondsSinceEpoch + seconds * 1000;
+    await prefs.setInt(_otpCooldownExpireGlobalKey, expireAtMs);
+    if (email.isNotEmpty) {
+      await prefs.setInt(_cooldownStorageKeyForEmail(email), expireAtMs);
+    }
+  }
+
+  Future<void> _clearOtpCooldownExpireAt() async {
+    final email = _emailController.text.trim();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_otpCooldownExpireGlobalKey);
+    if (email.isNotEmpty) {
+      await prefs.remove(_cooldownStorageKeyForEmail(email));
+    }
+  }
+
+  Future<void> _restoreCountdownIfNeeded() async {
+    final prefs = await SharedPreferences.getInstance();
+    final email = _emailController.text.trim();
+    final expireAtMs = prefs.getInt(_otpCooldownExpireGlobalKey) ??
+        (email.isEmpty ? null : prefs.getInt(_cooldownStorageKeyForEmail(email)));
+    if (expireAtMs == null) return;
+
+    final remainSec =
+        ((expireAtMs - DateTime.now().millisecondsSinceEpoch) / 1000).ceil();
+
+    if (!mounted) return;
+    if (remainSec <= 0) {
+      await prefs.remove(_otpCooldownExpireGlobalKey);
+      await prefs.remove(_cooldownStorageKeyForEmail(email));
+      return;
+    }
+
+    _countdownTimer?.cancel();
+    setState(() {
+      _countdown = remainSec;
+    });
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      if (_countdown <= 1) {
+        timer.cancel();
+        setState(() => _countdown = 0);
+        unawaited(_clearOtpCooldownExpireAt());
+      } else {
+        setState(() => _countdown--);
       }
     });
   }
@@ -171,11 +239,13 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
     });
 
     try {
-      debugPrint('🔍 尝试密码登录: ${_emailController.text.trim()}');
+      final email = _emailController.text.trim();
+      final password = _passwordController.text;
+      debugPrint('🔍 尝试密码登录: $email');
 
       final response = await _supabase.auth.signInWithPassword(
-        email: _emailController.text.trim(),
-        password: _passwordController.text,
+        email: email,
+        password: password,
       );
 
       debugPrint('✅ 密码登录成功');
@@ -191,12 +261,11 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
       debugPrint('Status Code: ${e.statusCode}');
 
       String errorMsg = '登录失败，请稍后重试';
-      if (e.message.contains('Invalid login credentials')) {
+      if (e.message.contains('Invalid login credentials') ||
+          e.message.contains('User not found')) {
         errorMsg = '邮箱或密码错误，请检查后重新输入';
       } else if (e.message.contains('Email not confirmed')) {
         errorMsg = '该邮箱尚未完成验证，请先前往邮箱点击验证链接';
-      } else if (e.message.contains('User not found')) {
-        errorMsg = '该邮箱尚未注册，请先完成注册';
       } else if (e.statusCode == '500') {
         errorMsg = '服务器内部错误（代码 500），请稍后重试或联系管理员';
       } else if (e.statusCode == '429' ||
@@ -243,10 +312,10 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
     try {
       debugPrint('🔍 尝试发送登录验证码到: $email');
 
-      // 登录验证码：不创建新用户，只允许已有账号使用验证码登录
+      // 验证码登录：若邮箱未注册则自动创建账号，降低首次登录门槛
       await _supabase.auth.signInWithOtp(
         email: email,
-        shouldCreateUser: false,
+        shouldCreateUser: true,
         emailRedirectTo: null,
         data: AuthOtpEmailKind.payload(AuthOtpEmailKind.login),
       );
@@ -260,7 +329,7 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
       String errorMsg = '发送验证码失败，请稍后重试';
       if (e.message.contains('User not found') ||
           e.message.contains('Signups not allowed for otp')) {
-        errorMsg = '该邮箱尚未注册，请先前往注册页面完成注册';
+        errorMsg = '发送验证码失败，请稍后重试';
       } else if (e.message.contains('Email not confirmed')) {
         errorMsg = '该邮箱尚未完成验证，请先在邮箱中完成验证操作';
       } else if (e.message.contains('rate limit exceeded') ||
@@ -330,7 +399,7 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
       } else if (e.message.contains('Email not confirmed')) {
         errorMsg = '该邮箱尚未完成验证，请先在邮箱中完成验证操作';
       } else if (e.message.contains('User not found')) {
-        errorMsg = '该邮箱尚未注册，请先前往注册页面完成注册';
+        errorMsg = '登录失败，请重新获取验证码后再试';
       } else if (e.statusCode == '500') {
         errorMsg = '验证码登录服务暂时不可用（代码 500），请稍后重试或联系管理员';
       } else if (e.statusCode == '429' ||
@@ -372,7 +441,8 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
 
   // 验证邮箱格式
   bool _isValidEmail(String email) {
-    return RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(email);
+    return RegExp(r'^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$')
+        .hasMatch(email);
   }
 
   @override
@@ -484,6 +554,45 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
                   ),
                 ),
 
+                if (_useOtpLogin) ...[
+                  const SizedBox(height: 10),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: PetureColors.surfaceMuted,
+                      borderRadius: BorderRadius.circular(PetureRadius.sm),
+                      border: Border.all(
+                        color: PetureColors.border,
+                        width: 1,
+                      ),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Padding(
+                          padding: EdgeInsets.only(top: 1),
+                          child: Icon(
+                            Icons.info_outline,
+                            size: 16,
+                            color: PetureColors.violet,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            '若该邮箱未注册，会自动为您创建账号',
+                            style: PetureTextStyles.caption.copyWith(
+                              color: PetureColors.textSecondary,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+
                 const SizedBox(height: 24),
 
                 // 邮箱输入框
@@ -524,7 +633,7 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
                           onChanged: (_) => setState(() {}),
                           decoration: petureInputDecoration(
                             labelText: '验证码',
-                            hintText: '请输入6位验证码',
+                            hintText: '请输入验证码',
                             prefixIcon: const Icon(Icons.verified_outlined),
                           ),
                           validator: (value) {
@@ -646,9 +755,15 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
                     onPressed: _isLoading
                         ? null
                         : () {
+                            final prefillEmail =
+                                _emailController.text.trim().isEmpty
+                                    ? null
+                                    : _emailController.text.trim();
                             Navigator.of(context).push(
                               MaterialPageRoute(
-                                builder: (context) => const EmailRegisterPage(),
+                                builder: (context) => EmailRegisterPage(
+                                  initialEmail: prefillEmail,
+                                ),
                               ),
                             );
                           },

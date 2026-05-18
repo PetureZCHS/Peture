@@ -18,7 +18,10 @@ import 'email_login_page.dart';
 /// 5. 加载状态管理
 /// 6. 成功/错误消息展示
 class EmailRegisterPage extends StatefulWidget {
-  const EmailRegisterPage({super.key});
+  const EmailRegisterPage({super.key, this.initialEmail});
+
+  /// 可选：从登录页带入的预填邮箱
+  final String? initialEmail;
 
   @override
   State<EmailRegisterPage> createState() => _EmailRegisterPageState();
@@ -56,6 +59,14 @@ class _EmailRegisterPageState extends State<EmailRegisterPage> {
   String? _errorMessage;
 
   bool get _isCodeReady => RegExp(r'^\d{6}$').hasMatch(_codeController.text);
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialEmail != null && widget.initialEmail!.trim().isNotEmpty) {
+      _emailController.text = widget.initialEmail!.trim();
+    }
+  }
 
   @override
   void dispose() {
@@ -382,7 +393,7 @@ class _EmailRegisterPageState extends State<EmailRegisterPage> {
 
                 // ===== 页面标题 =====
                 const Text(
-                  '创建新账户',
+                  '创建新账号',
                   style: PetureTextStyles.largeTitle,
                 ),
                 const SizedBox(height: 8),
