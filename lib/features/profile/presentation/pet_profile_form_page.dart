@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
@@ -6,6 +7,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:lpinyin/lpinyin.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -495,6 +497,8 @@ class _PetProfileFormPageState extends State<PetProfileFormPage>
 
   void _showSpeciesSelector() {
     String currentCategory = '狗狗'; // 默认狗狗
+    String searchQuery = '';
+    final searchController = TextEditingController();
     final scrollController = ScrollController();
     final pageController = PageController(initialPage: 1); // 0=猫咪, 1=狗狗
 
@@ -503,85 +507,69 @@ class _PetProfileFormPageState extends State<PetProfileFormPage>
       '狗狗': [
         {
           'name': '博美犬',
-          'image':
-              'https://images.unsplash.com/photo-1544568100-847a948585b9?w=200',
+          'image': 'assets/breeds/dogs/pomeranian.jpg',
         },
         {
           'name': '哈士奇',
-          'image':
-              'https://images.unsplash.com/photo-1605568427561-40dd23c2acea?w=200',
+          'image': 'assets/breeds/dogs/husky.jpg',
         },
         {
           'name': '拉布拉多',
-          'image':
-              'https://images.unsplash.com/photo-1579684385127-1ef15d508118?w=200',
+          'image': 'assets/breeds/dogs/labrador.jpg',
         },
         {
           'name': '柴犬',
-          'image':
-              'https://images.unsplash.com/photo-1583511655857-d19b40a7a54e?w=200',
+          'image': 'assets/breeds/dogs/shiba.jpg',
         },
         {
           'name': '金毛犬',
-          'image':
-              'https://images.unsplash.com/photo-1633722715463-d30f4f325e24?w=200',
+          'image': 'assets/breeds/dogs/golden_retriever.jpg',
         },
         {
           'name': '贵宾犬',
-          'image':
-              'https://images.unsplash.com/photo-1537151608828-ea2b11777ee8?w=200',
+          'image': 'assets/breeds/dogs/poodle.jpg',
         },
         {
           'name': '边牧犬',
-          'image':
-              'https://images.unsplash.com/photo-1587300003388-59208cc962cb?w=200',
+          'image': 'assets/breeds/dogs/border_collie.jpg',
         },
         {
           'name': '柯基犬',
-          'image':
-              'https://images.unsplash.com/photo-1546527868-ccb7ee7dfa6a?w=200',
+          'image': 'assets/breeds/dogs/corgi.jpg',
         },
       ],
       '猫咪': [
         {
           'name': '布偶猫',
-          'image':
-              'https://images.unsplash.com/photo-1513245543132-31f507417b26?w=200',
+          'image': 'assets/breeds/cats/ragdoll.jpg',
         },
         {
           'name': '暹罗猫',
-          'image':
-              'https://images.unsplash.com/photo-1513360371669-4adf3dd7dff8?w=200',
+          'image': 'assets/breeds/cats/siamese.jpg',
         },
         {
           'name': '缅因猫',
-          'image':
-              'https://images.unsplash.com/photo-1574158622682-e40e69881006?w=200',
+          'image': 'assets/breeds/cats/maine_coon.jpg',
         },
         {
           'name': '英短猫',
-          'image':
-              'https://images.unsplash.com/photo-1596854407944-bf87f6fdd49e?w=200',
+          'image': 'assets/breeds/cats/british_shorthair.jpg',
         },
         {
           'name': '狸花猫',
-          'image':
-              'https://images.unsplash.com/photo-1529778873920-4da4926a72c2?w=200',
+          'image': 'assets/breeds/cats/chinese_tabby.jpg',
         },
         {
           'name': '美短猫',
-          'image':
-              'https://images.unsplash.com/photo-1514888286974-6c03e2ca1dba?w=200',
+          'image': 'assets/breeds/cats/american_shorthair.jpg',
         },
         {
           'name': '波斯猫',
-          'image':
-              'https://images.unsplash.com/photo-1495360010541-f48722b34f7d?w=200',
+          'image': 'assets/breeds/cats/persian.jpg',
         },
         {
           'name': '金渐层',
-          'image':
-              'https://images.unsplash.com/photo-1543852786-1cf6624b9987?w=200',
+          'image': 'assets/breeds/cats/golden_shaded.jpg',
         },
       ],
     };
@@ -619,7 +607,7 @@ class _PetProfileFormPageState extends State<PetProfileFormPage>
                   borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
                 ),
                 child: Column(
-                  mainAxisSize: MainAxisSize.min,
+                  mainAxisSize: MainAxisSize.max,
                   children: [
                     // 标题栏
                     Padding(
@@ -670,6 +658,8 @@ class _PetProfileFormPageState extends State<PetProfileFormPage>
                                 );
                                 setModalState(() {
                                   currentCategory = category;
+                                  searchQuery = '';
+                                  searchController.clear();
                                 });
                               },
                               child: Container(
@@ -714,6 +704,43 @@ class _PetProfileFormPageState extends State<PetProfileFormPage>
                       ),
                     ),
                     const SizedBox(height: 8),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                      child: TextField(
+                        controller: searchController,
+                        onChanged: (value) {
+                          setModalState(() {
+                            searchQuery = value.trim();
+                          });
+                        },
+                        decoration: InputDecoration(
+                          hintText: '搜索品种',
+                          prefixIcon: const Icon(Icons.search, size: 20),
+                          suffixIcon: searchQuery.isEmpty
+                              ? null
+                              : IconButton(
+                                  icon: const Icon(Icons.close, size: 18),
+                                  onPressed: () {
+                                    searchController.clear();
+                                    setModalState(() {
+                                      searchQuery = '';
+                                    });
+                                  },
+                                ),
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 12,
+                          ),
+                          filled: true,
+                          fillColor: const Color(0xFFF7F8FA),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide.none,
+                          ),
+                        ),
+                      ),
+                    ),
                     // 内容区域 - 使用PageView实现滑动切换
                     Expanded(
                       child: PageView(
@@ -721,12 +748,36 @@ class _PetProfileFormPageState extends State<PetProfileFormPage>
                         onPageChanged: (index) {
                           setModalState(() {
                             currentCategory = index == 0 ? '猫咪' : '狗狗';
+                            searchQuery = '';
+                            searchController.clear();
                           });
                         },
                         children: ['猫咪', '狗狗'].map((category) {
                           final allBreeds = _speciesOptions[category] ?? [];
+                          final uniqueAllBreeds =
+                              LinkedHashSet<String>.from(allBreeds).toList();
+                          final popularNameSet = popularBreeds[category]!
+                              .map((e) => e['name'] ?? '')
+                              .toSet();
+                          final hasQuery = searchQuery.isNotEmpty;
+                          final filteredPopularBreeds = popularBreeds[category]!
+                              .where((breed) {
+                                final name = (breed['name'] ?? '');
+                                return _breedMatchesQuery(name, searchQuery);
+                              })
+                              .toList();
+                          final filteredAllBreeds = uniqueAllBreeds
+                              .where(
+                                (breed) => _breedMatchesQuery(breed, searchQuery),
+                              )
+                              .toList();
+                          final listBreeds = hasQuery
+                              ? filteredAllBreeds
+                              : uniqueAllBreeds
+                                  .where((breed) => !popularNameSet.contains(breed))
+                                  .toList();
                           final groupedBreeds = groupByInitial(
-                            allBreeds.skip(8).toList(),
+                            listBreeds,
                           );
                           // 排序字母，把#放到最后
                           final letters = groupedBreeds.keys.toList()
@@ -743,110 +794,184 @@ class _PetProfileFormPageState extends State<PetProfileFormPage>
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 // 热门品种网格
-                                Padding(
-                                  padding: const EdgeInsets.fromLTRB(
-                                    20,
-                                    0,
-                                    20,
-                                    20,
-                                  ),
-                                  child: GridView.builder(
-                                    shrinkWrap: true,
-                                    physics:
-                                        const NeverScrollableScrollPhysics(),
-                                    gridDelegate:
-                                        const SliverGridDelegateWithFixedCrossAxisCount(
-                                      crossAxisCount: 4,
-                                      mainAxisSpacing: 16,
-                                      crossAxisSpacing: 16,
-                                      childAspectRatio: 0.85,
+                                if (!hasQuery && filteredPopularBreeds.isNotEmpty)
+                                  Padding(
+                                    padding: const EdgeInsets.fromLTRB(
+                                      20,
+                                      0,
+                                      20,
+                                      20,
                                     ),
-                                    itemCount: popularBreeds[category]!.length,
-                                    itemBuilder: (context, index) {
-                                      final breed =
-                                          popularBreeds[category]![index];
-                                      return GestureDetector(
-                                        onTap: () {
-                                          setState(() {
-                                            _petType = currentCategory;
-                                            _petSpecies = breed['name'];
-                                          });
-                                          Navigator.pop(ctx);
-                                        },
-                                        child: Column(
-                                          children: [
-                                            Container(
-                                              width: 60,
-                                              height: 60,
-                                              decoration: BoxDecoration(
-                                                color: Colors.white,
-                                                shape: BoxShape.circle,
-                                                border: Border.all(
-                                                  color: Colors.grey.shade100,
-                                                  width: 1,
-                                                ),
-                                                boxShadow: [
-                                                  BoxShadow(
-                                                    color: Colors.black
-                                                        .withOpacity(0.06),
-                                                    blurRadius: 8,
-                                                    offset: const Offset(0, 2),
+                                    child: GridView.builder(
+                                      shrinkWrap: true,
+                                      physics:
+                                          const NeverScrollableScrollPhysics(),
+                                      gridDelegate:
+                                          const SliverGridDelegateWithFixedCrossAxisCount(
+                                        crossAxisCount: 4,
+                                        mainAxisSpacing: 16,
+                                        crossAxisSpacing: 16,
+                                        childAspectRatio: 0.85,
+                                      ),
+                                      itemCount: filteredPopularBreeds.length,
+                                      itemBuilder: (context, index) {
+                                        final breed =
+                                            filteredPopularBreeds[index];
+                                        return GestureDetector(
+                                          onTap: () {
+                                            setState(() {
+                                              _petType = currentCategory;
+                                              _petSpecies = breed['name'];
+                                            });
+                                            Navigator.pop(ctx);
+                                          },
+                                          child: Column(
+                                            children: [
+                                              Container(
+                                                width: 60,
+                                                height: 60,
+                                                decoration: BoxDecoration(
+                                                  color: Colors.white,
+                                                  shape: BoxShape.circle,
+                                                  border: Border.all(
+                                                    color: Colors.grey.shade100,
+                                                    width: 1,
                                                   ),
-                                                ],
-                                              ),
-                                              child: ClipOval(
-                                                child: CachedNetworkImage(
-                                                  imageUrl: breed['image']!,
-                                                  fit: BoxFit.cover,
-                                                  placeholder: (context, url) =>
-                                                      const Center(
-                                                    child: SizedBox(
-                                                      width: 16,
-                                                      height: 16,
-                                                      child:
-                                                          CircularProgressIndicator(
-                                                        strokeWidth: 2,
+                                                  boxShadow: [
+                                                    BoxShadow(
+                                                      color: Colors.black
+                                                          .withOpacity(0.06),
+                                                      blurRadius: 8,
+                                                      offset: const Offset(
+                                                        0,
+                                                        2,
                                                       ),
                                                     ),
-                                                  ),
-                                                  errorWidget: (
-                                                    context,
-                                                    url,
-                                                    error,
-                                                  ) {
-                                                    return Container(
-                                                      color:
-                                                          Colors.grey.shade200,
-                                                      child: const Icon(
-                                                        Icons.pets,
-                                                        size: 24,
-                                                        color: Colors.grey,
-                                                      ),
-                                                    );
-                                                  },
+                                                  ],
+                                                ),
+                                                child: ClipOval(
+                                                  child: (breed['image'] ?? '')
+                                                          .startsWith('assets/')
+                                                      ? Image.asset(
+                                                          breed['image']!,
+                                                          fit: BoxFit.cover,
+                                                          errorBuilder:
+                                                              (
+                                                                context,
+                                                                error,
+                                                                stackTrace,
+                                                              ) {
+                                                                debugPrint(
+                                                                  '❌ 资源图加载失败: ${breed['image']} error=$error',
+                                                                );
+                                                                return Container(
+                                                                  color: Colors
+                                                                      .grey
+                                                                      .shade200,
+                                                                  child: const Icon(
+                                                                    Icons.pets,
+                                                                    size: 24,
+                                                                    color: Colors
+                                                                        .grey,
+                                                                  ),
+                                                                );
+                                                              },
+                                                        )
+                                                      : CachedNetworkImage(
+                                                          imageUrl:
+                                                              breed['image']!,
+                                                          fit: BoxFit.cover,
+                                                          placeholder:
+                                                              (context, url) =>
+                                                                  const Center(
+                                                            child: SizedBox(
+                                                              width: 16,
+                                                              height: 16,
+                                                              child:
+                                                                  CircularProgressIndicator(
+                                                                strokeWidth: 2,
+                                                              ),
+                                                            ),
+                                                          ),
+                                                          errorWidget: (
+                                                            context,
+                                                            url,
+                                                            error,
+                                                          ) {
+                                                            return Container(
+                                                              color: Colors.grey
+                                                                  .shade200,
+                                                              child: const Icon(
+                                                                Icons.pets,
+                                                                size: 24,
+                                                                color:
+                                                                    Colors.grey,
+                                                              ),
+                                                            );
+                                                          },
+                                                        ),
                                                 ),
                                               ),
-                                            ),
-                                            const SizedBox(height: 6),
-                                            Text(
-                                              breed['name']!,
-                                              style: const TextStyle(
+                                              const SizedBox(height: 6),
+                                              _buildHighlightedBreedText(
+                                                breed['name']!,
+                                                searchQuery,
                                                 fontSize: 10,
-                                                color: Colors.black87,
                                                 fontWeight: FontWeight.w500,
-                                                height: 1.2,
                                               ),
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                              textAlign: TextAlign.center,
-                                            ),
-                                          ],
-                                        ),
-                                      );
-                                    },
+                                              if (_isPinyinOnlyMatch(
+                                                breed['name']!,
+                                                searchQuery,
+                                              ))
+                                                Container(
+                                                  margin: const EdgeInsets.only(
+                                                    top: 2,
+                                                  ),
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                    horizontal: 4,
+                                                    vertical: 1,
+                                                  ),
+                                                  decoration: BoxDecoration(
+                                                    color: const Color(
+                                                      0xFFEFF4FF,
+                                                    ),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                      4,
+                                                    ),
+                                                  ),
+                                                  child: const Text(
+                                                    '拼音匹配',
+                                                    style: TextStyle(
+                                                      fontSize: 8,
+                                                      color: Color(0xFF5A8EFA),
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                    ),
+                                                  ),
+                                                ),
+                                            ],
+                                          ),
+                                        );
+                                      },
+                                    ),
                                   ),
-                                ),
                                 const SizedBox(height: 16),
+                                if (hasQuery && filteredAllBreeds.isEmpty)
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 20,
+                                      vertical: 12,
+                                    ),
+                                    child: Text(
+                                      '没有找到相关品种，试试更短的关键词',
+                                      style: TextStyle(
+                                        color: Colors.grey.shade600,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                  ),
                                 // 字母索引列表
                                 ...letters.map((letter) {
                                   return Column(
@@ -906,21 +1031,49 @@ class _PetProfileFormPageState extends State<PetProfileFormPage>
                                               child: Row(
                                                 children: [
                                                   Expanded(
-                                                    child: Text(
+                                                    child:
+                                                        _buildHighlightedBreedText(
                                                       breed,
-                                                      style: const TextStyle(
-                                                        fontSize: 15,
-                                                        color: Colors.black87,
-                                                        fontWeight:
-                                                            FontWeight.w400,
-                                                      ),
+                                                      searchQuery,
+                                                      fontSize: 15,
+                                                      fontWeight:
+                                                          FontWeight.w400,
+                                                      textAlign: TextAlign.left,
                                                     ),
                                                   ),
-                                                  Icon(
-                                                    Icons.arrow_forward_ios,
-                                                    size: 14,
-                                                    color: Colors.grey.shade400,
-                                                  ),
+                                                  if (_isPinyinOnlyMatch(
+                                                    breed,
+                                                    searchQuery,
+                                                  ))
+                                                    Container(
+                                                      margin:
+                                                          const EdgeInsets.only(
+                                                        right: 8,
+                                                      ),
+                                                      padding: const EdgeInsets
+                                                          .symmetric(
+                                                        horizontal: 6,
+                                                        vertical: 2,
+                                                      ),
+                                                      decoration: BoxDecoration(
+                                                        color: const Color(
+                                                          0xFFEFF4FF,
+                                                        ),
+                                                        borderRadius:
+                                                            BorderRadius
+                                                                .circular(6),
+                                                      ),
+                                                      child: const Text(
+                                                        '拼音匹配',
+                                                        style: TextStyle(
+                                                          fontSize: 10,
+                                                          color:
+                                                              Color(0xFF5A8EFA),
+                                                          fontWeight:
+                                                              FontWeight.w600,
+                                                        ),
+                                                      ),
+                                                    ),
                                                 ],
                                               ),
                                             ),
@@ -1066,6 +1219,116 @@ class _PetProfileFormPageState extends State<PetProfileFormPage>
       }
     }
     return '#';
+  }
+
+  String _normalizeSearchText(String value) {
+    return value.toLowerCase().replaceAll(RegExp(r'\s+'), '');
+  }
+
+  bool _breedMatchesQuery(String breed, String query) {
+    if (query.isEmpty) return true;
+    final normalizedQuery = _normalizeSearchText(query);
+    final normalizedBreed = _normalizeSearchText(breed);
+    if (normalizedBreed.contains(normalizedQuery)) return true;
+
+    try {
+      final fullPinyin = _normalizeSearchText(
+        PinyinHelper.getPinyinE(
+          breed,
+          separator: '',
+          defPinyin: '',
+          format: PinyinFormat.WITHOUT_TONE,
+        ),
+      );
+      final shortPinyin = _normalizeSearchText(PinyinHelper.getShortPinyin(breed));
+      return fullPinyin.contains(normalizedQuery) ||
+          shortPinyin.contains(normalizedQuery);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  bool _isPinyinOnlyMatch(String breed, String query) {
+    final trimmed = query.trim();
+    if (trimmed.isEmpty) return false;
+
+    final normalizedQuery = _normalizeSearchText(trimmed);
+    final normalizedBreed = _normalizeSearchText(breed);
+    if (normalizedBreed.contains(normalizedQuery)) return false;
+
+    try {
+      final fullPinyin = _normalizeSearchText(
+        PinyinHelper.getPinyinE(
+          breed,
+          separator: '',
+          defPinyin: '',
+          format: PinyinFormat.WITHOUT_TONE,
+        ),
+      );
+      final shortPinyin = _normalizeSearchText(PinyinHelper.getShortPinyin(breed));
+      return fullPinyin.contains(normalizedQuery) ||
+          shortPinyin.contains(normalizedQuery);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Widget _buildHighlightedBreedText(
+    String breed,
+    String query, {
+    required double fontSize,
+    required FontWeight fontWeight,
+    TextAlign textAlign = TextAlign.left,
+  }) {
+    final baseStyle = TextStyle(
+      fontSize: fontSize,
+      color: Colors.black87,
+      fontWeight: fontWeight,
+      height: 1.2,
+    );
+    final trimmed = query.trim();
+    if (trimmed.isEmpty) {
+      return Text(
+        breed,
+        style: baseStyle,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        textAlign: textAlign,
+      );
+    }
+
+    final lowerBreed = breed.toLowerCase();
+    final lowerQuery = trimmed.toLowerCase();
+    final start = lowerBreed.indexOf(lowerQuery);
+    if (start < 0) {
+      return Text(
+        breed,
+        style: baseStyle,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        textAlign: textAlign,
+      );
+    }
+    final end = start + lowerQuery.length;
+    return RichText(
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      textAlign: textAlign,
+      text: TextSpan(
+        style: baseStyle,
+        children: [
+          TextSpan(text: breed.substring(0, start)),
+          TextSpan(
+            text: breed.substring(start, end),
+            style: baseStyle.copyWith(
+              color: const Color(0xFF5A8EFA),
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          TextSpan(text: breed.substring(end)),
+        ],
+      ),
+    );
   }
 
   void _showDatePicker() {

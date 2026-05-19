@@ -23,6 +23,14 @@ For _fastlane_ installation instructions, see [Installing _fastlane_](https://do
 
 Build Flutter iOS IPA and upload to TestFlight
 
+### ios release_auto
+
+```sh
+[bundle exec] fastlane ios release_auto
+```
+
+Build + upload TestFlight + 自动提交到 App Store 审核（减少手工选构建）
+
 ----
 
 This README.md is auto-generated and will be re-generated every time [_fastlane_](https://fastlane.tools) is run.
