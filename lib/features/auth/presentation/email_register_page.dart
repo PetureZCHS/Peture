@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:async';
 
 import '../../../core/auth_otp_email_context.dart';
+import '../../home/presentation/home_screen.dart';
 import '../../../shared/design_system/peture_design_system.dart';
 import 'email_login_page.dart';
 
@@ -17,7 +18,10 @@ import 'email_login_page.dart';
 /// 5. 加载状态管理
 /// 6. 成功/错误消息展示
 class EmailRegisterPage extends StatefulWidget {
-  const EmailRegisterPage({super.key});
+  const EmailRegisterPage({super.key, this.initialEmail});
+
+  /// 可选：从登录页带入的预填邮箱
+  final String? initialEmail;
 
   @override
   State<EmailRegisterPage> createState() => _EmailRegisterPageState();
@@ -55,6 +59,14 @@ class _EmailRegisterPageState extends State<EmailRegisterPage> {
   String? _errorMessage;
 
   bool get _isCodeReady => RegExp(r'^\d{6}$').hasMatch(_codeController.text);
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialEmail != null && widget.initialEmail!.trim().isNotEmpty) {
+      _emailController.text = widget.initialEmail!.trim();
+    }
+  }
 
   @override
   void dispose() {
@@ -381,7 +393,7 @@ class _EmailRegisterPageState extends State<EmailRegisterPage> {
 
                 // ===== 页面标题 =====
                 const Text(
-                  '创建新账户',
+                  '创建新账号',
                   style: PetureTextStyles.largeTitle,
                 ),
                 const SizedBox(height: 8),
@@ -434,9 +446,6 @@ class _EmailRegisterPageState extends State<EmailRegisterPage> {
                     return null;
                   },
                 ),
-                const SizedBox(height: 24),
-
-                // 此处不再设置密码，仅在后续“密码设置页”完成
                 const SizedBox(height: 12),
 
                 // ===== 验证码输入区域 =====
@@ -557,6 +566,15 @@ class _EmailPasswordSetupPageState extends State<EmailPasswordSetupPage> {
   bool _showPasswordRules = false;
   String? _errorMessage;
 
+  void _enterHomeAfterRegister() {
+    if (!mounted) return;
+    FocusScope.of(context).unfocus();
+    Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const HomeScreen()),
+      (route) => false,
+    );
+  }
+
   @override
   void dispose() {
     _passwordController.dispose();
@@ -575,9 +593,9 @@ class _EmailPasswordSetupPageState extends State<EmailPasswordSetupPage> {
       _hasMinLength && _hasUppercase && _hasLowercase && _hasDigit;
   bool get _canSubmit =>
       _isValidPassword &&
-      _confirmPasswordController.text.isNotEmpty &&
-      _confirmPasswordController.text == _passwordController.text &&
-      !_isPasswordVisible;
+      (_isPasswordVisible ||
+          (_confirmPasswordController.text.isNotEmpty &&
+              _confirmPasswordController.text == _passwordController.text));
 
   Widget _buildRuleChecklist() {
     return Column(
@@ -629,7 +647,7 @@ class _EmailPasswordSetupPageState extends State<EmailPasswordSetupPage> {
     // 密码处于「可见」状态时，不允许直接提交
     if (_isPasswordVisible) {
       setState(() {
-        _errorMessage = '请先关闭密码可见，然后再次确认密码后提交';
+        _errorMessage = '请先关闭密码可见，再确认后提交';
       });
       return;
     }
@@ -660,25 +678,14 @@ class _EmailPasswordSetupPageState extends State<EmailPasswordSetupPage> {
         UserAttributes(password: password),
       );
 
-      // 设置完成后主动登出，让用户用新密码或验证码重新登录
-      await _supabase.auth.signOut();
-
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('密码设置成功，请使用邮箱登录'),
+            content: Text('注册完成，已自动登录'),
             duration: Duration(seconds: 2),
           ),
         );
-
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(
-            builder: (context) => EmailLoginPage(
-              initialEmail: widget.email,
-            ),
-          ),
-          (route) => route.isFirst,
-        );
+        _enterHomeAfterRegister();
       }
     } on AuthException catch (e) {
       setState(() {

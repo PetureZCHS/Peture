@@ -357,6 +357,8 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen>
   List<HealthEvent> _healthLog = [];
   int _selectedTabIndex = 0;
   bool _isSelectorExpanded = false; // 新增：控制宠物选择器展开状态
+  bool _isSwitchingPetData = false;
+  int _petLoadRequestId = 0;
 
   // --- Tab Animation State ---
   late AnimationController _tabController;
@@ -509,12 +511,25 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen>
     if (_selectedPet == null || _selectedPet!.id == null) return;
 
     final petId = _selectedPet!.id!;
+    final requestId = ++_petLoadRequestId;
 
     try {
-      // 加载病历记录
-      final records =
-          await _supabaseService.getMedicalRecordsForPet(petId.toString());
-      _records = records.map((r) {
+      // 并行加载，减少切换宠物后的等待时间
+      final results = await Future.wait([
+        _supabaseService.getMedicalRecordsForPet(petId.toString()),
+        _supabaseService.getDailyRemindersForPet(petId.toString()),
+        _supabaseService.getWeightRecordsForPet(petId.toString()),
+        _supabaseService.getVaccineRecordsForPet(petId.toString()),
+      ]);
+
+      if (!mounted || requestId != _petLoadRequestId) return;
+
+      final records = results[0];
+      final reminders = results[1];
+      final weightRecords = results[2];
+      final vaccineRecords = results[3];
+
+      final parsedRecords = records.map((r) {
         try {
           return MedicalRecord.fromMap(r);
         } catch (e) {
@@ -523,33 +538,33 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen>
         }
       }).toList();
 
-      // 加载提醒事项
-      final reminders =
-          await _supabaseService.getDailyRemindersForPet(petId.toString());
-      _reminders = reminders.map((r) => DailyReminder.fromMap(r)).toList();
-
-      // 加载体重记录
-      final weightRecords =
-          await _supabaseService.getWeightRecordsForPet(petId.toString());
-      _weightRecords =
+      final parsedReminders =
+          reminders.map((r) => DailyReminder.fromMap(r)).toList();
+      final parsedWeightRecords =
           weightRecords.map((r) => WeightRecord.fromMap(r)).toList();
-
-      // 加载疫苗记录
-      final vaccineRecords = await _supabaseService.getVaccineRecordsForPet(
-        petId.toString(),
-      );
-      _vaccineRecords =
+      final parsedVaccineRecords =
           vaccineRecords.map((r) => VaccineRecord.fromMap(r)).toList();
 
-      _compileAndSortHealthLog();
+      final healthLog = <HealthEvent>[
+        ...parsedRecords,
+        ...parsedWeightRecords,
+        ...parsedVaccineRecords,
+      ]..sort((a, b) => b.date.compareTo(a.date));
 
-      // 更新UI
-      if (mounted) {
-        setState(() {});
-      }
+      setState(() {
+        _records = parsedRecords;
+        _reminders = parsedReminders;
+        _weightRecords = parsedWeightRecords;
+        _vaccineRecords = parsedVaccineRecords;
+        _healthLog = healthLog;
+        _isSwitchingPetData = false;
+      });
     } catch (e) {
       debugPrint('加载宠物数据失败: $e');
       if (mounted) {
+        setState(() {
+          _isSwitchingPetData = false;
+        });
         _showErrorSnackBar('加载数据失败，请检查网络连接');
       }
     }
@@ -824,6 +839,12 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen>
     setState(() {
       _selectedPet = newPet;
       _isSelectorExpanded = false; // 自动折叠选择器
+      _isSwitchingPetData = true;
+      _records = [];
+      _reminders = [];
+      _weightRecords = [];
+      _vaccineRecords = [];
+      _healthLog = [];
     });
     // 加载新宠物的数据
     _loadDataForSelectedPet();
@@ -1592,6 +1613,18 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen>
       key: const ValueKey<int>(1),
       child: Column(
         children: [
+          if (_isSwitchingPetData)
+            const Padding(
+              padding: EdgeInsets.only(top: 28),
+              child: Center(
+                child: SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(strokeWidth: 2.2),
+                ),
+              ),
+            )
+          else
           if (_healthLog.isEmpty)
             const Padding(
               padding: EdgeInsets.only(top: 28),
@@ -1731,7 +1764,18 @@ class _MedicalRecordScreenState extends State<MedicalRecordScreen>
   Widget _buildRemindersList() {
     return Container(
       key: const ValueKey<int>(2),
-      child: _reminders.isEmpty
+      child: _isSwitchingPetData
+          ? const Padding(
+              padding: EdgeInsets.only(top: 28),
+              child: Center(
+                child: SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(strokeWidth: 2.2),
+                ),
+              ),
+            )
+          : _reminders.isEmpty
           ? const Padding(
               padding: EdgeInsets.only(top: 28),
               child: Align(

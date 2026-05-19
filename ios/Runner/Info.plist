@@ -26,12 +26,27 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>app.peture.auth</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>app.peture</string>
+			</array>
+		</dict>
+	</array>
 	<key>NSCameraUsageDescription</key>
 	<string>允许使用相机拍摄头像</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>允许应用保存图片到相册</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>允许应用访问照片以便保存生成的图片</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

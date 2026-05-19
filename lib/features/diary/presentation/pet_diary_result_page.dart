@@ -205,6 +205,13 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
   int _displayedLength = 0; // 已显示的字符数
   int _lastScrollLength = 0; // 上次滚动时的字符数
 
+  bool get _isDiaryRenderCompleted {
+    final hasContent = _generatedContent.trim().isNotEmpty;
+    final fullLength = _fullTextBuffer.characters.length;
+    final typingFinished = _typingTimer == null && _displayedLength >= fullLength;
+    return !_showLoading && !_isGenerating && hasContent && typingFinished;
+  }
+
   // AI 生图相关
   bool _showGenerateImageButton = true;
   bool _isImageGenerating = false;
@@ -732,9 +739,11 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
           _lastScrollLength = _displayedLength;
         }
       } else if (!_isGenerating) {
-        // 如果已经显示完所有内容且生成已完成，停止定时器
+        // 如果已经显示完所有内容且生成已完成，停止定时器并刷新UI
         timer.cancel();
-        _typingTimer = null;
+        setState(() {
+          _typingTimer = null;
+        });
       }
       // 如果还在生成中，即使显示完了当前内容，也继续运行
       // 因为可能还会有新数据到达
@@ -953,14 +962,14 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
                   const SizedBox(height: 32),
 
                   // AI 生成配图区域 - 在保存/编辑按钮上方
-                  if (!_showLoading) _buildAiImageSection(),
+                  if (_isDiaryRenderCompleted) _buildAiImageSection(),
 
-                  if (!_showLoading && !_isGenerating && !_isImageGenerating)
+                  if (_isDiaryRenderCompleted && !_isImageGenerating)
                     const SizedBox(height: 16),
 
                   // 操作按钮 - 保存日记和重新编辑按钮
                   // 只在日记加载完成且不在AI生图过程中显示
-                  if (!_showLoading && !_isGenerating && !_isImageGenerating)
+                  if (_isDiaryRenderCompleted && !_isImageGenerating)
                     _buildActionButtons(),
 
                   const SizedBox(height: 20),
@@ -2536,49 +2545,36 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
               borderRadius: BorderRadius.circular(16),
               child: AspectRatio(
                 aspectRatio: 16 / 9,
-                child: LayoutBuilder(
-                  builder: (context, constraints) => RepaintBoundary(
-                    key: _imageWithWatermarkKey,
-                    child: Stack(
-                      children: [
-                        Positioned.fill(
-                          child: Hero(
-                            tag: 'diary_generated_image',
-                            child: Image.file(
-                              _generatedDiaryImageFile!,
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) {
-                                return Container(
-                                  color: const Color(0xFFF3F4F6),
-                                  alignment: Alignment.center,
-                                  child: const Text('图片加载失败'),
-                                );
-                              },
+                child: LayoutBuilder(builder: (context, constraints) {
+                  return Stack(
+                    children: [
+                      RepaintBoundary(
+                        key: _imageWithWatermarkKey,
+                        child: Stack(
+                          children: [
+                            Positioned.fill(
+                              child: Hero(
+                                tag: 'diary_generated_image',
+                                child: Image.file(
+                                  _generatedDiaryImageFile!,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) {
+                                    return Container(
+                                      color: const Color(0xFFF3F4F6),
+                                      alignment: Alignment.center,
+                                      child: const Text('图片加载失败'),
+                                    );
+                                  },
+                                ),
+                              ),
                             ),
-                          ),
+                            _buildWatermarkOverlay(constraints),
+                          ],
                         ),
-                        _buildWatermarkOverlay(constraints),
-                        // 添加点击提示图标
-                        Positioned(
-                          right: 12,
-                          top: 12,
-                          child: Container(
-                            padding: const EdgeInsets.all(6),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withOpacity(0.4),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: const Icon(
-                              Icons.zoom_in,
-                              color: Colors.white,
-                              size: 16,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+                      ),
+                    ],
+                  );
+                }),
               ),
             ),
           ),
@@ -3052,6 +3048,22 @@ class _UploadLifePhotoSheetState extends State<_UploadLifePhotoSheet> {
   File? _selectedImage;
   String? _precheckReason; // 预检查失败原因
 
+  String _toUserFriendlyPrecheckReason(String reason) {
+    final normalized = reason.trim();
+    if (normalized.isEmpty) {
+      return '图片检测服务暂时不可用，请稍后重试';
+    }
+    final lower = normalized.toLowerCase();
+    final containsProviderDetail = lower.contains('siliconflow') ||
+        lower.contains('api returned status') ||
+        lower.contains('openai') ||
+        lower.contains('model');
+    if (containsProviderDetail) {
+      return '图片检测服务暂时不可用，请稍后重试';
+    }
+    return normalized;
+  }
+
   Future<void> _pickImage() async {
     try {
       final picker = ImagePicker();
@@ -3122,23 +3134,21 @@ class _UploadLifePhotoSheetState extends State<_UploadLifePhotoSheet> {
       if (currentUserId == null) {
         throw Exception('用户未登录');
       }
+      if (widget.petId.isEmpty) {
+        throw Exception('宠物信息缺失，请返回后重试');
+      }
 
-      // 读取图片文件
-      final bytes = await _selectedImage!.readAsBytes();
+      // 与「编辑宠物档案」保持一致：先上传 Storage，再预检，再更新 pets 表
+      final uploadResult = await SupabaseService().uploadPetLifePhotoToStorage(
+        file: _selectedImage!,
+        petId: widget.petId,
+      );
+      if (uploadResult == null) {
+        throw Exception('生活照上传失败，请重试');
+      }
 
-      // 上传到 user-avatars bucket（与 uploadPetLifePhoto 一致）
-      uploadedFileName =
-          'lifephoto_${DateTime.now().millisecondsSinceEpoch}.jpg';
-      storagePath = '$currentUserId/${widget.petId}/$uploadedFileName';
-
-      await supabase.storage.from(bucket).uploadBinary(
-            storagePath,
-            bytes,
-            fileOptions: const FileOptions(
-              contentType: 'image/jpeg',
-              upsert: true,
-            ),
-          );
+      storagePath = uploadResult.path;
+      uploadedFileName = storagePath.split('/').last;
 
       // 调用 img-gen-precheck 检查图片质量（指定 bucket 和 path）
       final precheckResult = await _precheckImage(
@@ -3162,12 +3172,12 @@ class _UploadLifePhotoSheetState extends State<_UploadLifePhotoSheet> {
         return;
       }
 
-      // 检查通过，获取公共 URL 并更新宠物记录
-      final publicUrl = supabase.storage.from(bucket).getPublicUrl(storagePath);
+      // 检查通过：更新 pets.life_photo
+      // 这里使用 uploadPetLifePhotoToStorage 返回的 URL，行为与编辑宠物档案保持一致
       await supabase.from('pets').update({
-        'life_photo': publicUrl,
+        'life_photo': uploadResult.url,
         'updated_at': DateTime.now().toUtc().toIso8601String(),
-      }).eq('id', widget.petId);
+      }).eq('id', widget.petId).eq('user_id', currentUserId);
 
       if (mounted) {
         Navigator.of(context).pop(true); // 返回 true 表示上传成功
@@ -3249,11 +3259,64 @@ class _UploadLifePhotoSheetState extends State<_UploadLifePhotoSheet> {
       );
     } on FunctionException catch (e) {
       debugPrint('❌ 预检函数调用失败: $e');
-      final message = e.toString().toLowerCase();
-      if (message.contains('401') ||
-          message.contains('403') ||
-          message.contains('unauthorized') ||
-          message.contains('forbidden')) {
+      final rawMessage = e.toString();
+      final message = rawMessage.toLowerCase();
+
+      // 优先透传服务端明确返回的原因，避免把所有 403 误判成登录失效
+      try {
+        dynamic details = e.details;
+        if (details is String && details.isNotEmpty) {
+          details = jsonDecode(details);
+        }
+        if (details is Map) {
+          final reason = (details['reason'] ??
+                  details['message'] ??
+                  details['error'] ??
+                  details['detail'] ??
+                  '')
+              .toString()
+              .trim();
+          if (reason.isNotEmpty) {
+            return _ImagePrecheckResult(
+              pass: false,
+              reason: _toUserFriendlyPrecheckReason(reason),
+            );
+          }
+        }
+      } catch (_) {}
+
+      // 兜底：尝试从异常文本中提取 {"error":"..."} 或 {"message":"..."}
+      try {
+        final jsonStart = rawMessage.indexOf('{');
+        final jsonEnd = rawMessage.lastIndexOf('}');
+        if (jsonStart >= 0 && jsonEnd > jsonStart) {
+          final jsonPart = rawMessage.substring(jsonStart, jsonEnd + 1);
+          final decoded = jsonDecode(jsonPart);
+          if (decoded is Map) {
+            final extracted = (decoded['reason'] ??
+                    decoded['message'] ??
+                    decoded['error'] ??
+                    decoded['detail'] ??
+                    '')
+                .toString()
+                .trim();
+            if (extracted.isNotEmpty) {
+              return _ImagePrecheckResult(
+                pass: false,
+                reason: _toUserFriendlyPrecheckReason(extracted),
+              );
+            }
+          }
+        }
+      } catch (_) {}
+
+      final bool isAuthExpired = message.contains('401') ||
+          message.contains('jwt') ||
+          message.contains('invalid token') ||
+          message.contains('token expired') ||
+          message.contains('unauthorized');
+
+      if (isAuthExpired) {
         return const _ImagePrecheckResult(
           pass: false,
           reason: '登录状态已失效，请重新登录后重试',
@@ -3287,9 +3350,16 @@ class _UploadLifePhotoSheetState extends State<_UploadLifePhotoSheet> {
 
   @override
   Widget build(BuildContext context) {
+    const primaryColor = Color(0xFFE3A07B);
+    const primaryDeepColor = Color(0xFFD88960);
+    const sheetBgColor = Color(0xFFFFFCFA);
+    const softAccentColor = Color(0xFFFFF2EA);
+    const textPrimaryColor = Color(0xFF2D3142);
+    const textSecondaryColor = Color(0xFF7A7782);
+
     return Container(
       decoration: const BoxDecoration(
-        color: Colors.white,
+        color: sheetBgColor,
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       child: SafeArea(
@@ -3302,10 +3372,10 @@ class _UploadLifePhotoSheetState extends State<_UploadLifePhotoSheet> {
               // 顶部把手
               Center(
                 child: Container(
-                  width: 40,
+                  width: 44,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
+                    color: const Color(0xFFE7DDD6),
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -3318,12 +3388,16 @@ class _UploadLifePhotoSheetState extends State<_UploadLifePhotoSheet> {
                   Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF7C3AED).withOpacity(0.1),
+                      color: softAccentColor,
                       borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: const Color(0xFFF2D9C9),
+                        width: 1,
+                      ),
                     ),
                     child: const Icon(
                       Icons.photo_camera,
-                      color: Color(0xFF7C3AED),
+                      color: primaryDeepColor,
                       size: 24,
                     ),
                   ),
@@ -3337,15 +3411,15 @@ class _UploadLifePhotoSheetState extends State<_UploadLifePhotoSheet> {
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.w700,
-                            color: Color(0xFF2D3142),
+                            color: textPrimaryColor,
                           ),
                         ),
                         const SizedBox(height: 4),
                         Text(
                           '上传${widget.petName}的生活照，AI 将基于这张照片生成配图',
-                          style: TextStyle(
+                          style: const TextStyle(
                             fontSize: 14,
-                            color: Colors.grey.shade600,
+                            color: textSecondaryColor,
                             height: 1.4,
                           ),
                         ),
@@ -3374,10 +3448,10 @@ class _UploadLifePhotoSheetState extends State<_UploadLifePhotoSheet> {
                   child: Container(
                     height: 160,
                     decoration: BoxDecoration(
-                      color: Colors.grey.shade50,
+                      color: const Color(0xFFFFF8F4),
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(
-                        color: Colors.grey.shade300,
+                        color: const Color(0xFFF2DCCF),
                         style: BorderStyle.solid,
                       ),
                     ),
@@ -3387,23 +3461,23 @@ class _UploadLifePhotoSheetState extends State<_UploadLifePhotoSheet> {
                         Icon(
                           Icons.add_photo_alternate_outlined,
                           size: 48,
-                          color: Colors.grey.shade400,
+                          color: const Color(0xFFD7A88A),
                         ),
                         const SizedBox(height: 12),
-                        Text(
+                        const Text(
                           '点击选择图片',
                           style: TextStyle(
                             fontSize: 15,
-                            color: Colors.grey.shade600,
+                            color: textPrimaryColor,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
                         const SizedBox(height: 4),
-                        Text(
+                        const Text(
                           '支持 JPG、PNG 格式',
                           style: TextStyle(
                             fontSize: 12,
-                            color: Colors.grey.shade400,
+                            color: textSecondaryColor,
                           ),
                         ),
                       ],
@@ -3459,11 +3533,16 @@ class _UploadLifePhotoSheetState extends State<_UploadLifePhotoSheet> {
                         icon: const Icon(Icons.photo_library, size: 20),
                         label: const Text('相册'),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.grey.shade100,
-                          foregroundColor: Colors.grey.shade800,
+                          backgroundColor: const Color(0xFFFFF5EF),
+                          foregroundColor: textPrimaryColor,
+                          elevation: 0,
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
+                          ),
+                          side: const BorderSide(
+                            color: Color(0xFFF2DCCF),
+                            width: 1,
                           ),
                         ),
                       ),
@@ -3475,11 +3554,16 @@ class _UploadLifePhotoSheetState extends State<_UploadLifePhotoSheet> {
                         icon: const Icon(Icons.camera_alt, size: 20),
                         label: const Text('拍照'),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.grey.shade100,
-                          foregroundColor: Colors.grey.shade800,
+                          backgroundColor: const Color(0xFFFFF5EF),
+                          foregroundColor: textPrimaryColor,
+                          elevation: 0,
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
+                          ),
+                          side: const BorderSide(
+                            color: Color(0xFFF2DCCF),
+                            width: 1,
                           ),
                         ),
                       ),
@@ -3501,12 +3585,17 @@ class _UploadLifePhotoSheetState extends State<_UploadLifePhotoSheet> {
                               },
                         style: OutlinedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 14),
-                          side: BorderSide(color: Colors.grey.shade300),
+                          side: const BorderSide(color: Color(0xFFF0CBB4)),
+                          foregroundColor: primaryDeepColor,
+                          backgroundColor: const Color(0xFFFFF7F1),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
                         ),
-                        child: const Text('重新选择'),
+                        child: const Text(
+                          '重新选择',
+                          style: TextStyle(fontWeight: FontWeight.w600),
+                        ),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -3525,9 +3614,13 @@ class _UploadLifePhotoSheetState extends State<_UploadLifePhotoSheet> {
                             : const Icon(Icons.check, size: 20),
                         label: Text(_isUploading ? '上传中...' : '确认上传'),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF7C3AED),
+                          backgroundColor: primaryColor,
                           foregroundColor: Colors.white,
+                          disabledBackgroundColor:
+                              const Color(0xFFEFC3A8).withOpacity(0.7),
+                          disabledForegroundColor: Colors.white70,
                           padding: const EdgeInsets.symmetric(vertical: 14),
+                          elevation: 0,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
@@ -3545,7 +3638,10 @@ class _UploadLifePhotoSheetState extends State<_UploadLifePhotoSheet> {
                     : () => Navigator.of(context).pop(false),
                 child: const Text(
                   '暂不生成',
-                  style: TextStyle(color: Colors.grey),
+                  style: TextStyle(
+                    color: textSecondaryColor,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
             ],

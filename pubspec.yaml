@@ -1,7 +1,7 @@
 name: my_pet
 description: "A new Flutter project."
 publish_to: "none"
-version: 1.0.0+1
+version: 1.0.1+2
 
 environment:
   sdk: ">=3.0.0 <4.0.0" # 注意：我将 SDK 版本稍微放宽到了 >=3.0.0 以确保兼容性，原 3.9.0 可能导致报错
@@ -45,6 +45,7 @@ dependencies:
 
   # --- 认证相关依赖 ---
   flutter_secure_storage: ^9.2.2
+  sign_in_with_apple: ^6.1.4
 
   # --- 图表依赖 ---
   fl_chart: ^0.69.0

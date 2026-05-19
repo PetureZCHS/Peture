@@ -1114,9 +1114,14 @@ class _ResultPageState extends State<ResultPage>
                                         await tempFile.writeAsBytes(bytes);
 
                                         try {
-                                          // 使用 Gal 插件保存图片到相册
-                                          await Gal.putImage(tempPath,
-                                              album: 'Peture');
+                                          // iOS 在“仅添加照片”权限下，写入自定义相册可能触发 ACCESS_DENIED；
+                                          // 因此 iOS 优先写入系统相册，Android 保持写入 Peture 相册。
+                                          if (Platform.isIOS) {
+                                            await Gal.putImage(tempPath);
+                                          } else {
+                                            await Gal.putImage(tempPath,
+                                                album: 'Peture');
+                                          }
                                         } finally {
                                           // 无论保存成功或失败都删除临时文件
                                           if (await tempFile.exists()) {
@@ -1132,10 +1137,20 @@ class _ResultPageState extends State<ResultPage>
                                       } catch (e) {
                                         debugPrint('保存图片到相册时出错: $e');
                                         if (context.mounted) {
+                                          final errorText =
+                                              e.toString().toLowerCase();
+                                          final isPermissionDenied =
+                                              errorText.contains(
+                                                      'access_denied') ||
+                                                  errorText.contains('denied') ||
+                                                  errorText.contains(
+                                                      'permission');
                                           ScaffoldMessenger.of(context)
-                                              .showSnackBar(const SnackBar(
-                                                  content:
-                                                      Text("保存失败，请检查权限设置")));
+                                              .showSnackBar(SnackBar(
+                                                  content: Text(
+                                                      isPermissionDenied
+                                                          ? "保存失败：当前是“仅添加照片”权限，请在系统设置中允许“所有照片”后重试"
+                                                          : "保存失败，请稍后重试")));
                                         }
                                       }
                                     },
@@ -1277,7 +1292,8 @@ class _ResultPageState extends State<ResultPage>
 
     final isLocalUrl = hasUrl && _isLocalFilePath(safeUrl);
     final fileFromUrl = isLocalUrl ? _fileFromPath(safeUrl) : null;
-    final useNetwork = hasUrl && !isLocalUrl;
+    // 若本地文件已存在，优先使用本地文件，避免因网络波动导致全屏预览失败。
+    final useNetwork = !hasLocalFile && hasUrl && !isLocalUrl;
 
     Navigator.of(context).push(
       TransparentImageRoute(
