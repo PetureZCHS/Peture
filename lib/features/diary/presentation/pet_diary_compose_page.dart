@@ -188,30 +188,36 @@ class _PetDiaryComposePageState extends State<PetDiaryComposePage>
 
   /// 点击示例文本
   void _onExampleTap() {
+    final petName = _selectedPet?.name ?? '它';
+    final random = math.Random();
+
+    final catExamples = <String>[
+      '今天下班一开门，$petName 就踩着小碎步来迎接我，边蹭腿边“喵喵”催饭。吃完罐罐后它跳上窗台晒太阳，眯眼打呼噜的样子把我一天的疲惫都清空了。',
+      '今晚我刚坐下，$petName 就精准占领键盘，顺便用尾巴扫我手背“提醒”我先陪它。逗猫棒大战十分钟后，它心满意足地团成毛球睡着了。',
+      '今天$petName 心情超好，主动在我腿上踩奶，还奖励我一连串咕噜咕噜。看它认真舔爪理毛的样子，感觉整个家都被治愈了。',
+    ];
+    final dogExamples = <String>[
+      '今天天气超棒，我带$petName 去公园玩飞盘。它全程高速冲刺，几乎把把接住，路人都夸它聪明又有活力，回家后它喝完水就趴我脚边秒睡。',
+      '今天散步时$petName 遇到老朋友狗狗，兴奋得尾巴像小马达。玩累后它还叼着玩具回来找我互动，眼神亮晶晶地求夸奖。',
+      '今晚我刚拿出牵引绳，$petName 就原地转圈庆祝出门。一路上它认真闻闻看看，回家吃完饭又把头靠在我腿上，陪伴感直接拉满。',
+    ];
+    final genericExamples = <String>[
+      '今天$petName 特别粘人，一直跟在我身边。它时不时抬头看我一眼，像在确认“你在就安心”，我也被它的小表情萌到不行。',
+      '今天给$petName 准备了爱吃的零食，它开心得在屋里转来转去。玩了一会儿后，它乖乖趴在我旁边休息，岁月静好就是这种感觉。',
+      '今天$petName 状态很好，吃饭、玩耍、休息都很规律。看它快乐又放松的样子，我也忍不住想多记录一些和它的日常。',
+    ];
+
     String example;
-    // 根据已选宠物的类型提供不同的示例
-    if (_selectedPet != null) {
-      if (_selectedPet!.type == '猫咪') {
-        example =
-            '今天，我回到家一开门，${_selectedPet!.name} 就迈着优雅的猫步走过来，“喵”了一声蹭我的腿求摸摸。我给它倒了些猫粮，它吃得呼噜呼噜的。吃饱后，它跳上窗台晒太阳，眯着眼睛的样子太治愈了，感觉一天的疲惫都消失了。';
-      } else if (_selectedPet!.type == '狗狗') {
-        example =
-            '今天天气真好，我带 ${_selectedPet!.name} 去公园玩飞盘。它精力特别旺盛，跑得飞快，每次都能精准接住飞盘，周围的人都夸它聪明。玩累了我们就坐在草地上休息，它吐着舌头傻笑，我把准备好的零食喂给它，它开心得尾巴摇个不停。';
-      } else {
-        // 其他类型或未知类型，使用通用模版
-        example =
-            '今天 ${_selectedPet!.name} 特别乖，一直陪在我身边。看着它是圆滚滚的小眼睛，感觉心都要化了。给它喂了最爱吃的零食，它开心得不得了，希望它能一直这样快乐健康地成长。';
-      }
+    final petType = _selectedPet?.type.trim().toLowerCase() ?? '';
+    if (petType.contains('猫') || petType.contains('cat')) {
+      example = catExamples[random.nextInt(catExamples.length)];
+    } else if (petType.contains('狗') || petType.contains('dog')) {
+      example = dogExamples[random.nextInt(dogExamples.length)];
+    } else if (_selectedPet != null) {
+      example = genericExamples[random.nextInt(genericExamples.length)];
     } else {
-      // 未选择宠物时，交替显示猫狗示例（或随机一个）
-      final random = math.Random();
-      if (random.nextBool()) {
-        example =
-            '今天下班回家，家里的猫咪立刻跑过来迎接我，蹭来蹭去要小鱼干吃。吃饱喝足后，它就在沙发上踩奶，然后缩成一团睡着了，呼噜声听着真让人安心。';
-      } else {
-        example =
-            '今天带狗狗去公园散步，它看到别的狗狗特别兴奋，一直想冲过去玩。我们玩了会捡球游戏，它跑得气喘吁吁的，回来后喝了一大碗水，现在正趴在脚边打呼噜呢。';
-      }
+      final mixed = [...catExamples, ...dogExamples, ...genericExamples];
+      example = mixed[random.nextInt(mixed.length)];
     }
 
     setState(() {

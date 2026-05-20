@@ -1,7 +1,7 @@
 name: my_pet
 description: "A new Flutter project."
 publish_to: "none"
-version: 1.0.2+3
+version: 1.0.3+4
 
 environment:
   sdk: ">=3.0.0 <4.0.0" # 注意：我将 SDK 版本稍微放宽到了 >=3.0.0 以确保兼容性，原 3.9.0 可能导致报错
@@ -79,6 +79,7 @@ dependencies:
   
   # --- 图片缓存依赖 ---
   cached_network_image: ^3.4.0
+  qr_flutter: ^4.1.0
   
   # --- 传感器依赖（摇晃检测）---
   sensors_plus: ^6.1.1
