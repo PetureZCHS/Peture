@@ -3,12 +3,15 @@ import 'dart:convert';
 import 'dart:ui' as ui;
 import 'dart:io';
 
+import 'package:gal/gal.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -34,6 +37,8 @@ class _PetPersonalityTestPageState extends State<PetPersonalityTestPage> {
   List<int?> _answers = List<int?>.filled(12, null);
   _TestResult? _result;
   bool _viewingResult = false;
+  bool _isShareImageSaved = false;
+  bool _isShareTextCopied = false;
   final GlobalKey _shareCardKey = GlobalKey();
   List<Pet> _pets = const [];
   final Map<String, _SavedResult> _savedResultsByPetId = {};
@@ -326,6 +331,14 @@ class _PetPersonalityTestPageState extends State<PetPersonalityTestPage> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         title: const Text('宠格测试'),
+        actions: [
+          if (_viewingResult && _result != null)
+            IconButton(
+              onPressed: _shareImageFromAppBar,
+              tooltip: '分享',
+              icon: const Icon(Icons.ios_share_rounded),
+            ),
+        ],
       ),
       body: (!_started && !_viewingResult)
           ? _buildPetSelectionView()
@@ -475,7 +488,11 @@ class _PetPersonalityTestPageState extends State<PetPersonalityTestPage> {
                       horizontal: 4,
                       vertical: 4,
                     ),
-                    onPressed: _startQuizForPickedPet,
+                    onPressed: () async {
+                      final shouldRetest = await _confirmRetest();
+                      if (!shouldRetest) return;
+                      _startQuizForPickedPet();
+                    },
                     child: const Text('重新测试'),
                   ),
                 ),
@@ -492,6 +509,28 @@ class _PetPersonalityTestPageState extends State<PetPersonalityTestPage> {
         ),
       ],
     );
+  }
+
+  Future<bool> _confirmRetest() async {
+    final shouldRetest = await showCupertinoDialog<bool>(
+      context: context,
+      builder: (dialogContext) => CupertinoAlertDialog(
+        title: const Text('提示'),
+        content: const Text('重新测试将覆盖原有测试结果，是否继续？'),
+        actions: [
+          CupertinoDialogAction(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('取消'),
+          ),
+          CupertinoDialogAction(
+            isDestructiveAction: true,
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('继续'),
+          ),
+        ],
+      ),
+    );
+    return shouldRetest == true;
   }
 
   void _onPetPicked(Pet pet) {
@@ -520,6 +559,8 @@ class _PetPersonalityTestPageState extends State<PetPersonalityTestPage> {
         _result = saved.result;
         _viewingResult = true;
         _started = false;
+        _isShareImageSaved = false;
+        _isShareTextCopied = false;
       });
       return;
     }
@@ -536,6 +577,8 @@ class _PetPersonalityTestPageState extends State<PetPersonalityTestPage> {
       _result = null;
       _currentQuestion = 0;
       _answers = List<int?>.filled(12, null);
+      _isShareImageSaved = false;
+      _isShareTextCopied = false;
     });
   }
 
@@ -782,39 +825,89 @@ class _PetPersonalityTestPageState extends State<PetPersonalityTestPage> {
         ),
         const SizedBox(height: 12),
         CupertinoButton(
-          color: const Color(0xFFEDE7FF),
+          color: _isShareTextCopied
+              ? const Color(0xFFE6F7EE)
+              : const Color(0xFFEDE7FF),
           borderRadius: BorderRadius.circular(12),
           onPressed: () async {
-            await Clipboard.setData(ClipboardData(text: result.shareText));
-            if (!mounted) return;
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('分享文案已复制')),
+            if (_isShareTextCopied) return;
+            await Clipboard.setData(
+              ClipboardData(text: _buildCurrentShareText(result)),
             );
+            if (!mounted) return;
+            setState(() => _isShareTextCopied = true);
           },
-          child: const Text(
-            '复制分享文案',
-            style: TextStyle(color: Color(0xFF5B4EC7)),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (_isShareTextCopied) ...[
+                const Icon(Icons.check, size: 18, color: Color(0xFF2F9E62)),
+                const SizedBox(width: 6),
+              ],
+              Text(
+                _isShareTextCopied ? '已复制' : '复制分享文案',
+                style: TextStyle(
+                  color: _isShareTextCopied
+                      ? const Color(0xFF2F9E62)
+                      : const Color(0xFF5B4EC7),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
           ),
         ),
         const SizedBox(height: 10),
         CupertinoButton.filled(
           borderRadius: BorderRadius.circular(12),
-          onPressed: _shareAsImage,
-          child: const Text('生成图片分享'),
+          color: _isShareImageSaved
+              ? const Color(0xFFE6F7EE)
+              : const Color(0xFF7C3AED),
+          onPressed: _saveShareImageToGallery,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (_isShareImageSaved) ...[
+                const Icon(Icons.check, size: 18, color: Color(0xFF2F9E62)),
+                const SizedBox(width: 6),
+              ],
+              Text(
+                _isShareImageSaved ? '已保存' : '保存到相册',
+                style: TextStyle(
+                  color: _isShareImageSaved
+                      ? const Color(0xFF2F9E62)
+                      : Colors.white,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: 10),
         CupertinoButton.filled(
           borderRadius: BorderRadius.circular(12),
-          onPressed: () {
+          color: const Color(0xFFFFF1E8),
+          onPressed: () async {
+            final shouldRetest = await _confirmRetest();
+            if (!shouldRetest || !mounted) return;
             setState(() {
               _viewingResult = false;
               _started = true;
               _result = null;
               _currentQuestion = 0;
               _answers = List<int?>.filled(12, null);
+              _isShareImageSaved = false;
+              _isShareTextCopied = false;
             });
           },
-          child: const Text('重新测试'),
+          child: const Text(
+            '重新测试',
+            style: TextStyle(
+              color: Color(0xFFC2410C),
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ),
       ],
     );
@@ -1028,29 +1121,96 @@ class _PetPersonalityTestPageState extends State<PetPersonalityTestPage> {
     );
   }
 
-  Future<void> _shareAsImage() async {
+  Future<File?> _captureShareCardToTempFile() async {
+    final boundary =
+        _shareCardKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+    if (boundary == null) return null;
+    final ui.Image image = await boundary.toImage(pixelRatio: 3);
+    final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+    if (byteData == null) return null;
+    final Uint8List pngBytes = byteData.buffer.asUint8List();
+    final dir = await getTemporaryDirectory();
+    final path =
+        '${dir.path}/peture_personality_card_${DateTime.now().millisecondsSinceEpoch}.png';
+    final file = File(path);
+    await file.writeAsBytes(pngBytes);
+    return file;
+  }
+
+  Future<void> _saveShareImageToGallery() async {
+    if (_isShareImageSaved) return;
+    File? file;
     try {
-      final boundary = _shareCardKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
-      if (boundary == null) return;
-      final ui.Image image = await boundary.toImage(pixelRatio: 3);
-      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-      if (byteData == null) return;
-      final Uint8List pngBytes = byteData.buffer.asUint8List();
-      final dir = await getTemporaryDirectory();
-      final path = '${dir.path}/peture_personality_card_${DateTime.now().millisecondsSinceEpoch}.png';
-      final file = File(path);
-      await file.writeAsBytes(pngBytes);
-      await SharePlus.instance.share(
-        ShareParams(
-          files: [XFile(path)],
-          text: _result?.shareText,
-        ),
+      if (kIsWeb) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('当前平台不支持保存到相册，请在手机上使用')),
+        );
+        return;
+      }
+
+      if (Platform.isIOS) {
+        final status = await Permission.photosAddOnly.request();
+        final canSave = status.isGranted || status == PermissionStatus.limited;
+        if (!canSave) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('需要“添加照片”权限才能保存分享卡')),
+          );
+          return;
+        }
+      }
+
+      file = await _captureShareCardToTempFile();
+      if (file == null) return;
+      final path = file.path;
+
+      if (Platform.isIOS) {
+        await Gal.putImage(path);
+      } else if (Platform.isAndroid) {
+        await Gal.putImage(path, album: 'Peture');
+      } else {
+        await Gal.putImage(path);
+      }
+
+      if (!mounted) return;
+      setState(() => _isShareImageSaved = true);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('保存图片失败，请稍后重试')),
+      );
+    } finally {
+      if (file != null && await file.exists()) {
+        await file.delete();
+      }
+    }
+  }
+
+  Future<void> _shareImageFromAppBar() async {
+    File? file;
+    try {
+      file = await _captureShareCardToTempFile();
+      if (file == null) return;
+      if (!mounted) return;
+      final box = context.findRenderObject() as RenderBox?;
+      final shareOrigin = box != null
+          ? box.localToGlobal(Offset.zero) & box.size
+          : const Rect.fromLTWH(0, 0, 100, 100);
+      await Share.shareXFiles(
+        [XFile(file.path)],
+        text: _result != null ? _buildCurrentShareText(_result!) : '我的宠物宠格卡',
+        sharePositionOrigin: shareOrigin,
       );
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('生成分享图片失败，请稍后重试')),
       );
+    } finally {
+      if (file != null && await file.exists()) {
+        await file.delete();
+      }
     }
   }
 
@@ -1070,6 +1230,8 @@ class _PetPersonalityTestPageState extends State<PetPersonalityTestPage> {
           : _buildDogResult(answers);
       _viewingResult = true;
       _started = false;
+      _isShareImageSaved = false;
+      _isShareTextCopied = false;
     });
     _persistResultForCurrentPet();
   }
@@ -1118,12 +1280,13 @@ class _PetPersonalityTestPageState extends State<PetPersonalityTestPage> {
     if (a[7] == 4) {
       guides.add('如果它开始“剧情升级”（频繁攻击、乱尿、躲藏），先排查压力和健康。');
     }
+    const catchphrases = ['今天的罐罐，审批通过了吗？', '这个位置从现在起归我管。', '你可以摸我三秒，别超时。'];
     return _TestResult(
       personaName: data.$1,
       tagline: data.$2,
       dimensions: dimensions,
       guides: guides,
-      catchphrases: const ['今天的罐罐，审批通过了吗？', '这个位置从现在起归我管。', '你可以摸我三秒，别超时。'],
+      catchphrases: catchphrases,
       shareText: _buildShareText(
         petName: petName,
         petBreed: petBreed,
@@ -1131,7 +1294,7 @@ class _PetPersonalityTestPageState extends State<PetPersonalityTestPage> {
         tagline: data.$2,
         dimensions: dimensions,
         confidence: confidence,
-        catchphrase: '今天的罐罐，审批通过了吗？',
+        catchphrases: catchphrases,
       ),
       confidenceScore: confidence.score,
       confidenceLevel: confidence.level,
@@ -1158,12 +1321,13 @@ class _PetPersonalityTestPageState extends State<PetPersonalityTestPage> {
     final data = topScore < 60
         ? ('均衡陪伴型', '整体表现较均衡，建议持续观察多场景行为。')
         : (mapping[combo] ?? ('元气陪伴官', '热情稳定、互动积极，是家里的快乐发动机。'));
+    const catchphrases = ['我们现在就出门可以吗？', '这个闻起来像能吃，我申请试一口。', '带我一起，我保证只兴奋一点点。'];
     return _TestResult(
       personaName: data.$1,
       tagline: data.$2,
       dimensions: dimensions,
       guides: const ['每天安排稳定放电，不然它会自己开发“新项目”。', '训练时多夸奖+小零食，学习速度会快到离谱。', '进社交场景前先热身，避免它一上来就“全开麦”。'],
-      catchphrases: const ['我们现在就出门可以吗？', '这个闻起来像能吃，我申请试一口。', '带我一起，我保证只兴奋一点点。'],
+      catchphrases: catchphrases,
       shareText: _buildShareText(
         petName: petName,
         petBreed: petBreed,
@@ -1171,7 +1335,7 @@ class _PetPersonalityTestPageState extends State<PetPersonalityTestPage> {
         tagline: data.$2,
         dimensions: dimensions,
         confidence: confidence,
-        catchphrase: '我们现在就出门可以吗？',
+        catchphrases: catchphrases,
       ),
       confidenceScore: confidence.score,
       confidenceLevel: confidence.level,
@@ -1185,19 +1349,34 @@ class _PetPersonalityTestPageState extends State<PetPersonalityTestPage> {
     required String tagline,
     required Map<String, int> dimensions,
     required _Confidence confidence,
-    required String catchphrase,
+    required List<String> catchphrases,
   }) {
     final lines = dimensions.entries
         .map((e) => '${e.key} ${e.value}')
         .join('｜');
+    final catchphrasesText = catchphrases.map((e) => '• $e').join('\n');
     return '我刚给 $petName（$petBreed）做了 Peture 宠格测试！\n'
         '鉴定结果：【$personaName】\n'
         '$tagline\n'
         '六维雷达：$lines\n'
-        '宠物口头禅：$catchphrase\n'
+        '宠物口头禅：\n$catchphrasesText\n'
         '结果置信度：${confidence.score}（${confidence.level}）\n'
-        '扫码安装 Peture，给你家毛孩子也测一张同款宠格卡～\n'
-        '下载链接：https://peturezchs.github.io/';
+        '安装智宠合生 Peture，获取同款宠格测试～\n'
+        'iOS 下载链接：https://testflight.apple.com/join/6ZVsvBuY';
+  }
+
+  String _buildCurrentShareText(_TestResult result) {
+    final petName = _selectedPet?.name ?? '我家毛孩子';
+    final petBreed = _selectedPet?.breed ?? '神秘品种';
+    return _buildShareText(
+      petName: petName,
+      petBreed: petBreed,
+      personaName: result.personaName,
+      tagline: result.tagline,
+      dimensions: result.dimensions,
+      confidence: _Confidence(result.confidenceScore, result.confidenceLevel),
+      catchphrases: result.catchphrases,
+    );
   }
 
   int _weightedScore(List<int> answers, List<_WeightedIndex> items) {

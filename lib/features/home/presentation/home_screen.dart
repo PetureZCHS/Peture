@@ -542,7 +542,7 @@ class _HomeDashboardContentState extends State<_HomeDashboardContent> {
                       child: _buildSmallCard(
                         context,
                         title: '宠格测试',
-                        subtitle: '猫狗双问卷，生成宠格卡',
+                        subtitle: '一测看懂你家毛孩子',
                         icon: Icons.psychology_alt_rounded,
                         iconColor: const Color(0xFF7C3AED),
                         iconBgColor: const Color(0xFFEDE9FE),
