@@ -3415,9 +3415,9 @@ class _UploadLifePhotoSheetState extends State<_UploadLifePhotoSheet> {
                           ),
                         ),
                         const SizedBox(height: 4),
-                        Text(
-                          '上传${widget.petName}的生活照，AI 将基于这张照片生成配图',
-                          style: const TextStyle(
+                        const Text(
+                          'AI 生图功能基于宠物生活照。',
+                          style: TextStyle(
                             fontSize: 14,
                             color: textSecondaryColor,
                             height: 1.4,
@@ -3429,6 +3429,47 @@ class _UploadLifePhotoSheetState extends State<_UploadLifePhotoSheet> {
                 ],
               ),
               const SizedBox(height: 24),
+
+              const Text.rich(
+                TextSpan(
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: textSecondaryColor,
+                    height: 1.6,
+                  ),
+                  children: [
+                    TextSpan(text: '为了保证生图质量，请上传一张'),
+                    TextSpan(
+                      text: '仅包含这只毛孩子的清晰生活照',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: primaryDeepColor,
+                      ),
+                    ),
+                    TextSpan(text: '。\n'),
+                    TextSpan(text: '- 请确保毛孩子的 '),
+                    TextSpan(
+                      text: '面部细节（眼、耳、鼻、嘴）清晰完整',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: primaryDeepColor,
+                      ),
+                    ),
+                    TextSpan(text: '。\n'),
+                    TextSpan(text: '- 照片中 '),
+                    TextSpan(
+                      text: '请不要出现其他人或动物',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: primaryDeepColor,
+                      ),
+                    ),
+                    TextSpan(text: '。\n\n'),
+                    TextSpan(text: '上传处理过程预计需要 10 秒左右，请耐心等待。'),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
 
               // 图片预览或选择区域
               if (_selectedImage != null)

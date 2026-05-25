@@ -1534,65 +1534,79 @@ class _PreparationPageState extends State<PreparationPage>
                                         ? Stack(
                                             children: [
                                               Positioned.fill(
-                                                child: Column(
-                                                  mainAxisAlignment:
-                                                      MainAxisAlignment.center,
-                                                  children: [
-                                                    Container(
-                                                      padding:
-                                                          const EdgeInsets.all(
-                                                              16),
-                                                      decoration: BoxDecoration(
-                                                        color: AppColors.primary
-                                                            .withOpacity(0.1),
-                                                        shape: BoxShape.circle,
+                                                child: LayoutBuilder(
+                                                  builder: (context, constraints) {
+                                                    return SingleChildScrollView(
+                                                      padding: const EdgeInsets.symmetric(
+                                                        vertical: 12,
                                                       ),
-                                                      child: Icon(
-                                                        Icons
-                                                            .add_photo_alternate_outlined,
-                                                        size: 40,
-                                                        color: AppColors.primary
-                                                            .withOpacity(0.7),
+                                                      child: ConstrainedBox(
+                                                        constraints: BoxConstraints(
+                                                          minHeight: constraints.maxHeight - 24,
+                                                        ),
+                                                        child: Column(
+                                                          mainAxisAlignment:
+                                                              MainAxisAlignment.center,
+                                                          children: [
+                                                            Container(
+                                                              padding:
+                                                                  const EdgeInsets.all(
+                                                                      16),
+                                                              decoration: BoxDecoration(
+                                                                color: AppColors.primary
+                                                                    .withOpacity(0.1),
+                                                                shape: BoxShape.circle,
+                                                              ),
+                                                              child: Icon(
+                                                                Icons
+                                                                    .add_photo_alternate_outlined,
+                                                                size: 40,
+                                                                color: AppColors.primary
+                                                                    .withOpacity(0.7),
+                                                              ),
+                                                            ),
+                                                            const SizedBox(height: 16),
+                                                            Text(
+                                                              (_selectedPet!.lifePhoto ==
+                                                                          null ||
+                                                                      _selectedPet!
+                                                                          .lifePhoto!
+                                                                          .isEmpty)
+                                                                  ? '您还未上传${_selectedPet!.name}的生活照\n请上传'
+                                                                  : '正在载入 ${_selectedPet!.name} 的生活照',
+                                                              textAlign:
+                                                                  TextAlign.center,
+                                                              style: TextStyle(
+                                                                color: AppColors.textGrey
+                                                                    .withOpacity(0.9),
+                                                                fontSize: 14,
+                                                                fontWeight:
+                                                                    FontWeight.w500,
+                                                                height: 1.25,
+                                                              ),
+                                                            ),
+                                                            const SizedBox(height: 10),
+                                                            Padding(
+                                                              padding: const EdgeInsets
+                                                                  .symmetric(
+                                                                  horizontal: 18),
+                                                              child: Text(
+                                                                '请上传仅含这只毛孩子的清晰照片\n确保面部清晰、无其他人或动物',
+                                                                textAlign:
+                                                                    TextAlign.center,
+                                                                style: TextStyle(
+                                                                  color: AppColors
+                                                                      .textLight,
+                                                                  fontSize: 11,
+                                                                  height: 1.35,
+                                                                ),
+                                                              ),
+                                                            ),
+                                                          ],
+                                                        ),
                                                       ),
-                                                    ),
-                                                    const SizedBox(height: 16),
-                                                    Text(
-                                                      (_selectedPet!.lifePhoto ==
-                                                                  null ||
-                                                              _selectedPet!
-                                                                  .lifePhoto!
-                                                                  .isEmpty)
-                                                          ? '您还未上传${_selectedPet!.name}的生活照\n请上传'
-                                                          : '正在载入 ${_selectedPet!.name} 的生活照',
-                                                      textAlign:
-                                                          TextAlign.center,
-                                                      style: TextStyle(
-                                                        color: AppColors.textGrey
-                                                            .withOpacity(0.9),
-                                                        fontSize: 16,
-                                                        fontWeight:
-                                                            FontWeight.w500,
-                                                      ),
-                                                    ),
-                                                    const SizedBox(height: 8),
-                                                    const Text(
-                                                      "尽量包含宠物全身",
-                                                      style: TextStyle(
-                                                        color: AppColors
-                                                            .textLight,
-                                                        fontSize: 12,
-                                                      ),
-                                                    ),
-                                                    const SizedBox(height: 2),
-                                                    const Text(
-                                                      "确保面部清晰可见",
-                                                      style: TextStyle(
-                                                        color: AppColors
-                                                            .textLight,
-                                                        fontSize: 12,
-                                                      ),
-                                                    ),
-                                                  ],
+                                                    );
+                                                  },
                                                 ),
                                               ),
                                               if (_isPickingImage)
