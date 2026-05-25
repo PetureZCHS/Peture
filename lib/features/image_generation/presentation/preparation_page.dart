@@ -1115,10 +1115,46 @@ class _PreparationPageState extends State<PreparationPage>
 
     try {
       if (_selectedImage != null) {
-        syncedUrl = await _supabaseService.uploadPetLifePhoto(
+        final imageBytes = await _selectedImage!.readAsBytes();
+        final uploadResult = await _supabaseService.uploadPetLifePhotoToStorage(
           file: _selectedImage!,
           petId: petId,
         );
+        if (uploadResult == null) return;
+        if (!mounted) return;
+
+        final moderationFuture = _moderationGuard.runImageGuardByBytes(
+          context: context,
+          scene: ModerationScene.imageInput,
+          bytes: imageBytes,
+          onPassed: () async {},
+        );
+        final precheckFuture = _precheckUploadedImage(
+          uploadedFileName: uploadResult.path.split('/').last,
+          bucket: 'user-avatars',
+          path: uploadResult.path,
+        );
+        final moderationPassed = await moderationFuture;
+        final precheckResult = await precheckFuture;
+        if (!moderationPassed || !precheckResult.pass) {
+          try {
+            await supabase.storage
+                .from('user-avatars')
+                .remove([uploadResult.path]);
+          } catch (_) {}
+          if (!moderationPassed) {
+            _showErrorSnackBar('图片审核未通过，请更换后重试');
+          } else {
+            _showErrorSnackBar(precheckResult.reason);
+          }
+          return;
+        }
+
+        syncedUrl = uploadResult.url;
+        await supabase.from('pets').update({
+          'life_photo': syncedUrl,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        }).eq('id', petId).eq('user_id', userId);
       } else if (_selectedImageUrl != null && _selectedImageUrl!.isNotEmpty) {
         final uri = Uri.parse(_selectedImageUrl!);
         final resp = await http.get(uri);
@@ -1278,6 +1314,8 @@ class _PreparationPageState extends State<PreparationPage>
 
   Future<ImagePrecheckResult> _precheckUploadedImage({
     required String uploadedFileName,
+    String? bucket,
+    String? path,
   }) async {
     final supabase = Supabase.instance.client;
     const precheckTimeout = Duration(seconds: 15);
@@ -1288,6 +1326,8 @@ class _PreparationPageState extends State<PreparationPage>
             'img-gen-precheck',
             body: {
               'file_name': uploadedFileName,
+              if (bucket != null && bucket.isNotEmpty) 'bucket': bucket,
+              if (path != null && path.isNotEmpty) 'path': path,
             },
             headers: _functionAuthHeaders(),
           )
@@ -1988,16 +2028,18 @@ class _PreparationPageState extends State<PreparationPage>
                                       });
                                     }
 
-                                    final inputPassed =
-                                        await _moderateSelectedImageBeforeGeneration();
-                                    if (!inputPassed || !context.mounted) {
-                                      if (mounted) {
-                                        setState(() {
-                                          _isStartingTask = false;
-                                          _isPrecheckingImage = false;
-                                        });
+                                    if (!_isUsingSelectedPetLifePhoto) {
+                                      final inputPassed =
+                                          await _moderateSelectedImageBeforeGeneration();
+                                      if (!inputPassed || !context.mounted) {
+                                        if (mounted) {
+                                          setState(() {
+                                            _isStartingTask = false;
+                                            _isPrecheckingImage = false;
+                                          });
+                                        }
+                                        return;
                                       }
-                                      return;
                                     }
 
                                     // 保存 messenger 引用，避免 async 后 context 失效

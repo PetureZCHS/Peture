@@ -21,6 +21,9 @@ import '../../../services/supabase_service.dart';
 import '../../content_feedback/domain/content_feedback_kind.dart';
 import '../../content_feedback/presentation/content_feedback_bar.dart';
 import '../../content_feedback/utils/content_ref_digest.dart';
+import '../../moderation/data/moderation_client.dart';
+import '../../moderation/domain/moderation_scene.dart';
+import '../../moderation/utils/moderation_guard.dart';
 import 'pet_diary_share_card.dart';
 
 // ========== 水印配置 ==========
@@ -3044,9 +3047,16 @@ class _UploadLifePhotoSheet extends StatefulWidget {
 }
 
 class _UploadLifePhotoSheetState extends State<_UploadLifePhotoSheet> {
+  late final ModerationGuard _moderationGuard;
   bool _isUploading = false;
   File? _selectedImage;
   String? _precheckReason; // 预检查失败原因
+
+  @override
+  void initState() {
+    super.initState();
+    _moderationGuard = ModerationGuard(ModerationClient());
+  }
 
   String _toUserFriendlyPrecheckReason(String reason) {
     final normalized = reason.trim();
@@ -3150,12 +3160,33 @@ class _UploadLifePhotoSheetState extends State<_UploadLifePhotoSheet> {
       storagePath = uploadResult.path;
       uploadedFileName = storagePath.split('/').last;
 
-      // 调用 img-gen-precheck 检查图片质量（指定 bucket 和 path）
-      final precheckResult = await _precheckImage(
+      final imageBytes = await _selectedImage!.readAsBytes();
+      if (!mounted) return;
+      final moderationFuture = _moderationGuard.runImageGuardByBytes(
+        context: context,
+        scene: ModerationScene.imageInput,
+        bytes: imageBytes,
+        onPassed: () async {},
+      );
+      final precheckFuture = _precheckImage(
         fileName: uploadedFileName,
         bucket: bucket,
         path: storagePath,
       );
+
+      final moderationPassed = await moderationFuture;
+      final precheckResult = await precheckFuture;
+      if (!mounted) return;
+
+      if (!moderationPassed) {
+        try {
+          await supabase.storage.from(bucket).remove([storagePath]);
+        } catch (_) {}
+        setState(() {
+          _isUploading = false;
+        });
+        return;
+      }
 
       if (!precheckResult.pass) {
         // 检查不通过，删除上传的文件

@@ -43,16 +43,6 @@ export interface ModerationExecution {
   providerResponse?: Record<string, unknown>;
 }
 
-function envFlagEnabled(name: string, defaultValue = true): boolean {
-  const raw = Deno.env.get(name)?.trim().toLowerCase();
-  if (raw === undefined || raw === "") return defaultValue;
-  return !["0", "false", "off", "no", "disabled"].includes(raw);
-}
-
-function moderationEnabled(): boolean {
-  return envFlagEnabled("ENABLE_MODERATION", true);
-}
-
 function bytesToBase64(bytes: Uint8Array): string {
   let binary = "";
   const chunkSize = 0x8000;
@@ -65,10 +55,8 @@ function bytesToBase64(bytes: Uint8Array): string {
 async function loadImageBase64(storagePath: string): Promise<string | null> {
   const buckets = [
     "ai-images-temp",
-    "avatars-temp",
     "user-avatars-temp",
     "ai-images",
-    "avatars",
     "user-avatars",
   ];
   for (const bucket of buckets) {
@@ -86,18 +74,11 @@ export async function executeTextModeration(
   content: string,
   traceId: string,
 ): Promise<ModerationExecution> {
-  // 业务策略：AI 回复与日记生成正文不做文本审核（不调用易盾，也不走本地关键词）。
-  if (scene === "ai_output" || scene === "diary_output") {
-    return { result: passedResult(scene, traceId), provider: "output_text_bypassed_by_policy" };
-  }
-  if (!moderationEnabled()) {
-    return { result: passedResult(scene, traceId), provider: "all_disabled_by_flag" };
-  }
-  const outputEnabled = envFlagEnabled("ENABLE_OUTPUT_MODERATION", true);
+  const outputEnabled = (Deno.env.get("ENABLE_OUTPUT_MODERATION") ?? "true").toLowerCase() === "true";
   if (!outputEnabled && (scene === "ai_output" || scene === "diary_output" || scene === "image_output")) {
     return { result: passedResult(scene, traceId), provider: "output_disabled_by_flag" };
   }
-  const enabled = envFlagEnabled("ENABLE_TEXT_MODERATION", true);
+  const enabled = (Deno.env.get("ENABLE_TEXT_MODERATION") ?? "true").toLowerCase() === "true";
   if (!enabled) {
     return { result: passedResult(scene, traceId), provider: "disabled_by_flag" };
   }
@@ -132,14 +113,11 @@ export async function executeImageModeration(
   storagePath: string | undefined,
   traceId: string,
 ): Promise<ModerationExecution> {
-  if (!moderationEnabled()) {
-    return { result: passedResult(scene, traceId), provider: "all_disabled_by_flag" };
-  }
-  const outputEnabled = envFlagEnabled("ENABLE_OUTPUT_MODERATION", true);
+  const outputEnabled = (Deno.env.get("ENABLE_OUTPUT_MODERATION") ?? "true").toLowerCase() === "true";
   if (!outputEnabled && scene === "image_output") {
     return { result: passedResult(scene, traceId), provider: "output_disabled_by_flag" };
   }
-  const enabled = envFlagEnabled("ENABLE_IMAGE_MODERATION", true);
+  const enabled = (Deno.env.get("ENABLE_IMAGE_MODERATION") ?? "true").toLowerCase() === "true";
   if (!enabled) {
     return { result: passedResult(scene, traceId), provider: "disabled_by_flag" };
   }
