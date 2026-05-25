@@ -35,6 +35,7 @@ ios/Flutter/Generated.xcconfig
 ios/Flutter/flutter_export_environment.sh
 ios/Flutter/flutter_export_environment.xcconfig
 ios/Flutter/ephemeral/
+ios/fastlane/report.xml
 ios/Pods/
 ios/Podfile.lock
 ios/*.pbxuser
