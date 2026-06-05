@@ -1115,10 +1115,46 @@ class _PreparationPageState extends State<PreparationPage>
 
     try {
       if (_selectedImage != null) {
-        syncedUrl = await _supabaseService.uploadPetLifePhoto(
+        final imageBytes = await _selectedImage!.readAsBytes();
+        final uploadResult = await _supabaseService.uploadPetLifePhotoToStorage(
           file: _selectedImage!,
           petId: petId,
         );
+        if (uploadResult == null) return;
+        if (!mounted) return;
+
+        final moderationFuture = _moderationGuard.runImageGuardByBytes(
+          context: context,
+          scene: ModerationScene.imageInput,
+          bytes: imageBytes,
+          onPassed: () async {},
+        );
+        final precheckFuture = _precheckUploadedImage(
+          uploadedFileName: uploadResult.path.split('/').last,
+          bucket: 'user-avatars',
+          path: uploadResult.path,
+        );
+        final moderationPassed = await moderationFuture;
+        final precheckResult = await precheckFuture;
+        if (!moderationPassed || !precheckResult.pass) {
+          try {
+            await supabase.storage
+                .from('user-avatars')
+                .remove([uploadResult.path]);
+          } catch (_) {}
+          if (!moderationPassed) {
+            _showErrorSnackBar('图片审核未通过，请更换后重试');
+          } else {
+            _showErrorSnackBar(precheckResult.reason);
+          }
+          return;
+        }
+
+        syncedUrl = uploadResult.url;
+        await supabase.from('pets').update({
+          'life_photo': syncedUrl,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        }).eq('id', petId).eq('user_id', userId);
       } else if (_selectedImageUrl != null && _selectedImageUrl!.isNotEmpty) {
         final uri = Uri.parse(_selectedImageUrl!);
         final resp = await http.get(uri);
@@ -1278,6 +1314,8 @@ class _PreparationPageState extends State<PreparationPage>
 
   Future<ImagePrecheckResult> _precheckUploadedImage({
     required String uploadedFileName,
+    String? bucket,
+    String? path,
   }) async {
     final supabase = Supabase.instance.client;
     const precheckTimeout = Duration(seconds: 15);
@@ -1288,6 +1326,8 @@ class _PreparationPageState extends State<PreparationPage>
             'img-gen-precheck',
             body: {
               'file_name': uploadedFileName,
+              if (bucket != null && bucket.isNotEmpty) 'bucket': bucket,
+              if (path != null && path.isNotEmpty) 'path': path,
             },
             headers: _functionAuthHeaders(),
           )
@@ -1534,65 +1574,79 @@ class _PreparationPageState extends State<PreparationPage>
                                         ? Stack(
                                             children: [
                                               Positioned.fill(
-                                                child: Column(
-                                                  mainAxisAlignment:
-                                                      MainAxisAlignment.center,
-                                                  children: [
-                                                    Container(
-                                                      padding:
-                                                          const EdgeInsets.all(
-                                                              16),
-                                                      decoration: BoxDecoration(
-                                                        color: AppColors.primary
-                                                            .withOpacity(0.1),
-                                                        shape: BoxShape.circle,
+                                                child: LayoutBuilder(
+                                                  builder: (context, constraints) {
+                                                    return SingleChildScrollView(
+                                                      padding: const EdgeInsets.symmetric(
+                                                        vertical: 12,
                                                       ),
-                                                      child: Icon(
-                                                        Icons
-                                                            .add_photo_alternate_outlined,
-                                                        size: 40,
-                                                        color: AppColors.primary
-                                                            .withOpacity(0.7),
+                                                      child: ConstrainedBox(
+                                                        constraints: BoxConstraints(
+                                                          minHeight: constraints.maxHeight - 24,
+                                                        ),
+                                                        child: Column(
+                                                          mainAxisAlignment:
+                                                              MainAxisAlignment.center,
+                                                          children: [
+                                                            Container(
+                                                              padding:
+                                                                  const EdgeInsets.all(
+                                                                      16),
+                                                              decoration: BoxDecoration(
+                                                                color: AppColors.primary
+                                                                    .withOpacity(0.1),
+                                                                shape: BoxShape.circle,
+                                                              ),
+                                                              child: Icon(
+                                                                Icons
+                                                                    .add_photo_alternate_outlined,
+                                                                size: 40,
+                                                                color: AppColors.primary
+                                                                    .withOpacity(0.7),
+                                                              ),
+                                                            ),
+                                                            const SizedBox(height: 16),
+                                                            Text(
+                                                              (_selectedPet!.lifePhoto ==
+                                                                          null ||
+                                                                      _selectedPet!
+                                                                          .lifePhoto!
+                                                                          .isEmpty)
+                                                                  ? '您还未上传${_selectedPet!.name}的生活照\n请上传'
+                                                                  : '正在载入 ${_selectedPet!.name} 的生活照',
+                                                              textAlign:
+                                                                  TextAlign.center,
+                                                              style: TextStyle(
+                                                                color: AppColors.textGrey
+                                                                    .withOpacity(0.9),
+                                                                fontSize: 14,
+                                                                fontWeight:
+                                                                    FontWeight.w500,
+                                                                height: 1.25,
+                                                              ),
+                                                            ),
+                                                            const SizedBox(height: 10),
+                                                            Padding(
+                                                              padding: const EdgeInsets
+                                                                  .symmetric(
+                                                                  horizontal: 18),
+                                                              child: Text(
+                                                                '请上传仅含这只毛孩子的清晰照片\n确保面部清晰、无其他人或动物',
+                                                                textAlign:
+                                                                    TextAlign.center,
+                                                                style: TextStyle(
+                                                                  color: AppColors
+                                                                      .textLight,
+                                                                  fontSize: 11,
+                                                                  height: 1.35,
+                                                                ),
+                                                              ),
+                                                            ),
+                                                          ],
+                                                        ),
                                                       ),
-                                                    ),
-                                                    const SizedBox(height: 16),
-                                                    Text(
-                                                      (_selectedPet!.lifePhoto ==
-                                                                  null ||
-                                                              _selectedPet!
-                                                                  .lifePhoto!
-                                                                  .isEmpty)
-                                                          ? '您还未上传${_selectedPet!.name}的生活照\n请上传'
-                                                          : '正在载入 ${_selectedPet!.name} 的生活照',
-                                                      textAlign:
-                                                          TextAlign.center,
-                                                      style: TextStyle(
-                                                        color: AppColors.textGrey
-                                                            .withOpacity(0.9),
-                                                        fontSize: 16,
-                                                        fontWeight:
-                                                            FontWeight.w500,
-                                                      ),
-                                                    ),
-                                                    const SizedBox(height: 8),
-                                                    const Text(
-                                                      "尽量包含宠物全身",
-                                                      style: TextStyle(
-                                                        color: AppColors
-                                                            .textLight,
-                                                        fontSize: 12,
-                                                      ),
-                                                    ),
-                                                    const SizedBox(height: 2),
-                                                    const Text(
-                                                      "确保面部清晰可见",
-                                                      style: TextStyle(
-                                                        color: AppColors
-                                                            .textLight,
-                                                        fontSize: 12,
-                                                      ),
-                                                    ),
-                                                  ],
+                                                    );
+                                                  },
                                                 ),
                                               ),
                                               if (_isPickingImage)
@@ -1974,16 +2028,18 @@ class _PreparationPageState extends State<PreparationPage>
                                       });
                                     }
 
-                                    final inputPassed =
-                                        await _moderateSelectedImageBeforeGeneration();
-                                    if (!inputPassed || !context.mounted) {
-                                      if (mounted) {
-                                        setState(() {
-                                          _isStartingTask = false;
-                                          _isPrecheckingImage = false;
-                                        });
+                                    if (!_isUsingSelectedPetLifePhoto) {
+                                      final inputPassed =
+                                          await _moderateSelectedImageBeforeGeneration();
+                                      if (!inputPassed || !context.mounted) {
+                                        if (mounted) {
+                                          setState(() {
+                                            _isStartingTask = false;
+                                            _isPrecheckingImage = false;
+                                          });
+                                        }
+                                        return;
                                       }
-                                      return;
                                     }
 
                                     // 保存 messenger 引用，避免 async 后 context 失效

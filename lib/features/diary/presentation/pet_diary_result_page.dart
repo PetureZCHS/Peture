@@ -21,6 +21,9 @@ import '../../../services/supabase_service.dart';
 import '../../content_feedback/domain/content_feedback_kind.dart';
 import '../../content_feedback/presentation/content_feedback_bar.dart';
 import '../../content_feedback/utils/content_ref_digest.dart';
+import '../../moderation/data/moderation_client.dart';
+import '../../moderation/domain/moderation_scene.dart';
+import '../../moderation/utils/moderation_guard.dart';
 import 'pet_diary_share_card.dart';
 
 // ========== 水印配置 ==========
@@ -3044,9 +3047,16 @@ class _UploadLifePhotoSheet extends StatefulWidget {
 }
 
 class _UploadLifePhotoSheetState extends State<_UploadLifePhotoSheet> {
+  late final ModerationGuard _moderationGuard;
   bool _isUploading = false;
   File? _selectedImage;
   String? _precheckReason; // 预检查失败原因
+
+  @override
+  void initState() {
+    super.initState();
+    _moderationGuard = ModerationGuard(ModerationClient());
+  }
 
   String _toUserFriendlyPrecheckReason(String reason) {
     final normalized = reason.trim();
@@ -3150,12 +3160,33 @@ class _UploadLifePhotoSheetState extends State<_UploadLifePhotoSheet> {
       storagePath = uploadResult.path;
       uploadedFileName = storagePath.split('/').last;
 
-      // 调用 img-gen-precheck 检查图片质量（指定 bucket 和 path）
-      final precheckResult = await _precheckImage(
+      final imageBytes = await _selectedImage!.readAsBytes();
+      if (!mounted) return;
+      final moderationFuture = _moderationGuard.runImageGuardByBytes(
+        context: context,
+        scene: ModerationScene.imageInput,
+        bytes: imageBytes,
+        onPassed: () async {},
+      );
+      final precheckFuture = _precheckImage(
         fileName: uploadedFileName,
         bucket: bucket,
         path: storagePath,
       );
+
+      final moderationPassed = await moderationFuture;
+      final precheckResult = await precheckFuture;
+      if (!mounted) return;
+
+      if (!moderationPassed) {
+        try {
+          await supabase.storage.from(bucket).remove([storagePath]);
+        } catch (_) {}
+        setState(() {
+          _isUploading = false;
+        });
+        return;
+      }
 
       if (!precheckResult.pass) {
         // 检查不通过，删除上传的文件
@@ -3415,9 +3446,9 @@ class _UploadLifePhotoSheetState extends State<_UploadLifePhotoSheet> {
                           ),
                         ),
                         const SizedBox(height: 4),
-                        Text(
-                          '上传${widget.petName}的生活照，AI 将基于这张照片生成配图',
-                          style: const TextStyle(
+                        const Text(
+                          'AI 生图功能基于宠物生活照。',
+                          style: TextStyle(
                             fontSize: 14,
                             color: textSecondaryColor,
                             height: 1.4,
@@ -3429,6 +3460,47 @@ class _UploadLifePhotoSheetState extends State<_UploadLifePhotoSheet> {
                 ],
               ),
               const SizedBox(height: 24),
+
+              const Text.rich(
+                TextSpan(
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: textSecondaryColor,
+                    height: 1.6,
+                  ),
+                  children: [
+                    TextSpan(text: '为了保证生图质量，请上传一张'),
+                    TextSpan(
+                      text: '仅包含这只毛孩子的清晰生活照',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: primaryDeepColor,
+                      ),
+                    ),
+                    TextSpan(text: '。\n'),
+                    TextSpan(text: '- 请确保毛孩子的 '),
+                    TextSpan(
+                      text: '面部细节（眼、耳、鼻、嘴）清晰完整',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: primaryDeepColor,
+                      ),
+                    ),
+                    TextSpan(text: '。\n'),
+                    TextSpan(text: '- 照片中 '),
+                    TextSpan(
+                      text: '请不要出现其他人或动物',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: primaryDeepColor,
+                      ),
+                    ),
+                    TextSpan(text: '。\n\n'),
+                    TextSpan(text: '上传处理过程预计需要 10 秒左右，请耐心等待。'),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
 
               // 图片预览或选择区域
               if (_selectedImage != null)

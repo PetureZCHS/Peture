@@ -13,6 +13,7 @@ import '../../expense/presentation/unified_expense_home_page.dart';
 import '../../medical/presentation/medical_record_screen.dart';
 import '../../profile/presentation/profile_screen.dart';
 import '../../profile/presentation/feedback_page.dart';
+import '../../personality_test/presentation/pet_personality_test_page.dart';
 import '../../../core/page_tracker_mixin.dart';
 import '../../../shared/design_system/peture_design_system.dart';
 import '../../../shared/utils/ui_helpers.dart';
@@ -531,6 +532,28 @@ class _HomeDashboardContentState extends State<_HomeDashboardContent> {
                           Navigator.of(context).push(
                             CupertinoPageRoute(
                               builder: (_) => const DogClickerScreen(),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    SizedBox(
+                      width: width,
+                      child: _buildSmallCard(
+                        context,
+                        title: '宠格测试',
+                        subtitle: '一测看懂你家毛孩子',
+                        icon: Icons.psychology_alt_rounded,
+                        iconColor: const Color(0xFF7C3AED),
+                        iconBgColor: const Color(0xFFEDE9FE),
+                        gradientColors: const [
+                          Color(0xFFF6F1FF),
+                          Color(0xFFF2EDFF),
+                        ],
+                        onTap: () {
+                          Navigator.of(context).push(
+                            CupertinoPageRoute(
+                              builder: (_) => const PetPersonalityTestPage(),
                             ),
                           );
                         },

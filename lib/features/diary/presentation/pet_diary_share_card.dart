@@ -4,9 +4,11 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 // ========== 水印配置 ==========
 const String _shareWatermarkText = '智宠合生 Peture AI 生成';
+const String _shareCardQrUrl = 'https://testflight.apple.com/join/6ZVsvBuY';
 
 class _ShareWatermarkMetrics {
   final double horizontalPadding;
@@ -325,59 +327,93 @@ class PetDiaryShareCard extends StatelessWidget {
   }
 
   Widget _buildFooter() {
+    final footerPrimary = _getFooterPrimaryColor();
+    final footerSecondary = _getFooterSecondaryColor();
+    final qrColor = _getFooterQrColor();
     return Column(
       children: [
         Divider(
-          color: _getTextColor().withOpacity(0.1),
+          color: footerPrimary.withOpacity(0.16),
           height: 1,
         ),
         const SizedBox(height: 16),
         Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Row(
+            Expanded(
+              child: Row(
               children: [
-                // 二维码占位符
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: _getTextColor().withOpacity(0.05),
-                    borderRadius: BorderRadius.circular(4),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        '智宠合生 Peture',
+                        style: GoogleFonts.notoSans(
+                          color: footerPrimary,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 1),
+                      Text(
+                        '扫码安装，获取同款宠物日记',
+                        style: GoogleFonts.notoSans(
+                          color: footerSecondary,
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 1),
+                      Text(
+                        '记录你和毛孩子的每一天',
+                        style: TextStyle(
+                          color: footerSecondary,
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
                   ),
-                  child: Icon(Icons.qr_code_2, color: _getTextColor().withOpacity(0.5)),
                 ),
-                const SizedBox(width: 8),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Peture',
-                      style: GoogleFonts.dancingScript(
-                        color: _getTextColor(),
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
+                const SizedBox(width: 10),
+                Container(
+                  width: 58,
+                  height: 58,
+                  padding: const EdgeInsets.all(2),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: footerPrimary.withOpacity(0.2)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: footerPrimary.withOpacity(0.08),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: QrImageView(
+                      data: _shareCardQrUrl,
+                      version: QrVersions.auto,
+                      backgroundColor: Colors.white,
+                      padding: const EdgeInsets.all(1),
+                      gapless: true,
+                      eyeStyle: QrEyeStyle(
+                        eyeShape: QrEyeShape.square,
+                        color: qrColor,
+                      ),
+                      dataModuleStyle: QrDataModuleStyle(
+                        dataModuleShape: QrDataModuleShape.square,
+                        color: qrColor,
                       ),
                     ),
-                    Text(
-                      'Scan to join',
-                      style: TextStyle(
-                        color: _getTextColor().withOpacity(0.5),
-                        fontSize: 10,
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ],
             ),
-            // 心情指数或互动
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(color: _getTextColor().withOpacity(0.1)),
-              ),
-              child: Icon(Icons.thumb_up_alt_outlined, size: 16, color: _getTextColor().withOpacity(0.5)),
             ),
           ],
         ),
@@ -546,6 +582,33 @@ class PetDiaryShareCard extends StatelessWidget {
         return const Color(0xFF2D3436); // 深灰
       case ShareCardStyle.paper:
         return const Color(0xFFFF6B6B); // 珊瑚红
+    }
+  }
+
+  Color _getFooterPrimaryColor() {
+    switch (style) {
+      case ShareCardStyle.minimal:
+        return const Color(0xFF6F63A8);
+      case ShareCardStyle.paper:
+        return const Color(0xFF8B6B5A);
+    }
+  }
+
+  Color _getFooterSecondaryColor() {
+    switch (style) {
+      case ShareCardStyle.minimal:
+        return const Color(0xFF9A90BF);
+      case ShareCardStyle.paper:
+        return const Color(0xFFAA8D7F);
+    }
+  }
+
+  Color _getFooterQrColor() {
+    switch (style) {
+      case ShareCardStyle.minimal:
+        return const Color(0xFF5D4E99);
+      case ShareCardStyle.paper:
+        return const Color(0xFF7C5B4C);
     }
   }
 }

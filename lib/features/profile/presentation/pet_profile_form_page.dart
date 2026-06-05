@@ -35,6 +35,8 @@ class PetProfileFormPage extends StatefulWidget {
 class _PetProfileFormPageState extends State<PetProfileFormPage>
     with LoadingGuardMixin, PageTrackerMixin<PetProfileFormPage> {
   late final ModerationGuard _moderationGuard;
+  final ScrollController _pageScrollController = ScrollController();
+  final GlobalKey _lifePhotoPrecheckKey = GlobalKey();
   String? _petId;
   File? _avatarFile;
   File? _lifePhotoFile;
@@ -45,6 +47,7 @@ class _PetProfileFormPageState extends State<PetProfileFormPage>
   /// 编辑模式下云端头像 URL（仅展示，未重新选择文件时保留）
   String? _avatarUrl;
   String? _lifePhotoUrl;
+  String? _lifePhotoStoragePath; // 当前已上传并通过预检的 storage 路径
   String? _petName;
   String? _petType; // 宠物类型：狗狗/猫咪
   String? _petSpecies; // 品种
@@ -59,6 +62,8 @@ class _PetProfileFormPageState extends State<PetProfileFormPage>
   String? _ownerNickname; // 该宠物对主人的自定义称呼
   String _defaultOwnerNickname = '主人'; // 用户默认称呼
   bool _isSaving = false;
+  bool _isPickingLifePhoto = false;
+  bool _lifePhotoRemoved = false; // 用户主动删除了生活照
   String? _lifePhotoPrecheckReason; // 生活照预检查失败原因
 
   final Map<String, List<String>> _speciesOptions = {
@@ -131,6 +136,7 @@ class _PetProfileFormPageState extends State<PetProfileFormPage>
       '巴哥犬',
       '贵宾犬',
       '比利时牧羊犬',
+      '比熊犬',
       '大麦町犬',
       '斗牛梗',
       '德牧犬',
@@ -293,6 +299,12 @@ class _PetProfileFormPageState extends State<PetProfileFormPage>
     });
   }
 
+  @override
+  void dispose() {
+    _pageScrollController.dispose();
+    super.dispose();
+  }
+
   Future<void> _loadUserAvatar() async {
     try {
       final avatarPath = await UserAvatarHelper.getCurrentUserAvatarPath();
@@ -344,6 +356,13 @@ class _PetProfileFormPageState extends State<PetProfileFormPage>
   }
 
   Future<void> _pickLifePhoto() async {
+    if (_isPickingLifePhoto) return;
+    if (mounted) {
+      setState(() {
+        _isPickingLifePhoto = true;
+      });
+    }
+    final totalStopwatch = Stopwatch()..start();
     try {
       final picker = ImagePicker();
       final picked = await picker.pickImage(
@@ -359,6 +378,7 @@ class _PetProfileFormPageState extends State<PetProfileFormPage>
         tempDir.path,
         '${const Uuid().v4()}_lifephoto.jpg',
       );
+      final compressStopwatch = Stopwatch()..start();
       final compressed = await FlutterImageCompress.compressAndGetFile(
         picked.path,
         targetPath,
@@ -367,25 +387,292 @@ class _PetProfileFormPageState extends State<PetProfileFormPage>
         minWidth: 1024,
         minHeight: 1024,
       );
+      compressStopwatch.stop();
       final lifePhotoFile = File(compressed?.path ?? picked.path);
+      final sourceBytes = await File(picked.path).length();
+      final compressedBytes = await lifePhotoFile.length();
+      debugPrint(
+        '[LifePhotoTiming] compress=${compressStopwatch.elapsedMilliseconds}ms '
+        'sourceBytes=$sourceBytes compressedBytes=$compressedBytes',
+      );
+
       final lifePhotoBytes = await lifePhotoFile.readAsBytes();
       if (!mounted) return;
-      final imagePassed = await _moderationGuard.runImageGuardByBytes(
-        context: context,
-        scene: ModerationScene.imageInput,
-        bytes: lifePhotoBytes,
-        onPassed: () async {},
-      );
-      if (!imagePassed || !mounted) return;
+      final petId = _petId ?? const Uuid().v4();
+      _petId = petId;
+
+      final moderationFuture = (() async {
+        final moderationStopwatch = Stopwatch()..start();
+        final passed = await _moderationGuard.runImageGuardByBytes(
+          context: context,
+          scene: ModerationScene.imageInput,
+          bytes: lifePhotoBytes,
+          onPassed: () async {},
+        );
+        moderationStopwatch.stop();
+        debugPrint(
+          '[LifePhotoTiming] moderation=${moderationStopwatch.elapsedMilliseconds}ms '
+          'passed=$passed',
+        );
+        return passed;
+      })();
+
+      final uploadAndPrecheckFuture = (() async {
+        final uploadStopwatch = Stopwatch()..start();
+        final uploadResult = await SupabaseService().uploadPetLifePhotoToStorage(
+          file: lifePhotoFile,
+          petId: petId,
+        );
+        uploadStopwatch.stop();
+        debugPrint(
+          '[LifePhotoTiming] upload=${uploadStopwatch.elapsedMilliseconds}ms '
+          'success=${uploadResult != null}',
+        );
+        if (uploadResult == null) {
+          return (
+            pass: false,
+            reason: '生活照上传失败，请重试',
+            path: null as String?,
+            url: null as String?,
+            uploadFailed: true,
+          );
+        }
+
+        final fileName = uploadResult.path.split('/').last;
+        final precheckStopwatch = Stopwatch()..start();
+        final precheckResult = await _precheckLifePhoto(
+          fileName: fileName,
+          bucket: 'user-avatars',
+          path: uploadResult.path,
+        );
+        precheckStopwatch.stop();
+        debugPrint(
+          '[LifePhotoTiming] precheck=${precheckStopwatch.elapsedMilliseconds}ms '
+          'pass=${precheckResult.pass}',
+        );
+        if (!precheckResult.pass) {
+          await SupabaseService().removeStorageObject(
+            bucket: 'user-avatars',
+            path: uploadResult.path,
+          );
+          return (
+            pass: false,
+            reason: precheckResult.reason,
+            path: null as String?,
+            url: null as String?,
+            uploadFailed: false,
+          );
+        }
+
+        return (
+          pass: true,
+          reason: '',
+          path: uploadResult.path as String?,
+          url: uploadResult.url as String?,
+          uploadFailed: false,
+        );
+      })();
+
+      final moderationPassed = await moderationFuture;
+      final precheckOutcome = await uploadAndPrecheckFuture;
+      if (!mounted) return;
+      if (!moderationPassed) {
+        final uploadedPath = precheckOutcome.path;
+        if (uploadedPath != null && uploadedPath.isNotEmpty) {
+          await SupabaseService().removeStorageObject(
+            bucket: 'user-avatars',
+            path: uploadedPath,
+          );
+        }
+        return;
+      }
+      if (!precheckOutcome.pass) {
+        if (precheckOutcome.uploadFailed) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('生活照上传失败，请重试')));
+        } else {
+          setState(() {
+            _lifePhotoPrecheckReason = precheckOutcome.reason;
+          });
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _scrollToLifePhotoPrecheckReason();
+          });
+        }
+        return;
+      }
+
+      final previousStoragePath = _lifePhotoStoragePath;
+      final newStoragePath = precheckOutcome.path!;
+      final newLifePhotoUrl = precheckOutcome.url!;
+      if (previousStoragePath != null && previousStoragePath != newStoragePath) {
+        unawaited(
+          SupabaseService().removeStorageObject(
+            bucket: 'user-avatars',
+            path: previousStoragePath,
+          ),
+        );
+      }
 
       setState(() {
         _lifePhotoFile = lifePhotoFile;
-        _lifePhotoUrl = null;
+        _lifePhotoUrl = newLifePhotoUrl;
+        _lifePhotoStoragePath = newStoragePath;
+        _lifePhotoRemoved = false;
         _lifePhotoPrecheckReason = null; // 清除之前的预检查结果
       });
+      totalStopwatch.stop();
+      debugPrint('[LifePhotoTiming] total=${totalStopwatch.elapsedMilliseconds}ms');
     } catch (e) {
+      totalStopwatch.stop();
+      debugPrint('[LifePhotoTiming] failed total=${totalStopwatch.elapsedMilliseconds}ms error=$e');
       debugPrint('选择生活照失败: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isPickingLifePhoto = false;
+        });
+      }
     }
+  }
+
+  Future<void> _removeLifePhoto() async {
+    if (_isPickingLifePhoto || _isSaving) return;
+    final pathToDelete = _lifePhotoStoragePath;
+    setState(() {
+      _lifePhotoFile = null;
+      _lifePhotoUrl = null;
+      _lifePhotoStoragePath = null;
+      _lifePhotoRemoved = true;
+      _lifePhotoPrecheckReason = null;
+    });
+    if (pathToDelete != null && pathToDelete.isNotEmpty) {
+      await SupabaseService().removeStorageObject(
+        bucket: 'user-avatars',
+        path: pathToDelete,
+      );
+    }
+  }
+
+  Future<bool> _confirmLifePhotoUploadTips() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+          insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+          titlePadding: EdgeInsets.zero,
+          contentPadding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
+          actionsPadding: const EdgeInsets.fromLTRB(20, 12, 20, 14),
+          title: const SizedBox.shrink(),
+          content: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 18),
+                const Text.rich(
+                  TextSpan(
+                    style: TextStyle(
+                      fontSize: 15.5,
+                      height: 1.52,
+                      color: Color(0xFF353535),
+                    ),
+                    children: [
+                      TextSpan(text: 'AI 生图功能基于宠物生活照。\n'),
+                      TextSpan(text: '为了保证生图质量，请上传一张'),
+                      TextSpan(
+                        text: '仅包含这只毛孩子的清晰生活照',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFFB46969),
+                        ),
+                      ),
+                      TextSpan(text: '。'),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                const Text.rich(
+                  TextSpan(
+                    style: TextStyle(
+                      fontSize: 15.5,
+                      height: 1.46,
+                      color: Color(0xFF424242),
+                    ),
+                    children: [
+                      TextSpan(text: '• 请确保毛孩子的 '),
+                      TextSpan(
+                        text: '面部细节（眼、耳、鼻、嘴）清晰完整',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFFB46969),
+                        ),
+                      ),
+                      TextSpan(text: '。\n'),
+                      TextSpan(text: '• 照片中 '),
+                      TextSpan(
+                        text: '请不要出现其他人或动物',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFFB46969),
+                        ),
+                      ),
+                      TextSpan(text: '。\n\n'),
+                      TextSpan(text: '上传处理过程预计需要 10 秒，\n请耐心等待。'),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 2),
+              ],
+            ),
+          ),
+          actions: [
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.of(context).pop(false),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF7A7A7A),
+                      side: const BorderSide(color: Color(0xFFE6DED9)),
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(11),
+                      ),
+                      textStyle: const TextStyle(
+                        fontSize: 16.5,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    child: const Text('取消'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: () => Navigator.of(context).pop(true),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFFD68A70),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(11),
+                      ),
+                      textStyle: const TextStyle(
+                        fontSize: 16.5,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    child: const Text('选择照片'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        );
+      },
+    );
+    return confirmed ?? false;
   }
 
   /// 图片质量预检查 - 调用 img-gen-precheck Edge Function
@@ -493,6 +780,18 @@ class _PetProfileFormPageState extends State<PetProfileFormPage>
       debugPrint('❌ 生活照预检异常: $e\n$st');
       return (pass: false, reason: '图片检测失败，请检查网络后重试');
     }
+  }
+
+  Future<void> _scrollToLifePhotoPrecheckReason() async {
+    if (!mounted) return;
+    final targetContext = _lifePhotoPrecheckKey.currentContext;
+    if (targetContext == null) return;
+    await Scrollable.ensureVisible(
+      targetContext,
+      duration: const Duration(milliseconds: 320),
+      curve: Curves.easeOutCubic,
+      alignment: 0.92,
+    );
   }
 
   void _showSpeciesSelector() {
@@ -1111,6 +1410,7 @@ class _PetProfileFormPageState extends State<PetProfileFormPage>
       '埃': 'A',
       '爱': 'A',
       '安': 'A',
+      '奥': 'A',
       '巴': 'B',
       '伯': 'B',
       '布': 'B',
@@ -1208,6 +1508,7 @@ class _PetProfileFormPageState extends State<PetProfileFormPage>
       '银': 'Y',
       '玉': 'Y',
       '中': 'Z',
+      '藏': 'C',
       '指': 'Z',
       '芝': 'Z',
       '折': 'Z',
@@ -2258,6 +2559,34 @@ class _PetProfileFormPageState extends State<PetProfileFormPage>
   }
 
   Widget _buildLifePhotoTrailing() {
+    if (_isPickingLifePhoto) {
+      return const Row(
+        children: [
+          SizedBox(
+            width: 18,
+            height: 18,
+            child: CircularProgressIndicator(
+              strokeWidth: 2.2,
+              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFD98D72)),
+            ),
+          ),
+          SizedBox(width: 8),
+          Padding(
+            padding: EdgeInsets.only(right: 6),
+            child: Text(
+              '处理中...',
+              style: TextStyle(fontSize: 14, color: Color(0xFF9A9A9A)),
+            ),
+          ),
+          Icon(
+            Icons.arrow_forward_ios,
+            size: 14,
+            color: Color(0xFFCCCCCC),
+          ),
+        ],
+      );
+    }
+
     final hasLifePhoto = _lifePhotoFile != null ||
         (_lifePhotoUrl != null && _lifePhotoUrl!.isNotEmpty);
 
@@ -2292,6 +2621,7 @@ class _PetProfileFormPageState extends State<PetProfileFormPage>
     }
 
     return Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
         ClipRRect(
           borderRadius: BorderRadius.circular(10),
@@ -2306,6 +2636,21 @@ class _PetProfileFormPageState extends State<PetProfileFormPage>
               style: TextStyle(fontSize: 14, color: Color(0xFFCCCCCC)),
             ),
           ),
+        if (hasLifePhoto) ...[
+          GestureDetector(
+            onTap: _removeLifePhoto,
+            behavior: HitTestBehavior.opaque,
+            child: const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+              child: Icon(
+                Icons.delete_outline_rounded,
+                size: 18,
+                color: Color(0xFFBE8C8C),
+              ),
+            ),
+          ),
+          const SizedBox(width: 4),
+        ],
         const Icon(
           Icons.arrow_forward_ios,
           size: 14,
@@ -2500,18 +2845,6 @@ class _PetProfileFormPageState extends State<PetProfileFormPage>
         if (!avatarPassed || !mounted) return;
       }
 
-      if (_lifePhotoFile != null) {
-        final lifePhotoBytes = await _lifePhotoFile!.readAsBytes();
-        if (!mounted) return;
-        final lifePhotoPassed = await _moderationGuard.runImageGuardByBytes(
-          context: context,
-          scene: ModerationScene.imageInput,
-          bytes: lifePhotoBytes,
-          onPassed: () async {},
-        );
-        if (!lifePhotoPassed || !mounted) return;
-      }
-
       // 保存逻辑，返回数据给上一页
       // 根据品种自动推断宠物类型（如果用户没有明确选择）
       String? petType = _petType;
@@ -2547,41 +2880,13 @@ class _PetProfileFormPageState extends State<PetProfileFormPage>
 
       String? lifePhotoValue = (widget.initialData?['life_photo'] ??
           widget.initialData?['lifePhoto']) as String?;
-      if (_lifePhotoFile != null) {
-        final uploadResult = await SupabaseService().uploadPetLifePhotoToStorage(
-          file: _lifePhotoFile!,
-          petId: petId,
-        );
-        if (uploadResult == null) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('生活照上传失败，请重试')),
-            );
-          }
-          return;
-        }
-
-        final fileName = uploadResult.path.split('/').last;
-        final precheckResult = await _precheckLifePhoto(
-          fileName: fileName,
-          bucket: 'user-avatars',
-          path: uploadResult.path,
-        );
-
-        if (!precheckResult.pass) {
-          await SupabaseService().removeStorageObject(
-            bucket: 'user-avatars',
-            path: uploadResult.path,
-          );
-          if (mounted) {
-            setState(() {
-              _lifePhotoPrecheckReason = precheckResult.reason;
-            });
-          }
-          return;
-        }
-
-        lifePhotoValue = uploadResult.url;
+      if (_lifePhotoRemoved) {
+        lifePhotoValue = null;
+      }
+      if (_lifePhotoStoragePath != null &&
+          _lifePhotoUrl != null &&
+          _lifePhotoUrl!.isNotEmpty) {
+        lifePhotoValue = _lifePhotoUrl;
       }
 
       final result = {
@@ -2644,7 +2949,10 @@ class _PetProfileFormPageState extends State<PetProfileFormPage>
         'owner_nickname': _ownerNickname,
         'use_custom_nickname': _ownerNickname != null && _ownerNickname!.isNotEmpty,
         'updated_at': DateTime.now().toUtc().toIso8601String(),
-      }..removeWhere((_, value) => value == null);
+      };
+      dbPayload.removeWhere(
+        (key, value) => value == null && key != 'life_photo',
+      );
 
       try {
         await Supabase.instance.client.from('pets').upsert(
@@ -2669,6 +2977,7 @@ class _PetProfileFormPageState extends State<PetProfileFormPage>
 
   @override
   Widget build(BuildContext context) {
+    final isSaveDisabled = _isSaving || _isPickingLifePhoto;
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.dark.copyWith(
         statusBarColor: Colors.transparent,
@@ -2701,6 +3010,7 @@ class _PetProfileFormPageState extends State<PetProfileFormPage>
           children: [
             Expanded(
               child: SingleChildScrollView(
+                controller: _pageScrollController,
                 child: Column(
                   children: [
                     // 头像区域
@@ -2829,7 +3139,11 @@ class _PetProfileFormPageState extends State<PetProfileFormPage>
                             label: '生活照',
                             placeholder: '请选择生活照',
                             trailing: _buildLifePhotoTrailing(),
-                            onTap: () {
+                            onTap: () async {
+                              if (_isPickingLifePhoto) return;
+                              final confirmed =
+                                  await _confirmLifePhotoUploadTips();
+                              if (!confirmed || !mounted) return;
                               setState(() => _lifePhotoPrecheckReason =
                                   null); // 清除之前的预检查结果
                               _pickLifePhoto();
@@ -2840,6 +3154,7 @@ class _PetProfileFormPageState extends State<PetProfileFormPage>
                           if (_lifePhotoPrecheckReason != null &&
                               _lifePhotoPrecheckReason!.isNotEmpty)
                             Padding(
+                              key: _lifePhotoPrecheckKey,
                               padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
                               child: Container(
                                 padding: const EdgeInsets.all(14),
@@ -2892,7 +3207,7 @@ class _PetProfileFormPageState extends State<PetProfileFormPage>
                   width: double.infinity,
                   child: Container(
                     decoration: BoxDecoration(
-                      gradient: _isSaving
+                      gradient: isSaveDisabled
                           ? const LinearGradient(
                               colors: [Color(0xFFD7C9C1), Color(0xFFCDBDB5)],
                               begin: Alignment.topCenter,
@@ -2905,12 +3220,12 @@ class _PetProfileFormPageState extends State<PetProfileFormPage>
                             ),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
-                        color: _isSaving
+                        color: isSaveDisabled
                             ? const Color(0x00FFFFFF)
                             : const Color(0xFFF1C2AC),
                         width: 1,
                       ),
-                      boxShadow: _isSaving
+                      boxShadow: isSaveDisabled
                           ? []
                           : [
                               BoxShadow(
@@ -2924,7 +3239,9 @@ class _PetProfileFormPageState extends State<PetProfileFormPage>
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.transparent,
                         foregroundColor:
-                            _isSaving ? const Color(0xFFF0F4F8) : Colors.white,
+                            isSaveDisabled
+                                ? const Color(0xFFF0F4F8)
+                                : Colors.white,
                         shadowColor: Colors.transparent,
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         shape: RoundedRectangleBorder(
@@ -2933,7 +3250,7 @@ class _PetProfileFormPageState extends State<PetProfileFormPage>
                         elevation: 0,
                         disabledBackgroundColor: Colors.transparent,
                       ),
-                      onPressed: _isSaving ? null : _savePetProfile,
+                      onPressed: isSaveDisabled ? null : _savePetProfile,
                       child: _isSaving
                           ? Row(
                               mainAxisSize: MainAxisSize.min,

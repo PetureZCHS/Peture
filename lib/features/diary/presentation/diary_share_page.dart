@@ -8,6 +8,7 @@ import 'package:flutter/rendering.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:gal/gal.dart';
 import '../../../core/page_tracker_mixin.dart';
@@ -17,6 +18,7 @@ import '../../../shared/models/pet_diary.dart';
 
 // ========== 水印配置 ==========
 const String _watermarkText = '智宠合生 Peture AI 生成';
+const String _shareCardQrUrl = 'https://testflight.apple.com/join/6ZVsvBuY';
 
 class _WatermarkMetrics {
   final double horizontalPadding;
@@ -408,7 +410,7 @@ class _DiarySharePageState extends State<DiarySharePage>
             _buildAiImageWithWatermark(),
           ],
           const SizedBox(height: 30),
-          _buildFooter(),
+          _buildFooterWithLink(),
         ],
       ),
     );
@@ -445,7 +447,7 @@ class _DiarySharePageState extends State<DiarySharePage>
             _buildAiImageWithWatermark(),
           ],
           const SizedBox(height: 30),
-          _buildFooter(color: Colors.brown[400]),
+          _buildFooterWithLink(color: Colors.brown[400]),
         ],
       ),
     );
@@ -507,10 +509,7 @@ class _DiarySharePageState extends State<DiarySharePage>
               ],
             ),
             const SizedBox(height: 8),
-            Text(
-              '由智宠合生 Peture AI 生成',
-              style: GoogleFonts.caveat(fontSize: 12, color: Colors.grey),
-            ),
+            _buildFooterWithLink(color: Colors.grey),
           ],
         ),
       ),
@@ -555,7 +554,7 @@ class _DiarySharePageState extends State<DiarySharePage>
             _buildAiImageWithWatermark(),
           ],
           const SizedBox(height: 30),
-          _buildFooter(color: Colors.pink[300]),
+          _buildFooterWithLink(color: Colors.pink[300]),
         ],
       ),
     );
@@ -590,22 +589,78 @@ class _DiarySharePageState extends State<DiarySharePage>
   }
 
   Widget _buildFooter({Color? color}) {
-    return Center(
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.auto_awesome, size: 12, color: color ?? Colors.grey[400]),
-          const SizedBox(width: 4),
-          Text(
-            '由智宠合生 Peture AI 生成',
-            style: TextStyle(
-              fontSize: 10,
-              color: color ?? Colors.grey[400],
-              letterSpacing: 1,
+    final baseColor = color ?? Colors.grey[400]!;
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.auto_awesome, size: 12, color: baseColor),
+            const SizedBox(width: 4),
+            Text(
+              '由智宠合生 Peture AI 生成',
+              style: TextStyle(
+                fontSize: 10,
+                color: baseColor,
+                letterSpacing: 1,
+              ),
+            ),
+          ],
+        ),
+        Container(
+          width: 68,
+          height: 68,
+          padding: const EdgeInsets.all(0.5),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: baseColor.withOpacity(0.35)),
+          ),
+          child: QrImageView(
+            data: _shareCardQrUrl,
+            version: QrVersions.auto,
+            padding: EdgeInsets.zero,
+            gapless: true,
+            eyeStyle: QrEyeStyle(
+              eyeShape: QrEyeShape.square,
+              color: baseColor.withOpacity(0.9),
+            ),
+            dataModuleStyle: QrDataModuleStyle(
+              dataModuleShape: QrDataModuleShape.square,
+              color: baseColor.withOpacity(0.9),
             ),
           ),
-        ],
-      ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFooterWithLink({Color? color}) {
+    final baseColor = color ?? Colors.grey[400]!;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildFooter(color: color),
+        const SizedBox(height: 1),
+        Text(
+          '智宠合生 Peture',
+          style: TextStyle(
+            fontSize: 10,
+            height: 1.1,
+            fontWeight: FontWeight.w700,
+            color: baseColor.withOpacity(0.95),
+          ),
+        ),
+        Text(
+          '扫码安装获取同款宠物日记',
+          style: TextStyle(
+            fontSize: 10,
+            height: 1.1,
+            color: baseColor.withOpacity(0.9),
+          ),
+        ),
+      ],
     );
   }
 

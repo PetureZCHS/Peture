@@ -1,22 +1,23 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 const apiKey = Deno.env.get("DIFY_DIARY_API_KEY");
 const DIFY_API = "https://api.dify.ai/v1/workflows/run";
+
 Deno.serve(async (req)=>{
   // CORS headers 配置
   const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type'
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   };
+
   // Handle CORS preflight requests / 处理 CORS 预检请求
   if (req.method === 'OPTIONS') {
-    return new Response('ok', {
-      headers: corsHeaders
-    });
+    return new Response('ok', { headers: corsHeaders });
   }
+
   if (req.method !== "POST") {
     return new Response("Method Not Allowed", {
       status: 405,
-      headers: corsHeaders
+      headers: corsHeaders,
     });
   }
   let body;
@@ -25,7 +26,7 @@ Deno.serve(async (req)=>{
   } catch  {
     return new Response("Bad Request", {
       status: 400,
-      headers: corsHeaders
+      headers: corsHeaders,
     });
   }
   const { inputs, user, response_mode } = body ?? {};
@@ -33,7 +34,7 @@ Deno.serve(async (req)=>{
   if (!apiKey) {
     return new Response("Missing DIFY_DIARY_API_KEY", {
       status: 500,
-      headers: corsHeaders
+      headers: corsHeaders,
     });
   }
   const baseHeaders = {
@@ -58,7 +59,7 @@ Deno.serve(async (req)=>{
     if (!upstream.body) {
       return new Response("Upstream unavailable", {
         status: 502,
-        headers: corsHeaders
+        headers: corsHeaders,
       });
     }
     const sseHeaders = new Headers({
