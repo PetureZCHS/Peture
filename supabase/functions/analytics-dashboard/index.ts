@@ -18,6 +18,28 @@ type AnalyticsEvent = {
 const MAX_CUSTOM_RANGE_DAYS = 90;
 const MAX_ROWS = 50000;
 const PAGE_SIZE = 1000;
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
+
+const VALUE_RECORD_EVENTS = new Set([
+  "diary_generate_success",
+  "expense_created",
+  "image_generate_success",
+  "pet_memory_saved",
+  "pet_profile_created",
+  "pet_record_value_created",
+  "share_card_click",
+]);
+
+const LEGACY_MEMORY_EVENTS = new Set([
+  "diary_generate_success",
+  "image_generate_success",
+  "share_card_click",
+]);
+
+const PET_PROFILE_ACTIVITY_EVENTS = new Set([
+  "pet_profile_active",
+  "pet_profile_created",
+]);
 
 function corsHeaders() {
   return {
@@ -92,6 +114,13 @@ async function resolveUserId(req: Request): Promise<string | null> {
 
 function userKey(event: AnalyticsEvent) {
   return event.user_id ?? event.anonymous_id ?? event.session_id;
+}
+
+function propertyText(event: AnalyticsEvent, key: string) {
+  const value = event.properties?.[key];
+  if (typeof value !== "string") return null;
+  const text = value.trim();
+  return text.length > 0 ? text : null;
 }
 
 function inc(map: Map<string, number>, key: string, amount = 1) {
@@ -171,6 +200,50 @@ function overview(events: AnalyticsEvent[]) {
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([date, set]) => ({ date, users: set.size })),
     avg_duration_ms: durationCount > 0 ? Math.round(durationSum / durationCount) : 0,
+  };
+}
+
+function northStarMetrics(events: AnalyticsEvent[]) {
+  const valueRecordingUsers = new Set<string>();
+  const activePetProfiles = new Set<string>();
+  const activePetProfileUsers = new Set<string>();
+  let explicitMemorySavedCount = 0;
+  let legacyMemoryCount = 0;
+
+  for (const event of events) {
+    const key = userKey(event);
+    if (VALUE_RECORD_EVENTS.has(event.event_name)) {
+      valueRecordingUsers.add(key);
+    }
+
+    if (event.event_name === "pet_memory_saved") {
+      explicitMemorySavedCount += 1;
+    } else if (LEGACY_MEMORY_EVENTS.has(event.event_name)) {
+      legacyMemoryCount += 1;
+    }
+
+    const petId = propertyText(event, "pet_id") ?? propertyText(event, "petId");
+    if (petId) {
+      activePetProfiles.add(petId);
+    }
+    if (
+      event.module === "pet_profile" ||
+      PET_PROFILE_ACTIVITY_EVENTS.has(event.event_name)
+    ) {
+      activePetProfileUsers.add(key);
+    }
+  }
+
+  const hasPetProfileIds = activePetProfiles.size > 0;
+  return {
+    weekly_value_recording_users: valueRecordingUsers.size,
+    weekly_active_pet_profiles: hasPetProfileIds
+      ? activePetProfiles.size
+      : activePetProfileUsers.size,
+    weekly_pet_memories_saved: explicitMemorySavedCount > 0
+      ? explicitMemorySavedCount
+      : legacyMemoryCount,
+    active_pet_profiles_approximate: !hasPetProfileIds,
   };
 }
 
@@ -334,10 +407,17 @@ Deno.serve(async (req) => {
 
   try {
     const events = await loadEvents(supabase, range, filters);
+    const weeklyRange = {
+      startAt: new Date(Date.now() - WEEK_MS).toISOString(),
+      endAt: new Date().toISOString(),
+    };
+    const weeklyFilters = { ...filters, module: "all", event_name: "all" };
+    const weeklyEvents = await loadEvents(supabase, weeklyRange, weeklyFilters);
     const payload = {
       range,
       filters,
       truncated: events.length >= MAX_ROWS,
+      north_star: northStarMetrics(weeklyEvents),
       overview: overview(events),
       page_rankings: pageRankings(events),
       feature_rankings: featureRankings(events),

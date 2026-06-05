@@ -11,6 +11,7 @@ import 'features/auth/presentation/login_page.dart';
 import 'features/admin_analytics/presentation/admin_analytics_app.dart';
 import 'features/home/presentation/home_screen.dart';
 import 'core/config/supabase_config.dart';
+import 'services/analytics_service.dart';
 import 'shared/design_system/peture_design_system.dart';
 
 void main() async {
@@ -79,6 +80,7 @@ class _RootRouterState extends State<RootRouter> {
     super.initState();
     // 读取本地已持久化的会话
     _session = Supabase.instance.client.auth.currentSession;
+    unawaited(AnalyticsService.ensureInitForAuthenticatedSession());
 
     // 监听登录、登出和 Token 刷新事件
     _authSub =
@@ -95,6 +97,9 @@ class _RootRouterState extends State<RootRouter> {
           setState(() {
             _session = session;
           });
+          if (session != null) {
+            unawaited(AnalyticsService.ensureInitForAuthenticatedSession());
+          }
           break;
         case AuthChangeEvent.signedOut:
         case AuthChangeEvent.userDeleted:

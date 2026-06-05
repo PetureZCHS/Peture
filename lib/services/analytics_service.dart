@@ -20,12 +20,26 @@ class AnalyticsService {
 
   static bool _isInitialized = false;
   static bool _isFlushing = false;
+  static Future<void>? _initFuture;
   static String? _anonymousId;
   static String? _sessionId;
   static Future<void> _queueMutation = Future.value();
   static final Map<String, DateTime> _pageStartTimes = {};
 
   static Future<void> init() async {
+    if (_isInitialized) return;
+    if (_initFuture != null) return _initFuture;
+
+    _initFuture = _init();
+    try {
+      await _initFuture;
+    } catch (_) {
+      _initFuture = null;
+      rethrow;
+    }
+  }
+
+  static Future<void> _init() async {
     if (_isInitialized) return;
 
     _anonymousId = await _loadAnonymousId();
@@ -60,6 +74,17 @@ class AnalyticsService {
     if (await hasConsent()) {
       await init();
     }
+  }
+
+  /// Restored sessions from older builds may have accepted the terms gate before
+  /// the analytics consent key existed. Keep those signed-in users trackable
+  /// without requiring a logout/login cycle.
+  static Future<void> ensureInitForAuthenticatedSession() async {
+    if (Supabase.instance.client.auth.currentSession == null) return;
+    if (!await hasConsent()) {
+      await setConsentAccepted(true);
+    }
+    await init();
   }
 
   static void logEvent(

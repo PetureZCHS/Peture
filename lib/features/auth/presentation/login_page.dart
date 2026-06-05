@@ -11,6 +11,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/auth_pending_email_login.dart';
 import '../../../core/auth_terms_consent.dart';
+import '../../../services/analytics_service.dart';
 import '../../home/presentation/home_screen.dart';
 import '../../../shared/design_system/peture_design_system.dart';
 // 导入邮箱登录页面
@@ -486,13 +487,20 @@ class _LoginBodyContentState extends State<_LoginBodyContent> {
       if (!mounted) return;
       if (state.event == AuthChangeEvent.signedIn &&
           _supabase.auth.currentSession != null) {
-        FocusScope.of(context).unfocus();
-        Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const HomeScreen()),
-          (route) => false,
-        );
+        unawaited(_enterHomeAfterLogin());
       }
     });
+  }
+
+  Future<void> _enterHomeAfterLogin() async {
+    if (!mounted) return;
+    await AnalyticsService.acceptConsentAndInit();
+    if (!mounted) return;
+    FocusScope.of(context).unfocus();
+    Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const HomeScreen()),
+      (route) => false,
+    );
   }
 
   @override
@@ -557,8 +565,7 @@ class _LoginBodyContentState extends State<_LoginBodyContent> {
 
     try {
       final rawNonce = _supabase.auth.generateRawNonce();
-      final hashedNonce =
-          sha256.convert(utf8.encode(rawNonce)).toString();
+      final hashedNonce = sha256.convert(utf8.encode(rawNonce)).toString();
 
       final credential = await SignInWithApple.getAppleIDCredential(
         scopes: const [
@@ -587,7 +594,8 @@ class _LoginBodyContentState extends State<_LoginBodyContent> {
         message = '尝试次数过多，请稍后再试';
       }
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(message)));
       }
     } on SignInWithAppleAuthorizationException catch (e) {
       if (!mounted) return;
@@ -663,13 +671,10 @@ class _LoginBodyContentState extends State<_LoginBodyContent> {
       final currentNickname = (profile['nickname'] as String?)?.trim() ?? '';
       if (currentNickname.isNotEmpty || nicknameCandidate == null) return;
 
-      await _supabase
-          .from('users_profiles')
-          .update({
-            'nickname': nicknameCandidate,
-            'updated_at': DateTime.now().toIso8601String(),
-          })
-          .eq('id', userId);
+      await _supabase.from('users_profiles').update({
+        'nickname': nicknameCandidate,
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', userId);
     } catch (e) {
       debugPrint('Apple 登录后补全用户资料失败: $e');
     }
@@ -819,7 +824,8 @@ class _AgreementRow extends StatelessWidget {
           onTap: onTapTerms,
           child: Text(
             '《用户协议》',
-            style: PetureTextStyles.caption.copyWith(color: PetureColors.violet),
+            style:
+                PetureTextStyles.caption.copyWith(color: PetureColors.violet),
           ),
         ),
         const Text(' 与 ', style: PetureTextStyles.caption),
@@ -827,7 +833,8 @@ class _AgreementRow extends StatelessWidget {
           onTap: onTapPrivacy,
           child: Text(
             '《隐私政策》',
-            style: PetureTextStyles.caption.copyWith(color: PetureColors.violet),
+            style:
+                PetureTextStyles.caption.copyWith(color: PetureColors.violet),
           ),
         ),
       ],

@@ -53,7 +53,13 @@ class _AdminAnalyticsAppState extends State<AdminAnalyticsApp> {
       title: 'Peture 埋点看板',
       theme: theme,
       home: _session == null
-          ? const EmailLoginPage()
+          ? EmailLoginPage(
+              onLoginSuccess: () {
+                setState(() {
+                  _session = Supabase.instance.client.auth.currentSession;
+                });
+              },
+            )
           : const AdminAnalyticsDashboardPage(),
     );
   }
@@ -90,7 +96,9 @@ class _AdminAnalyticsDashboardPageState
   }
 
   void _refresh() {
-    setState(() => _future = _load());
+    setState(() {
+      _future = _load();
+    });
   }
 
   @override
@@ -317,9 +325,12 @@ class _DashboardContent extends StatelessWidget {
     final features = _asList(data['feature_rankings']);
     final errors = _asList(data['error_rankings']);
     final funnel = _asList(data['funnel']);
+    final northStar = normalizeNorthStarMetrics(data['north_star']);
 
     return Column(
       children: [
+        _NorthStarPanel(metrics: northStar),
+        const SizedBox(height: 18),
         LayoutBuilder(
           builder: (context, constraints) {
             final columns = constraints.maxWidth > 1100 ? 4 : 2;
@@ -327,7 +338,7 @@ class _DashboardContent extends StatelessWidget {
               crossAxisCount: columns,
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              childAspectRatio: 2.7,
+              childAspectRatio: columns == 4 ? 2.7 : 1.6,
               crossAxisSpacing: 14,
               mainAxisSpacing: 14,
               children: [
@@ -440,6 +451,93 @@ class _DashboardContent extends StatelessWidget {
   }
 }
 
+class NorthStarMetrics {
+  final int valueRecordingUsers;
+  final int activePetProfiles;
+  final int petMemoriesSaved;
+  final bool activePetProfilesApproximate;
+
+  const NorthStarMetrics({
+    required this.valueRecordingUsers,
+    required this.activePetProfiles,
+    required this.petMemoriesSaved,
+    required this.activePetProfilesApproximate,
+  });
+}
+
+NorthStarMetrics normalizeNorthStarMetrics(Object? value) {
+  final map = _asMap(value);
+  return NorthStarMetrics(
+    valueRecordingUsers: _toInt(map['weekly_value_recording_users']),
+    activePetProfiles: _toInt(map['weekly_active_pet_profiles']),
+    petMemoriesSaved: _toInt(map['weekly_pet_memories_saved']),
+    activePetProfilesApproximate:
+        map['active_pet_profiles_approximate'] == true,
+  );
+}
+
+class _NorthStarPanel extends StatelessWidget {
+  final NorthStarMetrics metrics;
+
+  const _NorthStarPanel({required this.metrics});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: _panelDecoration(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            '北极星指标',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            '固定统计近 7 天，受平台筛选影响',
+            style: TextStyle(color: Colors.black54),
+          ),
+          const SizedBox(height: 16),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final columns = constraints.maxWidth > 980 ? 3 : 1;
+              return GridView.count(
+                crossAxisCount: columns,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                childAspectRatio: columns == 3 ? 2.8 : 3.4,
+                crossAxisSpacing: 14,
+                mainAxisSpacing: 14,
+                children: [
+                  _MetricCard(
+                    label: '价值记录用户',
+                    value: '${metrics.valueRecordingUsers}',
+                    caption: '每周完成 ≥1 次有价值宠物记录',
+                  ),
+                  _MetricCard(
+                    label: '活跃宠物档案',
+                    value: '${metrics.activePetProfiles}',
+                    caption: metrics.activePetProfilesApproximate
+                        ? '暂无 pet_id，按用户近似'
+                        : '按 pet_id 去重',
+                  ),
+                  _MetricCard(
+                    label: '宠物记忆保存',
+                    value: '${metrics.petMemoriesSaved}',
+                    caption: '日记 / AI 图 / 分享保存',
+                  ),
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _MetricCard extends StatelessWidget {
   final String label;
   final String value;
@@ -471,7 +569,12 @@ class _MetricCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 4),
-          Text(caption, style: const TextStyle(color: Colors.black45)),
+          Text(
+            caption,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(color: Colors.black45),
+          ),
         ],
       ),
     );
@@ -692,4 +795,9 @@ String _ms(Object? value) {
 double _toDouble(Object? value) {
   if (value is num) return value.toDouble();
   return double.tryParse(value?.toString() ?? '') ?? 0;
+}
+
+int _toInt(Object? value) {
+  if (value is num) return value.round();
+  return int.tryParse(value?.toString() ?? '') ?? 0;
 }

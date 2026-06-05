@@ -16,6 +16,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../../core/page_tracker_mixin.dart';
+import '../../../services/analytics_service.dart';
 import '../../../shared/utils/ui_helpers.dart';
 import '../../../shared/utils/avatar_image_helper.dart';
 import '../../../shared/utils/user_avatar_helper.dart';
@@ -972,8 +973,7 @@ class _ResultPageState extends State<ResultPage>
                                       var canSaveToGallery = false;
                                       if (Platform.isIOS) {
                                         // iOS 最小权限：仅申请新增照片权限（不请求全相册读取）。
-                                        status = await Permission
-                                            .photosAddOnly
+                                        status = await Permission.photosAddOnly
                                             .request();
                                         canSaveToGallery = status.isGranted ||
                                             status == PermissionStatus.limited;
@@ -1008,7 +1008,8 @@ class _ResultPageState extends State<ResultPage>
                                           (status?.isPermanentlyDenied ==
                                                   true ||
                                               status ==
-                                                  PermissionStatus.restricted)) {
+                                                  PermissionStatus
+                                                      .restricted)) {
                                         // 权限被永久拒绝或受限，引导用户到设置
                                         if (context.mounted) {
                                           showDialog(
@@ -1045,8 +1046,8 @@ class _ResultPageState extends State<ResultPage>
                                         if (context.mounted) {
                                           ScaffoldMessenger.of(context)
                                               .showSnackBar(const SnackBar(
-                                                  content: Text(
-                                                      "需要保存权限才能写入相册")));
+                                                  content:
+                                                      Text("需要保存权限才能写入相册")));
                                         }
                                         return;
                                       }
@@ -1133,24 +1134,31 @@ class _ResultPageState extends State<ResultPage>
                                           ScaffoldMessenger.of(context)
                                               .showSnackBar(const SnackBar(
                                                   content: Text("已保存到相册！")));
+                                          AnalyticsService.track(
+                                            'pet_memory_saved',
+                                            module: 'ai_image',
+                                            properties: {
+                                              'entry_page': 'ai_image_result',
+                                              'memory_type': 'ai_image',
+                                              'source_event':
+                                                  'ai_image_save_gallery',
+                                            },
+                                          );
                                         }
                                       } catch (e) {
                                         debugPrint('保存图片到相册时出错: $e');
                                         if (context.mounted) {
                                           final errorText =
                                               e.toString().toLowerCase();
-                                          final isPermissionDenied =
-                                              errorText.contains(
-                                                      'access_denied') ||
-                                                  errorText.contains('denied') ||
-                                                  errorText.contains(
-                                                      'permission');
+                                          final isPermissionDenied = errorText
+                                                  .contains('access_denied') ||
+                                              errorText.contains('denied') ||
+                                              errorText.contains('permission');
                                           ScaffoldMessenger.of(context)
                                               .showSnackBar(SnackBar(
-                                                  content: Text(
-                                                      isPermissionDenied
-                                                          ? "保存失败：当前是“仅添加照片”权限，请在系统设置中允许“所有照片”后重试"
-                                                          : "保存失败，请稍后重试")));
+                                                  content: Text(isPermissionDenied
+                                                      ? "保存失败：当前是“仅添加照片”权限，请在系统设置中允许“所有照片”后重试"
+                                                      : "保存失败，请稍后重试")));
                                         }
                                       }
                                     },
