@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:my_pet/features/admin_analytics/presentation/admin_analytics_app.dart';
@@ -24,5 +26,12 @@ void main() {
     expect(metrics.activePetProfiles, 0);
     expect(metrics.petMemoriesSaved, 0);
     expect(metrics.activePetProfilesApproximate, isFalse);
+  });
+
+  test('weekly pet memory count combines explicit and legacy events', () {
+    final source = File('supabase/functions/analytics-dashboard/index.ts')
+        .readAsStringSync();
+
+    expect(source, contains('explicitMemorySavedCount + legacyMemoryCount'));
   });
 }

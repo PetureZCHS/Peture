@@ -240,9 +240,7 @@ function northStarMetrics(events: AnalyticsEvent[]) {
     weekly_active_pet_profiles: hasPetProfileIds
       ? activePetProfiles.size
       : activePetProfileUsers.size,
-    weekly_pet_memories_saved: explicitMemorySavedCount > 0
-      ? explicitMemorySavedCount
-      : legacyMemoryCount,
+    weekly_pet_memories_saved: explicitMemorySavedCount + legacyMemoryCount,
     active_pet_profiles_approximate: !hasPetProfileIds,
   };
 }
