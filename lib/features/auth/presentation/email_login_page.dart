@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/auth_otp_email_context.dart';
 import '../../../core/auth_terms_consent.dart';
+import '../../../services/analytics_service.dart';
 import '../../home/presentation/home_screen.dart';
 import '../../../shared/design_system/peture_design_system.dart';
 import 'email_register_page.dart';
@@ -19,6 +20,7 @@ class EmailLoginPage extends StatefulWidget {
     this.initialMessage,
     this.forceOtp = false,
     this.startCountdownOnInit = false,
+    this.onLoginSuccess,
   });
 
   /// 可选：预填的邮箱（从注册页跳转时带上）
@@ -33,6 +35,11 @@ class EmailLoginPage extends StatefulWidget {
   /// 可选：进入页面时是否直接进入验证码倒计时
   /// 场景：从注册页跳转过来时，验证码已经发送，这里应直接显示灰色倒计时按钮
   final bool startCountdownOnInit;
+
+  /// 可选：登录成功后的自定义处理。
+  ///
+  /// 默认进入 App 首页；后台/看板等独立入口可覆盖该行为。
+  final VoidCallback? onLoginSuccess;
 
   @override
   State<EmailLoginPage> createState() => _EmailLoginPageState();
@@ -64,9 +71,15 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
   static final Uri _privacyUri =
       Uri.parse('https://PetureZCHS.github.io/privacy');
 
-  void _enterHomeAfterLogin() {
+  Future<void> _enterHomeAfterLogin() async {
     if (!mounted) return;
     FocusScope.of(context).unfocus();
+    if (widget.onLoginSuccess != null) {
+      widget.onLoginSuccess!();
+      return;
+    }
+    await AnalyticsService.acceptConsentAndInit();
+    if (!mounted) return;
     Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const HomeScreen()),
       (route) => false,
@@ -160,8 +173,7 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
   Future<void> _persistOtpCooldownExpireAt({required int seconds}) async {
     final email = _emailController.text.trim();
     final prefs = await SharedPreferences.getInstance();
-    final expireAtMs =
-        DateTime.now().millisecondsSinceEpoch + seconds * 1000;
+    final expireAtMs = DateTime.now().millisecondsSinceEpoch + seconds * 1000;
     await prefs.setInt(_otpCooldownExpireGlobalKey, expireAtMs);
     if (email.isNotEmpty) {
       await prefs.setInt(_cooldownStorageKeyForEmail(email), expireAtMs);
@@ -181,7 +193,9 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
     final prefs = await SharedPreferences.getInstance();
     final email = _emailController.text.trim();
     final expireAtMs = prefs.getInt(_otpCooldownExpireGlobalKey) ??
-        (email.isEmpty ? null : prefs.getInt(_cooldownStorageKeyForEmail(email)));
+        (email.isEmpty
+            ? null
+            : prefs.getInt(_cooldownStorageKeyForEmail(email)));
     if (expireAtMs == null) return;
 
     final remainSec =
@@ -252,7 +266,7 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
       debugPrint('User: ${response.user?.email}');
 
       if (_supabase.auth.currentSession != null && mounted) {
-        _enterHomeAfterLogin();
+        await _enterHomeAfterLogin();
       } else {
         _showMessage('登录状态未建立，请稍后重试');
       }
@@ -380,7 +394,7 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
       if ((response.session != null || response.user != null) && mounted) {
         debugPrint('✅ 验证码登录成功: ${response.user?.email}');
         if (_supabase.auth.currentSession != null) {
-          _enterHomeAfterLogin();
+          await _enterHomeAfterLogin();
         } else {
           _showMessage('登录状态未建立，请稍后重试');
         }
@@ -506,7 +520,8 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
                               color: _useOtpLogin
                                   ? Colors.white
                                   : Colors.transparent,
-                              borderRadius: BorderRadius.circular(PetureRadius.sm),
+                              borderRadius:
+                                  BorderRadius.circular(PetureRadius.sm),
                             ),
                             alignment: Alignment.center,
                             child: Text(
@@ -536,7 +551,8 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
                               color: !_useOtpLogin
                                   ? Colors.white
                                   : Colors.transparent,
-                              borderRadius: BorderRadius.circular(PetureRadius.sm),
+                              borderRadius:
+                                  BorderRadius.circular(PetureRadius.sm),
                             ),
                             alignment: Alignment.center,
                             child: Text(
@@ -652,7 +668,8 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
                       SizedBox(
                         height: 48,
                         child: PetureSecondaryButton(
-                          label: _countdown > 0 ? '重发(${_countdown}s)' : '发送验证码',
+                          label:
+                              _countdown > 0 ? '重发(${_countdown}s)' : '发送验证码',
                           isLoading: _isSendingCode,
                           onPressed: _isSendingCode || _countdown > 0
                               ? null
@@ -710,8 +727,7 @@ class _EmailLoginPageState extends State<EmailLoginPage> {
                       visualDensity: VisualDensity.compact,
                       activeColor: const Color(0xFF5D5FEF),
                     ),
-                    const Text('我已阅读并同意',
-                        style: PetureTextStyles.caption),
+                    const Text('我已阅读并同意', style: PetureTextStyles.caption),
                     GestureDetector(
                       onTap: _isLoading ? null : () => _openLegal(_termsUri),
                       child: Text(

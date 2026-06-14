@@ -15,6 +15,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/page_tracker_mixin.dart';
+import '../../../services/analytics_service.dart';
 import '../../../services/supabase_edge_service.dart';
 import '../../../shared/models/pet_diary.dart';
 import '../../../services/supabase_service.dart';
@@ -211,7 +212,8 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
   bool get _isDiaryRenderCompleted {
     final hasContent = _generatedContent.trim().isNotEmpty;
     final fullLength = _fullTextBuffer.characters.length;
-    final typingFinished = _typingTimer == null && _displayedLength >= fullLength;
+    final typingFinished =
+        _typingTimer == null && _displayedLength >= fullLength;
     return !_showLoading && !_isGenerating && hasContent && typingFinished;
   }
 
@@ -825,6 +827,26 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
           _isSaved = true;
           _diaryId = diaryId;
         });
+        AnalyticsService.track(
+          'pet_memory_saved',
+          module: 'diary',
+          properties: {
+            'entry_page': 'diary_result',
+            'pet_id': widget.petId,
+            'memory_type': 'diary',
+            'source_event': 'diary_save',
+          },
+        );
+        AnalyticsService.track(
+          'pet_record_value_created',
+          module: 'north_star',
+          properties: {
+            'entry_page': 'diary_result',
+            'pet_id': widget.petId,
+            'record_type': 'diary',
+            'source_event': 'diary_save',
+          },
+        );
         // 保存成功后只更新按钮状态，不显示 SnackBar
       }
     } catch (e) {
@@ -1330,6 +1352,16 @@ class _PetDiaryResultPageState extends State<PetDiaryResultPage>
         setState(() {
           _isImageSavedToGallery = true;
         });
+        AnalyticsService.track(
+          'pet_memory_saved',
+          module: 'diary',
+          properties: {
+            'entry_page': 'diary_result',
+            'pet_id': widget.petId,
+            'memory_type': 'diary_image',
+            'source_event': 'diary_image_save_gallery',
+          },
+        );
       }
     } catch (e) {
       debugPrint('保存带水印图片失败: $e');
@@ -3205,10 +3237,14 @@ class _UploadLifePhotoSheetState extends State<_UploadLifePhotoSheet> {
 
       // 检查通过：更新 pets.life_photo
       // 这里使用 uploadPetLifePhotoToStorage 返回的 URL，行为与编辑宠物档案保持一致
-      await supabase.from('pets').update({
-        'life_photo': uploadResult.url,
-        'updated_at': DateTime.now().toUtc().toIso8601String(),
-      }).eq('id', widget.petId).eq('user_id', currentUserId);
+      await supabase
+          .from('pets')
+          .update({
+            'life_photo': uploadResult.url,
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
+          })
+          .eq('id', widget.petId)
+          .eq('user_id', currentUserId);
 
       if (mounted) {
         Navigator.of(context).pop(true); // 返回 true 表示上传成功

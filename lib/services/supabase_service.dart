@@ -47,8 +47,7 @@ class SupabaseService {
   }
 
   /// 当前 Supabase 会话的 access token（调用需用户鉴权的 Edge Function 时使用）
-  String? get sessionAccessToken =>
-      _client.auth.currentSession?.accessToken;
+  String? get sessionAccessToken => _client.auth.currentSession?.accessToken;
 
   // ============================================================
   // 用户资料相关方法
@@ -134,8 +133,10 @@ class SupabaseService {
     if (e is PostgrestException) {
       final hint = e.hint;
       final code = e.code;
-      final extra = [if (code != null) code, if (hint != null && hint.isNotEmpty) hint]
-          .join(' · ');
+      final extra = [
+        if (code != null) code,
+        if (hint != null && hint.isNotEmpty) hint
+      ].join(' · ');
       return extra.isEmpty ? e.message : '${e.message} ($extra)';
     }
     if (e is AuthException) return e.message;
@@ -305,7 +306,8 @@ class SupabaseService {
       }
 
       // 未显式选择绝育状态时，用 false 占位，避免 boolean NOT NULL 列收到 null
-      if (!petData.containsKey('neuter_status') || petData['neuter_status'] == null) {
+      if (!petData.containsKey('neuter_status') ||
+          petData['neuter_status'] == null) {
         petData['neuter_status'] = false;
       }
       // 不向 PostgREST 发送 null，减少「违反非空约束」；缺省列走库端 default
@@ -318,15 +320,26 @@ class SupabaseService {
           throw TimeoutException('请求超时，请检查网络连接');
         },
       );
+      final petId = response['id'] as String?;
       AnalyticsService.track(
         'pet_profile_created',
         module: 'pet_profile',
         properties: {
           'entry_page': 'supabase_service',
+          'pet_id': petId,
           'pet_type': petData['type'] ?? petData['species'],
         },
       );
-      return response['id'] as String?;
+      AnalyticsService.track(
+        'pet_profile_active',
+        module: 'pet_profile',
+        properties: {
+          'entry_page': 'supabase_service',
+          'pet_id': petId,
+          'activity_type': 'created',
+        },
+      );
+      return petId;
     } catch (e) {
       AnalyticsService.track(
         'error_event',
@@ -1040,22 +1053,21 @@ class SupabaseService {
       final diaryData = diary.toMap();
       diaryData.remove('id');
       diaryData['user_id'] = userId;
-      
+
       // 确保使用 created_at 字段名以匹配数据库
       diaryData['created_at'] = diary.timestamp.toIso8601String();
       diaryData.remove('timestamp'); // 移除可能导致错误的 timestamp 字段
-      
+
       // 检查 pet_id 是否为空字符串，如果是这移除，或者设置为 null
-      if (diaryData['pet_id'] == null || (diaryData['pet_id'] is String && (diaryData['pet_id'] as String).isEmpty)) {
+      if (diaryData['pet_id'] == null ||
+          (diaryData['pet_id'] is String &&
+              (diaryData['pet_id'] as String).isEmpty)) {
         diaryData.remove('pet_id');
       }
 
       // 尝试插入 pet_diaries 表
-      final response = await _client
-          .from('pet_diaries')
-          .insert(diaryData)
-          .select()
-          .single();
+      final response =
+          await _client.from('pet_diaries').insert(diaryData).select().single();
       return response['id'] as String?;
     } catch (e) {
       debugPrint('插入日记失败: $e');
@@ -1077,7 +1089,7 @@ class SupabaseService {
       }
 
       final response = await query.order('created_at', ascending: false);
-      
+
       return List<Map<String, dynamic>>.from(response)
           .map((data) => PetDiary.fromMap(data))
           .toList();
@@ -1569,7 +1581,8 @@ class SupabaseService {
         'style': diary.style,
         'created_at': diary.timestamp.toIso8601String(),
         if (diary.petId != null) 'pet_id': diary.petId,
-        if (diary.aiImg != null && diary.aiImg!.isNotEmpty) 'ai_img': diary.aiImg,
+        if (diary.aiImg != null && diary.aiImg!.isNotEmpty)
+          'ai_img': diary.aiImg,
       };
 
       final response =
@@ -1587,14 +1600,17 @@ class SupabaseService {
     if (userId == null) return [];
 
     try {
-      var query = _client.from('pet_diaries').select('*, pets(type)').eq('user_id', userId);
+      var query = _client
+          .from('pet_diaries')
+          .select('*, pets(type)')
+          .eq('user_id', userId);
 
       if (petId != null) {
         query = query.eq('pet_id', petId);
       }
 
       final response = await query.order('created_at', ascending: false);
-      
+
       return (response as List).map((map) => PetDiary.fromMap(map)).toList();
     } catch (e) {
       debugPrint('获取宠物日记失败: $e');
@@ -2901,7 +2917,6 @@ class SupabaseService {
 
   static const String _communityBucket = 'post-images';
   static const String _userAvatarBucket = 'user-avatars';
-  
 
   /// 删除同一 Storage 目录下除 [keepObjectPath] 外的 `avatar_*` 文件，避免历史头像堆积。
   Future<void> _removeOtherAvatarObjectsInFolder({
@@ -2910,15 +2925,13 @@ class SupabaseService {
     required String keepObjectPath,
   }) async {
     try {
-      final items =
-          await _client.storage.from(bucket).list(path: folderPrefix);
+      final items = await _client.storage.from(bucket).list(path: folderPrefix);
       final removePaths = <String>[];
       for (final item in items) {
         if (item.id == null) continue;
         if (!item.name.startsWith('avatar_')) continue;
-        final objectPath = folderPrefix.isEmpty
-            ? item.name
-            : '$folderPrefix/${item.name}';
+        final objectPath =
+            folderPrefix.isEmpty ? item.name : '$folderPrefix/${item.name}';
         if (objectPath == keepObjectPath) continue;
         removePaths.add(objectPath);
       }
@@ -2942,7 +2955,8 @@ class SupabaseService {
       for (final item in items) {
         if (item.id == null) continue;
         if (!item.name.startsWith('lifephoto_')) continue;
-        final objectPath = folderPrefix.isEmpty ? item.name : '$folderPrefix/${item.name}';
+        final objectPath =
+            folderPrefix.isEmpty ? item.name : '$folderPrefix/${item.name}';
         if (objectPath == keepObjectPath) continue;
         removePaths.add(objectPath);
       }
@@ -3016,13 +3030,14 @@ class SupabaseService {
         folderPrefix: userId,
         keepObjectPath: path,
       );
-      
+
       // 清除用户头像缓存（旧头像已失效）
       await AvatarCacheService().clearCacheByType(AvatarType.user);
       debugPrint('🗑️ 用户头像上传成功，已清除旧缓存');
-      
+
       return (
-        url: '${base.split('?').first}?t=${DateTime.now().millisecondsSinceEpoch}',
+        url:
+            '${base.split('?').first}?t=${DateTime.now().millisecondsSinceEpoch}',
         error: null,
       );
     } catch (e, st) {
@@ -3103,13 +3118,10 @@ class SupabaseService {
           '${base.split('?').first}?t=${DateTime.now().millisecondsSinceEpoch}';
 
       try {
-        await _client
-            .from('pets')
-            .update({
-              'avatar': publicUrl,
-              'updated_at': DateTime.now().toUtc().toIso8601String(),
-            })
-            .eq('id', petId);
+        await _client.from('pets').update({
+          'avatar': publicUrl,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        }).eq('id', petId);
       } catch (e) {
         debugPrint('保存宠物 avatar 到 pets 表失败: $e');
       }
@@ -3133,7 +3145,8 @@ class SupabaseService {
     final userId = await currentUserId;
     if (userId == null) return null;
     if (petId.isEmpty) return null;
-    final path = '$userId/$petId/lifephoto_${DateTime.now().millisecondsSinceEpoch}.jpg';
+    final path =
+        '$userId/$petId/lifephoto_${DateTime.now().millisecondsSinceEpoch}.jpg';
     try {
       await _client.storage.from(_userAvatarBucket).upload(
             path,
@@ -3147,16 +3160,14 @@ class SupabaseService {
         folderPrefix: folderPrefix,
         keepObjectPath: path,
       );
-      final publicUrl = '${base.split('?').first}?t=${DateTime.now().millisecondsSinceEpoch}';
+      final publicUrl =
+          '${base.split('?').first}?t=${DateTime.now().millisecondsSinceEpoch}';
 
       try {
-        await _client
-            .from('pets')
-            .update({
-              'life_photo': publicUrl,
-              'updated_at': DateTime.now().toUtc().toIso8601String(),
-            })
-            .eq('id', petId);
+        await _client.from('pets').update({
+          'life_photo': publicUrl,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        }).eq('id', petId);
       } catch (e) {
         debugPrint('保存宠物 life_photo 到 pets 表失败: $e');
       }
@@ -3177,7 +3188,8 @@ class SupabaseService {
     final userId = await currentUserId;
     if (userId == null) return null;
     if (petId.isEmpty) return null;
-    final path = '$userId/$petId/lifephoto_${DateTime.now().millisecondsSinceEpoch}.jpg';
+    final path =
+        '$userId/$petId/lifephoto_${DateTime.now().millisecondsSinceEpoch}.jpg';
     try {
       await _client.storage.from(_userAvatarBucket).upload(
             path,
@@ -3185,7 +3197,8 @@ class SupabaseService {
             fileOptions: const FileOptions(upsert: true),
           );
       final base = _client.storage.from(_userAvatarBucket).getPublicUrl(path);
-      final publicUrl = '${base.split('?').first}?t=${DateTime.now().millisecondsSinceEpoch}';
+      final publicUrl =
+          '${base.split('?').first}?t=${DateTime.now().millisecondsSinceEpoch}';
       return (url: publicUrl, path: path);
     } catch (e) {
       debugPrint('上传宠物生活照到 Storage 失败: $e');
@@ -3612,7 +3625,8 @@ class SupabaseService {
 
     final failures = <String>[];
 
-    Future<void> safeDelete(Future<void> Function() action, String label) async {
+    Future<void> safeDelete(
+        Future<void> Function() action, String label) async {
       try {
         await action();
       } catch (e) {
@@ -3623,10 +3637,8 @@ class SupabaseService {
 
     // 先删强依赖/关联表，再删主表，尽量规避外键约束失败。
     await safeDelete(
-      () async => _client
-          .from('community_post_likes')
-          .delete()
-          .eq('user_id', userId),
+      () async =>
+          _client.from('community_post_likes').delete().eq('user_id', userId),
       'community_post_likes',
     );
     await safeDelete(
@@ -3651,7 +3663,8 @@ class SupabaseService {
       'community_user_follows',
     );
     await safeDelete(
-      () async => _client.from('community_posts').delete().eq('author_id', userId),
+      () async =>
+          _client.from('community_posts').delete().eq('author_id', userId),
       'community_posts',
     );
 
@@ -3668,7 +3681,8 @@ class SupabaseService {
       'pet_diaries',
     );
     await safeDelete(
-      () async => _client.from('medical_records').delete().eq('user_id', userId),
+      () async =>
+          _client.from('medical_records').delete().eq('user_id', userId),
       'medical_records',
     );
     await safeDelete(
@@ -3676,7 +3690,8 @@ class SupabaseService {
       'weight_records',
     );
     await safeDelete(
-      () async => _client.from('vaccine_records').delete().eq('user_id', userId),
+      () async =>
+          _client.from('vaccine_records').delete().eq('user_id', userId),
       'vaccine_records',
     );
     await safeDelete(
@@ -3700,11 +3715,13 @@ class SupabaseService {
       'deworming_reminders',
     );
     await safeDelete(
-      () async => _client.from('daily_cost_items').delete().eq('user_id', userId),
+      () async =>
+          _client.from('daily_cost_items').delete().eq('user_id', userId),
       'daily_cost_items',
     );
     await safeDelete(
-      () async => _client.from('fitness_records').delete().eq('user_id', userId),
+      () async =>
+          _client.from('fitness_records').delete().eq('user_id', userId),
       'fitness_records',
     );
     await safeDelete(
